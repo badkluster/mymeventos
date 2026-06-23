@@ -1,0 +1,3 @@
+import { Schema, model, models } from 'mongoose';
+const notificationSchema = new Schema({ userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true }, title: { type: String, required: true }, message: { type: String, required: true }, readAt: Date, metadata: Schema.Types.Mixed, createdBy: { type: Schema.Types.ObjectId, ref: 'User' }, updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }, deletedAt: { type: Date, default: null, index: true }, deletedBy: { type: Schema.Types.ObjectId, ref: 'User' } }, { timestamps: true });
+export const Notification = models.Notification || model('Notification', notificationSchema);
