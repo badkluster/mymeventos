@@ -15,6 +15,7 @@ export enum Permission {
   LEADS_UPDATE = 'leads.update',
   LEADS_ASSIGN = 'leads.assign',
   LEADS_CONVERT = 'leads.convert',
+  LEADS_DELETE = 'leads.delete',
 
   // Quotes
   QUOTES_READ = 'quotes.read',

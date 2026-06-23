@@ -22,6 +22,7 @@ export const ApiMessages = {
   SALON_CREATED: 'Salón creado correctamente.',
   SALON_UPDATED: 'Salón actualizado correctamente.',
   SALON_DELETED: 'Salón eliminado correctamente.'
+  ,LEAD_CREATED: 'Lead creado correctamente.', LEAD_UPDATED: 'Lead actualizado correctamente.', LEAD_DELETED: 'Lead eliminado correctamente.', LEAD_NOT_FOUND: 'Lead no encontrado.', LEAD_STATUS_UPDATED: 'Estado del lead actualizado correctamente.', LEAD_LOST: 'Lead marcado como perdido.', ACTIVITY_CREATED: 'Actividad agregada correctamente.', QUICK_QUOTE_CREATED: 'Solicitud recibida correctamente.'
 } as const;
 
 export type ApiMessageCode = keyof typeof ApiMessages;
