@@ -1,12 +1,13 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - apps/*
+  - packages/*
+
+ignoredBuiltDependencies:
+  - '@scarf/scarf'
+  - bcrypt
 
 onlyBuiltDependencies:
   - esbuild
   - sharp
   - unrs-resolver
   - bcrypt
-
-ignoredBuiltDependencies:
-  - "@scarf/scarf"
