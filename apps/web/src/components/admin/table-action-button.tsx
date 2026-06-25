@@ -1,0 +1,2 @@
+'use client'; import type { ComponentType,MouseEventHandler } from 'react'; import { Tooltip } from '@/components/ui/tooltip';
+export function TableActionButton({icon:Icon,label,onClick}:{icon:ComponentType<{className?:string}>;label:string;onClick?:MouseEventHandler<HTMLButtonElement>}){return <Tooltip label={label}><button type="button" aria-label={label} onClick={onClick} className="rounded p-2 hover:bg-muted"><Icon className="h-4 w-4"/></button></Tooltip>}

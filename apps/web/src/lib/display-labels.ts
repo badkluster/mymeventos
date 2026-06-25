@@ -1,0 +1,5 @@
+export const leadStatusLabels: Record<string,string>={new:'Nuevo',contacted:'Contactado',follow_up:'Seguimiento',quote_sent:'Presupuesto enviado',negotiation:'Negociación',won:'Ganado',lost:'Perdido',converted:'Convertido'};
+export const leadSourceLabels: Record<string,string>={web_form:'Formulario web',quick_quote:'Cotización rápida',whatsapp:'WhatsApp',manual:'Manual',promotion:'Promoción',ticket:'Entrada',invitation:'Invitación',other:'Otro'};
+export const activityTypeLabels: Record<string,string>={note:'Nota',call:'Llamada',whatsapp:'WhatsApp',email:'Email',status_change:'Cambio de estado',assignment:'Asignación',quote_created:'Presupuesto creado',quote_sent:'Presupuesto enviado',lost:'Perdido',converted:'Convertido',system:'Sistema'};
+export const quoteStatusLabels: Record<string,string>={draft:'Borrador',sent:'Enviado',follow_up:'En seguimiento',accepted:'Aceptado',rejected:'Rechazado',expired:'Vencido',converted:'Convertido'};
+export const displayLabel=(labels:Record<string,string>,value:string)=>labels[value]??'Sin especificar';

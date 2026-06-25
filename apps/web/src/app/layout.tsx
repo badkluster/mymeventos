@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from '@/components/theme-provider';
+import { brandAssets } from '@/lib/brand-assets';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,20 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+
 export const metadata: Metadata = {
-  title: { default: 'M&M Eventos', template: '%s | M&M Eventos' }, description: 'Salones para eventos inolvidables.', openGraph: { title: 'M&M Eventos', description: 'Salones para eventos inolvidables.', type: 'website' }, robots: { index: true, follow: true },
+  metadataBase: new URL(siteUrl),
+  title: { default: 'M&M Eventos', template: '%s | M&M Eventos' },
+  description: 'Salones para eventos inolvidables.',
+  manifest: '/site.webmanifest',
+  icons: {
+    icon: [{ url: brandAssets.favicon }, { url: brandAssets.icon32, sizes: '32x32', type: 'image/png' }, { url: brandAssets.icon192, sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: brandAssets.icon192, sizes: '192x192', type: 'image/png' }]
+  },
+  openGraph: { title: 'M&M Eventos', description: 'Salones para eventos inolvidables.', type: 'website', images: [{ url: brandAssets.openGraphImage, width: 1200, height: 1200, alt: 'Logo de M&M Eventos' }] },
+  twitter: { card: 'summary_large_image', title: 'M&M Eventos', description: 'Salones para eventos inolvidables.', images: [brandAssets.openGraphImage] },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({
