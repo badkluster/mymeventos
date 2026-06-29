@@ -1,1 +1,5 @@
-const titles: Record<string,string>={leads:'Leads',customers:'Clientes',quotes:'Presupuestos',events:'Eventos',calendar:'Calendario',payments:'Pagos',inventory:'Inventario',products:'Productos',suppliers:'Proveedores',promotions:'Promociones',campaigns:'Campañas',invitations:'Invitaciones',tickets:'Entradas',staff:'Personal',payroll:'Nómina',reports:'Reportes',settings:'Configuración',users:'Usuarios',roles:'Roles'}; export default async function ModulePage({params}:{params:Promise<{module:string}>}) { const {module}=await params; return <section><h1 className="text-2xl font-semibold">{titles[module] ?? 'Administración'}</h1><p className="mt-3 text-zinc-500">Módulo en preparación.</p></section>; }
+import { notFound } from 'next/navigation';
+
+export default function ModulePage() {
+  notFound();
+}

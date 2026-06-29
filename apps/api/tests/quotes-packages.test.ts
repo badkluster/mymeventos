@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne } }));
 vi.mock('../src/modules/crm/crm.models', () => ({
-  Lead: {}, LeadActivity: {}, PackageTemplate: { find: mocks.packageFind, findOne: mocks.packageFindOne }, Quote: {}, QuoteRevision: {}, VenuePackageRule: { findOne: mocks.ruleFindOne }
+  Lead: {}, LeadActivity: {}, Customer: {}, Event: {}, Contract: { findOne: vi.fn() }, ContractAddendum: {}, PackageTemplate: { find: mocks.packageFind, findOne: mocks.packageFindOne }, Quote: {}, QuoteRevision: {}, VenuePackageRule: { findOne: mocks.ruleFindOne }, Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn() }
 }));
 vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: mocks.salonCount } }));
 vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: vi.fn().mockResolvedValue(undefined) }));

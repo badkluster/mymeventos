@@ -4,6 +4,7 @@ import { Permission, Role } from '@mym/shared';
 import { Salon } from './salon.model';
 import { PackageTemplate, VenuePackageRule } from '../crm/crm.models';
 import { User } from '../users/user.model';
+import { syncSalonManager } from '../users/user.service';
 import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -151,13 +152,14 @@ async function getSalonOrFail(request: Request, salonId: string): Promise<any> {
 
 async function ensureManagerIsValid(managerUserId?: string): Promise<void> {
   if (!managerUserId) return;
-  const manager = await User.findOne({ _id: managerUserId, active: true, deletedAt: null }).lean();
+  const manager: any = await User.findOne({ _id: managerUserId, active: true, deletedAt: null }).lean();
   if (!manager) throw new ApiError(422, 'SALON_MANAGER_NOT_FOUND');
+  if (!(manager.roles ?? []).some((role: Role) => [Role.ADMIN, Role.MANAGER, Role.SALON_MANAGER].includes(role))) throw new ApiError(422, 'SALON_MANAGER_ROLE_INVALID');
 }
 
 async function attachManagerToSalon(managerUserId: string | undefined, salonId: string): Promise<void> {
   if (!managerUserId) return;
-  await User.findOneAndUpdate({ _id: managerUserId, active: true, deletedAt: null }, { $addToSet: { salonIds: salonId } });
+  await syncSalonManager(salonId, managerUserId);
 }
 
 function managerIdsFrom(salons: any[]): string[] {
@@ -213,7 +215,7 @@ router.post('/', requirePermission(Permission.SALONS_UPDATE), validateRequest(cr
   if (duplicate) throw new ApiError(409, 'SALON_SLUG_ALREADY_EXISTS');
   await ensureManagerIsValid(request.body.managerUserId);
   const salon = await Salon.create({ ...request.body, locality: request.body.locality || request.body.city, createdBy: request.user!.id, updatedBy: request.user!.id });
-  await attachManagerToSalon(request.body.managerUserId, salon._id.toString());
+  await syncSalonManager(salon._id.toString(), request.body.managerUserId, request.user!.id);
   await writeAuditLog(request, 'SALON_CREATE', 'Salon', salon._id.toString());
   return sendSuccess(response, { salon }, 201, getApiMessage('SALON_CREATED'));
 }));
@@ -229,9 +231,14 @@ router.patch('/:id', requirePermission(Permission.SALONS_UPDATE), validateReques
     if (duplicate) throw new ApiError(409, 'SALON_SLUG_ALREADY_EXISTS');
   }
   await ensureManagerIsValid(request.body.managerUserId);
-  const salon = await Salon.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { ...request.body, locality: request.body.locality || request.body.city, updatedBy: request.user!.id }, { new: true });
+  const previousSalon: any = await Salon.findOne({ _id: request.params.id, deletedAt: null }).select('managerUserId').lean();
+  const { managerUserId, ...body } = request.body;
+  let update: Record<string, unknown> = { ...body, locality: body.locality || body.city, updatedBy: request.user!.id };
+  if (managerUserId) update.managerUserId = managerUserId;
+  if (managerUserId === '') update = { $set: update, $unset: { managerUserId: 1 } };
+  const salon = await Salon.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, update, { new: true });
   if (!salon) throw new ApiError(404, 'SALON_NOT_FOUND');
-  await attachManagerToSalon(request.body.managerUserId, request.params.id);
+  if (request.body.managerUserId !== undefined) await syncSalonManager(request.params.id, request.body.managerUserId || undefined, request.user!.id, previousSalon?.managerUserId?.toString());
   await writeAuditLog(request, 'SALON_UPDATE', 'Salon', request.params.id);
   return sendSuccess(response, { salon: await enrichSalon(salon.toObject ? salon.toObject() : salon) }, 200, getApiMessage('SALON_UPDATED'));
 }));

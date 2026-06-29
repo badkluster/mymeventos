@@ -9,7 +9,9 @@ const base = {
 
 const leadSchema = new Schema({
   firstName: String, lastName: String, fullName: { type: String, index: true }, phone: { type: String, index: true },
+  normalizedPhone: { type: String, index: true },
   email: { type: String, index: true }, alternativePhone: String, eventType: String, eventDate: Date, guestCount: Number,
+  normalizedEmail: { type: String, index: true },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true },
   salonIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Salon' }], default: [], index: true },
   assignedUserId: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -22,13 +24,45 @@ const leadSchema = new Schema({
 
 const activitySchema = new Schema({
   leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
-  type: { type: String, enum: ['note', 'call', 'whatsapp', 'email', 'status_change', 'assignment', 'quote_created', 'quote_sent', 'lost', 'converted', 'system'] },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
+  eventId: { type: Schema.Types.ObjectId, ref: 'Event', index: true },
+  type: { type: String, enum: ['note', 'call', 'whatsapp', 'email', 'status_change', 'assignment', 'quote_created', 'quote_sent', 'lost', 'converted', 'event_created', 'customer_created', 'system'] },
   title: String, description: String, metadata: Schema.Types.Mixed, createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: { createdAt: true, updatedAt: false } });
 
+const quoteRequestSchema = new Schema({
+  leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
+  source: { type: String, enum: ['website', 'admin', 'whatsapp', 'office', 'phone', 'quick_quote', 'other'], default: 'admin', index: true },
+  status: { type: String, enum: ['new', 'in_review', 'converted', 'discarded', 'duplicated'], default: 'new', index: true },
+  contactName: { type: String, required: true, trim: true },
+  firstName: String,
+  lastName: String,
+  phone: String,
+  normalizedPhone: { type: String, index: true },
+  email: String,
+  normalizedEmail: { type: String, index: true },
+  eventType: String,
+  estimatedEventDate: Date,
+  guestCount: Number,
+  interestedSalonIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Salon' }], default: [], index: true },
+  message: String,
+  originalPayload: Schema.Types.Mixed,
+  assignedToUserId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+  takenByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+  reviewedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+  convertedQuoteIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Quote' }], default: [] },
+  duplicateOfRequestId: { type: Schema.Types.ObjectId, ref: 'QuoteRequest' },
+  possibleDuplicateLeadIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Lead' }], default: [] },
+  possibleDuplicateCustomerIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Customer' }], default: [] },
+  internalNotes: String,
+  ...base
+}, { timestamps: true });
+
 const customerSchema = new Schema({
-  firstName: String, lastName: String, fullName: { type: String, index: true }, phone: { type: String, index: true }, email: { type: String, index: true },
-  alternativeContacts: [Schema.Types.Mixed], notes: String, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' },
+  firstName: String, lastName: String, fullName: { type: String, index: true }, phone: { type: String, index: true }, normalizedPhone: { type: String, index: true }, email: { type: String, index: true }, normalizedEmail: { type: String, index: true },
+  alternativeContacts: [Schema.Types.Mixed], notes: String, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceLeadIds: [{ type: Schema.Types.ObjectId, ref: 'Lead' }],
+  createdFromLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, createdFromQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
   salonIds: [{ type: Schema.Types.ObjectId, ref: 'Salon', index: true }], ...base
 }, { timestamps: true });
 
@@ -61,8 +95,9 @@ venuePackageRuleSchema.index({ packageTemplateId: 1, salonId: 1 }, { unique: tru
 
 const quoteSchema = new Schema({
   quoteNumber: { type: String, required: true, unique: true, index: true },
-  leadId: { type: Schema.Types.ObjectId, ref: 'Lead', required: true, index: true },
+  leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
+  source: { type: String, enum: ['new_person', 'lead', 'customer', 'quote_request', 'manual', 'other'], default: 'manual', index: true },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
   packageTemplateId: { type: Schema.Types.ObjectId, ref: 'PackageTemplate', index: true },
   status: { type: String, enum: ['draft', 'sent', 'follow_up', 'accepted', 'rejected', 'expired', 'converted'], default: 'draft', index: true },
@@ -75,8 +110,16 @@ const quoteSchema = new Schema({
   validUntil: Date, sentAt: Date, acceptedAt: Date, rejectedAt: Date,
   pdfUrl: String, pdfSecureUrl: String, pdfPublicId: String, pdfGeneratedAt: Date,
   templateSnapshot: Schema.Types.Mixed,
+  contactSnapshot: Schema.Types.Mixed,
+  packageSnapshot: Schema.Types.Mixed,
+  convertedCustomerId: { type: Schema.Types.ObjectId, ref: 'Customer' },
+  convertedEventId: { type: Schema.Types.ObjectId, ref: 'Event' },
   ...base
 }, { timestamps: true });
+quoteSchema.pre('validate', function validateQuoteAssociation(next) {
+  if (!this.leadId && !this.customerId) return next(new Error('Quote must have leadId or customerId.'));
+  return next();
+});
 
 const revisionSchema = new Schema({
   quoteId: { type: Schema.Types.ObjectId, ref: 'Quote', index: true }, version: Number, snapshot: Schema.Types.Mixed,
@@ -84,14 +127,116 @@ const revisionSchema = new Schema({
 }, { timestamps: { createdAt: true, updatedAt: false } });
 
 const eventSchema = new Schema({
-  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true }, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true }, leadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, quoteId: { type: Schema.Types.ObjectId, ref: 'Quote' }, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' }, createdFromQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true }, eventType: String, eventName: String, eventDate: Date,
-  startTime: String, endTime: String, guestCount: Number, status: { type: String, enum: ['draft', 'quoted', 'reserved', 'confirmed', 'cancelled', 'lost'], default: 'draft' },
-  estimatedAmount: Number, finalAmount: Number, notes: String, ...base
+  startTime: String, endTime: String, guestCount: Number, status: { type: String, enum: ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'], default: 'draft' },
+  estimatedAmount: Number, finalAmount: Number, notes: String,
+  commercialSnapshot: Schema.Types.Mixed,
+  menuSnapshot: Schema.Types.Mixed,
+  servicesSnapshot: Schema.Types.Mixed,
+  paymentSnapshot: Schema.Types.Mixed,
+  contractReadyChecklist: Schema.Types.Mixed,
+  ...base
 }, { timestamps: true });
+
+const securityDepositSchema = new Schema({
+  amount: { type: Number, default: 0 },
+  requiredAt: Date,
+  returnedAt: Date,
+  status: { type: String, enum: ['pending', 'received', 'returned', 'retained'], default: 'pending' },
+  notes: String
+}, { _id: false });
+
+const addendumItemSchema = new Schema({
+  type: { type: String, enum: ['extra_service', 'beverage', 'decoration', 'menu_upgrade', 'staff', 'hour_extension', 'other'], default: 'other' },
+  name: { type: String, required: true },
+  description: String,
+  quantity: { type: Number, default: 1 },
+  unitPrice: { type: Number, default: 0 },
+  totalPrice: { type: Number, default: 0 }
+}, { _id: false });
+
+const contractSchema = new Schema({
+  contractNumber: { type: String, required: true, unique: true, index: true },
+  eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
+  quoteId: { type: Schema.Types.ObjectId, ref: 'Quote', index: true },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
+  leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'requires_changes', 'cancelled', 'superseded'], default: 'pending_approval', index: true },
+  customerSnapshot: Schema.Types.Mixed,
+  eventSnapshot: Schema.Types.Mixed,
+  commercialSnapshot: Schema.Types.Mixed,
+  menuSnapshot: Schema.Types.Mixed,
+  servicesSnapshot: Schema.Types.Mixed,
+  paymentAgreementSnapshot: Schema.Types.Mixed,
+  legalTermsSnapshot: Schema.Types.Mixed,
+  securityDeposit: { type: securityDepositSchema, default: () => ({}) },
+  securityDepositSnapshot: Schema.Types.Mixed,
+  baseAmount: { type: Number, default: 0 },
+  approvedAddendumsAmount: { type: Number, default: 0 },
+  pendingAddendumsAmount: { type: Number, default: 0 },
+  discountsAmount: { type: Number, default: 0 },
+  totalAmount: { type: Number, default: 0 },
+  paidAmount: { type: Number, default: 0 },
+  balanceAmount: { type: Number, default: 0 },
+  observations: String,
+  approvedAt: Date,
+  approvedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+  cancelledAt: Date,
+  ...base
+}, { timestamps: true });
+contractSchema.index({ eventId: 1, deletedAt: 1 });
+
+const contractAddendumSchema = new Schema({
+  addendumNumber: { type: String, required: true, unique: true, index: true },
+  contractId: { type: Schema.Types.ObjectId, ref: 'Contract', required: true, index: true },
+  eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'rejected', 'cancelled'], default: 'pending_approval', index: true },
+  title: { type: String, required: true },
+  description: String,
+  items: { type: [addendumItemSchema], default: [] },
+  subtotalAmount: { type: Number, default: 0 },
+  discountAmount: { type: Number, default: 0 },
+  totalAmount: { type: Number, default: 0 },
+  affectsBalance: { type: Boolean, default: false },
+  approvedAt: Date,
+  approvedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+  cancelledAt: Date,
+  ...base
+}, { timestamps: true });
+contractAddendumSchema.index({ contractId: 1, deletedAt: 1 });
+
+const paymentSchema = new Schema({
+  paymentNumber: { type: String, required: true, unique: true, index: true },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
+  eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
+  contractId: { type: Schema.Types.ObjectId, ref: 'Contract', required: true, index: true },
+  quoteId: { type: Schema.Types.ObjectId, ref: 'Quote', index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  type: { type: String, enum: ['deposit', 'installment', 'balance', 'addendum', 'extra', 'security_deposit', 'adjustment', 'refund', 'other'], default: 'installment', index: true },
+  method: { type: String, enum: ['cash', 'bank_transfer', 'mercado_pago', 'card', 'other'] },
+  status: { type: String, enum: ['pending', 'paid', 'cancelled', 'refunded'], default: 'pending', index: true },
+  amount: { type: Number, required: true, min: 0 },
+  dueDate: { type: Date, index: true },
+  paidAt: Date,
+  receiptNumber: String,
+  reference: String,
+  notes: String,
+  affectsContractBalance: { type: Boolean, default: true },
+  refundedPaymentId: { type: Schema.Types.ObjectId, ref: 'Payment' },
+  cancelledBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  cancelledAt: Date,
+  ...base
+}, { timestamps: true });
+paymentSchema.index({ contractId: 1, status: 1, deletedAt: 1 });
+paymentSchema.index({ customerId: 1, paidAt: -1, createdAt: -1 });
 
 export const Lead = models.Lead || model('Lead', leadSchema);
 export const LeadActivity = models.LeadActivity || model('LeadActivity', activitySchema);
+export const QuoteRequest = models.QuoteRequest || model('QuoteRequest', quoteRequestSchema);
 export const Customer = models.Customer || model('Customer', customerSchema);
 export const ContactPerson = models.ContactPerson || model('ContactPerson', contactSchema);
 export const PackageTemplate = models.PackageTemplate || model('PackageTemplate', packageTemplateSchema);
@@ -99,3 +244,6 @@ export const VenuePackageRule = models.VenuePackageRule || model('VenuePackageRu
 export const Quote = models.Quote || model('Quote', quoteSchema);
 export const QuoteRevision = models.QuoteRevision || model('QuoteRevision', revisionSchema);
 export const Event = models.Event || model('Event', eventSchema);
+export const Contract = models.Contract || model('Contract', contractSchema);
+export const ContractAddendum = models.ContractAddendum || model('ContractAddendum', contractAddendumSchema);
+export const Payment = models.Payment || model('Payment', paymentSchema);

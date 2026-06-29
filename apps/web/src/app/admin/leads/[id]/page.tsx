@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CalendarDays, ChevronLeft, Mail, MessageCircle, Pencil, StickyNote, Trash2, Users } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { activityTypeLabels, displayLabel, leadSourceLabels, leadStatusLabels } from '@/lib/display-labels';
+import { activityTypeLabels, displayLabel, leadSourceLabels, leadStatusLabels, quoteRequestSourceLabels, quoteRequestStatusLabels, quoteStatusLabels } from '@/lib/display-labels';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 
@@ -31,6 +31,10 @@ type Lead = {
 
 type Activity = { _id: string; type: string; title: string; description?: string; createdAt: string };
 type Salon = { _id: string; name: string };
+type QuoteRequest = { _id: string; status: string; source: string; eventType?: string; interestedSalonIds?: string[]; createdAt?: string };
+type Quote = { _id: string; quoteNumber: string; status: string; packageName?: string; createdAt?: string };
+type EventItem = { _id: string; eventName?: string; eventType?: string; status: string; eventDate?: string; salonId?: string | { name?: string } };
+type CustomerItem = { _id: string; fullName?: string; phone?: string; email?: string };
 
 const formatDate = (value?: string) => value
   ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(value))
@@ -56,6 +60,10 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
   const { showToast } = useToast();
   const [lead, setLead] = useState<Lead>();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [convertedCustomer, setConvertedCustomer] = useState<CustomerItem>();
   const [salons, setSalons] = useState<Salon[]>([]);
   const [id, setId] = useState('');
   const [note, setNote] = useState('');
@@ -72,14 +80,21 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const load = async (currentId: string) => {
-    const [leadResponse, activitiesResponse, salonsResponse] = await Promise.all([
+    const [leadResponse, activitiesResponse, salonsResponse, requestsResponse, quotesResponse, historyResponse] = await Promise.all([
       api.get<{ lead: Lead }>(`/leads/${currentId}`),
       api.get<{ activities: Activity[] }>(`/leads/${currentId}/activities`),
       api.get<{ salons: Salon[] }>('/salons'),
+      api.get<{ items: QuoteRequest[] }>(`/quote-requests?limit=50&leadId=${currentId}`),
+      api.get<{ items: Quote[] }>(`/quotes?limit=50&leadId=${currentId}`),
+      api.get<{ events: EventItem[]; convertedCustomer?: CustomerItem }>(`/leads/${currentId}/commercial-history`),
     ]);
     setLead(leadResponse.lead);
     setActivities(activitiesResponse.activities);
     setSalons(salonsResponse.salons);
+    setQuoteRequests(requestsResponse.items ?? []);
+    setQuotes(quotesResponse.items ?? []);
+    setEvents(historyResponse.events ?? []);
+    setConvertedCustomer(historyResponse.convertedCustomer);
   };
 
   useEffect(() => {
@@ -244,6 +259,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
             <div><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Tipo de evento</dt><dd className="mt-1 font-medium text-zinc-800">{lead.eventType || 'Sin especificar'}</dd></div>
             <div><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Origen</dt><dd className="mt-1 font-medium text-zinc-800">{displayLabel(leadSourceLabels, lead.source)}</dd></div>
             <div className="sm:col-span-2"><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Salones de interés</dt><dd className="mt-1 font-medium text-zinc-800">{selectedSalonNames.length ? selectedSalonNames.join(' · ') : 'Sin salón asociado'}</dd></div>
+            <div className="sm:col-span-2"><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Cliente convertido</dt><dd className="mt-1 font-medium text-zinc-800">{convertedCustomer ? <Link href={`/admin/customers/${convertedCustomer._id}`} className="underline">{convertedCustomer.fullName || 'Ver cliente'}</Link> : 'No convertido'}</dd></div>
           </dl>
         </article>
 
@@ -270,6 +286,22 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
           {activities.length === 0 ? <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">Todavía no hay actividades registradas.</p> : <div className="mt-5 space-y-4">{activities.map((activity) => <div key={activity._id} className="relative border-l-2 border-zinc-200 pl-5 pb-1 before:absolute before:-left-[5px] before:top-1 before:h-2 before:w-2 before:rounded-full before:bg-zinc-950"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-medium text-zinc-900">{displayLabel(activityTypeLabels, activity.type)}</p><time className="text-xs text-zinc-400">{new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(activity.createdAt))}</time></div><p className="mt-1 text-sm leading-6 text-zinc-600">{activity.description || activity.title}</p></div>)}</div>}
         </article>
       </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-zinc-950">Solicitudes de presupuesto</h2>
+          {quoteRequests.length === 0 ? <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay solicitudes asociadas visibles.</p> : <div className="mt-5 space-y-3">{quoteRequests.map((item) => <Link key={item._id} href={`/admin/quotes/requests/${item._id}`} className="block rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition hover:bg-zinc-100"><p className="font-medium text-zinc-900">{formatDate(item.createdAt)} · {displayLabel(quoteRequestStatusLabels, item.status)}</p><p className="mt-1 text-sm text-zinc-500">{displayLabel(quoteRequestSourceLabels, item.source)} · {item.eventType || 'Sin tipo de evento'}</p></Link>)}</div>}
+        </article>
+        <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-zinc-950">Presupuestos asociados</h2>
+          {quotes.length === 0 ? <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay presupuestos asociados visibles.</p> : <div className="mt-5 space-y-3">{quotes.map((item) => <Link key={item._id} href={`/admin/quotes/${item._id}`} className="block rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition hover:bg-zinc-100"><p className="font-medium text-zinc-900">{item.quoteNumber} · {displayLabel(quoteStatusLabels, item.status)}</p><p className="mt-1 text-sm text-zinc-500">{item.packageName || 'Personalizado'}</p></Link>)}</div>}
+        </article>
+      </div>
+
+      <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-zinc-950">Eventos generados</h2>
+        {events.length === 0 ? <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay eventos generados desde este lead.</p> : <div className="mt-5 grid gap-3 md:grid-cols-2">{events.map((item) => <Link key={item._id} href={`/admin/events/${item._id}`} className="block rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition hover:bg-zinc-100"><p className="font-medium text-zinc-900">{item.eventName || item.eventType || 'Evento'} · {displayLabel({ quoted: 'Pendiente de contrato', draft: 'Borrador', reserved: 'Reservado', confirmed: 'Confirmado', cancelled: 'Cancelado', lost: 'Perdido' }, item.status)}</p><p className="mt-1 text-sm text-zinc-500">{formatDate(item.eventDate)} · {typeof item.salonId === 'string' ? 'Sin salón' : item.salonId?.name || 'Sin salón'}</p></Link>)}</div>}
+      </article>
 
       <Modal open={isEditOpen} onClose={() => setIsEditOpen(false)} title="Editar lead" description="Actualizá los datos de esta oportunidad comercial.">
         <form onSubmit={saveLead} className="grid max-h-[70vh] gap-4 overflow-y-auto p-6 md:grid-cols-2">

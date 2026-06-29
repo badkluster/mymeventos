@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
-import { Lead, LeadActivity } from './crm.models';
+import { Event, Lead, LeadActivity, Quote, QuoteRequest } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
@@ -233,7 +233,7 @@ router.get(
   validateRequest(idParamsSchema),
   asyncHandler(async (request, response) => {
     const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
-    await ensureLeadAccess(request, lead);
+    await ensureLeadAccess(request, lead as LeadLike | null);
     return sendSuccess(response, { lead });
   })
 );
@@ -244,7 +244,7 @@ router.patch(
   validateRequest(updateLeadSchema),
   asyncHandler(async (request, response) => {
     const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
-    await ensureLeadAccess(request, lead);
+    await ensureLeadAccess(request, lead as LeadLike | null);
 
     const update = request.body as z.infer<typeof updateLeadSchema>['body'];
     const currentSalonIds = normalizedSalonIds(lead!);
@@ -341,6 +341,48 @@ router.get(
     await ensureLeadAccess(request, lead);
     const activities = await LeadActivity.find({ leadId: lead!._id }).sort({ createdAt: -1 }).lean();
     return sendSuccess(response, { activities });
+  })
+);
+
+router.get(
+  '/:id/quotes',
+  requirePermission(Permission.LEADS_READ),
+  validateRequest(idParamsSchema),
+  asyncHandler(async (request, response) => {
+    const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+    await ensureLeadAccess(request, lead);
+    const quotes = await Quote.find({ leadId: request.params.id, deletedAt: null }).populate('salonId', 'name').sort({ createdAt: -1 }).lean();
+    return sendSuccess(response, { quotes });
+  })
+);
+
+router.get(
+  '/:id/events',
+  requirePermission(Permission.EVENTS_READ),
+  validateRequest(idParamsSchema),
+  asyncHandler(async (request, response) => {
+    const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+    await ensureLeadAccess(request, lead);
+    const events = await Event.find({ $or: [{ leadId: request.params.id }, { sourceLeadId: request.params.id }], deletedAt: null }).populate('salonId', 'name').populate('customerId', 'fullName phone email').sort({ eventDate: -1, createdAt: -1 }).lean();
+    return sendSuccess(response, { events });
+  })
+);
+
+router.get(
+  '/:id/commercial-history',
+  requirePermission(Permission.LEADS_READ),
+  validateRequest(idParamsSchema),
+  asyncHandler(async (request, response) => {
+    const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null }).populate('convertedCustomerId', 'fullName phone email').lean();
+    const leadForAccess = lead as LeadLike | null;
+    await ensureLeadAccess(request, leadForAccess);
+    const [quoteRequests, quotes, events, activities] = await Promise.all([
+      QuoteRequest.find({ leadId: request.params.id, deletedAt: null }).sort({ createdAt: -1 }).lean(),
+      Quote.find({ leadId: request.params.id, deletedAt: null }).populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
+      Event.find({ $or: [{ leadId: request.params.id }, { sourceLeadId: request.params.id }], deletedAt: null }).populate('salonId', 'name').populate('customerId', 'fullName phone email').sort({ eventDate: -1, createdAt: -1 }).lean(),
+      LeadActivity.find({ leadId: request.params.id }).sort({ createdAt: -1 }).limit(50).lean()
+    ]);
+    return sendSuccess(response, { lead, quoteRequests, quotes, events, activities, convertedCustomer: (lead as any)?.convertedCustomerId });
   })
 );
 

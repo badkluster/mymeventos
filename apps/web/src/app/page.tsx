@@ -328,7 +328,7 @@ export default function Home() {
       await api.post('/public/quick-quote', { name: data.get('name'), phone: data.get('phone'), email: data.get('email'), eventType: data.get('eventType'), eventDate: data.get('eventDate') || undefined, guestCount: Number(data.get('guestCount')), salonId: data.get('salonId'), message: data.get('message') });
       form.reset();
       setFormSalonId('');
-      setMessage('¡Gracias! Recibimos tu consulta y te contactaremos pronto.');
+      setMessage('Recibimos tu solicitud. Un asesor de M&M Eventos se contactará para enviarte el presupuesto.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No se pudo enviar la consulta.');
     } finally {

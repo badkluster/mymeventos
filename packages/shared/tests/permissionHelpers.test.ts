@@ -15,10 +15,14 @@ describe('Permission Helpers', () => {
       expect(hasPermission(Role.VALIDATOR, Permission.SETTINGS_UPDATE)).toBe(false);
     });
 
-    it('should respect customOverrides if provided', () => {
-      // Overrides replace the preset logic completely based on our implementation
-      expect(hasPermission(Role.VALIDATOR, Permission.TICKETS_VALIDATE, [Permission.SETTINGS_UPDATE])).toBe(false);
+    it('should add customOverrides to role presets', () => {
+      expect(hasPermission(Role.VALIDATOR, Permission.TICKETS_VALIDATE, [Permission.SETTINGS_UPDATE])).toBe(true);
       expect(hasPermission(Role.VALIDATOR, Permission.SETTINGS_UPDATE, [Permission.SETTINGS_UPDATE])).toBe(true);
+    });
+
+    it('should deny permissions explicitly listed in deniedOverrides for non-admin roles', () => {
+      expect(hasPermission(Role.VALIDATOR, Permission.TICKETS_VALIDATE, [], [Permission.TICKETS_VALIDATE])).toBe(false);
+      expect(hasPermission(Role.ADMIN, Permission.USERS_DELETE, [], [Permission.USERS_DELETE])).toBe(true);
     });
   });
 

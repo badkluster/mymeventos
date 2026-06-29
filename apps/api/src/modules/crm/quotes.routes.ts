@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role, hasPermission } from '@mym/shared';
-import { Lead, LeadActivity, PackageTemplate, Quote, QuoteRevision, VenuePackageRule } from './crm.models';
+import { Customer, Lead, LeadActivity, PackageTemplate, Quote, QuoteRevision, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
@@ -11,6 +11,8 @@ import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
 import { generateAndUploadQuotePdf } from './quote-pdf.service';
+import { convertQuoteToEvent } from './quote-to-event.service';
+import { findOrCreateLead } from './lead-dedupe.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const quoteStatuses = ['draft', 'sent', 'follow_up', 'accepted', 'rejected', 'expired', 'converted'] as const;
@@ -36,7 +38,7 @@ const quoteFields = z.object({
   paymentTerms: z.string().trim().optional(), promotionText: z.string().trim().optional(), giftText: z.string().trim().optional(), menuSections: menuSectionsSchema.optional(), includedServices: z.array(z.string().trim().min(1)).optional(), notes: z.string().trim().optional(), validUntil: z.coerce.date().optional()
 });
 const createQuoteSchema = z.object({ body: quoteFields.refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.').superRefine((body, context) => {
-  if (!body.leadId) {
+  if (!body.leadId && !body.customerId) {
     for (const field of ['phone', 'eventType', 'guestCount'] as const) if (body[field] === undefined) context.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Campo obligatorio para una persona nueva.' });
     if (!body.contactName && !(body.firstName && body.lastName)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['contactName'], message: 'Debe indicar el nombre de la persona.' });
   }
@@ -46,6 +48,7 @@ const createQuoteSchema = z.object({ body: quoteFields.refine((body) => Boolean(
 const updateQuoteSchema = z.object({ body: quoteFields.omit({ leadId: true, customerId: true, salonIds: true }).partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo para actualizar.'), params: z.object({ id: objectId }), query: z.object({}) });
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const statusSchema = z.object({ body: z.object({ status: z.enum(quoteStatuses) }), params: z.object({ id: objectId }), query: z.object({}) });
+const convertToEventSchema = z.object({ body: z.object({ eventName: z.string().trim().optional(), notes: z.string().trim().optional() }).optional().default({}), params: z.object({ id: objectId }), query: z.object({}) });
 const ruleSchema = z.object({ body: ruleFields, params: z.object({ id: objectId, salonId: objectId }), query: z.object({}) });
 
 const router = Router();
@@ -94,6 +97,8 @@ function buildListQuery(request: Request): Record<string, unknown> {
   if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: request.user!.salonIds } });
   const status = getQueryString(request.query.status); if (status && quoteStatuses.includes(status as any)) terms.push({ status });
   const salonId = getQueryString(request.query.salonId); if (salonId && objectId.safeParse(salonId).success) terms.push({ salonId });
+  const leadId = getQueryString(request.query.leadId); if (leadId && objectId.safeParse(leadId).success) terms.push({ leadId });
+  const customerId = getQueryString(request.query.customerId); if (customerId && objectId.safeParse(customerId).success) terms.push({ customerId });
   const packageTemplateId = getQueryString(request.query.packageTemplateId); if (packageTemplateId && objectId.safeParse(packageTemplateId).success) terms.push({ packageTemplateId });
   const term = getQueryString(request.query.search); if (term) terms.push({ $or: ['quoteNumber', 'contactName', 'phone', 'email', 'packageName', 'eventType'].map((field) => ({ [field]: { $regex: term, $options: 'i' } })) });
   return terms.length === 1 ? terms[0] : { $and: terms };
@@ -146,7 +151,7 @@ router.get('/', requirePermission(Permission.QUOTES_READ), asyncHandler(async (r
   const page = Math.max(1, Number(getQueryString(request.query.page)) || 1); const limit = Math.min(100, Math.max(1, Number(getQueryString(request.query.limit)) || 20));
   const allowedSorts = ['createdAt', 'eventDate', 'totalAmount', 'status', 'quoteNumber']; const sortBy = allowedSorts.includes(getQueryString(request.query.sortBy) ?? '') ? getQueryString(request.query.sortBy)! : 'createdAt';
   const query = buildListQuery(request); const totalItems = await Quote.countDocuments(query);
-  const quotes = await Quote.find(query).sort({ [sortBy]: getQueryString(request.query.sortOrder) === 'asc' ? 1 : -1 }).skip((page - 1) * limit).limit(limit).lean();
+  const quotes = await Quote.find(query).populate('leadId', 'fullName firstName lastName phone email').populate('customerId', 'fullName firstName lastName phone email').sort({ [sortBy]: getQueryString(request.query.sortOrder) === 'asc' ? 1 : -1 }).skip((page - 1) * limit).limit(limit).lean();
   return sendSuccess(response, { items: quotes.map(serializeQuote), meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)) } });
 }));
 
@@ -154,17 +159,37 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
   const salonIds = uniqueIds([...(request.body.salonIds ?? []), ...(request.body.salonId ? [request.body.salonId] : [])]);
   await ensureAccessibleSalons(request, salonIds);
   let lead: any;
+  let customer: any;
   if (request.body.leadId) {
     lead = await Lead.findOne({ _id: request.body.leadId, deletedAt: null });
     if (!lead) throw new ApiError(404, 'LEAD_NOT_FOUND');
     const leadSalonIds = new Set([lead.salonId?.toString(), ...(lead.salonIds ?? []).map((id: { toString(): string }) => id.toString())]);
     if (![...leadSalonIds].some((salonId) => salonIds.includes(salonId as string))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
   }
+  if (request.body.customerId) {
+    customer = await Customer.findOne({ _id: request.body.customerId, deletedAt: null });
+    if (!customer) throw new ApiError(404, 'CUSTOMER_NOT_FOUND');
+    const customerSalonIds = (customer.salonIds ?? []).map((id: { toString(): string }) => id.toString());
+    if (customerSalonIds.length && !customerSalonIds.some((salonId: string) => salonIds.includes(salonId))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  }
   const templates: Array<Record<string, any>> = request.body.packageTemplateId ? await Promise.all(salonIds.map((salonId) => getApplicableTemplate(request.body.packageTemplateId!, salonId, true))) : salonIds.map(() => ({}));
-  if (!lead) {
-    const fullName = request.body.contactName ?? `${request.body.firstName} ${request.body.lastName}`.trim(); const nameParts = fullName.split(/\s+/);
-    lead = await Lead.create({ firstName: request.body.firstName ?? nameParts[0], lastName: request.body.lastName ?? (nameParts.slice(1).join(' ') || 'Sin apellido'), fullName, phone: request.body.phone, email: request.body.email || undefined, eventType: request.body.eventType, eventDate: request.body.eventDate, guestCount: request.body.guestCount, salonId: salonIds[0], salonIds, source: 'manual', status: 'new', createdBy: request.user!.id, updatedBy: request.user!.id });
-    await writeAuditLog(request, 'LEAD_CREATE_FROM_QUOTE', 'Lead', lead._id.toString());
+  if (!lead && !customer) {
+    const result = await findOrCreateLead({
+      contactName: request.body.contactName ?? `${request.body.firstName ?? ''} ${request.body.lastName ?? ''}`.trim(),
+      firstName: request.body.firstName,
+      lastName: request.body.lastName,
+      phone: request.body.phone,
+      email: request.body.email || undefined,
+      eventType: request.body.eventType,
+      estimatedEventDate: request.body.eventDate,
+      guestCount: request.body.guestCount,
+      salonIds,
+      source: 'manual',
+      userId: request.user!.id
+    });
+    lead = result.lead;
+    customer = result.existingCustomer;
+    if (lead && result.created) await writeAuditLog(request, 'LEAD_CREATE_FROM_QUOTE', 'Lead', lead._id.toString());
   }
   const quotes = [];
   for (const [index, salonId] of salonIds.entries()) {
@@ -172,7 +197,8 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
     const { applyCommercialOverrides, manualMode, ...body } = request.body;
     const commercialFields = ['durationHours', 'startTime', 'endTime', 'pricePerPerson', 'discountPercentage', 'finalPricePerPerson', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
     const nonCommercialBody = Object.fromEntries(Object.entries(body).filter(([key]) => !commercialFields.includes(key)));
-    const raw = { ...template, ...nonCommercialBody, ...(applyCommercialOverrides ? pickDefined(body, commercialFields) : {}), salonId, leadId: lead._id, contactName: request.body.contactName ?? lead.fullName, phone: request.body.phone ?? lead.phone, email: request.body.email ?? lead.email, eventType: request.body.eventType ?? lead.eventType, eventDate: request.body.eventDate ?? lead.eventDate, guestCount: request.body.guestCount ?? lead.guestCount, packageName: request.body.packageName ?? template.name, packageTemplateId: request.body.packageTemplateId, quoteNumber: quoteNumber(), createdBy: request.user!.id, updatedBy: request.user!.id, templateSnapshot: request.body.packageTemplateId ? template : undefined };
+    const contactName = request.body.contactName ?? lead?.fullName ?? customer?.fullName;
+    const raw = { ...template, ...nonCommercialBody, ...(applyCommercialOverrides ? pickDefined(body, commercialFields) : {}), salonId, leadId: lead?._id, customerId: customer?._id, source: customer ? 'customer' : lead ? (request.body.leadId ? 'lead' : 'new_person') : 'manual', contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email, eventType: request.body.eventType ?? lead?.eventType, eventDate: request.body.eventDate ?? lead?.eventDate, guestCount: request.body.guestCount ?? lead?.guestCount, packageName: request.body.packageName ?? template.name, packageTemplateId: request.body.packageTemplateId, quoteNumber: quoteNumber(), createdBy: request.user!.id, updatedBy: request.user!.id, templateSnapshot: request.body.packageTemplateId ? template : undefined, packageSnapshot: request.body.packageTemplateId ? template : undefined, contactSnapshot: { leadId: lead?._id, customerId: customer?._id, contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email } };
     const calculated = calculateQuote(raw);
     if (!calculated.guestCount || !calculated.pricePerPerson || !calculated.finalPricePerPerson || !calculated.totalAmount) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
     const quote: any = await Quote.create(calculated);
@@ -180,14 +206,14 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
     Object.assign(quote, pdf);
     await quote.save();
     quotes.push(quote); await createRevision(quote, request, 'Presupuesto creado');
-    await LeadActivity.create({ leadId: lead._id, type: 'quote_created', title: 'Presupuesto creado', description: `Se creó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id, salonId }, createdBy: request.user!.id });
-    await writeAuditLog(request, 'QUOTE_CREATE', 'Quote', quote._id.toString(), { leadId: lead._id.toString(), salonId });
+    await LeadActivity.create({ leadId: lead?._id, customerId: customer?._id, type: 'quote_created', title: 'Presupuesto creado', description: `Se creó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id, salonId }, createdBy: request.user!.id });
+    await writeAuditLog(request, 'QUOTE_CREATE', 'Quote', quote._id.toString(), { leadId: lead?._id?.toString(), customerId: customer?._id?.toString(), salonId });
   }
-  return sendSuccess(response, { quotes, leadId: lead._id }, 201, getApiMessage('QUOTE_CREATED'));
+  return sendSuccess(response, { quotes, leadId: lead?._id, customerId: customer?._id }, 201, getApiMessage('QUOTE_CREATED'));
 }));
 
 router.get('/:id', requirePermission(Permission.QUOTES_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
-  const quote = await Quote.findOne({ _id: request.params.id, deletedAt: null }).lean(); await ensureQuoteAccess(request, quote);
+  const quote = await Quote.findOne({ _id: request.params.id, deletedAt: null }).populate('leadId', 'fullName phone email').populate('customerId', 'fullName phone email').populate('convertedCustomerId', 'fullName phone email').populate('convertedEventId', 'eventName eventType eventDate status').lean(); await ensureQuoteAccess(request, quote);
   return sendSuccess(response, { quote: serializeQuote(quote) });
 }));
 
@@ -195,14 +221,14 @@ router.patch('/:id', requirePermission(Permission.QUOTES_UPDATE), validateReques
   const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, quote);
   if (request.body.salonId) await ensureAccessibleSalons(request, [request.body.salonId]);
   const updated = calculateQuote({ ...quote.toObject(), ...request.body, updatedBy: request.user!.id }); Object.assign(quote, updated); await quote.save(); await createRevision(quote, request, 'Presupuesto actualizado');
-  await LeadActivity.create({ leadId: quote.leadId, type: 'system', title: 'Presupuesto actualizado', description: `Se actualizó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id }, createdBy: request.user!.id });
+  await LeadActivity.create({ leadId: quote.leadId, customerId: quote.customerId, type: 'system', title: 'Presupuesto actualizado', description: `Se actualizó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id }, createdBy: request.user!.id });
   await writeAuditLog(request, 'QUOTE_UPDATE', 'Quote', quote._id.toString()); return sendSuccess(response, { quote }, 200, getApiMessage('QUOTE_UPDATED'));
 }));
 
 router.post('/:id/duplicate', requirePermission(Permission.QUOTES_CREATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const original: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, original);
   const duplicate = await Quote.create({ ...original.toObject(), _id: undefined, quoteNumber: quoteNumber(), status: 'draft', sentAt: undefined, acceptedAt: undefined, rejectedAt: undefined, createdAt: undefined, updatedAt: undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
-  await createRevision(duplicate, request, `Duplicado de ${original.quoteNumber}`); await LeadActivity.create({ leadId: duplicate.leadId, type: 'quote_created', title: 'Presupuesto duplicado', description: `Se duplicó ${original.quoteNumber} como ${duplicate.quoteNumber}.`, metadata: { quoteId: duplicate._id }, createdBy: request.user!.id });
+  await createRevision(duplicate, request, `Duplicado de ${original.quoteNumber}`); await LeadActivity.create({ leadId: duplicate.leadId, customerId: duplicate.customerId, type: 'quote_created', title: 'Presupuesto duplicado', description: `Se duplicó ${original.quoteNumber} como ${duplicate.quoteNumber}.`, metadata: { quoteId: duplicate._id }, createdBy: request.user!.id });
   await writeAuditLog(request, 'QUOTE_DUPLICATE', 'Quote', duplicate._id.toString(), { sourceQuoteId: original._id.toString() }); return sendSuccess(response, { quote: duplicate }, 201, getApiMessage('QUOTE_DUPLICATED'));
 }));
 
@@ -210,13 +236,21 @@ router.patch('/:id/status', requirePermission(Permission.QUOTES_UPDATE), validat
   const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, quote);
   if (['accepted', 'rejected', 'converted'].includes(request.body.status) && !hasQuoteApproval(request)) throw new ApiError(403, 'FORBIDDEN');
   quote.status = request.body.status; quote.updatedBy = request.user!.id; if (request.body.status === 'sent') quote.sentAt = new Date(); if (request.body.status === 'accepted') quote.acceptedAt = new Date(); if (request.body.status === 'rejected') quote.rejectedAt = new Date(); await quote.save(); await createRevision(quote, request, 'Estado actualizado');
-  await LeadActivity.create({ leadId: quote.leadId, type: request.body.status === 'sent' ? 'quote_sent' : 'system', title: 'Estado de presupuesto actualizado', description: `El presupuesto ${quote.quoteNumber} cambió de estado.`, metadata: { quoteId: quote._id, status: quote.status }, createdBy: request.user!.id }); await writeAuditLog(request, 'QUOTE_STATUS_UPDATE', 'Quote', quote._id.toString(), { status: quote.status });
+  await LeadActivity.create({ leadId: quote.leadId, customerId: quote.customerId, type: request.body.status === 'sent' ? 'quote_sent' : 'system', title: 'Estado de presupuesto actualizado', description: `El presupuesto ${quote.quoteNumber} cambió de estado.`, metadata: { quoteId: quote._id, status: quote.status }, createdBy: request.user!.id }); await writeAuditLog(request, 'QUOTE_STATUS_UPDATE', 'Quote', quote._id.toString(), { status: quote.status });
   return sendSuccess(response, { quote }, 200, getApiMessage('QUOTE_STATUS_UPDATED'));
+}));
+
+router.post('/:id/convert-to-event', requirePermission(Permission.EVENTS_CREATE), validateRequest(convertToEventSchema), asyncHandler(async (request, response) => {
+  const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureQuoteAccess(request, quote);
+  const result = await convertQuoteToEvent({ quoteId: request.params.id, userId: request.user!.id, eventName: request.body.eventName, notes: request.body.notes });
+  await writeAuditLog(request, 'QUOTE_CONVERT_TO_EVENT', 'Event', result.event._id.toString(), { quoteId: request.params.id, customerId: result.customer._id.toString() });
+  return sendSuccess(response, result, result.createdEvent ? 201 : 200, getApiMessage(result.createdEvent ? 'EVENT_CREATED_FROM_QUOTE' : 'EVENT_ALREADY_CREATED_FROM_QUOTE'));
 }));
 
 router.delete('/:id', requirePermission(Permission.QUOTES_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, quote); quote.deletedAt = new Date(); quote.deletedBy = request.user!.id; quote.updatedBy = request.user!.id; await quote.save();
-  await LeadActivity.create({ leadId: quote.leadId, type: 'system', title: 'Presupuesto eliminado', description: `Se eliminó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id }, createdBy: request.user!.id }); await writeAuditLog(request, 'QUOTE_DELETE', 'Quote', quote._id.toString());
+  await LeadActivity.create({ leadId: quote.leadId, customerId: quote.customerId, type: 'system', title: 'Presupuesto eliminado', description: `Se eliminó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id }, createdBy: request.user!.id }); await writeAuditLog(request, 'QUOTE_DELETE', 'Quote', quote._id.toString());
   return sendSuccess(response, { deleted: true }, 200, getApiMessage('QUOTE_DELETED'));
 }));
 

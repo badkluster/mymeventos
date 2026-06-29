@@ -1,0 +1,109 @@
+'use client';
+
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight, Eye, Search } from 'lucide-react';
+import { api } from '@/lib/api';
+import { eventStatusLabels } from '@/lib/display-labels';
+import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
+import { TableActionButton } from '@/components/admin/table-action-button';
+import { useToast } from '@/components/ui/toast-provider';
+import type { Event, PaginationMeta, Salon } from '@/features/quotes/types';
+
+type ListResponse = { items?: Event[]; meta?: Partial<PaginationMeta> };
+
+const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value)) : 'Sin fecha';
+const statusTone: Record<string, string> = { draft: 'bg-zinc-100 text-zinc-700', quoted: 'bg-amber-50 text-amber-800', reserved: 'bg-sky-50 text-sky-700', confirmed: 'bg-emerald-50 text-emerald-700', cancelled: 'bg-rose-50 text-rose-700', lost: 'bg-orange-50 text-orange-700' };
+
+function entityName(value: unknown) {
+  if (!value || typeof value === 'string') return 'Sin datos';
+  const item = value as { fullName?: string; name?: string; quoteNumber?: string };
+  return item.fullName || item.name || item.quoteNumber || 'Sin datos';
+}
+
+function entityId(value: unknown) {
+  return typeof value === 'string' ? value : (value as { _id?: string } | undefined)?._id ?? '';
+}
+
+function normalize(response: ListResponse): { items: Event[]; meta: PaginationMeta } {
+  const items = response.items ?? [];
+  const source = response.meta ?? {};
+  const totalItems = source.totalItems ?? items.length;
+  const limit = source.limit ?? 20;
+  const page = source.page ?? 1;
+  const totalPages = source.totalPages ?? Math.max(1, Math.ceil(totalItems / limit));
+  return { items, meta: { page, limit, totalItems, totalPages, hasNextPage: source.hasNextPage ?? page < totalPages, hasPreviousPage: source.hasPreviousPage ?? page > 1 } };
+}
+
+export default function EventsPage() {
+  const { showToast } = useToast();
+  const [items, setItems] = useState<Event[]>([]);
+  const [salons, setSalons] = useState<Salon[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({ page: 1, limit: 20, query: '', status: '', salonId: '' });
+  const [searchInput, setSearchInput] = useState('');
+  const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, totalItems: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false });
+  const [savingId, setSavingId] = useState('');
+  const setNotice = (message: string) => message && showToast({ message, variant: 'error' });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const query = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit), search: filters.query });
+      if (filters.status) query.set('status', filters.status);
+      if (filters.salonId) query.set('salonId', filters.salonId);
+      const [eventsResponse, salonsResponse] = await Promise.all([
+        api.get<ListResponse>(`/events?${query.toString()}`),
+        api.get<{ salons?: Salon[] } | Salon[]>('/salons')
+      ]);
+      const events = normalize(eventsResponse);
+      setItems(events.items);
+      setMeta(events.meta);
+      setSalons(Array.isArray(salonsResponse) ? salonsResponse : salonsResponse.salons ?? []);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'No se pudieron cargar los eventos.');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  // La pantalla debe sincronizar datos con filtros y paginación.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setFilters((current) => ({ ...current, page: 1, query: searchInput.trim() })), 350);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  const updateFilters = (changes: Partial<typeof filters>) => setFilters((current) => ({ ...current, ...changes }));
+  const updateStatus = async (event: Event, status: string) => {
+    setSavingId(event._id);
+    try {
+      await api.patch(`/events/${event._id}/status`, { status });
+      await load();
+      showToast({ message: 'Estado del evento actualizado.', variant: 'success' });
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : 'No se pudo actualizar el evento.', variant: 'error' });
+    } finally {
+      setSavingId('');
+    }
+  };
+
+  return <section className="space-y-6">
+    <PageHeader title="Eventos" description="Eventos creados desde presupuestos aceptados y futuras reservas." />
+    <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,auto)]">
+        <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-11 pl-10" placeholder="Buscar por evento o notas..." /></div>
+        <Select aria-label="Filtrar por estado" value={filters.status} onChange={(event) => updateFilters({ page: 1, status: event.target.value })} className="h-11 min-w-44"><option value="">Todos los estados</option>{Object.entries(eventStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+        <Select aria-label="Filtrar por salón" value={filters.salonId} onChange={(event) => updateFilters({ page: 1, salonId: event.target.value })} className="h-11 min-w-40"><option value="">Todos los salones</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select>
+        <Select aria-label="Cantidad de filas por página" value={filters.limit} onChange={(event) => updateFilters({ page: 1, limit: Number(event.target.value) })} className="h-11 min-w-32">{[10, 20, 50].map((item) => <option key={item} value={item}>{item} por página</option>)}</Select>
+      </div>
+    </div>
+    <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm">
+      <div className="overflow-x-auto"><table className="min-w-[1080px] w-full text-sm"><thead className="border-b border-zinc-200 bg-zinc-50/80 text-zinc-500"><tr>{['Evento / cliente', 'Fecha', 'Salón', 'Tipo de evento', 'Presupuesto origen', 'Estado'].map((label) => <th key={label} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide">{label}</th>)}<th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide">Acciones</th></tr></thead><tbody className="divide-y divide-zinc-100">{items.map((event) => { const quoteId = entityId(event.sourceQuoteId ?? event.quoteId); return <tr key={event._id} className="transition-colors hover:bg-amber-50/35"><td className="px-5 py-4"><p className="font-medium text-zinc-900">{event.eventName || event.eventType || 'Evento sin nombre'}</p><p className="mt-1 text-xs text-zinc-500">{entityName(event.customerId)}</p></td><td className="px-5 py-4 text-zinc-700">{formatDate(event.eventDate)}</td><td className="px-5 py-4 text-zinc-700">{entityName(event.salonId)}</td><td className="px-5 py-4 text-zinc-700">{event.eventType || 'Sin tipo'}</td><td className="px-5 py-4 text-zinc-700">{quoteId ? <Link href={`/admin/quotes/${quoteId}`} className="font-medium text-zinc-950 underline">{entityName(event.sourceQuoteId ?? event.quoteId)}</Link> : 'No informado'}</td><td className="px-5 py-4"><label className="sr-only" htmlFor={`event-status-${event._id}`}>Cambiar estado de evento</label><Select id={`event-status-${event._id}`} aria-label="Cambiar estado de evento" value={event.status} disabled={savingId === event._id} onChange={(change) => void updateStatus(event, change.target.value)} className={`min-w-36 py-1.5 text-xs font-semibold ${statusTone[event.status] ?? 'bg-zinc-100 text-zinc-700'}`}>{Object.entries(eventStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></td><td className="px-5 py-4"><div className="flex justify-end"><Link href={`/admin/events/${event._id}`}><TableActionButton icon={Eye} label="Ver evento" /></Link></div></td></tr>; })}</tbody></table></div>
+      {loading && <div className="px-6 py-12 text-center text-sm text-zinc-500">Cargando eventos...</div>}
+      {!loading && items.length === 0 && <div className="grid place-items-center px-6 py-16 text-center"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-100 text-zinc-500"><CalendarDays className="h-6 w-6" /></span><h2 className="mt-4 font-semibold text-zinc-900">No hay eventos</h2><p className="mt-1 max-w-sm text-sm text-zinc-500">Los presupuestos convertidos aparecerán en este listado.</p></div>}
+    </div>
+    <footer className="flex flex-col gap-4 rounded-2xl border border-zinc-200/80 bg-white px-5 py-4 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between"><span className="text-zinc-600">Mostrando <strong className="font-semibold text-zinc-950">{items.length}</strong> de <strong className="font-semibold text-zinc-950">{meta.totalItems}</strong></span><div className="flex items-center gap-2"><Button variant="secondary" className="px-3" disabled={!meta.hasPreviousPage} onClick={() => updateFilters({ page: meta.page - 1 })}><ChevronLeft className="h-4 w-4" /><span className="sr-only">Anterior</span></Button><span className="min-w-32 text-center text-zinc-600">Página {meta.page} de {meta.totalPages}</span><Button variant="secondary" className="px-3" disabled={!meta.hasNextPage} onClick={() => updateFilters({ page: meta.page + 1 })}><ChevronRight className="h-4 w-4" /><span className="sr-only">Siguiente</span></Button></div></footer>
+  </section>;
+}

@@ -7,7 +7,9 @@ export enum Permission {
 
   // Salons
   SALONS_READ = 'salons.read',
+  SALONS_CREATE = 'salons.create',
   SALONS_UPDATE = 'salons.update',
+  SALONS_DELETE = 'salons.delete',
 
   // Leads
   LEADS_READ = 'leads.read',
@@ -22,18 +24,36 @@ export enum Permission {
   QUOTES_CREATE = 'quotes.create',
   QUOTES_UPDATE = 'quotes.update',
   QUOTES_APPROVE = 'quotes.approve',
+  QUOTES_DELETE = 'quotes.delete',
+
+  // Customers
+  CUSTOMERS_READ = 'customers.read',
+  CUSTOMERS_CREATE = 'customers.create',
+  CUSTOMERS_UPDATE = 'customers.update',
+  CUSTOMERS_DELETE = 'customers.delete',
 
   // Events
   EVENTS_READ = 'events.read',
   EVENTS_CREATE = 'events.create',
   EVENTS_UPDATE = 'events.update',
   EVENTS_CANCEL = 'events.cancel',
+  EVENTS_DELETE = 'events.delete',
+
+  // Contracts
+  CONTRACTS_READ = 'contracts.read',
+  CONTRACTS_CREATE = 'contracts.create',
+  CONTRACTS_UPDATE = 'contracts.update',
+  CONTRACTS_APPROVE = 'contracts.approve',
+  CONTRACTS_CANCEL = 'contracts.cancel',
+  CONTRACTS_DELETE = 'contracts.delete',
 
   // Payments
   PAYMENTS_READ = 'payments.read',
   PAYMENTS_CREATE = 'payments.create',
+  PAYMENTS_UPDATE = 'payments.update',
   PAYMENTS_APPROVE = 'payments.approve',
   PAYMENTS_REJECT = 'payments.reject',
+  PAYMENTS_CANCEL = 'payments.cancel',
 
   // Inventory
   INVENTORY_READ = 'inventory.read',
@@ -80,11 +100,13 @@ export const RolePresets: Record<Role, Permission[]> = {
   [Role.ADMIN]: Object.values(Permission),
   [Role.MANAGER]: [
     Permission.USERS_READ,
-    Permission.SALONS_READ, Permission.SALONS_UPDATE,
+    Permission.SALONS_READ, Permission.SALONS_CREATE, Permission.SALONS_UPDATE,
     Permission.LEADS_READ, Permission.LEADS_CREATE, Permission.LEADS_UPDATE, Permission.LEADS_ASSIGN, Permission.LEADS_CONVERT,
     Permission.QUOTES_READ, Permission.QUOTES_CREATE, Permission.QUOTES_UPDATE, Permission.QUOTES_APPROVE,
-    Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE,
-    Permission.PAYMENTS_READ,
+    Permission.CUSTOMERS_READ, Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_UPDATE,
+    Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE, Permission.EVENTS_CANCEL,
+    Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE, Permission.CONTRACTS_APPROVE, Permission.CONTRACTS_CANCEL,
+    Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_UPDATE,
     Permission.INVENTORY_READ, Permission.INVENTORY_UPDATE, Permission.INVENTORY_RESERVE, Permission.INVENTORY_RETURN,
     Permission.PROMOTIONS_READ, Permission.PROMOTIONS_CREATE, Permission.PROMOTIONS_UPDATE,
     Permission.CAMPAIGNS_READ, Permission.CAMPAIGNS_CREATE, Permission.CAMPAIGNS_SEND,
@@ -95,8 +117,10 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.SALONS_READ,
     Permission.LEADS_READ, Permission.LEADS_CREATE, Permission.LEADS_UPDATE, Permission.LEADS_ASSIGN, Permission.LEADS_CONVERT,
     Permission.QUOTES_READ, Permission.QUOTES_CREATE, Permission.QUOTES_UPDATE,
+    Permission.CUSTOMERS_READ, Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_UPDATE,
     Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE,
-    Permission.PAYMENTS_READ,
+    Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE,
+    Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE,
     Permission.INVENTORY_READ, Permission.INVENTORY_RESERVE, Permission.INVENTORY_RETURN,
     Permission.REPORTS_READ
   ],
@@ -105,18 +129,22 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.INVENTORY_READ
   ],
   [Role.ACCOUNTING]: [
-    Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_APPROVE, Permission.PAYMENTS_REJECT,
+    Permission.CONTRACTS_READ,
+    Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_UPDATE, Permission.PAYMENTS_APPROVE, Permission.PAYMENTS_REJECT, Permission.PAYMENTS_CANCEL,
     Permission.REPORTS_READ, Permission.REPORTS_EXPORT,
     Permission.PAYROLL_READ, Permission.PAYROLL_MANAGE
   ],
   [Role.OPERATIONS]: [
-    Permission.EVENTS_READ,
+    Permission.EVENTS_READ, Permission.EVENTS_UPDATE,
+    Permission.CONTRACTS_READ,
     Permission.INVENTORY_READ, Permission.INVENTORY_UPDATE, Permission.INVENTORY_RESERVE, Permission.INVENTORY_RETURN
   ],
   [Role.SALES]: [
     Permission.LEADS_READ, Permission.LEADS_CREATE, Permission.LEADS_UPDATE,
     Permission.QUOTES_READ, Permission.QUOTES_CREATE, Permission.QUOTES_UPDATE,
-    Permission.EVENTS_READ
+    Permission.CUSTOMERS_READ, Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_UPDATE,
+    Permission.EVENTS_READ, Permission.EVENTS_CREATE,
+    Permission.CONTRACTS_READ
   ],
   [Role.VALIDATOR]: [
     Permission.TICKETS_VALIDATE, Permission.TICKETS_READ

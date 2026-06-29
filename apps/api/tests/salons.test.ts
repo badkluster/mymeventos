@@ -24,9 +24,11 @@ vi.mock('../src/modules/salons/salon.model', () => ({
 }));
 vi.mock('../src/modules/crm/crm.models', () => ({
   Lead: {}, LeadActivity: {},
+  Customer: {}, Event: {}, Contract: { findOne: vi.fn() }, ContractAddendum: {},
   PackageTemplate: { find: mocks.packageFind, exists: mocks.packageExists },
   Quote: {}, QuoteRevision: {},
-  VenuePackageRule: { find: mocks.ruleFind, findOneAndUpdate: mocks.ruleFindOneAndUpdate }
+  VenuePackageRule: { find: mocks.ruleFind, findOneAndUpdate: mocks.ruleFindOneAndUpdate },
+  Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn() }
 }));
 vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: mocks.writeAuditLog }));
 vi.mock('../src/modules/notifications/notification.service', () => ({ createNotifications: vi.fn() }));
@@ -61,6 +63,7 @@ describe('salons management', () => {
     });
     mocks.userFind.mockReturnValue(chainSelectLean([]));
     mocks.userFindOneAndUpdate.mockResolvedValue({});
+    mocks.salonFindOne.mockReturnValue({ select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: salonId, managerUserId: undefined }) }) });
     mocks.salonExists.mockResolvedValue(null);
   });
 
@@ -111,7 +114,10 @@ describe('salons management', () => {
       .send({ managerUserId: managerId });
 
     expect(response.status).toBe(200);
-    expect(mocks.userFindOneAndUpdate).toHaveBeenCalledWith({ _id: managerId, active: true, deletedAt: null }, { $addToSet: { salonIds: salonId } });
+    expect(mocks.userFindOneAndUpdate).toHaveBeenCalledWith(
+      { _id: managerId, deletedAt: null },
+      expect.objectContaining({ $addToSet: { salonIds: salonId, managedSalonIds: salonId } })
+    );
   });
 
   it('rejects an unknown manager user', async () => {

@@ -5,7 +5,8 @@ import { User } from '../modules/users/user.model';
 import { SystemSetting } from '../modules/settings/systemSetting.model';
 import { PackageTemplate, VenuePackageRule } from '../modules/crm/crm.models';
 import { hashPassword } from '../utils/password';
-import { Role } from '@mym/shared';
+import { Permission, Role } from '@mym/shared';
+import { buildUserFullName, normalizeUserEmail, normalizeUserPhone } from '../modules/users/user.model';
 
 const packageTemplates = [
   {
@@ -187,7 +188,100 @@ const salonManagerSeeds = [
   }
 ];
 
+const backofficeUserSeeds = [
+  {
+    username: 'ventas.general',
+    email: 'ventas@mm-eventos.com',
+    firstName: 'Equipo',
+    lastName: 'Comercial',
+    phone: '221 555-1201',
+    roles: [Role.SALES],
+    position: 'Ventas y seguimiento comercial',
+    department: 'Comercial',
+    canReceiveLeadNotifications: true,
+    canReceiveQuoteRequestNotifications: true,
+    permissionOverrides: [Permission.LEADS_READ, Permission.QUOTES_READ, Permission.CUSTOMERS_READ]
+  },
+  {
+    username: 'operaciones.general',
+    email: 'operaciones@mm-eventos.com',
+    firstName: 'Equipo',
+    lastName: 'Operaciones',
+    phone: '221 555-1202',
+    roles: [Role.OPERATIONS],
+    position: 'Coordinación operativa',
+    department: 'Operaciones',
+    canReceiveLeadNotifications: false,
+    canReceiveQuoteRequestNotifications: false,
+    permissionOverrides: [Permission.EVENTS_READ, Permission.CONTRACTS_READ]
+  },
+  {
+    username: 'administracion.cobros',
+    email: 'cobros@mm-eventos.com',
+    firstName: 'Administración',
+    lastName: 'Cobros',
+    phone: '221 555-1203',
+    roles: [Role.ACCOUNTING],
+    position: 'Pagos y cobranzas',
+    department: 'Administración',
+    canReceiveLeadNotifications: false,
+    canReceiveQuoteRequestNotifications: false,
+    permissionOverrides: [Permission.PAYMENTS_READ, Permission.CONTRACTS_READ]
+  },
+  {
+    username: 'staff.eventos',
+    email: 'staff@mm-eventos.com',
+    firstName: 'Staff',
+    lastName: 'Eventos',
+    phone: '221 555-1204',
+    roles: [Role.STAFF],
+    position: 'Staff de eventos',
+    department: 'Eventos',
+    canReceiveLeadNotifications: false,
+    canReceiveQuoteRequestNotifications: false,
+    permissionOverrides: []
+  }
+];
+
 const defaultManagerPassword = 'MymEventos2026!';
+const defaultBackofficePassword = 'MymEventos2026!';
+
+function userSeedSet(seed: { username: string; email: string; firstName: string; lastName: string; phone: string; roles: Role[]; position: string; department: string; canReceiveLeadNotifications: boolean; canReceiveQuoteRequestNotifications: boolean; permissionOverrides?: Permission[] }, salonIds: unknown[]) {
+  return {
+    email: normalizeUserEmail(seed.email),
+    normalizedEmail: normalizeUserEmail(seed.email),
+    firstName: seed.firstName,
+    lastName: seed.lastName,
+    fullName: buildUserFullName(seed.firstName, seed.lastName),
+    phone: seed.phone,
+    normalizedPhone: normalizeUserPhone(seed.phone),
+    roles: seed.roles,
+    primaryRole: seed.roles[0],
+    permissionOverrides: seed.permissionOverrides ?? [],
+    permissionDeniedOverrides: [],
+    active: true,
+    deletedAt: null,
+    salonIds,
+    primarySalonId: salonIds[0],
+    canReceiveLeadNotifications: seed.canReceiveLeadNotifications,
+    canReceiveQuoteRequestNotifications: seed.canReceiveQuoteRequestNotifications,
+    mustChangePassword: true,
+    notificationPreferences: {
+      emailNotificationsEnabled: true,
+      systemNotificationsEnabled: true,
+      whatsappNotificationsEnabled: false,
+      notifyOnNewLead: seed.canReceiveLeadNotifications,
+      notifyOnNewQuoteRequest: seed.canReceiveQuoteRequestNotifications,
+      notifyOnQuoteApproved: true,
+      notifyOnContractApproved: true,
+      notifyOnPaymentReceived: seed.roles.includes(Role.ACCOUNTING),
+      notifyOnEventReminder: true,
+      notifyOnAssignedTask: true
+    },
+    employeeProfile: { position: seed.position, department: seed.department, employmentStatus: 'active' },
+    attendanceConfig: { enabled: false, canUseMobileApp: true, requiresGeolocation: false, requiresWifiOrIpValidation: false, allowedIpAddresses: [], allowManualAdjustment: false }
+  };
+}
 
 async function seed(): Promise<void> {
   await connectDatabase();
@@ -198,6 +292,7 @@ async function seed(): Promise<void> {
   )));
   const salonsByName = new Map(salons.map((salon) => [salon.name, salon]));
   const managerPasswordHash = await hashPassword(defaultManagerPassword);
+  const backofficePasswordHash = await hashPassword(defaultBackofficePassword);
   let createdManagers = 0;
   let updatedManagers = 0;
   for (const managerSeed of salonManagerSeeds) {
@@ -208,18 +303,27 @@ async function seed(): Promise<void> {
       { username: managerSeed.username },
       {
         $set: {
-          email: managerSeed.email,
+          email: normalizeUserEmail(managerSeed.email),
+          normalizedEmail: normalizeUserEmail(managerSeed.email),
           firstName: managerSeed.firstName,
           lastName: managerSeed.lastName,
+          fullName: buildUserFullName(managerSeed.firstName, managerSeed.lastName),
           phone: managerSeed.phone,
+          normalizedPhone: normalizeUserPhone(managerSeed.phone),
           roles: [Role.SALON_MANAGER],
+          primaryRole: Role.SALON_MANAGER,
           active: true,
           deletedAt: null,
           primarySalonId: salon._id,
           primaryManagedSalonId: salon._id,
           mustChangePassword: true,
-          notificationPreferences: { email: true, inApp: true, whatsapp: false, newLead: true, newQuoteRequest: true, quoteAccepted: true, eventReminder: true, paymentReminder: true },
-          attendanceConfig: { canUseMobileApp: false, requiresGeolocation: true, requiresWifiOrIpValidation: false, allowedIpAddresses: [] }
+          canReceiveLeadNotifications: true,
+          canReceiveQuoteRequestNotifications: true,
+          permissionOverrides: [],
+          permissionDeniedOverrides: [],
+          notificationPreferences: { email: true, inApp: true, whatsapp: false, newLead: true, newQuoteRequest: true, quoteAccepted: true, eventReminder: true, paymentReminder: true, emailNotificationsEnabled: true, systemNotificationsEnabled: true, whatsappNotificationsEnabled: false, notifyOnNewLead: true, notifyOnNewQuoteRequest: true, notifyOnQuoteApproved: true, notifyOnContractApproved: true, notifyOnPaymentReceived: false, notifyOnEventReminder: true, notifyOnAssignedTask: true },
+          employeeProfile: { position: `Encargado/a ${managerSeed.salonName}`, department: 'Operaciones', employmentStatus: 'active' },
+          attendanceConfig: { enabled: false, canUseMobileApp: false, requiresGeolocation: true, requiresWifiOrIpValidation: false, allowedIpAddresses: [], allowManualAdjustment: false }
         },
         $addToSet: { salonIds: salon._id, managedSalonIds: salon._id },
         $setOnInsert: { username: managerSeed.username, passwordHash: managerPasswordHash }
@@ -229,9 +333,25 @@ async function seed(): Promise<void> {
     await Salon.findByIdAndUpdate(salon._id, { $set: { managerUserId: manager._id } });
     existingManager ? updatedManagers++ : createdManagers++;
   }
+  let createdBackofficeUsers = 0;
+  let updatedBackofficeUsers = 0;
+  const allSalonIds = salons.map((salon) => salon._id);
+  for (const userSeed of backofficeUserSeeds) {
+    const existingUser = await User.findOne({ username: userSeed.username });
+    await User.findOneAndUpdate(
+      { username: userSeed.username },
+      {
+        $set: userSeedSet(userSeed, allSalonIds),
+        $setOnInsert: { username: userSeed.username, passwordHash: backofficePasswordHash }
+      },
+      { new: true, upsert: true }
+    );
+    existingUser ? updatedBackofficeUsers++ : createdBackofficeUsers++;
+  }
   const hasAdminCredentials = Boolean(env.SEED_ADMIN_USERNAME && env.SEED_ADMIN_EMAIL && env.SEED_ADMIN_PASSWORD && env.SEED_ADMIN_PASSWORD.length >= 12);
   if (hasAdminCredentials) await User.findOneAndUpdate({ username: env.SEED_ADMIN_USERNAME!.toLowerCase() }, {
-    $setOnInsert: { username: env.SEED_ADMIN_USERNAME!.toLowerCase(), email: env.SEED_ADMIN_EMAIL!.toLowerCase(), passwordHash: await hashPassword(env.SEED_ADMIN_PASSWORD!), firstName: 'Administrador', lastName: 'Inicial', roles: [Role.ADMIN], salonIds: salons.map((salon) => salon._id), active: true }
+    $set: { email: env.SEED_ADMIN_EMAIL!.toLowerCase(), normalizedEmail: normalizeUserEmail(env.SEED_ADMIN_EMAIL!), firstName: 'Administrador', lastName: 'Inicial', fullName: 'Administrador Inicial', roles: [Role.ADMIN], primaryRole: Role.ADMIN, salonIds: allSalonIds, primarySalonId: allSalonIds[0], active: true, deletedAt: null },
+    $setOnInsert: { username: env.SEED_ADMIN_USERNAME!.toLowerCase(), passwordHash: await hashPassword(env.SEED_ADMIN_PASSWORD!) }
   }, { upsert: true });
   else console.warn('Seed de usuario administrador omitido: faltan credenciales válidas. Se continuará con la precarga comercial.');
   await SystemSetting.findOneAndUpdate({ key: 'application' }, { $setOnInsert: { key: 'application', value: { timezone: 'America/Argentina/Buenos_Aires', currency: 'ARS' }, description: 'Configuración inicial de la aplicación' } }, { upsert: true });
@@ -255,7 +375,7 @@ async function seed(): Promise<void> {
       if (!existingRule) createdRules++;
     }
   }
-  console.info(`Initial data seeded: ${createdPackages} packages created, ${updatedPackages} packages updated, ${createdRules} venue rules created, ${createdManagers} salon managers created, ${updatedManagers} salon managers updated.`);
+  console.info(`Initial data seeded: ${createdPackages} packages created, ${updatedPackages} packages updated, ${createdRules} venue rules created, ${createdManagers} salon managers created, ${updatedManagers} salon managers updated, ${createdBackofficeUsers} backoffice users created, ${updatedBackofficeUsers} backoffice users updated.`);
 }
 
 seed().then(disconnectDatabase).catch(async (error) => { console.error('Seed failed:', error); await disconnectDatabase(); process.exitCode = 1; });

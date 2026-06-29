@@ -19,7 +19,8 @@ const environmentSchema = z.object({
   COOKIE_SECURE: booleanSchema.default('false'),
   COOKIE_SAME_SITE: sameSiteSchema.default('lax'),
   SMTP_HOST: z.string().optional(), SMTP_PORT: z.coerce.number().int().positive().optional(),
-  SMTP_USER: z.string().optional(), SMTP_PASS: z.string().optional(),
+  SMTP_USER: z.string().optional(), SMTP_PASS: z.string().optional(), SMTP_FROM: z.string().optional(),
+  EMAIL_NOTIFICATIONS_ENABLED: booleanSchema.default('false'),
   CLOUDINARY_CLOUD_NAME: z.string().optional(), CLOUDINARY_API_KEY: z.string().optional(), CLOUDINARY_API_SECRET: z.string().optional(), CLOUDINARY_URL: z.string().optional(),
   SEED_ADMIN_USERNAME: z.string().optional(), SEED_ADMIN_EMAIL: z.string().optional(), SEED_ADMIN_PASSWORD: z.string().optional()
 });

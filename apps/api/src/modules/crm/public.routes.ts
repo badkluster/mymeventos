@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { Lead, LeadActivity, PackageTemplate, VenuePackageRule } from './crm.models';
+import { PackageTemplate, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
-import { createNotifications } from '../notifications/notification.service';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { ApiError } from '../../middlewares/errorHandler';
+import { createQuoteRequest } from './quote-request.service';
 
 const router = Router();
 const schema = z.object({
@@ -88,11 +88,19 @@ router.get('/salons', asyncHandler(async (_request, response) => {
 router.post('/quick-quote', validateRequest(schema), asyncHandler(async (request, response) => {
   const salon = await Salon.exists({ _id: request.body.salonId, active: true, deletedAt: null });
   if (!salon) throw new ApiError(404, 'SALON_NOT_FOUND');
-  const [firstName, ...last] = request.body.name.trim().split(/\s+/);
-  const lead = await Lead.create({ ...request.body, firstName, lastName: last.join(' '), fullName: request.body.name, salonIds: [request.body.salonId], source: 'quick_quote', status: 'new' });
-  await LeadActivity.create({ leadId: lead._id, type: 'system', title: 'Solicitud rápida recibida' });
-  await createNotifications({ type: 'lead.created', title: 'Nueva cotización rápida', message: `${lead.fullName} solicitó información para ${lead.eventType}.`, actionUrl: `/admin/leads/${lead._id}`, metadata: { leadId: lead._id, salonId: request.body.salonId } });
-  return sendSuccess(response, { leadId: lead._id }, 201, getApiMessage('QUICK_QUOTE_CREATED'));
+  const result = await createQuoteRequest({
+    source: 'quick_quote',
+    contactName: request.body.name,
+    phone: request.body.phone,
+    email: request.body.email,
+    eventType: request.body.eventType,
+    estimatedEventDate: request.body.eventDate,
+    guestCount: request.body.guestCount,
+    interestedSalonIds: [request.body.salonId],
+    message: request.body.message,
+    originalPayload: request.body
+  });
+  return sendSuccess(response, { leadId: result.lead?._id, customerId: result.customer?._id, quoteRequestId: result.quoteRequest._id }, 201, 'Recibimos tu solicitud. Un asesor de M&M Eventos se contactará para enviarte el presupuesto.');
 }));
 
 export default router;

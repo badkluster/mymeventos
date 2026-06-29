@@ -1,1 +1,20 @@
-const cards = ['Leads nuevos', 'Eventos confirmados', 'Presupuestos pendientes', 'Pagos vencidos', 'Próximos eventos', 'Promociones activas', 'Stock con conflictos', 'Entradas vendidas']; export default function AdminPage() { return <><h1 className="text-2xl font-semibold">Resumen general</h1><p className="mt-1 text-sm text-zinc-500">Indicadores de ejemplo para la futura operación.</p><section className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{cards.map((card) => <article key={card} className="rounded-xl border bg-card p-5"><p className="text-sm text-zinc-500">{card}</p><p className="mt-3 text-3xl font-semibold">—</p></article>)}</section></>; }
+'use client';
+import Link from 'next/link';
+import { PageHeader } from '@/components/ui/primitives';
+import { visibleAdminModules } from '@/lib/admin-permissions';
+import { useSession } from '@/components/session-provider';
+
+export default function AdminPage() {
+  const { user } = useSession();
+  const modules = visibleAdminModules(user).filter((module) => module.href !== '/admin');
+  return <section className="space-y-6">
+    <PageHeader title="Panel" description="Accesos directos a los módulos implementados del backoffice." />
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {modules.map(({ title, description, href, icon: Icon }) => <Link key={href} href={href} className="group rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50" aria-label={`Ir a ${title}`}>
+        <span className="grid h-11 w-11 place-items-center rounded-xl bg-zinc-100 text-zinc-700 transition group-hover:bg-zinc-950 group-hover:text-white"><Icon className="h-5 w-5" /></span>
+        <h2 className="mt-5 text-base font-semibold text-zinc-950">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-zinc-500">{description}</p>
+      </Link>)}
+    </div>
+  </section>;
+}
