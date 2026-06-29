@@ -6,427 +6,431 @@ import Image from 'next/image';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Camera, Check, ChevronLeft, ChevronRight, ChevronUp, Clock3, Gift, MapPin, MessageCircle, PackageCheck, PlayCircle, Sparkles, Users, Utensils, X } from 'lucide-react';
+import { ArrowRight, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, ChevronUp, Clock3, ExternalLink, Gift, GlassWater, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { brandAssets } from '@/lib/brand-assets';
-import { faqs, packages as fallbackPackages, services } from '@/features/landing/data/landing-data';
 
-type PublicMedia = {
-  _id?: string;
-  url: string;
-  secureUrl?: string;
-  resourceType: 'image' | 'video' | 'raw';
-  title?: string;
-  altText?: string;
-  displayOrder?: number;
-};
+type Media = { url: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
+type ExtraService = { _id?: string; name: string; description?: string; basePrice?: number; includedByDefault?: boolean };
+type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
+type Package = { _id: string; name: string; salonId?: string; salonName?: string; durationHours?: number; pricePerPerson?: number; finalPricePerPerson?: number; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
+type LandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
+type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
+type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[] };
 
-type PublicPackage = {
-  _id: string;
-  name: string;
-  durationHours?: number;
-  startTime?: string;
-  endTime?: string;
-  pricePerPerson?: number;
-  discountPercentage?: number;
-  finalPricePerPerson?: number;
-  depositAmount?: number;
-  paymentTerms?: string;
-  promotionText?: string;
-  giftText?: string;
-  includedServices?: string[];
-  menuSections?: { title?: string; name?: string; items: string[] }[];
-  ruleConfigured?: boolean;
-};
+const fallbackHero = 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1800&q=80';
+const fallbackGallery = [
+  'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1478146896981-b80fe463b330?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=900&q=80',
+];
+const fallbackServices = [
+  { title: 'Catering', description: 'Menús gourmet para cada tipo de evento.', icon: 'Utensils' },
+  { title: 'Barra y bebidas', description: 'Tragos y bebidas premium durante la noche.', icon: 'GlassWater' },
+  { title: 'DJ e iluminación', description: 'Sonido profesional y ambientación lumínica.', icon: 'Music' },
+  { title: 'Organización completa', description: 'Coordinación integral antes y durante el evento.', icon: 'Sparkles' },
+];
+const fallbackEventTypes = ['15 años', 'Casamientos', 'Cumpleaños', 'Egresados', 'Empresariales', 'Infantiles'].map((title) => ({ title, description: 'Propuestas a medida para celebrar sin preocuparte.', icon: 'PartyPopper' }));
+const fallbackFaqs = [
+  { question: '¿Con cuánta anticipación debo reservar?', answer: 'Recomendamos consultar cuanto antes para asegurar disponibilidad y congelar condiciones comerciales.' },
+  { question: '¿Puedo visitar el salón antes del evento?', answer: 'Sí, coordinamos una visita para que conozcas el espacio y revisemos tu idea en detalle.' },
+  { question: '¿Qué incluye el servicio de catering?', answer: 'Depende del paquete, pero podemos incluir recepción, plato principal, postre, mesa dulce, bebidas y barra.' },
+  { question: '¿Se puede congelar el precio con seña?', answer: 'Sí, las condiciones vigentes se pueden reservar abonando la seña indicada en la propuesta.' },
+];
 
-type PublicExtra = {
-  _id?: string;
-  name: string;
-  description?: string;
-  basePrice?: number;
-  includedByDefault?: boolean;
-};
-
-type PublicSalon = {
-  _id: string;
-  name: string;
-  slug?: string;
-  address?: string;
-  city?: string;
-  locality?: string;
-  province?: string;
-  phone?: string;
-  whatsapp?: string;
-  email?: string;
-  publicTitle?: string;
-  publicShortDescription?: string;
-  publicDescription?: string;
-  heroImageUrl?: string;
-  galleryImageUrls?: string[];
-  mediaGallery?: PublicMedia[];
-  locationText?: string;
-  mapUrl?: string;
-  minCapacity?: number;
-  maxCapacity?: number;
-  recommendedCapacity?: number;
-  defaultStartTime?: string;
-  defaultEndTime?: string;
-  defaultDurationHours?: number;
-  allowsExtraHour?: boolean;
-  extraHourPrice?: number;
-  defaultDepositAmount?: number;
-  defaultPaymentTerms?: string;
-  packages?: PublicPackage[];
-  extraServices?: PublicExtra[];
-};
-
-const section = 'mx-auto max-w-6xl px-6 py-20';
 const money = (value?: number) => value ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value) : 'Consultar';
+const iconMap = { Utensils, GlassWater, Music, Sparkles, PartyPopper, CalendarDays, Gift, Camera, Users };
+
+function InstagramIcon({ className = '' }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.9" fill="currentColor" stroke="none" /></svg>;
+}
+
+function FacebookIcon({ className = '' }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor"><path d="M14.2 8.2V6.9c0-.7.5-.9 1-.9h1.8V3.1c-.3 0-1.4-.1-2.7-.1-2.7 0-4.5 1.6-4.5 4.6v.6H7v3.3h2.8V21h3.5v-9.5h2.9l.5-3.3h-3Z" /></svg>;
+}
+
+function TikTokIcon({ className = '' }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor"><path d="M15.9 3c.3 2.1 1.5 3.6 3.6 3.9v3.1a7 7 0 0 1-3.6-1.1v5.7c0 3.6-2.2 6.4-5.8 6.4A5.7 5.7 0 0 1 4.4 15c0-3.4 2.8-5.9 6.4-5.5v3.3c-1.7-.3-3 .6-3 2.2 0 1.4 1 2.5 2.4 2.5 1.6 0 2.4-1 2.4-3V3h3.3Z" /></svg>;
+}
+
+function WhatsAppIcon({ className = '' }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor"><path d="M12.04 2C6.57 2 2.12 6.37 2.12 11.75c0 1.72.46 3.4 1.34 4.88L2 22l5.52-1.42a10.1 10.1 0 0 0 4.52.94c5.47 0 9.92-4.37 9.92-9.76S17.51 2 12.04 2Zm0 17.82a8.36 8.36 0 0 1-4.22-1.14l-.3-.18-3.27.84.87-3.12-.2-.32a7.9 7.9 0 0 1-1.2-4.15c0-4.44 3.73-8.05 8.32-8.05 4.58 0 8.31 3.61 8.31 8.05s-3.73 8.07-8.31 8.07Zm4.56-6.03c-.25-.12-1.48-.72-1.71-.8-.23-.09-.4-.13-.57.12-.17.25-.65.8-.8.97-.15.17-.3.19-.55.07-.25-.13-1.06-.38-2.02-1.21a7.5 7.5 0 0 1-1.4-1.71c-.15-.25-.02-.39.11-.51.12-.12.25-.3.37-.44.13-.15.17-.25.25-.42.09-.17.04-.32-.02-.44-.06-.13-.57-1.35-.78-1.84-.2-.48-.41-.42-.57-.43h-.48c-.17 0-.44.06-.67.32-.23.25-.88.85-.88 2.07s.9 2.4 1.03 2.57c.13.17 1.78 2.68 4.31 3.75.6.26 1.07.41 1.44.53.6.19 1.15.16 1.59.1.48-.07 1.48-.6 1.69-1.18.21-.58.21-1.08.15-1.18-.06-.11-.23-.17-.49-.3Z" /></svg>;
+}
+
+function titleForSalon(salon: Salon) { return salon.publicTitle || salon.name; }
+function locationForSalon(salon: Salon) { return salon.locationText || salon.locality || salon.city || salon.address || 'La Plata'; }
+function descriptionForSalon(salon: Salon) { return salon.publicShortDescription || salon.publicDescription || 'Un espacio M&M preparado para celebrar con servicio integral.'; }
+function imageForSalon(salon: Salon) { return salon.heroImageUrl || salon.mediaGallery?.[0]?.secureUrl || salon.mediaGallery?.[0]?.url || salon.galleryImageUrls?.[0] || fallbackHero; }
+function capacityForSalon(salon: Salon) {
+  if (salon.minCapacity && salon.maxCapacity) return `${salon.minCapacity} a ${salon.maxCapacity} personas`;
+  if (salon.maxCapacity || salon.recommendedCapacity) return `Hasta ${salon.maxCapacity || salon.recommendedCapacity} personas`;
+  return 'Capacidad a confirmar';
+}
+function mediaForSalon(salon: Salon): Media[] {
+  const items: Media[] = [
+    ...(salon.heroImageUrl ? [{ url: salon.heroImageUrl, title: titleForSalon(salon), resourceType: 'image', displayOrder: -1 } satisfies Media] : []),
+    ...(salon.mediaGallery ?? []),
+    ...(salon.galleryImageUrls ?? []).map((url, index) => ({ url, resourceType: 'image', displayOrder: index + 50 })),
+  ];
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const source = item.secureUrl || item.url;
+    if (!source || seen.has(source)) return false;
+    seen.add(source);
+    return true;
+  }).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+}
+function waLink(number?: string, message = 'Hola M&M Eventos, quiero solicitar un presupuesto para mi evento.') {
+  return `https://wa.me/${(number || '').replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+}
+function scrollTo(id: string) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function salonWaMessage(salon: Salon) {
+  return `Hola M&M Eventos, vengo de la web y quiero más información sobre ${titleForSalon(salon)} (${locationForSalon(salon)}).`;
+}
+function mapUrlForSalon(salon: Salon) {
+  const query = salon.address || salon.locationText || [titleForSalon(salon), salon.locality || salon.city].filter(Boolean).join(', ');
+  if (salon.mapUrl && (salon.mapUrl.includes('/embed') || salon.mapUrl.includes('output=embed'))) return salon.mapUrl;
+  return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+}
+function mapExternalUrlForSalon(salon: Salon) {
+  const query = salon.address || salon.locationText || [titleForSalon(salon), salon.locality || salon.city].filter(Boolean).join(', ');
+  return salon.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function SectionTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
+  return <div className="mx-auto mb-8 max-w-3xl text-center">
+    <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#d8b56d]">{eyebrow}</p>
+    <h2 className="mt-3 text-3xl font-semibold text-white md:text-5xl">{title}</h2>
+    {subtitle ? <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">{subtitle}</p> : null}
+  </div>;
+}
+
+function IconBadge({ name }: { name?: string }) {
+  const Icon = iconMap[(name || 'Sparkles') as keyof typeof iconMap] || Sparkles;
+  return <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#d8b56d]/30 bg-[#d8b56d]/10 text-[#e8c77a]"><Icon className="h-5 w-5" /></span>;
+}
 
 function Portal({ children }: { children: React.ReactNode }) {
   if (typeof document === 'undefined') return null;
   return createPortal(children, document.body);
 }
 
-function salonTitle(salon: PublicSalon) {
-  return salon.publicTitle || salon.name;
-}
-
-function salonLocation(salon: PublicSalon) {
-  return salon.locationText || salon.locality || salon.city || salon.address || 'Ubicación a confirmar';
-}
-
-function salonDescription(salon: PublicSalon) {
-  return salon.publicShortDescription || salon.publicDescription || 'Un espacio M&M preparado para celebrar con atención integral, servicios coordinados y una propuesta comercial personalizada.';
-}
-
-function salonMedia(salon: PublicSalon): PublicMedia[] {
-  const structured = salon.mediaGallery ?? [];
-  const gallery: PublicMedia[] = (salon.galleryImageUrls ?? []).map((url, index) => ({ url, resourceType: 'image' as const, displayOrder: index + 20 }));
-  const hero: PublicMedia[] = salon.heroImageUrl ? [{ url: salon.heroImageUrl, resourceType: 'image' as const, displayOrder: -1, title: salonTitle(salon) }] : [];
-  const seen = new Set<string>();
-  return [...hero, ...structured, ...gallery]
-    .filter((asset) => asset.url || asset.secureUrl)
-    .filter((asset) => {
-      const url = asset.secureUrl || asset.url;
-      if (seen.has(url)) return false;
-      seen.add(url);
-      return true;
-    })
-    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-}
-
-function Capacity({ salon }: { salon: PublicSalon }) {
-  if (!salon.minCapacity && !salon.maxCapacity && !salon.recommendedCapacity) return <span>Capacidad a confirmar</span>;
-  if (salon.minCapacity && salon.maxCapacity) return <span>{salon.minCapacity} a {salon.maxCapacity} personas</span>;
-  return <span>Hasta {salon.maxCapacity || salon.recommendedCapacity} personas</span>;
-}
-
-function MediaFrame({ asset, title, className = '' }: { asset?: PublicMedia; title: string; className?: string }) {
-  if (!asset) return <div className={`grid place-items-end overflow-hidden bg-[radial-gradient(circle_at_top_left,#71717a,transparent_36%),linear-gradient(135deg,#27272a,#030303)] p-5 ${className}`}><span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 backdrop-blur">M&M Eventos</span></div>;
-  const source = asset.secureUrl || asset.url;
-  if (asset.resourceType === 'video') return <video src={source} className={`h-full w-full object-cover ${className}`} controls playsInline preload="metadata" aria-label={asset.title || title} />;
-  return <img src={source} alt={asset.altText || asset.title || title} className={`h-full w-full object-cover ${className}`} loading="lazy" />;
-}
-
-function whatsappHref(phone: string | undefined, message: string) {
-  const digits = phone?.replace(/\D/g, '');
-  return `https://wa.me/${digits || ''}?text=${encodeURIComponent(message)}`;
-}
-
-function salonWhatsappMessage(salon: PublicSalon) {
-  return `Hola M&M Eventos, vengo de la web y quiero obtener más información sobre ${salonTitle(salon)} (${salonLocation(salon)}). ¿Me podrían asesorar para realizar un evento?`;
-}
-
-function packageWhatsappMessage(salon: PublicSalon, item: PublicPackage) {
-  const price = item.finalPricePerPerson || item.pricePerPerson ? ` Valor publicado: ${money(item.finalPricePerPerson || item.pricePerPerson)} por persona.` : '';
-  return `Hola M&M Eventos, vengo de la web y quiero consultar por el salón ${salonTitle(salon)} y el paquete ${item.name}.${price} ¿Me podrían enviar más información y disponibilidad?`;
-}
-
-function mapEmbedUrl(salon: PublicSalon) {
-  const query = salon.address || salon.locationText || [salon.name, salon.locality || salon.city, salon.province].filter(Boolean).join(', ');
-  return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
-}
-
-function PackageCard({ item, cta }: { item: PublicPackage; cta?: React.ReactNode }) {
-  return <article className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <h4 className="text-lg font-semibold text-white">{item.name}</h4>
-        <p className="mt-1 text-sm text-zinc-400">{item.durationHours ? `${item.durationHours} horas` : 'Duración a confirmar'}{item.startTime && item.endTime ? ` · ${item.startTime} a ${item.endTime}` : ''}</p>
-      </div>
-      {item.discountPercentage ? <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-200">{item.discountPercentage}% off</span> : null}
-    </div>
-    <p className="mt-4 text-2xl font-semibold">{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs font-normal text-zinc-400">por persona</span></p>
-    {item.promotionText ? <p className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">{item.promotionText}</p> : null}
-    {item.giftText ? <p className="mt-3 flex gap-2 text-sm text-zinc-300"><Gift className="mt-0.5 h-4 w-4 shrink-0 text-amber-200" />{item.giftText}</p> : null}
-    {item.includedServices?.length ? <ul className="mt-4 space-y-2 text-sm text-zinc-300">{item.includedServices.slice(0, 5).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />{service}</li>)}</ul> : null}
-    {cta ? <div className="mt-5">{cta}</div> : null}
-  </article>;
-}
-
-function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon?: PublicSalon; onClose: () => void; onRequestQuote: (salon: PublicSalon) => void }) {
-  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
+function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | null; onClose: () => void; onRequestQuote: (salon: Salon) => void }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
-  const media = useMemo(() => salon ? salonMedia(salon) : [], [salon]);
+  const media = useMemo(() => salon ? mediaForSalon(salon) : [], [salon]);
 
   useEffect(() => {
     if (!salon) return;
-    const previousOverflow = document.body.style.overflow;
+    const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
+    return () => { document.body.style.overflow = previous; };
   }, [salon]);
 
   if (!salon) return null;
 
-  const safeMediaIndex = Math.min(selectedMediaIndex, Math.max(media.length - 1, 0));
-  const selectedMedia = media[safeMediaIndex];
+  const selectedMedia = media[Math.min(selectedIndex, Math.max(media.length - 1, 0))];
+  const selectedSource = selectedMedia?.secureUrl || selectedMedia?.url || imageForSalon(salon);
   const lightboxMedia = lightboxIndex !== null ? media[Math.min(lightboxIndex, Math.max(media.length - 1, 0))] : undefined;
+  const lightboxSource = lightboxMedia?.secureUrl || lightboxMedia?.url;
   const packages = salon.packages ?? [];
   const extras = salon.extraServices ?? [];
-  const goLightbox = (direction: 1 | -1) => setLightboxIndex((current) => {
+  const changeLightbox = (direction: 1 | -1) => setLightboxIndex((current) => {
     if (current === null || !media.length) return current;
     return (current + direction + media.length) % media.length;
   });
 
   return <AnimatePresence>
-    <motion.div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-md md:px-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.article className="mx-auto max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950 text-white shadow-2xl" initial={{ opacity: 0, y: 28, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} transition={{ duration: 0.22 }} onClick={(event) => event.stopPropagation()}>
-        <div className="relative">
-          <button type="button" onClick={() => media.length && setLightboxIndex(safeMediaIndex)} className="block h-[48vh] min-h-80 w-full overflow-hidden text-left" aria-label="Abrir imagen principal en galería">
-            <MediaFrame asset={selectedMedia} title={salonTitle(salon)} className="h-full w-full" />
+    <motion.div className="fixed inset-0 z-50 overflow-y-auto bg-black/82 px-4 py-5 backdrop-blur-md md:px-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.article className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-[#d8b56d]/25 bg-[#080807] text-white shadow-2xl" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} onClick={(event) => event.stopPropagation()}>
+        <div className="relative h-[46vh] min-h-80 overflow-hidden bg-[#14110b]">
+          <button type="button" onClick={() => media.length && setLightboxIndex(Math.min(selectedIndex, Math.max(media.length - 1, 0)))} className="block h-full w-full text-left" aria-label={`Abrir galería de ${titleForSalon(salon)}`}>
+            {selectedMedia?.resourceType === 'video' ? <video src={selectedSource} className="h-full w-full object-cover" controls playsInline /> : <img src={selectedSource} alt={selectedMedia?.altText || selectedMedia?.title || titleForSalon(salon)} className="h-full w-full object-cover" />}
           </button>
-          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/25 to-transparent" />
-          <button type="button" onClick={onClose} aria-label="Cerrar detalle del salón" className="absolute right-5 top-5 rounded-full border border-white/15 bg-black/45 p-2.5 text-white backdrop-blur transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#080807] via-black/20 to-transparent" />
+          <button type="button" onClick={onClose} aria-label="Cerrar detalle del salón" className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-black/50 text-white backdrop-blur transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
+          <button type="button" onClick={() => media.length && setLightboxIndex(Math.min(selectedIndex, Math.max(media.length - 1, 0)))} className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:border-[#d8b56d] hover:text-[#e8c77a]"><Camera className="h-4 w-4" />Ver fotos</button>
           <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
-            <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="text-sm uppercase tracking-[.3em] text-zinc-300">Salón M&M</motion.p>
-            <motion.h3 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }} className="mt-2 max-w-3xl text-4xl font-semibold md:text-6xl">{salonTitle(salon)}</motion.h3>
-            <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="mt-4 flex items-center gap-2 text-zinc-200"><MapPin className="h-4 w-4" />{salonLocation(salon)}</motion.p>
+            <p className="text-xs font-semibold uppercase tracking-[0.34em] text-[#e8c77a]">Detalle del salón</p>
+            <h2 className="mt-3 max-w-3xl text-4xl font-semibold md:text-6xl">{titleForSalon(salon)}</h2>
+            <button type="button" onClick={() => setMapOpen(true)} className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-1.5 text-sm text-zinc-200 backdrop-blur transition hover:border-[#d8b56d] hover:text-[#e8c77a]" aria-label={`Ver ubicación de ${titleForSalon(salon)}`}><MapPin className="h-4 w-4 text-[#d8b56d]" />Ver ubicación: {locationForSalon(salon)}</button>
           </div>
         </div>
 
-        <div className="grid gap-8 p-6 md:p-8 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-8">
+        <div className="grid gap-7 p-5 md:p-8 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-7">
+            {media.length > 1 ? <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">{media.slice(0, 12).map((item, index) => {
+              const source = item.secureUrl || item.url;
+              return <button key={`${source}-${index}`} type="button" onClick={() => { setSelectedIndex(index); setLightboxIndex(index); }} aria-label={`Abrir imagen ${index + 1} de ${titleForSalon(salon)}`} className={`h-20 overflow-hidden rounded-xl border transition ${index === selectedIndex ? 'border-[#d8b56d]' : 'border-white/10 hover:border-[#d8b56d]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={source} alt={item.altText || item.title || titleForSalon(salon)} className="h-full w-full object-cover" />}</button>;
+            })}</div> : null}
+
             <section>
-              <h4 className="text-2xl font-semibold">Detalle del salón</h4>
-              <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-300">{salon.publicDescription || salonDescription(salon)}</p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><Users className="h-5 w-5 text-zinc-300" /><p className="mt-3 text-sm text-zinc-400">Capacidad</p><p className="mt-1 font-semibold"><Capacity salon={salon} /></p></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><Clock3 className="h-5 w-5 text-zinc-300" /><p className="mt-3 text-sm text-zinc-400">Horario sugerido</p><p className="mt-1 font-semibold">{salon.defaultStartTime && salon.defaultEndTime ? `${salon.defaultStartTime} a ${salon.defaultEndTime}` : salon.defaultDurationHours ? `${salon.defaultDurationHours} horas` : 'A coordinar'}</p></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><PackageCheck className="h-5 w-5 text-zinc-300" /><p className="mt-3 text-sm text-zinc-400">Paquetes activos</p><p className="mt-1 font-semibold">{packages.length || 'A configurar'}</p></div>
+              <h3 className="text-2xl font-semibold">Información del salón</h3>
+              <p className="mt-4 text-sm leading-7 text-zinc-300 md:text-base">{salon.publicDescription || descriptionForSalon(salon)}</p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Users className="h-5 w-5 text-[#d8b56d]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Capacidad</p><p className="mt-1 font-semibold">{capacityForSalon(salon)}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Clock3 className="h-5 w-5 text-[#d8b56d]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Horario</p><p className="mt-1 font-semibold">{salon.defaultStartTime && salon.defaultEndTime ? `${salon.defaultStartTime} a ${salon.defaultEndTime}` : salon.defaultDurationHours ? `${salon.defaultDurationHours} horas` : 'A coordinar'}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><PackageCheck className="h-5 w-5 text-[#d8b56d]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Paquetes</p><p className="mt-1 font-semibold">{packages.length || 'A consultar'}</p></div>
               </div>
             </section>
 
-            <section>
-              <div className="flex items-center justify-between gap-4">
-                <h4 className="text-2xl font-semibold">Galería</h4>
-                <span className="flex items-center gap-2 text-sm text-zinc-400"><Camera className="h-4 w-4" />{media.length ? `${media.length} archivos` : 'Sin imágenes cargadas'}</span>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-                {(media.length ? media : [undefined, undefined, undefined, undefined]).slice(0, 8).map((asset, index) => <button key={asset?._id || asset?.url || index} type="button" onClick={() => { setSelectedMediaIndex(index); if (asset) setLightboxIndex(index); }} className={`relative h-28 overflow-hidden rounded-2xl border transition ${safeMediaIndex === index ? 'border-white' : 'border-white/10 hover:border-white/40'}`} aria-label={`Ver imagen ${index + 1} de ${salonTitle(salon)}`}>
-                  <MediaFrame asset={asset} title={salonTitle(salon)} className="h-full w-full" />
-                  {asset?.resourceType === 'video' ? <span className="absolute inset-0 grid place-items-center bg-black/20"><PlayCircle className="h-8 w-8" /></span> : null}
-                </button>)}
-              </div>
-            </section>
-
-            <section>
-              <h4 className="text-2xl font-semibold">Paquetes disponibles</h4>
-              {packages.length ? <div className="mt-4 grid gap-4 md:grid-cols-2">{packages.map((item) => <PackageCard key={`${salon._id}-${item._id}`} item={item} cta={<a href={whatsappHref(salon.whatsapp, packageWhatsappMessage(salon, item))} target="_blank" rel="noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200"><MessageCircle className="h-4 w-4" />Consultar paquete</a>} />)}</div> : <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-zinc-300">Todavía no hay paquetes públicos cargados para este salón. Podés consultar y armamos una propuesta personalizada.</p>}
-            </section>
+            {packages.length ? <section>
+              <h3 className="text-2xl font-semibold">Paquetes disponibles</h3>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">{packages.slice(0, 4).map((item) => <article key={item._id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-start justify-between gap-3"><h4 className="font-semibold">{item.name}</h4>{item.badgeLabel ? <span className="rounded-md bg-[#d8b56d] px-2 py-1 text-[10px] font-bold uppercase text-black">{item.badgeLabel}</span> : null}</div>
+                <p className="mt-3 text-xl font-semibold text-[#e8c77a]">{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs font-normal text-zinc-500">por persona</span></p>
+                {item.includedServices?.length ? <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">{item.includedServices.slice(0, 4).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#d8b56d]" />{service}</li>)}</ul> : null}
+                {item.promotionText || item.giftText ? <p className="mt-3 text-sm text-[#f3dca2]">{item.promotionText || item.giftText}</p> : null}
+              </article>)}</div>
+            </section> : null}
           </div>
 
-          <aside className="space-y-5">
-            <div className="rounded-3xl border border-white/10 bg-white p-6 text-black">
-              <p className="text-sm font-medium text-zinc-500">Consultar este salón</p>
-              <h4 className="mt-2 text-2xl font-semibold">{salonTitle(salon)}</h4>
-              <p className="mt-3 text-sm leading-6 text-zinc-600">{salonDescription(salon)}</p>
-              <a href="#contacto" onClick={(event) => { event.preventDefault(); onRequestQuote(salon); }} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-zinc-800">Solicitar presupuesto <ArrowRight className="h-4 w-4" /></a>
-              <a href={whatsappHref(salon.whatsapp, salonWhatsappMessage(salon))} target="_blank" rel="noreferrer" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-zinc-200 px-5 py-3 text-sm font-medium transition hover:bg-zinc-100"><MessageCircle className="h-4 w-4" />WhatsApp</a>
+          <aside className="space-y-4">
+            <div className="rounded-2xl border border-[#d8b56d]/25 bg-[#12100c] p-5">
+              <h3 className="text-lg font-semibold">Acciones rápidas</h3>
+              <div className="mt-4 grid gap-2">
+                <button type="button" onClick={() => onRequestQuote(salon)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8b56d] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#efcf85]">Pedir presupuesto <Send className="h-4 w-4" /></button>
+                <a href={waLink(salon.whatsapp, salonWaMessage(salon))} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#25d366] hover:text-[#25d366]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a>
+                <button type="button" onClick={() => setMapOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#d8b56d] hover:text-[#e8c77a]">Ver ubicación <MapPin className="h-4 w-4" /></button>
+              </div>
+              <div className="mt-5 space-y-2 text-sm text-zinc-400">
+                {salon.address ? <p><span className="text-zinc-200">Dirección:</span> {salon.address}</p> : null}
+                {salon.phone ? <p><span className="text-zinc-200">Teléfono:</span> {salon.phone}</p> : null}
+                {salon.email ? <p><span className="text-zinc-200">Email:</span> {salon.email}</p> : null}
+                {salon.defaultDepositAmount ? <p><span className="text-zinc-200">Seña sugerida:</span> {money(salon.defaultDepositAmount)}</p> : null}
+              </div>
             </div>
 
-            {extras.length ? <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-              <h4 className="flex items-center gap-2 text-lg font-semibold"><Sparkles className="h-5 w-5 text-amber-200" />Extras disponibles</h4>
-              <div className="mt-4 space-y-3">
-                {extras.map((extra) => <div key={extra._id || extra.name} className="rounded-2xl border border-white/10 p-4">
-                  <p className="font-medium">{extra.name}</p>
-                  {extra.description ? <p className="mt-1 text-sm text-zinc-400">{extra.description}</p> : null}
-                  <p className="mt-2 text-sm text-zinc-300">{extra.includedByDefault ? 'Incluido según propuesta' : 'Disponible para sumar al evento'}</p>
-                </div>)}
-              </div>
+            {extras.length ? <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <h3 className="text-lg font-semibold">Servicios extra</h3>
+              <div className="mt-4 grid gap-3">{extras.slice(0, 6).map((extra) => <div key={extra._id || extra.name} className="rounded-xl border border-white/10 p-3">
+                <p className="font-semibold">{extra.name}</p>
+                {extra.description ? <p className="mt-1 text-sm leading-5 text-zinc-400">{extra.description}</p> : null}
+                {extra.basePrice ? <p className="mt-2 text-sm text-[#e8c77a]">{money(extra.basePrice)}</p> : null}
+              </div>)}</div>
             </div> : null}
 
-            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-              <h4 className="flex items-center gap-2 text-lg font-semibold"><Utensils className="h-5 w-5 text-zinc-300" />Condiciones comerciales</h4>
-              <dl className="mt-4 space-y-3 text-sm text-zinc-300">
-                <div><dt className="text-zinc-500">Seña sugerida</dt><dd className="mt-1 font-medium text-white">{money(salon.defaultDepositAmount)}</dd></div>
-                <div><dt className="text-zinc-500">Condiciones de pago</dt><dd className="mt-1 leading-6">{salon.defaultPaymentTerms || 'A coordinar según fecha, paquete y cantidad de invitados.'}</dd></div>
-              </dl>
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+              <button type="button" onClick={() => setMapOpen(true)} className="group relative block h-64 w-full overflow-hidden text-left" aria-label={`Ver ubicación de ${titleForSalon(salon)}`}>
+                <iframe title={`Mapa de ${titleForSalon(salon)}`} src={mapUrlForSalon(salon)} className="pointer-events-none h-full w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+                <span className="absolute inset-x-4 bottom-4 inline-flex items-center justify-center gap-2 rounded-lg bg-black/75 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition group-hover:bg-[#d8b56d] group-hover:text-black"><MapPin className="h-4 w-4" />Ver ubicación</span>
+              </button>
             </div>
-
-            <button type="button" onClick={() => setMapOpen(true)} className="block w-full rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-left transition hover:bg-white/10"><MapPin className="h-5 w-5 text-zinc-300" /><p className="mt-3 font-semibold">Ver ubicación en mapa</p><p className="mt-1 text-sm text-zinc-400">{salon.address || salonLocation(salon)}</p></button>
           </aside>
         </div>
       </motion.article>
 
-      <Portal>
-      <AnimatePresence>
-        {lightboxMedia ? <motion.div className="fixed inset-0 z-[60] grid place-items-center bg-black/90 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={(event) => { event.stopPropagation(); setLightboxIndex(null); }}>
-          <button type="button" aria-label="Cerrar galería" onClick={() => setLightboxIndex(null)} className="absolute right-5 top-5 rounded-full border border-white/15 bg-white/10 p-2.5 text-white backdrop-blur transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
-          {media.length > 1 ? <button type="button" aria-label="Imagen anterior" onClick={(event) => { event.stopPropagation(); goLightbox(-1); }} className="absolute left-5 top-1/2 rounded-full border border-white/15 bg-white/10 p-3 text-white backdrop-blur transition hover:bg-white hover:text-black"><ChevronLeft className="h-6 w-6" /></button> : null}
-          <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} className="max-h-[86vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="h-[76vh] max-h-[760px] bg-black">
-              <MediaFrame asset={lightboxMedia} title={salonTitle(salon)} className="h-full w-full object-contain" />
-            </div>
-            <div className="flex items-center justify-between gap-4 px-5 py-4 text-sm text-zinc-300">
-              <span>{lightboxMedia.title || salonTitle(salon)}</span>
-              <span>{(lightboxIndex ?? 0) + 1} / {media.length}</span>
-            </div>
-          </motion.div>
-          {media.length > 1 ? <button type="button" aria-label="Imagen siguiente" onClick={(event) => { event.stopPropagation(); goLightbox(1); }} className="absolute right-5 top-1/2 rounded-full border border-white/15 bg-white/10 p-3 text-white backdrop-blur transition hover:bg-white hover:text-black"><ChevronRight className="h-6 w-6" /></button> : null}
-        </motion.div> : null}
-      </AnimatePresence>
+      {lightboxIndex !== null && lightboxSource ? <Portal><div className="fixed inset-0 z-[100] grid place-items-center bg-black/92 p-4" role="dialog" aria-modal="true" aria-label={`Galería de ${titleForSalon(salon)}`} onClick={(event) => event.stopPropagation()}>
+        <button type="button" onClick={() => setLightboxIndex(null)} aria-label="Cerrar galería" className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
+        {media.length > 1 ? <button type="button" onClick={() => changeLightbox(-1)} aria-label="Imagen anterior" className="absolute left-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronLeft className="h-6 w-6" /></button> : null}
+        <div className="max-h-[88vh] w-full max-w-6xl">
+          {lightboxMedia?.resourceType === 'video' ? <video src={lightboxSource} className="mx-auto max-h-[78vh] w-full rounded-2xl object-contain" controls playsInline autoPlay /> : <img src={lightboxSource} alt={lightboxMedia?.altText || lightboxMedia?.title || titleForSalon(salon)} className="mx-auto max-h-[78vh] w-full rounded-2xl object-contain" />}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{media.map((item, index) => {
+            const source = item.secureUrl || item.url;
+            return <button key={`${source}-lightbox-${index}`} type="button" onClick={() => setLightboxIndex(index)} aria-label={`Ver imagen ${index + 1}`} className={`h-14 w-20 overflow-hidden rounded-lg border transition ${index === lightboxIndex ? 'border-[#d8b56d]' : 'border-white/15 hover:border-[#d8b56d]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={source} alt={item.altText || item.title || titleForSalon(salon)} className="h-full w-full object-cover" />}</button>;
+          })}</div>
+        </div>
+        {media.length > 1 ? <button type="button" onClick={() => changeLightbox(1)} aria-label="Imagen siguiente" className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronRight className="h-6 w-6" /></button> : null}
+      </div></Portal> : null}
 
-      <AnimatePresence>
-        {mapOpen ? <motion.div className="fixed inset-0 z-[60] grid place-items-center bg-black/80 p-4 backdrop-blur" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={(event) => { event.stopPropagation(); setMapOpen(false); }}>
-          <motion.div initial={{ opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} className="w-full max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
-              <div><p className="text-sm text-zinc-400">Ubicación</p><h4 className="text-xl font-semibold">{salonTitle(salon)}</h4></div>
-              <button type="button" aria-label="Cerrar mapa" onClick={() => setMapOpen(false)} className="rounded-full border border-white/15 p-2 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
-            </div>
-            <iframe src={mapEmbedUrl(salon)} title={`Mapa de ${salonTitle(salon)}`} className="h-[65vh] w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-          </motion.div>
-        </motion.div> : null}
-      </AnimatePresence>
-      </Portal>
+      {mapOpen ? <Portal><div className="fixed inset-0 z-[100] grid place-items-center bg-black/88 p-4" role="dialog" aria-modal="true" aria-label={`Mapa de ${titleForSalon(salon)}`} onClick={(event) => event.stopPropagation()}>
+        <section className="w-full max-w-5xl overflow-hidden rounded-3xl border border-[#d8b56d]/30 bg-[#080807] shadow-2xl">
+          <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+            <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b56d]">Ubicación</p><h3 className="mt-1 text-2xl font-semibold text-white">{titleForSalon(salon)}</h3><p className="mt-1 text-sm text-zinc-400">{salon.address || locationForSalon(salon)}</p><a href={mapExternalUrlForSalon(salon)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#e8c77a] hover:text-white">Abrir en Google Maps <ExternalLink className="h-4 w-4" /></a></div>
+            <button type="button" onClick={() => setMapOpen(false)} aria-label="Cerrar mapa" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
+          </header>
+          <iframe title={`Mapa ampliado de ${titleForSalon(salon)}`} src={mapUrlForSalon(salon)} className="h-[70vh] w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+        </section>
+      </div></Portal> : null}
     </motion.div>
   </AnimatePresence>;
 }
 
 export default function Home() {
-  const [salons, setSalons] = useState<PublicSalon[]>([]);
-  const [selectedSalon, setSelectedSalon] = useState<PublicSalon>();
-  const [formSalonId, setFormSalonId] = useState('');
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [landing, setLanding] = useState<LandingPayload>({ salons: [], packages: [], promotions: [], gallery: [], testimonials: [], faqs: [], serviceBlocks: [], eventTypes: [] });
+  const [selectedSalonId, setSelectedSalonId] = useState('');
+  const [selectedSalon, setSelectedSalon] = useState<Salon | null>(null);
+  const [socialNetwork, setSocialNetwork] = useState<'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [formMessage, setFormMessage] = useState('');
+  const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   useEffect(() => {
-    void api.get<{ salons: PublicSalon[] }>('/public/salons').then((data) => setSalons(data.salons ?? [])).catch((error: Error) => setMessage(error.message));
+    void api.get<LandingPayload>('/public/landing').then(setLanding).catch(() => undefined);
   }, []);
+
+  const settings = landing.settings ?? {};
+  const salons = landing.salons;
+  const heroImage = settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' });
+  const serviceBlocks = landing.serviceBlocks.length ? landing.serviceBlocks : fallbackServices;
+  const eventTypes = landing.eventTypes.length ? landing.eventTypes : fallbackEventTypes;
+  const faqs: LandingItem[] = landing.faqs.length ? landing.faqs : fallbackFaqs;
+  const gallery: LandingItem[] = landing.gallery.length ? landing.gallery : fallbackGallery.map((imageUrl, index) => ({ title: `Momento M&M ${index + 1}`, imageUrl, category: 'Momentos' }));
+  const packages = useMemo(() => landing.packages.length ? landing.packages : salons.flatMap((salon) => (salon.packages ?? []).map((item) => ({ ...item, salonName: titleForSalon(salon) }))).slice(0, 3), [landing.packages, salons]);
+  const displaySalons = useMemo(() => salons.length ? salons : [...new Map(packages.map((item, index) => [String(item.salonName || `M&M Eventos ${index + 1}`), { _id: String(item.salonId || item._id || index), name: String(item.salonName || 'M&M Eventos'), publicTitle: String(item.salonName || 'M&M Eventos'), publicShortDescription: 'Un espacio M&M preparado para celebrar con servicio integral.', locationText: 'La Plata', minCapacity: 60, maxCapacity: 250, heroImageUrl: fallbackGallery[index % fallbackGallery.length] } as Salon])).values()], [salons, packages]);
+  const locations = useMemo(() => [...new Set(displaySalons.map(locationForSalon).filter(Boolean))].slice(0, 4), [displaySalons]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const data = new FormData(form);
-    if (!data.get('salonId')) return setMessage('Seleccioná un salón para continuar.');
-    setLoading(true);
-    setMessage('');
+    const formData = new FormData(form);
+    setFormState('loading');
+    setFormMessage('');
     try {
-      await api.post('/public/quick-quote', { name: data.get('name'), phone: data.get('phone'), email: data.get('email'), eventType: data.get('eventType'), eventDate: data.get('eventDate') || undefined, guestCount: Number(data.get('guestCount')), salonId: data.get('salonId'), message: data.get('message') });
+      await api.post('/public/quick-quote', {
+        name: formData.get('name'),
+        phone: formData.get('phone'),
+        email: formData.get('email'),
+        eventType: formData.get('eventType'),
+        eventDate: formData.get('eventDate') || undefined,
+        guestCount: Number(formData.get('guestCount')),
+        salonId: formData.get('salonId'),
+        message: formData.get('message'),
+      });
       form.reset();
-      setFormSalonId('');
-      setMessage('Recibimos tu solicitud. Un asesor de M&M Eventos se contactará para enviarte el presupuesto.');
+      setSelectedSalonId('');
+      setFormState('success');
+      setFormMessage('Recibimos tu solicitud. Un asesor de M&M Eventos se contactará para enviarte una propuesta personalizada.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'No se pudo enviar la consulta.');
-    } finally {
-      setLoading(false);
+      setFormState('error');
+      setFormMessage(error instanceof Error ? error.message : 'No se pudo enviar la solicitud. Revisá los datos e intentá nuevamente.');
     }
   }
 
-  const featuredPackages = salons.flatMap((salon) => (salon.packages ?? []).map((item) => ({ ...item, salonName: salonTitle(salon), salonId: salon._id }))).slice(0, 6);
-  const requestQuoteForSalon = (salon: PublicSalon) => {
-    setFormSalonId(salon._id);
-    setSelectedSalon(undefined);
-    window.setTimeout(() => document.getElementById('contacto')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-  };
+  const nav = [
+    ['Salones', 'salones'],
+    ['Paquetes', 'paquetes'],
+    ['Galería', 'galeria'],
+    ['FAQ', 'faq'],
+    ['Contacto', 'contacto'],
+  ];
 
-  return <main className="bg-zinc-950 text-white">
-    <header className="sticky top-0 z-10 border-b border-white/10 bg-zinc-950/90 px-6 py-3 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={132} height={132} className="h-12 w-auto object-contain" priority />
-        <a href="#contacto" className="rounded-full border border-white/20 px-4 py-2 text-sm text-zinc-100 transition hover:bg-white hover:text-black">Consultar</a>
+  const socialOptions = [
+    { key: 'whatsapp' as const, label: 'WhatsApp', icon: WhatsAppIcon, field: 'whatsapp' as const },
+    { key: 'instagram' as const, label: 'Instagram', icon: InstagramIcon, field: 'instagramUrl' as const },
+    { key: 'facebook' as const, label: 'Facebook', icon: FacebookIcon, field: 'facebookUrl' as const },
+    { key: 'tiktok' as const, label: 'TikTok', icon: TikTokIcon, field: 'tiktokUrl' as const },
+  ];
+  const activeSocial = socialOptions.find((item) => item.key === socialNetwork);
+
+  return <main className="min-h-screen bg-[#050505] text-white">
+    <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/65 backdrop-blur-xl">
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 md:px-8">
+        <button type="button" onClick={() => scrollTo('inicio')} className="shrink-0" aria-label="Ir al inicio"><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" priority /></button>
+        <nav className="hidden items-center gap-9 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-200 md:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="transition hover:text-[#e8c77a]">{label}</button>)}</nav>
+        <div className="hidden items-center gap-3 md:flex"><button type="button" onClick={() => scrollTo('contacto')} className="rounded-lg bg-[#d8b56d] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(216,181,109,.22)] transition hover:bg-[#efcf85]">Solicitá presupuesto</button></div>
+        <button type="button" onClick={() => setMobileOpen(true)} className="grid h-10 w-10 place-items-center rounded-lg border border-white/15 md:hidden" aria-label="Abrir menú"><Menu className="h-5 w-5" /></button>
       </div>
+      {mobileOpen ? <div className="fixed inset-0 z-50 bg-black/95 p-5 md:hidden">
+        <div className="flex items-center justify-between"><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={130} height={56} className="h-12 w-auto object-contain" /><button type="button" onClick={() => setMobileOpen(false)} className="grid h-10 w-10 place-items-center rounded-lg border border-white/15" aria-label="Cerrar menú"><X className="h-5 w-5" /></button></div>
+        <nav className="mt-10 grid gap-3">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); scrollTo(id); }} className="rounded-xl border border-white/10 px-4 py-4 text-left text-sm uppercase tracking-[0.2em]">{label}</button>)}</nav>
+      </div> : null}
     </header>
 
-    <section className="grid min-h-[70vh] place-items-center bg-[radial-gradient(circle_at_top,#3f3f46,transparent_45%)] px-6 text-center">
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-        <Image src={brandAssets.logoLightOnDark} alt="M&M Salón de Eventos" width={260} height={260} className="mx-auto mb-8 h-auto w-56 object-contain md:w-72" priority />
-        <p className="text-sm tracking-[.3em] text-zinc-400">{salons.map((salon) => salon.locality || salon.city).filter(Boolean).join(' · ') || 'LA PLATA · SAN CARLOS · VILLA ELISA'}</p>
-        <h1 className="mt-5 text-5xl font-semibold md:text-7xl">Eventos memorables<br />en espacios únicos</h1>
-        <p className="mx-auto mt-5 max-w-2xl text-zinc-300">Salones, catering, ambientación, DJ, staff y organización completa.</p>
-        <a href="#contacto" className="mt-8 inline-block rounded-full bg-white px-6 py-3 text-black transition hover:bg-zinc-200">Solicitar presupuesto</a>
-      </motion.div>
-    </section>
-
-    <section className={section}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-[.3em] text-zinc-500">Espacios reales cargados en sistema</p>
-          <h2 className="mt-3 text-4xl font-semibold">Nuestros salones</h2>
-        </div>
-        <p className="max-w-md text-sm leading-6 text-zinc-400">Seleccioná un salón para ver galería, capacidad, condiciones comerciales y paquetes activos.</p>
-      </div>
-      <div className="mt-8 grid gap-5 md:grid-cols-3">
-        {salons.map((salon, index) => {
-          const media = salonMedia(salon);
-          return <motion.button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.05 }} className="group overflow-hidden rounded-3xl border border-white/10 bg-zinc-900 text-left shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-white/25">
-            <div className="relative h-56 overflow-hidden">
-              <MediaFrame asset={media[0]} title={salonTitle(salon)} className="h-full w-full transition duration-700 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent" />
-              <span className="absolute right-4 top-4 rounded-full bg-black/55 px-3 py-1 text-xs text-white backdrop-blur">{(salon.packages ?? []).length} paquetes</span>
-            </div>
-            <div className="p-5">
-              <h3 className="text-xl font-semibold">{salonTitle(salon)}</h3>
-              <p className="mt-2 min-h-12 text-sm leading-6 text-zinc-400">{salonDescription(salon)}</p>
-              <div className="mt-4 flex flex-wrap gap-3 text-sm text-zinc-200">
-                <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{salonLocation(salon)}</span>
-                <span className="flex items-center gap-1.5"><Users className="h-4 w-4" /><Capacity salon={salon} /></span>
-              </div>
-              <span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-white underline decoration-white/30 underline-offset-4 group-hover:decoration-white">Ver detalle <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" /></span>
-            </div>
-          </motion.button>;
-        })}
+    <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-20">
+      <img src={heroImage} alt="Salón M&M preparado para evento" className="absolute inset-0 h-full w-full object-cover" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(5,5,5,1),rgba(5,5,5,.08)_38%,rgba(5,5,5,.64))]" />
+      <div className="relative mx-auto grid min-h-[calc(92vh-5rem)] max-w-7xl content-center px-5 py-16 md:px-8">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="max-w-3xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#e8c77a]">M&M Eventos</p>
+          <h1 className="mt-5 text-5xl font-semibold leading-[0.96] tracking-tight text-white md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre imaginaste'}</h1>
+          <p className="mt-6 max-w-xl text-base leading-7 text-zinc-200 md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</p>
+          <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => scrollTo('contacto')} className="inline-flex items-center gap-2 rounded-lg bg-[#d8b56d] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#efcf85]">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></button><button type="button" onClick={() => scrollTo('salones')} className="inline-flex items-center gap-2 rounded-lg border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-[#d8b56d] hover:text-[#e8c77a]">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></button></div>
+          <div className="mt-7 flex flex-wrap gap-2">{(locations.length ? locations : ['San Carlos', 'Villa Elisa', 'La Plata']).map((item) => <span key={item} className="inline-flex items-center gap-2 rounded-full border border-[#d8b56d]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur"><MapPin className="h-3.5 w-3.5 text-[#e8c77a]" />{item}</span>)}</div>
+        </motion.div>
       </div>
     </section>
 
-    <section className="bg-zinc-900">
-      <div className={section}>
-        <h2 className="text-4xl font-semibold">Paquetes para celebrar</h2>
-        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {featuredPackages.length ? featuredPackages.map((item) => <PackageCard key={`${item.salonId}-${item._id}`} item={item} />) : fallbackPackages.map(([name, desc, price, tag]) => <article key={name} className="rounded-xl border border-white/10 p-5"><span className="text-xs text-zinc-400">{tag}</span><h3 className="mt-3 text-xl font-semibold">{name}</h3><p className="mt-2 text-sm text-zinc-400">{desc}</p><p className="mt-4">{price}</p></article>)}
-        </div>
+    <section id="salones" className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+      <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones reales publicados desde backoffice, con ubicación, capacidad, imágenes y paquetes activos." />
+      <div className="grid gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <article key={salon._id} className="group overflow-hidden rounded-2xl border border-[#d8b56d]/25 bg-[#10100f] shadow-2xl shadow-black/30">
+        <div className="relative h-56 overflow-hidden"><img src={imageForSalon(salon)} alt={titleForSalon(salon)} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></div>
+        <div className="p-5"><h3 className="text-xl font-semibold">{titleForSalon(salon)}</h3><div className="mt-3 flex flex-wrap gap-3 text-xs text-zinc-300"><span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-[#d8b56d]" />{locationForSalon(salon)}</span><span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5 text-[#d8b56d]" />{capacityForSalon(salon)}</span></div><p className="mt-3 min-h-12 text-sm leading-6 text-zinc-400">{descriptionForSalon(salon)}</p><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#d8b56d]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#d8b56d] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#efcf85]">Pedir presupuesto</button></div></div>
+      </article>)}</div>
+    </section>
+
+    <section className="border-y border-[#d8b56d]/15 bg-[#0b0b0a] px-5 py-8 md:px-8">
+      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <div key={step} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4"><span className="text-2xl font-semibold text-[#d8b56d]">{index + 1}</span><div><h3 className="font-semibold">{step}</h3><p className="text-xs leading-5 text-zinc-500">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div></div>)}</div>
+    </section>
+
+    <section id="paquetes" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+      <SectionTitle eyebrow="Paquetes para celebrar" title="Propuestas comerciales claras" subtitle="Valores publicados desde paquetes y reglas comerciales del backoffice." />
+      <div className="grid gap-5 lg:grid-cols-3">{packages.slice(0, 3).map((item, index) => <article key={`${item._id}-${index}`} className={`rounded-2xl border p-6 ${index === 1 ? 'border-[#d8b56d] bg-[#14110b]' : 'border-[#d8b56d]/35 bg-[#0f0f0e]'}`}>
+        <div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-semibold uppercase tracking-[0.12em]">{item.name}</h3><p className="mt-1 text-xs text-zinc-500">{item.salonName || 'M&M Eventos'}</p></div><span className="rounded-md bg-[#d8b56d] px-2 py-1 text-[10px] font-bold uppercase text-black">{item.badgeLabel || ['Más elegido', 'Premium', 'Exclusivo'][index]}</span></div>
+        <p className="mt-6 text-sm text-zinc-400">Desde</p><p className="text-3xl font-semibold text-[#e8c77a]">{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs text-zinc-400">por persona</span></p>
+        <ul className="mt-5 space-y-2 text-sm text-zinc-300">{(item.includedServices ?? []).slice(0, 6).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#d8b56d]" />{service}</li>)}</ul>
+        {item.promotionText || item.giftText ? <p className="mt-4 rounded-lg border border-[#d8b56d]/20 bg-[#d8b56d]/10 p-3 text-sm text-[#f3dca2]">{item.promotionText || item.giftText}</p> : null}
+        <button type="button" onClick={() => scrollTo('contacto')} className="mt-6 w-full rounded-lg border border-[#d8b56d]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#d8b56d] hover:text-black">Ver detalles</button>
+      </article>)}</div>
+    </section>
+
+    <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
+      <SectionTitle eyebrow="Tipos de eventos" title="Celebraciones que sabemos resolver" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">{eventTypes.slice(0, 6).map((item) => <div key={item.title} className="rounded-xl border border-[#d8b56d]/25 bg-white/[0.03] p-4 text-center"><IconBadge name={item.icon} /><h3 className="mt-3 text-sm font-semibold uppercase tracking-[0.08em]">{item.title}</h3></div>)}</div>
+    </section>
+
+    <section className="border-y border-white/10 bg-[#0b0b0a] px-5 py-16 md:px-8">
+      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><div><p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#d8b56d]">Servicios incluidos</p><h2 className="mt-3 text-3xl font-semibold md:text-4xl">Todo lo que necesitás, nosotros lo hacemos.</h2></div><div className="grid gap-4 sm:grid-cols-2">{serviceBlocks.slice(0, 8).map((item) => <div key={item.title} className="flex gap-3"><IconBadge name={item.icon} /><div><h3 className="font-semibold">{item.title}</h3><p className="mt-1 text-sm leading-5 text-zinc-400">{item.description}</p></div></div>)}</div></div>
+    </section>
+
+    <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+      <SectionTitle eyebrow="Promociones y beneficios" title="Motivos para reservar hoy" />
+      <div className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item) => <article key={item._id || item.title} className="group overflow-hidden rounded-xl border border-[#d8b56d]/25 bg-[#10100f] p-5 transition hover:-translate-y-1 hover:border-[#d8b56d]">{item.imageUrl ? <img src={item.imageUrl} alt={item.title || 'Promoción M&M'} className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" /> : <IconBadge name={item.icon || 'Gift'} />}<h3 className="mt-4 font-semibold">{item.title}</h3><p className="mt-2 text-sm leading-5 text-zinc-400">{item.description || item.subtitle}</p>{item.badgeText ? <span className="mt-4 inline-block rounded-full bg-[#d8b56d]/15 px-3 py-1 text-xs text-[#e8c77a]">{item.badgeText}</span> : null}</article>)}</div>
+    </section>
+
+    <section id="galeria" className="border-y border-white/10 bg-[#0b0b0a] px-5 py-16 md:px-8">
+      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería protagonista" subtitle="Momentos únicos que perduran para toda la vida" /><div className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <button key={item._id || item.imageUrl || index} type="button" aria-label={item.altText || item.title || 'Momento M&M'} className={`group relative overflow-hidden rounded-xl border border-[#d8b56d]/20 bg-[#14110b] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${item.imageUrl || fallbackGallery[index % fallbackGallery.length]})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition group-hover:opacity-100">{item.title}</span></button>)}</div></div>
+    </section>
+
+    <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+      <SectionTitle eyebrow="Testimonios" title="Lo que dicen quienes ya celebraron" />
+      <div className="grid gap-4 md:grid-cols-3">{(landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }]).slice(0, 3).map((item) => <blockquote key={item._id || item.customerName} className="rounded-xl border border-white/10 bg-white/[0.03] p-5"><p className="text-sm leading-6 text-zinc-300">“{item.quote}”</p><footer className="mt-5 flex items-center justify-between"><div><p className="font-semibold">{item.customerName}</p><p className="text-xs text-zinc-500">{item.eventType}</p></div><span className="flex text-[#d8b56d]">{Array.from({ length: item.rating || 5 }).map((_, index) => <Star key={index} className="h-3.5 w-3.5 fill-current" />)}</span></footer></blockquote>)}</div>
+    </section>
+
+    <section id="faq" className="border-y border-white/10 bg-[#0b0b0a] px-5 py-16 md:px-8">
+      <div className="mx-auto max-w-5xl"><SectionTitle eyebrow="Preguntas frecuentes" title="Respuestas rápidas antes de consultar" /><div className="grid gap-3 md:grid-cols-2">{faqs.slice(0, 8).map((item) => <details key={item._id || item.question} className="group rounded-xl border border-white/10 bg-black/25 p-4"><summary className="cursor-pointer list-none text-sm font-semibold text-white">{item.question}</summary><p className="mt-3 text-sm leading-6 text-zinc-400">{item.answer}</p></details>)}</div></div>
+    </section>
+
+    <section id="contacto" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+      <div className="overflow-hidden rounded-3xl border border-[#d8b56d]/35 bg-[#0e0d0b] shadow-[0_0_50px_rgba(216,181,109,.12)] lg:grid lg:grid-cols-[0.75fr_1.25fr]">
+        <div className="relative min-h-80 p-8"><img src={gallery[0]?.imageUrl || heroImage} alt="Detalle de evento M&M" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#d8b56d]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><span><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#d8b56d]" />Respuesta rápida</span><span><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#d8b56d]" />Propuesta a medida</span><span><Check className="mx-auto mb-2 h-5 w-5 text-[#d8b56d]" />Sin compromiso</span></div></div></div>
+        <form onSubmit={submit} className="grid gap-4 p-5 md:grid-cols-2 md:p-8">
+          {formMessage ? <p className={`rounded-xl border p-3 text-sm md:col-span-2 ${formState === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-red-400/30 bg-red-400/10 text-red-100'}`}>{formMessage}</p> : null}
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Nombre<input required name="name" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="Tu nombre" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Teléfono<input required name="phone" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="Tu teléfono" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Email<input name="email" type="email" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="tu@email.com" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Tipo de evento<input required name="eventType" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="15 años, casamiento..." /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Fecha tentativa<input name="eventDate" type="date" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Cantidad de personas<input required name="guestCount" type="number" min="1" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="Nº de personas" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => setSelectedSalonId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400 md:col-span-2">Mensaje<textarea name="message" className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="Contanos más detalles de tu evento..." /></label>
+          <button disabled={formState === 'loading'} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8b56d] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#efcf85] disabled:opacity-60 md:col-span-2">{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></button>
+        </form>
       </div>
     </section>
 
-    <section className={section}><h2 className="text-4xl font-semibold">Servicios incluidos</h2><div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{services.map((item) => <p key={item} className="flex gap-3 rounded-lg border border-white/10 p-4"><Check className="h-4 w-4" />{item}</p>)}</div></section>
-    <section className="bg-zinc-800"><div className={section}><h2 className="text-4xl font-semibold">Promociones y beneficios</h2><div className="mt-8 grid gap-4 md:grid-cols-4">{['Últimas fechas disponibles', 'Promo mes especial', 'Congelá tu valor con seña', 'Stand de glitter de regalo'].map((item) => <div key={item} className="rounded-xl bg-white p-5 text-black"><Sparkles className="h-5 w-5" /><p className="mt-4 font-semibold">{item}</p></div>)}</div></div></section>
-    <section className={section}><h2 className="text-4xl font-semibold">Momentos M&M</h2><div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-3">{salons.flatMap((salon) => salonMedia(salon)).slice(0, 6).map((asset, index) => <div key={asset.url} className="h-44 overflow-hidden rounded-2xl border border-white/10"><MediaFrame asset={asset} title={`Momento M&M ${index + 1}`} className="h-full w-full" /></div>)}{!salons.flatMap((salon) => salonMedia(salon)).length ? ['Salón preparado', 'Mesa principal', 'Ambientación', 'Vajilla', 'Fiesta', 'Catering'].map((item) => <div key={item} className="grid min-h-40 place-items-end rounded-2xl bg-gradient-to-br from-zinc-600 to-black p-4 font-medium">{item}</div>) : null}</div></section>
-    <section className="bg-zinc-900"><div className={section}><h2 className="text-4xl font-semibold">Ubicaciones</h2><div className="mt-8 grid gap-4 md:grid-cols-3">{salons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="rounded-xl border border-white/10 p-5 text-left transition hover:bg-white/5"><h3>{salonTitle(salon)}</h3><p className="mt-2 text-zinc-400">{salon.address || salonLocation(salon)}</p><span className="mt-4 inline-block text-sm underline">Ver salón</span></button>)}</div></div></section>
-    <section className={section}><h2 className="text-4xl font-semibold">Testimonios</h2><div className="mt-8 grid gap-4 md:grid-cols-3">{['Excelente atención y una noche hermosa.', 'La fiesta salió perfecta de principio a fin.', 'Muy buena organización y equipo.'].map((item) => <blockquote key={item} className="rounded-xl border border-white/10 p-5">“{item}”</blockquote>)}</div></section>
-    <section className={section}><h2 className="text-4xl font-semibold">Preguntas frecuentes</h2><div className="mt-7 grid gap-3">{faqs.map((question) => <details key={question} className="rounded-xl border border-white/10 p-5"><summary>{question}</summary><p className="mt-3 text-sm text-zinc-400">Escribinos para recibir una propuesta personalizada.</p></details>)}</div></section>
+    <footer className="border-t border-white/10 bg-[#080808] px-5 py-10 md:px-8">
+      <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-4"><div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-500">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d8b56d]/30 text-[#d8b56d] transition hover:bg-[#d8b56d] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#d8b56d]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#d8b56d]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <span key={salon._id}>{titleForSalon(salon)}</span>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#d8b56d]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || '+54 9 221 123-4567'}</span><span>{settings.contactEmail || 'info@mm-eventos.com.ar'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#d8b56d] hover:text-[#efcf85]">Escribinos por WhatsApp</button></div></div></div>
+    </footer>
 
-    <section id="contacto" className="bg-white text-black">
-      <form onSubmit={submit} className="mx-auto grid max-w-xl gap-4 px-6 py-20">
-        <Image src={brandAssets.logoDarkOnLight} alt="M&M Eventos" width={180} height={180} className="mx-auto h-auto w-40 object-contain" />
-        <h2 className="text-4xl font-semibold">Solicitá tu presupuesto</h2>
-        {message && <p className="rounded bg-zinc-100 p-3 text-sm">{message}</p>}
-        <label>Nombre<input required name="name" className="mt-1 w-full rounded border p-3" /></label>
-        <label>Teléfono<input required name="phone" className="mt-1 w-full rounded border p-3" /></label>
-        <label>Email opcional<input name="email" type="email" className="mt-1 w-full rounded border p-3" /></label>
-        <label>Tipo de evento<input required name="eventType" className="mt-1 w-full rounded border p-3" /></label>
-        <label>Fecha tentativa<input name="eventDate" type="date" className="mt-1 w-full rounded border p-3" /></label>
-        <label>Cantidad de personas<input required name="guestCount" type="number" min="1" className="mt-1 w-full rounded border p-3" /></label>
-        <label>Salón de interés<select required name="salonId" value={formSalonId} onChange={(event) => setFormSalonId(event.target.value)} className="mt-1 w-full rounded border p-3"><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salonTitle(salon)}</option>)}</select></label>
-        <label>Mensaje<textarea name="message" className="mt-1 w-full rounded border p-3" /></label>
-        <button disabled={loading} className="rounded bg-black p-3 text-white">{loading ? 'Enviando…' : 'Solicitar presupuesto'}</button>
-      </form>
-    </section>
+    {activeSocial ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Elegir salón para ${activeSocial.label}`}>
+      <section className="w-full max-w-lg rounded-2xl border border-[#d8b56d]/35 bg-[#0e0d0b] p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#d8b56d]">Contacto por salón</p><h2 className="mt-2 text-2xl font-semibold">Elegí a cuál {activeSocial.label} acceder</h2><p className="mt-2 text-sm text-zinc-400">Cada salón administra su propio canal.</p></div><button type="button" onClick={() => setSocialNetwork(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/15 text-white transition hover:bg-white hover:text-black" aria-label="Cerrar selector"><X className="h-4 w-4" /></button></div>
+        <div className="mt-5 grid gap-3">{displaySalons.map((salon) => {
+          const href = activeSocial.key === 'whatsapp' ? waLink(salon.whatsapp, settings.whatsappDefaultMessage) : salon[activeSocial.field];
+          return href ? <a key={salon._id} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm transition hover:border-[#d8b56d] hover:bg-[#d8b56d]/10"><span><strong className="block text-white">{titleForSalon(salon)}</strong><span className="text-zinc-500">{locationForSalon(salon)}</span></span><activeSocial.icon className="h-5 w-5 text-[#d8b56d]" /></a> : <div key={salon._id} className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-500"><strong className="block text-zinc-300">{titleForSalon(salon)}</strong>Sin {activeSocial.label} configurado</div>;
+        })}</div>
+      </section>
+    </div> : null}
 
-    <a href="https://wa.me/?text=Hola%20M%26M%20Eventos%2C%20quiero%20consultar%20por%20un%20evento." aria-label="WhatsApp" className="fixed bottom-6 right-6 rounded-full bg-white p-4 text-black"><MessageCircle /></a>
-    <a href="#" aria-label="Volver arriba" className="fixed bottom-6 left-6 rounded-full border border-white/30 p-3"><ChevronUp /></a>
-    <SalonDetailModal salon={selectedSalon} onClose={() => setSelectedSalon(undefined)} onRequestQuote={requestQuoteForSalon} />
+    <SalonDetailModal key={selectedSalon?._id ?? 'salon-detail'} salon={selectedSalon} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
+
+    <button type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>
+    <button type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 right-4 z-30 rounded-lg bg-[#d8b56d] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:right-24">Solicitá tu presupuesto</button>
+    <button type="button" onClick={() => scrollTo('inicio')} aria-label="Volver arriba" className="fixed bottom-4 left-4 z-30 hidden rounded-lg border border-white/20 bg-black/60 p-3 backdrop-blur md:grid"><ChevronUp className="h-4 w-4" /></button>
   </main>;
 }

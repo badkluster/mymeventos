@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-import { Permission } from '@mym/shared';
-import { requireAuth, requirePermission } from '../../middlewares/auth';
+import { hasPermission, Permission } from '@mym/shared';
+import { requireAuth } from '../../middlewares/auth';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
 import { sendSuccess } from '../../utils/api';
@@ -28,10 +28,19 @@ function defaultFolder(input: z.infer<typeof uploadSchema>): string {
 
 router.use(requireAuth);
 
-router.post('/', requirePermission(Permission.SALONS_UPDATE), upload.single('file'), asyncHandler(async (request, response) => {
+function canUpload(request: Express.Request, context: z.infer<typeof uploadSchema>['context']) {
+  const user = request.user;
+  if (!user) return false;
+  if (context === 'users') return true;
+  const needed = context === 'salons' ? Permission.SALONS_UPDATE : context === 'general' ? Permission.LANDING_UPDATE : Permission.SALONS_UPDATE;
+  return user.roles.some((role) => hasPermission(role, needed, user.permissionOverrides, user.permissionDeniedOverrides));
+}
+
+router.post('/', upload.single('file'), asyncHandler(async (request, response) => {
   if (!request.file) throw new ApiError(400, 'UPLOAD_FILE_REQUIRED');
   const parsed = uploadSchema.safeParse(request.body);
   if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR');
+  if (!canUpload(request, parsed.data.context)) throw new ApiError(403, 'FORBIDDEN');
   const resourceType = resourceTypeFor(request.file.mimetype);
   const asset = await uploadBuffer(request.file.buffer, {
     folder: defaultFolder(parsed.data),

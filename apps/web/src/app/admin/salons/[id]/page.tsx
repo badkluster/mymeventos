@@ -197,6 +197,9 @@ export default function SalonDetailPage() {
       phone: toText(form.get('phone')),
       whatsapp: toText(form.get('whatsapp')),
       email: toText(form.get('email')),
+      instagramUrl: toText(form.get('instagramUrl')),
+      facebookUrl: toText(form.get('facebookUrl')),
+      tiktokUrl: toText(form.get('tiktokUrl')),
       managerUserId: toText(form.get('managerUserId')) || undefined,
       minCapacity: toNumber(form.get('minCapacity')),
       maxCapacity: toNumber(form.get('maxCapacity')),
@@ -241,7 +244,10 @@ export default function SalonDetailPage() {
       seoTitle: toText(form.get('seoTitle')),
       seoDescription: toText(form.get('seoDescription')),
       locationText: toText(form.get('locationText')),
-      mapUrl: toText(form.get('mapUrl'))
+      mapUrl: toText(form.get('mapUrl')),
+      instagramUrl: toText(form.get('instagramUrl')),
+      facebookUrl: toText(form.get('facebookUrl')),
+      tiktokUrl: toText(form.get('tiktokUrl'))
     }, 'Datos públicos guardados correctamente.');
   }
 
@@ -394,6 +400,7 @@ export default function SalonDetailPage() {
       <Field label="Nombre"><Input name="name" defaultValue={salon.name} required /></Field><Field label="Slug"><Input name="slug" defaultValue={salon.slug} required /></Field><Field label="Localidad"><Input name="locality" defaultValue={salon.locality || salon.city} /></Field>
       <Field label="Dirección"><Input name="address" defaultValue={salon.address} /></Field><Field label="Ciudad"><Input name="city" defaultValue={salon.city} /></Field><Field label="Provincia"><Input name="province" defaultValue={salon.province} /></Field>
       <Field label="Teléfono"><Input name="phone" defaultValue={salon.phone} /></Field><Field label="WhatsApp"><Input name="whatsapp" defaultValue={salon.whatsapp} /></Field><Field label="Email"><Input name="email" type="email" defaultValue={salon.email} /></Field>
+      <Field label="Instagram"><Input name="instagramUrl" defaultValue={salon.instagramUrl} placeholder="https://instagram.com/..." /></Field><Field label="Facebook"><Input name="facebookUrl" defaultValue={salon.facebookUrl} placeholder="https://facebook.com/..." /></Field><Field label="TikTok"><Input name="tiktokUrl" defaultValue={salon.tiktokUrl} placeholder="https://tiktok.com/@..." /></Field>
       <Field label="Encargado del salón"><Select name="managerUserId" defaultValue={typeof salon.managerUserId === 'string' ? salon.managerUserId : salon.manager?._id ?? ''}><option value="">Sin encargado asignado</option>{users.map((user) => <option key={user._id} value={user._id}>{managerLabel(user)}</option>)}</Select></Field>
       <Field label="Capacidad mínima"><Input name="minCapacity" type="number" min={0} defaultValue={salon.minCapacity ?? 0} /></Field><Field label="Capacidad máxima"><Input name="maxCapacity" type="number" min={0} defaultValue={salon.maxCapacity ?? 0} /></Field><Field label="Capacidad recomendada"><Input name="recommendedCapacity" type="number" min={0} defaultValue={salon.recommendedCapacity ?? 0} /></Field>
       <div className="lg:col-span-3"><p className="text-sm font-medium text-zinc-700">Tipos de evento permitidos</p><div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{eventTypeOptions.map(([value, label]) => <label key={value} className="flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-sm"><input name={`eventType:${value}`} type="checkbox" defaultChecked={salon.allowedEventTypes?.includes(value)} />{label}</label>)}</div></div>
@@ -424,7 +431,9 @@ export default function SalonDetailPage() {
       <Field label="Descripción corta" className="lg:col-span-2"><Textarea name="publicShortDescription" defaultValue={salon.publicShortDescription} /></Field><Field label="Descripción pública" className="lg:col-span-2"><Textarea name="publicDescription" defaultValue={salon.publicDescription} /></Field>
       <label className="flex items-center gap-2 text-sm text-zinc-700"><input name="visibleOnWebsite" type="checkbox" defaultChecked={salon.visibleOnWebsite} />Visible en web</label><Field label="Orden de aparición"><Input name="displayOrder" type="number" min={0} defaultValue={salon.displayOrder ?? 0} /></Field>
       <Field label="URL imagen principal"><Input name="heroImageUrl" defaultValue={salon.heroImageUrl} /></Field><Field label="Ubicación visible"><Input name="locationText" defaultValue={salon.locationText} /></Field>
-      <Field label="URLs de galería (una por línea)" className="lg:col-span-2"><Textarea name="galleryImageUrls" defaultValue={salon.galleryImageUrls?.join('\n')} /></Field><Field label="SEO title"><Input name="seoTitle" defaultValue={salon.seoTitle} /></Field><Field label="SEO description"><Input name="seoDescription" defaultValue={salon.seoDescription} /></Field><Field label="URL de mapa" className="lg:col-span-2"><Input name="mapUrl" defaultValue={salon.mapUrl} /></Field>
+      <Field label="URLs de galería (una por línea)" className="lg:col-span-2"><Textarea name="galleryImageUrls" defaultValue={salon.galleryImageUrls?.join('\n')} /></Field><Field label="SEO title"><Input name="seoTitle" defaultValue={salon.seoTitle} /></Field><Field label="SEO description"><Input name="seoDescription" defaultValue={salon.seoDescription} /></Field>
+      <Field label="Instagram"><Input name="instagramUrl" defaultValue={salon.instagramUrl} placeholder="https://instagram.com/..." /></Field><Field label="Facebook"><Input name="facebookUrl" defaultValue={salon.facebookUrl} placeholder="https://facebook.com/..." /></Field><Field label="TikTok"><Input name="tiktokUrl" defaultValue={salon.tiktokUrl} placeholder="https://tiktok.com/@..." /></Field>
+      <Field label="URL de mapa" className="lg:col-span-2"><Input name="mapUrl" defaultValue={salon.mapUrl} /></Field>
       <footer className="lg:col-span-2 flex justify-end"><Button disabled={saving}><Globe2 className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar landing'}</Button></footer>
     </form>}
     {tab === 'activity' && <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6"><h2 className="font-semibold text-zinc-900">Actividad</h2><p className="mt-1 text-sm text-zinc-500">La API ya registra auditoría de cambios relevantes. La UI de actividad específica para salones queda preparada para conectar cuando exista el patrón visual común. Los presupuestos y eventos futuros por salón se consultan desde los filtros de Presupuestos y Eventos.</p></div>}

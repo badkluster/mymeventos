@@ -77,6 +77,8 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
     leadId: event.leadId?._id ?? event.sourceLeadId?._id,
     salonId: salon?._id,
     status: 'pending_approval',
+    contractMode: event.quoteMode ?? quote?.quoteMode ?? 'PACKAGE',
+    lineItemsSnapshot: event.lineItemsSnapshot ?? quote?.lineItems ?? [],
     customerSnapshot: {
       firstName: customer?.firstName,
       lastName: customer?.lastName,
@@ -96,6 +98,7 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
       endTime: event.endTime ?? commercial.endTime,
       durationHours: commercial.durationHours ?? quote?.durationHours,
       guestCount: event.guestCount,
+      guestBreakdown: event.guestBreakdown,
       adultsCount: event.adultsCount,
       childrenCount: event.childrenCount,
       teenagersCount: event.teenagersCount,

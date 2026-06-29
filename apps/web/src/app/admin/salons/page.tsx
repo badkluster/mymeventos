@@ -18,6 +18,9 @@ type SalonForm = {
   city: string;
   whatsapp: string;
   email: string;
+  instagramUrl: string;
+  facebookUrl: string;
+  tiktokUrl: string;
   managerUserId: string;
   maxCapacity: number;
   active: boolean;
@@ -25,7 +28,7 @@ type SalonForm = {
   publicShortDescription: string;
 };
 
-const emptyForm: SalonForm = { name: '', slug: '', address: '', city: '', whatsapp: '', email: '', managerUserId: '', maxCapacity: 0, active: true, visibleOnWebsite: true, publicShortDescription: '' };
+const emptyForm: SalonForm = { name: '', slug: '', address: '', city: '', whatsapp: '', email: '', instagramUrl: '', facebookUrl: '', tiktokUrl: '', managerUserId: '', maxCapacity: 0, active: true, visibleOnWebsite: true, publicShortDescription: '' };
 const slugify = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const errorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && 'code' in error && error.code === 'ROUTE_NOT_FOUND') return 'La API no encontró el endpoint de Salones. Revisá que el backend esté actualizado y en ejecución.';
@@ -104,6 +107,9 @@ export default function SalonsPage() {
       city: salon.locality || salon.city || '',
       whatsapp: salon.whatsapp ?? '',
       email: salon.email ?? '',
+      instagramUrl: salon.instagramUrl ?? '',
+      facebookUrl: salon.facebookUrl ?? '',
+      tiktokUrl: salon.tiktokUrl ?? '',
       managerUserId: typeof salon.managerUserId === 'string' ? salon.managerUserId : salon.manager?._id ?? '',
       maxCapacity: salon.maxCapacity ?? 0,
       active: salon.active,
@@ -211,6 +217,9 @@ export default function SalonsPage() {
         <label className="text-sm font-medium text-zinc-700">Localidad<Input value={form.city} onChange={(event) => updateForm('city', event.target.value)} /></label>
         <label className="text-sm font-medium text-zinc-700">WhatsApp<Input value={form.whatsapp} onChange={(event) => updateForm('whatsapp', event.target.value)} /></label>
         <label className="text-sm font-medium text-zinc-700">Email<Input type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} /></label>
+        <label className="text-sm font-medium text-zinc-700">Instagram<Input value={form.instagramUrl} onChange={(event) => updateForm('instagramUrl', event.target.value)} placeholder="https://instagram.com/..." /></label>
+        <label className="text-sm font-medium text-zinc-700">Facebook<Input value={form.facebookUrl} onChange={(event) => updateForm('facebookUrl', event.target.value)} placeholder="https://facebook.com/..." /></label>
+        <label className="text-sm font-medium text-zinc-700">TikTok<Input value={form.tiktokUrl} onChange={(event) => updateForm('tiktokUrl', event.target.value)} placeholder="https://tiktok.com/@..." /></label>
         <label className="text-sm font-medium text-zinc-700">Encargado del salón<Select value={form.managerUserId} onChange={(event) => updateForm('managerUserId', event.target.value)}><option value="">Sin encargado asignado</option>{users.map((user) => <option key={user._id} value={user._id}>{managerLabel(user)}</option>)}</Select></label>
         <label className="text-sm font-medium text-zinc-700">Capacidad máxima<Input type="number" min={0} value={form.maxCapacity} onChange={(event) => updateForm('maxCapacity', Number(event.target.value))} /></label>
         <label className="text-sm font-medium text-zinc-700 sm:col-span-2">Descripción corta pública<Textarea value={form.publicShortDescription} onChange={(event) => updateForm('publicShortDescription', event.target.value)} /></label>

@@ -51,6 +51,9 @@ export type Salon = {
   phone?: string;
   whatsapp?: string;
   email?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
+  tiktokUrl?: string;
   managerUserId?: string;
   manager?: SalonManager;
   active: boolean;

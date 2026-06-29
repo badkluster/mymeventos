@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { PackageTemplate, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
+import { LandingEventType, LandingFaq, LandingGalleryItem, LandingPromotion, LandingServiceBlock, LandingSettings, LandingTestimonial } from '../landing/landing.models';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
@@ -33,18 +34,18 @@ async function readLeanList(query: any, sort?: Record<string, 1 | -1>): Promise<
   return [];
 }
 
-router.get('/salons', asyncHandler(async (_request, response) => {
+async function publicSalons() {
   const salons = await Salon.find({ active: true, deletedAt: null, $or: [{ visibleOnWebsite: true }, { visibleOnWebsite: { $exists: false } }] })
-    .select('_id name slug address city locality province phone whatsapp email publicTitle publicShortDescription publicDescription heroImageUrl galleryImageUrls mediaGallery locationText mapUrl minCapacity maxCapacity recommendedCapacity allowedEventTypes defaultStartTime defaultEndTime defaultDurationHours allowsExtraHour extraHourPrice defaultDepositAmount defaultPaymentTerms visibleOnWebsite displayOrder extraServices active')
+    .select('_id name slug address city locality province phone whatsapp email instagramUrl facebookUrl tiktokUrl publicTitle publicShortDescription publicDescription heroImageUrl galleryImageUrls mediaGallery locationText mapUrl minCapacity maxCapacity recommendedCapacity allowedEventTypes defaultStartTime defaultEndTime defaultDurationHours allowsExtraHour extraHourPrice defaultDepositAmount defaultPaymentTerms visibleOnWebsite displayOrder extraServices active')
     .sort({ displayOrder: 1, name: 1 })
     .lean();
   const salonIds = salons.map((salon: any) => salon._id);
   const [templates, rules] = await Promise.all([
-    readLeanList(PackageTemplate.find({ active: true, deletedAt: null, $or: [{ isGlobal: true }, { salonIds: { $in: salonIds } }] }), { name: 1 }),
+    readLeanList(PackageTemplate.find({ active: true, deletedAt: null, $and: [{ $or: [{ visibleOnWebsite: true }, { visibleOnWebsite: { $exists: false } }] }, { $or: [{ isGlobal: true }, { salonIds: { $in: salonIds } }] }] }), { displayOrder: 1, name: 1 }),
     readLeanList(VenuePackageRule.find({ active: true, deletedAt: null, salonId: { $in: salonIds } }))
   ]);
   const rulesBySalonAndPackage = new Map(rules.map((rule: any) => [`${rule.salonId.toString()}:${rule.packageTemplateId.toString()}`, rule]));
-  const publicSalons = salons.map((salon: any) => {
+  return salons.map((salon: any) => {
     const salonId = salon._id.toString();
     const packages = templates
       .filter((template: any) => template.isGlobal || (template.salonIds ?? []).some((id: any) => id.toString() === salonId))
@@ -57,7 +58,11 @@ router.get('/salons', asyncHandler(async (_request, response) => {
         const finalPricePerPerson = Number(source.finalPricePerPerson ?? Math.round(pricePerPerson * (1 - discountPercentage / 100)));
         return {
           _id: template._id,
-          name: template.name,
+          name: template.publicTitle ?? template.name,
+          description: template.publicDescription ?? source.notes,
+          publicHighlights: template.publicHighlights ?? [],
+          badgeLabel: template.badgeLabel,
+          featured: template.featured,
           durationHours: source.durationHours,
           startTime: source.startTime,
           endTime: source.endTime,
@@ -82,7 +87,30 @@ router.get('/salons', asyncHandler(async (_request, response) => {
       packages
     };
   });
-  return sendSuccess(response, { salons: publicSalons });
+}
+
+function activeNowQuery() {
+  const now = new Date();
+  return { active: true, deletedAt: null, $and: [{ $or: [{ startsAt: { $exists: false } }, { startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ endsAt: { $exists: false } }, { endsAt: null }, { endsAt: { $gte: now } }] }] };
+}
+
+router.get('/landing', asyncHandler(async (_request, response) => {
+  const [settings, salons, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes] = await Promise.all([
+    LandingSettings.findOne({ key: 'default', active: true, deletedAt: null }).lean(),
+    publicSalons(),
+    LandingPromotion.find({ ...activeNowQuery(), visibleOnHome: true }).sort({ displayOrder: 1, createdAt: -1 }).limit(8).lean(),
+    LandingGalleryItem.find({ active: true, deletedAt: null }).sort({ featured: -1, displayOrder: 1, createdAt: -1 }).limit(12).lean(),
+    LandingTestimonial.find({ active: true, deletedAt: null }).sort({ featured: -1, displayOrder: 1, createdAt: -1 }).limit(6).lean(),
+    LandingFaq.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
+    LandingServiceBlock.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
+    LandingEventType.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
+  ]);
+  const packages = salons.flatMap((salon: any) => (salon.packages ?? []).map((item: any) => ({ ...item, salonId: salon._id, salonName: salon.publicTitle || salon.name }))).slice(0, 6);
+  return sendSuccess(response, { settings, salons, packages, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes });
+}));
+
+router.get('/salons', asyncHandler(async (_request, response) => {
+  return sendSuccess(response, { salons: await publicSalons() });
 }));
 
 router.post('/quick-quote', validateRequest(schema), asyncHandler(async (request, response) => {

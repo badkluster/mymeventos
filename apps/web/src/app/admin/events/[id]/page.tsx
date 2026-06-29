@@ -2,21 +2,26 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ChevronLeft, FileText, Printer } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, FileText, Printer, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { displayLabel, eventStatusLabels, paymentMethodLabels, paymentStatusLabels, paymentTypeLabels, quoteStatusLabels } from '@/lib/display-labels';
-import { Button, Select, Textarea } from '@/components/ui/primitives';
+import { displayLabel, eventStaffStatusLabels, eventStatusLabels, paymentMethodLabels, paymentStatusLabels, paymentTypeLabels, quoteStatusLabels, staffSubroleLabels } from '@/lib/display-labels';
+import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import type { Contract, Event, Payment, PaymentSummary, Quote } from '@/features/quotes/types';
 
 const money = (value?: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value ?? 0);
 const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(value)) : 'Sin fecha definida';
+const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : 'Sin horario';
 
 function entityName(value: unknown) {
   if (!value || typeof value === 'string') return 'Sin datos';
   const item = value as { fullName?: string; name?: string; quoteNumber?: string; firstName?: string; lastName?: string };
   return item.fullName || item.name || item.quoteNumber || [item.firstName, item.lastName].filter(Boolean).join(' ') || 'Sin datos';
 }
+
+type StaffOption = { _id: string; fullName?: string; firstName?: string; lastName?: string; username?: string; staffProfile?: { staffSubroles?: string[] } };
+type StaffAssignment = { _id: string; staffUserId?: string | StaffOption; salonId?: string | { _id: string; name?: string }; roleLabel?: string; staffSubrole?: string; shiftStart?: string; shiftEnd?: string; status: string; notes?: string };
+const staffName = (value: unknown) => typeof value === 'string' ? value : ((value as StaffOption | undefined)?.fullName || [(value as StaffOption | undefined)?.firstName, (value as StaffOption | undefined)?.lastName].filter(Boolean).join(' ') || (value as StaffOption | undefined)?.username || 'Staff');
 function entityId(value: unknown) {
   return typeof value === 'string' ? value : (value as { _id?: string } | undefined)?._id ?? '';
 }
@@ -27,6 +32,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [event, setEvent] = useState<Event>();
   const [contract, setContract] = useState<Contract>();
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [staffForm, setStaffForm] = useState({ staffUserId: '', staffSubrole: 'WAITER', roleLabel: '', shiftStart: '', shiftEnd: '', notes: '' });
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary>({ paidAmount: 0, refundedAmount: 0, pendingAmount: 0, securityDepositAmount: 0, overdueAmount: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,13 +45,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const load = async (eventId: string) => {
     setLoading(true);
     try {
-      const [response, paymentsResponse] = await Promise.all([
+      const [response, paymentsResponse, staffResponse, staffOptionsResponse] = await Promise.all([
         api.get<{ event: Event; contract?: Contract }>(`/events/${eventId}`),
-        api.get<{ items: Payment[]; summary: PaymentSummary }>(`/events/${eventId}/payments`)
+        api.get<{ items: Payment[]; summary: PaymentSummary }>(`/events/${eventId}/payments`),
+        api.get<{ items: StaffAssignment[] }>(`/events/${eventId}/staff`),
+        api.get<{ items: StaffOption[] }>('/staff?active=true&limit=100')
       ]);
       setEvent(response.event);
       setContract(response.contract);
       setPayments(paymentsResponse.items ?? []);
+      setStaffAssignments(staffResponse.items ?? []);
+      setStaffOptions(staffOptionsResponse.items ?? []);
       setPaymentSummary(paymentsResponse.summary ?? { paidAmount: 0, refundedAmount: 0, pendingAmount: 0, securityDepositAmount: 0, overdueAmount: 0 });
     } catch (error) {
       notice(error instanceof Error ? error.message : 'No se pudo cargar el evento.', 'error');
@@ -92,6 +105,35 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       setSaving(false);
     }
   };
+  const assignStaff = async () => {
+    if (!event) return;
+    setSaving(true);
+    try {
+      await api.post(`/events/${event._id}/staff`, { ...staffForm, shiftStart: staffForm.shiftStart || undefined, shiftEnd: staffForm.shiftEnd || undefined, roleLabel: staffForm.roleLabel || undefined });
+      setStaffModalOpen(false);
+      setStaffForm({ staffUserId: '', staffSubrole: 'WAITER', roleLabel: '', shiftStart: '', shiftEnd: '', notes: '' });
+      await load(id);
+      notice('Staff asignado correctamente.');
+    } catch (error) {
+      notice(error instanceof Error ? error.message : 'No se pudo asignar el staff.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const updateStaffAssignment = async (assignmentId: string, action: 'confirm' | 'cancel' | 'delete') => {
+    if (!event) return;
+    setSaving(true);
+    try {
+      if (action === 'delete') await api.delete(`/events/${event._id}/staff/${assignmentId}`);
+      else await api.post(`/events/${event._id}/staff/${assignmentId}/${action}`, {});
+      await load(id);
+      notice('Asignación actualizada correctamente.');
+    } catch (error) {
+      notice(error instanceof Error ? error.message : 'No se pudo actualizar la asignación.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading || !event) return <div className="grid min-h-56 place-items-center rounded-2xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">Cargando evento...</div>;
 
@@ -121,15 +163,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         <label className="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">Estado<Select value={event.status} disabled={saving} onChange={(change) => void updateStatus(change.target.value)} className="w-56 py-2">{Object.entries(eventStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
       </div>
     </header>
-    <div className="flex flex-wrap gap-2 border-b border-zinc-200">{['resumen', 'cliente', 'comercial', 'menu', 'servicios', 'contrato', 'pagos', 'actividad'].map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`px-4 py-3 text-sm font-medium capitalize ${activeTab === tab ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>{tab === 'menu' ? 'Menú' : tab === 'contrato' ? 'Contrato pendiente' : tab}</button>)}</div>
+    <div className="flex flex-wrap gap-2 border-b border-zinc-200">{['resumen', 'cliente', 'comercial', 'menu', 'servicios', 'staff', 'contrato', 'pagos', 'actividad'].map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`px-4 py-3 text-sm font-medium capitalize ${activeTab === tab ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>{tab === 'menu' ? 'Menú' : tab === 'contrato' ? 'Contrato pendiente' : tab}</button>)}</div>
     {activeTab === 'resumen' && <div className="grid gap-5 lg:grid-cols-3"><Card title="Evento"><Item label="Tipo" value={event.eventType || 'Sin especificar'} /><Item label="Fecha" value={formatDate(event.eventDate)} /><Item label="Horario" value={[event.startTime, event.endTime].filter(Boolean).join(' - ') || 'Sin horario'} /><Item label="Personas" value={event.guestCount || 'Sin definir'} /><Item label="Salón" value={entityName(event.salonId)} /></Card><article className="rounded-2xl border border-zinc-200 bg-zinc-950 p-6 text-white shadow-sm"><p className="text-sm font-medium text-zinc-300">Importe estimado</p><p className="mt-3 text-3xl font-semibold">{money(event.finalAmount ?? event.estimatedAmount)}</p><p className="mt-5 text-sm text-zinc-300">Pendiente de contrato y plan de pagos.</p></article><Card title="Notas"><p className="whitespace-pre-wrap text-sm leading-6 text-zinc-600">{event.notes || 'Sin notas.'}</p></Card></div>}
     {activeTab === 'cliente' && <div className="grid gap-5 lg:grid-cols-2"><Card title="Cliente"><Item label="Nombre" value={entityName(event.customerId)} /><Item label="Lead origen" value={lead ? entityName(lead) : 'No informado'} /><div className="mt-4 flex flex-wrap gap-3">{customerId ? <Link href={`/admin/customers/${customerId}`} className="inline-flex text-sm font-medium text-zinc-950 underline">Ver cliente</Link> : null}{lead && typeof lead !== 'string' ? <Link href={`/admin/leads/${lead._id}`} className="inline-flex text-sm font-medium text-zinc-950 underline">Ver lead</Link> : null}</div></Card><Card title="Presupuestos relacionados"><Item label="Número" value={quote?.quoteNumber || 'No informado'} /><Item label="Estado" value={quote ? displayLabel(quoteStatusLabels, quote.status) : 'No informado'} /><Item label="Total" value={money(quote?.totalAmount ?? event.estimatedAmount)} />{quote?._id ? <Link href={`/admin/quotes/${quote._id}`} className="mt-4 inline-flex text-sm font-medium text-zinc-950 underline">Ver presupuesto</Link> : null}</Card></div>}
     {activeTab === 'comercial' && <Card title="Comercial"><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Item label="Paquete" value={String(commercial.packageName ?? quote?.packageName ?? 'Personalizado')} /><Item label="Precio por persona" value={money(Number(commercial.pricePerPerson ?? quote?.pricePerPerson))} /><Item label="Descuento" value={`${commercial.discountPercentage ?? quote?.discountPercentage ?? 0}%`} /><Item label="Total" value={money(Number(commercial.totalAmount ?? event.finalAmount ?? event.estimatedAmount))} /><Item label="Seña sugerida" value={money(Number(commercial.depositAmount ?? quote?.depositAmount))} /><Item label="Saldo estimado" value={money(Number(commercial.balanceAmount ?? quote?.balanceAmount))} /><Item label="Condiciones de pago" value={String(commercial.paymentTerms ?? quote?.paymentTerms ?? 'No informadas')} /><Item label="Promoción/regalo" value={[commercial.promotionText, commercial.giftText].filter(Boolean).join(' · ') || 'No informado'} /></div></Card>}
     {activeTab === 'menu' && <SnapshotEditor key={menuText} title="Menú" initialValue={menuText} saving={saving} onSave={(value) => patchEvent({ menuSnapshot: value.split('\n').map((line) => { const [title, ...items] = line.split(':'); return { title: title.trim() || 'Menú', items: items.join(':').split('|').map((item) => item.trim()).filter(Boolean) }; }).filter((section) => section.items.length) })} />}
     {activeTab === 'servicios' && <SnapshotEditor key={servicesText} title="Servicios incluidos" initialValue={servicesText} saving={saving} onSave={(value) => patchEvent({ servicesSnapshot: value.split('\n').map((item) => item.trim()).filter(Boolean) })} />}
+    {activeTab === 'staff' && <Card title="Staff del evento"><div className="flex justify-end"><Button disabled={saving} onClick={() => setStaffModalOpen(true)}><CalendarPlus className="mr-2 h-4 w-4" />Asignar staff</Button></div>{staffAssignments.length ? <div className="overflow-x-auto"><table className="min-w-[840px] w-full text-sm"><thead className="text-left text-xs uppercase text-zinc-400"><tr><th className="py-2">Staff</th><th>Rol</th><th>Turno</th><th>Estado</th><th className="text-right">Acciones</th></tr></thead><tbody className="divide-y divide-zinc-100">{staffAssignments.map((assignment) => <tr key={assignment._id}><td className="py-3">{staffName(assignment.staffUserId)}</td><td>{assignment.roleLabel || displayLabel(staffSubroleLabels, assignment.staffSubrole ?? '')}</td><td>{[formatDateTime(assignment.shiftStart), assignment.shiftEnd ? formatDateTime(assignment.shiftEnd) : ''].filter(Boolean).join(' - ')}</td><td>{displayLabel(eventStaffStatusLabels, assignment.status)}</td><td><div className="flex justify-end gap-2"><Button variant="secondary" className="px-3 py-2" disabled={saving || assignment.status === 'confirmed'} onClick={() => void updateStaffAssignment(assignment._id, 'confirm')}>Confirmar</Button><Button variant="secondary" className="px-3 py-2" disabled={saving || assignment.status === 'cancelled'} onClick={() => void updateStaffAssignment(assignment._id, 'cancel')}>Cancelar</Button><Button variant="danger" className="px-3 py-2" disabled={saving} onClick={() => void updateStaffAssignment(assignment._id, 'delete')}><Trash2 className="h-4 w-4" /><span className="sr-only">Quitar</span></Button></div></td></tr>)}</tbody></table></div> : <p className="rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay staff asignado a este evento.</p>}</Card>}
     {activeTab === 'contrato' && <div className="space-y-5">{contract ? <Card title="Contrato generado"><div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-emerald-50 px-4 py-4"><div><p className="font-semibold text-emerald-950">{contract.contractNumber}</p><p className="mt-1 text-sm text-emerald-700">Estado: {contract.status} · Total contractual: {money(contract.totalAmount)}</p></div><div className="flex flex-wrap gap-2"><Link href={`/admin/contracts/${contract._id}`}><Button><FileText className="mr-2 h-4 w-4" />Ver contrato</Button></Link><Link href={`/admin/contracts/${contract._id}?tab=adendas`}><Button variant="secondary">Ver adendas</Button></Link><Link href={`/admin/contracts/${contract._id}/print`}><Button variant="secondary"><Printer className="mr-2 h-4 w-4" />Imprimir</Button></Link></div></div></Card> : null}<Card title="Checklist para contrato"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{Object.entries({ customerComplete: 'Cliente completo', document: 'DNI/documento', address: 'Domicilio', salonDefined: 'Salón definido', dateDefined: 'Fecha definida', timeDefined: 'Horario definido', guestCount: 'Cantidad de invitados', totalPrice: 'Precio total', deposit: 'Seña', paymentTerms: 'Condiciones de pago', menu: 'Menú', includedServices: 'Servicios incluidos' }).map(([key, label]) => <span key={key} className={`rounded-xl px-3 py-2 text-sm font-medium ${checklist[key] ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>{label}: {checklist[key] ? 'OK' : 'Pendiente'}</span>)}</div>{contract ? <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-4 text-sm text-emerald-700">Este evento ya tiene contrato activo.</p> : canCreateContract ? <div className="mt-5 rounded-xl bg-emerald-50 px-4 py-4"><p className="text-sm text-emerald-700">El evento tiene los datos mínimos para generar contrato.</p><Button disabled={saving} className="mt-4" onClick={() => void createContract()}><FileText className="mr-2 h-4 w-4" />{saving ? 'Creando contrato...' : 'Crear contrato'}</Button></div> : <div className="mt-5 rounded-xl bg-amber-50 px-4 py-4 text-sm text-amber-800"><p className="font-medium">Faltan datos para generar contrato:</p><ul className="mt-2 list-disc pl-5">{contractMissing.map((item) => <li key={item}>{item}</li>)}</ul></div>}</Card></div>}
     {activeTab === 'pagos' && <div className="space-y-5"><div className="grid gap-5 lg:grid-cols-4"><Card title="Cobrado"><Item label="Impacta saldo" value={money(paymentSummary.paidAmount)} /></Card><Card title="Pendiente"><Item label="Programado" value={money(paymentSummary.pendingAmount)} /></Card><Card title="Vencido"><Item label="Importe vencido" value={money(paymentSummary.overdueAmount)} /></Card><Card title="Garantía"><Item label="Recibida" value={money(paymentSummary.securityDepositAmount)} /></Card></div><Card title="Pagos del evento">{payments.length ? <div className="overflow-x-auto"><table className="min-w-[840px] w-full text-sm"><thead className="text-left text-xs uppercase text-zinc-400"><tr><th className="py-2">Número</th><th>Tipo</th><th>Estado</th><th>Medio</th><th>Importe</th><th>Fecha</th><th>Contrato</th></tr></thead><tbody className="divide-y divide-zinc-100">{payments.map((payment) => <tr key={payment._id}><td className="py-3"><Link className="font-medium text-zinc-950 underline" href={`/admin/payments/${payment._id}`}>{payment.paymentNumber}</Link></td><td>{displayLabel(paymentTypeLabels, payment.type)}</td><td>{displayLabel(paymentStatusLabels, payment.status)}</td><td>{payment.method ? displayLabel(paymentMethodLabels, payment.method) : 'No informado'}</td><td>{money(payment.amount)}</td><td>{formatDate(payment.paidAt ?? payment.dueDate)}</td><td>{contract?._id ? <Link className="font-medium text-zinc-950 underline" href={`/admin/contracts/${contract._id}?tab=pagos`}>{contract.contractNumber}</Link> : 'Sin contrato'}</td></tr>)}</tbody></table></div> : <p className="rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay pagos registrados para este evento.</p>}</Card></div>}
     {activeTab === 'actividad' && <Card title="Actividad"><p className="text-sm text-zinc-500">Actividad específica de eventos pendiente de modelo dedicado. Los cambios importantes quedan auditados en el sistema.</p></Card>}
+    <Modal open={staffModalOpen} title="Asignar staff" description="La asignación queda vinculada a este evento y al salón del evento." onClose={() => setStaffModalOpen(false)}><div className="space-y-4 p-6"><Select value={staffForm.staffUserId} onChange={(event) => setStaffForm((current) => ({ ...current, staffUserId: event.target.value }))}><option value="">Seleccionar staff</option>{staffOptions.map((staff) => <option key={staff._id} value={staff._id}>{staffName(staff)}</option>)}</Select><div className="grid gap-3 md:grid-cols-2"><Select value={staffForm.staffSubrole} onChange={(event) => setStaffForm((current) => ({ ...current, staffSubrole: event.target.value }))}>{Object.entries(staffSubroleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select><Input placeholder="Rol específico opcional" value={staffForm.roleLabel} onChange={(event) => setStaffForm((current) => ({ ...current, roleLabel: event.target.value }))} /><Input type="datetime-local" value={staffForm.shiftStart} onChange={(event) => setStaffForm((current) => ({ ...current, shiftStart: event.target.value }))} /><Input type="datetime-local" value={staffForm.shiftEnd} onChange={(event) => setStaffForm((current) => ({ ...current, shiftEnd: event.target.value }))} /></div><Textarea placeholder="Notas" value={staffForm.notes} onChange={(event) => setStaffForm((current) => ({ ...current, notes: event.target.value }))} /><div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" onClick={() => setStaffModalOpen(false)}>Cancelar</Button><Button disabled={saving || !staffForm.staffUserId} onClick={() => void assignStaff()}>Asignar</Button></div></div></Modal>
   </section>;
 }
 

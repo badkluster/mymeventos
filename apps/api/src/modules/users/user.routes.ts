@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { Permission, Role } from '@mym/shared';
+import { Permission, Role, StaffEmploymentStatus, StaffSubrole } from '@mym/shared';
 import { User } from './user.model';
 import { requireAuth, requirePermission, requireRole } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
@@ -12,6 +12,7 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { getApiMessage } from '../../utils/messages';
 import { generateTemporaryPassword, normalizeUserInput, sanitizeUser, syncUserManagedSalons, validatePrimarySalonFields } from './user.service';
 import { buildUserFullName } from './user.model';
+import { EventStaffAssignment } from '../crm/crm.models';
 
 const router = Router();
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
@@ -30,6 +31,39 @@ const notificationSchema = z.object({
   notifyOnPaymentReceived: z.boolean().optional(),
   notifyOnEventReminder: z.boolean().optional(),
   notifyOnAssignedTask: z.boolean().optional()
+}).partial();
+export const staffProfileSchema = z.object({
+  staffCode: optionalText,
+  staffSubroles: z.array(z.nativeEnum(StaffSubrole)).optional(),
+  documentType: optionalText,
+  documentNumber: optionalText,
+  birthDate: z.coerce.date().optional(),
+  address: optionalText,
+  emergencyContactName: optionalText,
+  emergencyContactPhone: optionalText,
+  startDate: z.coerce.date().optional(),
+  endDate: z.coerce.date().optional(),
+  employmentStatus: z.nativeEnum(StaffEmploymentStatus).optional(),
+  notes: optionalText
+}).partial();
+export const workScheduleSchema = z.object({
+  type: z.enum(['FIXED', 'FLEXIBLE', 'EVENT_BASED']).optional(),
+  weeklyAvailability: z.array(z.object({
+    dayOfWeek: z.coerce.number().int().min(0).max(6),
+    enabled: z.boolean().optional(),
+    startTime: optionalText,
+    endTime: optionalText
+  }).refine((item) => !item.enabled || !item.startTime || !item.endTime || item.endTime > item.startTime, 'El horario de fin debe ser posterior al inicio.')).optional(),
+  notes: optionalText
+}).partial();
+export const payrollProfileSchema = z.object({
+  paymentType: z.enum(['PER_EVENT', 'PER_HOUR', 'MONTHLY', 'OTHER']).optional(),
+  hourlyRate: z.coerce.number().min(0).optional(),
+  eventRate: z.coerce.number().min(0).optional(),
+  monthlySalary: z.coerce.number().min(0).optional(),
+  currency: optionalText,
+  paymentNotes: optionalText,
+  active: z.boolean().optional()
 }).partial();
 const employeeProfileSchema = z.object({
   employeeCode: optionalText,
@@ -75,14 +109,18 @@ const baseFields = z.object({
   primaryManagedSalonId: objectId.optional().or(z.literal('')),
   canReceiveLeadNotifications: z.boolean().optional(),
   canReceiveQuoteRequestNotifications: z.boolean().optional(),
+  canAccessBackoffice: z.boolean().optional(),
   active: z.boolean().optional(),
   mustChangePassword: z.boolean().optional(),
   notificationPreferences: notificationSchema.optional(),
   employeeProfile: employeeProfileSchema.optional(),
+  staffProfile: staffProfileSchema.optional(),
+  workSchedule: workScheduleSchema.optional(),
+  payrollProfile: payrollProfileSchema.optional(),
   attendanceConfig: attendanceConfigSchema.optional(),
   preferences: preferencesSchema.optional()
 });
-const createSchema = z.object({ body: baseFields.extend({ username: z.string().trim().min(3), email: z.string().trim().email(), firstName: z.string().trim().min(1), lastName: z.string().trim().min(1) }), params: z.object({}), query: z.object({}) });
+const createSchema = z.object({ body: baseFields.extend({ username: z.string().trim().min(3), firstName: z.string().trim().min(1), lastName: z.string().trim().min(1) }), params: z.object({}), query: z.object({}) });
 const updateSchema = z.object({ body: baseFields.omit({ username: true, email: true, password: true }).partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'), params: z.object({ id: objectId }), query: z.object({}) });
 const rolesPatchSchema = z.object({ body: z.object({ roles: z.array(roleSchema).min(1), primaryRole: roleSchema.optional() }), params: z.object({ id: objectId }), query: z.object({}) });
 const permissionsPatchSchema = z.object({ body: z.object({ permissionOverrides: z.array(permissionSchema).default([]), permissionDeniedOverrides: z.array(permissionSchema).default([]) }), params: z.object({ id: objectId }), query: z.object({}) });
@@ -91,11 +129,15 @@ const managedSalonsPatchSchema = z.object({ body: z.object({ managedSalonIds: z.
 const notificationPatchSchema = z.object({ body: notificationSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const employeePatchSchema = z.object({ body: employeeProfileSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const attendancePatchSchema = z.object({ body: attendanceConfigSchema, params: z.object({ id: objectId }), query: z.object({}) });
+const staffProfilePatchSchema = z.object({ body: staffProfileSchema, params: z.object({ id: objectId }), query: z.object({}) });
+const workSchedulePatchSchema = z.object({ body: workScheduleSchema, params: z.object({ id: objectId }), query: z.object({}) });
+const payrollProfilePatchSchema = z.object({ body: payrollProfileSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const passwordResetSchema = z.object({ body: z.object({ password: z.string().min(8).optional() }).default({}), params: z.object({ id: objectId }), query: z.object({}) });
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
 function buildQuery(request: Request): Record<string, unknown> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }];
+  if (!request.user!.roles.includes(Role.ADMIN) && request.user!.salonIds.length) terms.push({ salonIds: { $in: request.user!.salonIds } });
   const search = queryValue(request.query.search);
   if (search) terms.push({ $or: ['username', 'email', 'fullName', 'firstName', 'lastName', 'phone', 'documentNumber'].map((field) => ({ [field]: { $regex: search, $options: 'i' } })) });
   const role = queryValue(request.query.role);
@@ -103,6 +145,9 @@ function buildQuery(request: Request): Record<string, unknown> {
   const active = queryValue(request.query.active);
   if (active === 'true') terms.push({ active: true });
   if (active === 'false') terms.push({ active: false });
+  const canAccessBackoffice = queryValue(request.query.canAccessBackoffice);
+  if (canAccessBackoffice === 'true') terms.push({ canAccessBackoffice: true });
+  if (canAccessBackoffice === 'false') terms.push({ canAccessBackoffice: false });
   const salonId = queryValue(request.query.salonId);
   if (salonId && objectId.safeParse(salonId).success) terms.push({ salonIds: salonId });
   const managedSalonId = queryValue(request.query.managedSalonId);
@@ -139,13 +184,15 @@ router.get('/', requirePermission(Permission.USERS_READ), asyncHandler(async (re
 }));
 
 router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
-  const temporaryPassword = request.body.password ?? generateTemporaryPassword();
-  const input = normalizeUserInput({ ...request.body, mustChangePassword: request.body.mustChangePassword ?? true });
+  const roles = request.body.roles?.length ? request.body.roles : [Role.STAFF];
+  const canAccessBackoffice = request.body.canAccessBackoffice ?? roles.some((role: Role) => [Role.ADMIN, Role.MANAGER, Role.SALON_MANAGER].includes(role));
+  const temporaryPassword = canAccessBackoffice ? request.body.password ?? generateTemporaryPassword() : request.body.password;
+  const input = normalizeUserInput({ ...request.body, roles, canAccessBackoffice, mustChangePassword: canAccessBackoffice ? request.body.mustChangePassword ?? true : false });
   validatePrimarySalonFields({ ...input, salonIds: input.salonIds ?? [], managedSalonIds: input.managedSalonIds ?? [] });
-  const user = await User.create({ ...input, passwordHash: await hashPassword(temporaryPassword), createdBy: request.user!.id, updatedBy: request.user!.id });
+  const user = await User.create({ ...input, passwordHash: temporaryPassword ? await hashPassword(temporaryPassword) : undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
   if (input.managedSalonIds?.length) await syncUserManagedSalons(user._id.toString(), input.managedSalonIds, request.user!.id);
   await writeAuditLog(request, 'USER_CREATE', 'User', user._id.toString());
-  return sendSuccess(response, { user: sanitizeUser(user), temporaryPassword: request.body.password ? undefined : temporaryPassword }, 201, getApiMessage('USER_CREATED'));
+  return sendSuccess(response, { user: sanitizeUser(user), temporaryPassword: canAccessBackoffice && !request.body.password ? temporaryPassword : undefined }, 201, getApiMessage('USER_CREATED'));
 }));
 
 router.get('/:id', requirePermission(Permission.USERS_READ), validateRequest(idParams), asyncHandler(async (request, response) => sendSuccess(response, { user: await getUserOrFail(request.params.id), roles: Object.values(Role), permissions: Object.values(Permission) })));
@@ -164,10 +211,18 @@ router.patch('/:id', requirePermission(Permission.USERS_UPDATE), validateRequest
 }));
 
 router.patch('/:id/roles', requireRole(Role.ADMIN), validateRequest(rolesPatchSchema), asyncHandler(async (request, response) => {
-  const user = await User.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { roles: request.body.roles, primaryRole: request.body.primaryRole ?? request.body.roles[0], updatedBy: request.user!.id }, { new: true, runValidators: true }).select('-passwordHash -passwordResetTokenHash');
+  const canAccessBackoffice = request.body.roles.some((role: Role) => [Role.ADMIN, Role.MANAGER, Role.SALON_MANAGER].includes(role));
+  const user = await User.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { roles: request.body.roles, primaryRole: request.body.primaryRole ?? request.body.roles[0], canAccessBackoffice, updatedBy: request.user!.id }, { new: true, runValidators: true }).select('-passwordHash -passwordResetTokenHash');
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND');
   await writeAuditLog(request, 'USER_ROLES_UPDATE', 'User', request.params.id, { roles: request.body.roles });
   return sendSuccess(response, { user: sanitizeUser(user) }, 200, getApiMessage('USER_UPDATED'));
+}));
+
+router.get('/:id/event-assignments', requirePermission(Permission.USERS_READ), validateRequest(idParams), asyncHandler(async (request, response) => {
+  const current = await User.findOne({ _id: request.params.id, deletedAt: null }).select('_id').lean();
+  if (!current) throw new ApiError(404, 'USER_NOT_FOUND');
+  const items = await EventStaffAssignment.find({ staffUserId: request.params.id, deletedAt: null }).populate('eventId', 'eventName eventType eventDate startTime endTime status salonId').populate('salonId', 'name').sort({ shiftStart: 1, createdAt: -1 }).lean();
+  return sendSuccess(response, { items });
 }));
 
 router.patch('/:id/permissions', requireRole(Role.ADMIN), validateRequest(permissionsPatchSchema), asyncHandler(async (request, response) => {
@@ -203,6 +258,9 @@ router.patch('/:id/managed-salons', requirePermission(Permission.USERS_UPDATE), 
 for (const [path, field, schema] of [
   ['notification-preferences', 'notificationPreferences', notificationPatchSchema],
   ['employee-profile', 'employeeProfile', employeePatchSchema],
+  ['staff-profile', 'staffProfile', staffProfilePatchSchema],
+  ['work-schedule', 'workSchedule', workSchedulePatchSchema],
+  ['payroll-profile', 'payrollProfile', payrollProfilePatchSchema],
   ['attendance-config', 'attendanceConfig', attendancePatchSchema]
 ] as const) {
   router.patch(`/:id/${path}`, requirePermission(Permission.USERS_UPDATE), validateRequest(schema), asyncHandler(async (request, response) => {

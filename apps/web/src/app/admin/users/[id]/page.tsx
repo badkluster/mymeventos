@@ -15,7 +15,7 @@ import { Permission } from '@mym/shared';
 type Salon = { _id: string; name?: string; slug?: string; active?: boolean };
 type User = {
   _id: string; username?: string; email?: string; firstName?: string; lastName?: string; fullName?: string; phone?: string; documentType?: string; documentNumber?: string;
-  roles?: string[]; primaryRole?: string; permissionOverrides?: string[]; permissionDeniedOverrides?: string[]; active?: boolean; mustChangePassword?: boolean; lastLoginAt?: string;
+  roles?: string[]; primaryRole?: string; permissionOverrides?: string[]; permissionDeniedOverrides?: string[]; canAccessBackoffice?: boolean; active?: boolean; mustChangePassword?: boolean; lastLoginAt?: string;
   salonIds?: Array<string | Salon>; managedSalonIds?: Array<string | Salon>; primarySalonId?: string | Salon; primaryManagedSalonId?: string | Salon;
   notificationPreferences?: Record<string, boolean>;
   employeeProfile?: { employeeCode?: string; position?: string; department?: string; employmentStatus?: string; emergencyContactName?: string; emergencyContactPhone?: string; notes?: string };
@@ -141,6 +141,7 @@ export default function UserDetailPage() {
         <Field label="Teléfono" value={user.phone} />
         <Field label="Documento" value={[user.documentType, user.documentNumber].filter(Boolean).join(' ')} />
         <Field label="Debe cambiar contraseña" value={user.mustChangePassword ? 'Sí' : 'No'} />
+        <Field label="Acceso backoffice" value={user.canAccessBackoffice ? 'Sí' : 'No'} />
         <Field label="Estado" value={user.active === false ? 'Inactivo' : 'Activo'} />
       </div>
       <SalonList title="Salones con acceso" items={user.salonIds} />

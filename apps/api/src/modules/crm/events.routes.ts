@@ -1,7 +1,8 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { Permission, Role } from '@mym/shared';
-import { Contract, Customer, Event, Payment } from './crm.models';
+import { Permission, Role, StaffSubrole } from '@mym/shared';
+import { Contract, Customer, Event, EventStaffAssignment, Payment } from './crm.models';
+import { User } from '../users/user.model';
 import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -15,6 +16,19 @@ import { paymentSummary } from './payments.service';
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const eventStatuses = ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'] as const;
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
+const assignmentIdSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
+const assignmentBaseBody = z.object({
+  staffUserId: objectId,
+  roleLabel: z.string().trim().optional(),
+  staffSubrole: z.nativeEnum(StaffSubrole).optional(),
+  shiftStart: z.coerce.date().optional(),
+  shiftEnd: z.coerce.date().optional(),
+  status: z.enum(['proposed', 'assigned', 'confirmed', 'checked_in', 'completed', 'cancelled', 'no_show']).optional(),
+  notes: z.string().trim().optional()
+});
+const assignmentBody = assignmentBaseBody.refine((body) => body.roleLabel || body.staffSubrole, 'Debe indicar rol o subrol.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.');
+const createAssignmentSchema = z.object({ body: assignmentBody, params: z.object({ id: objectId }), query: z.object({}) });
+const updateAssignmentSchema = z.object({ body: assignmentBaseBody.partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.'), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
 const statusSchema = z.object({ body: z.object({ status: z.enum(eventStatuses) }), params: z.object({ id: objectId }), query: z.object({}) });
 const updateSchema = z.object({
   body: z.object({
@@ -99,6 +113,58 @@ router.get('/:id/payments', requirePermission(Permission.PAYMENTS_READ), validat
   const summary = await paymentSummary({ eventId: request.params.id });
   return sendSuccess(response, { items, summary });
 }));
+
+router.get('/:id/staff', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  const items = await EventStaffAssignment.find({ eventId: request.params.id, deletedAt: null }).populate('staffUserId', 'firstName lastName fullName phone email roles staffProfile salonIds active').populate('salonId', 'name').sort({ shiftStart: 1, createdAt: 1 }).lean();
+  return sendSuccess(response, { items });
+}));
+
+router.post('/:id/staff', requirePermission(Permission.EVENTS_UPDATE), validateRequest(createAssignmentSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  if (['cancelled', 'lost'].includes(event.status)) throw new ApiError(422, 'EVENT_NOT_ASSIGNABLE');
+  const staff: any = await User.findOne({ _id: request.body.staffUserId, active: true, deletedAt: null }).lean();
+  if (!staff) throw new ApiError(422, 'STAFF_NOT_FOUND');
+  const staffSalonIds = (staff.salonIds ?? []).map((id: { toString(): string }) => id.toString());
+  const salonId = event.salonId?.toString();
+  if (!staff.roles?.includes(Role.ADMIN) && salonId && !staffSalonIds.includes(salonId)) throw new ApiError(403, 'STAFF_SALON_SCOPE_FORBIDDEN');
+  const duplicate = await EventStaffAssignment.exists({ eventId: request.params.id, staffUserId: request.body.staffUserId, shiftStart: request.body.shiftStart ?? null, shiftEnd: request.body.shiftEnd ?? null, deletedAt: null, status: { $nin: ['cancelled', 'no_show'] } });
+  if (duplicate) throw new ApiError(409, 'STAFF_ASSIGNMENT_DUPLICATED');
+  const assignment = await EventStaffAssignment.create({ ...request.body, eventId: request.params.id, salonId, createdBy: request.user!.id, updatedBy: request.user!.id });
+  await writeAuditLog(request, 'EVENT_STAFF_ASSIGN', 'EventStaffAssignment', assignment._id.toString(), { eventId: request.params.id, staffUserId: request.body.staffUserId });
+  return sendSuccess(response, { assignment }, 201);
+}));
+
+router.patch('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UPDATE), validateRequest(updateAssignmentSchema), asyncHandler(async (request, response) => {
+  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  const assignment = await EventStaffAssignment.findOneAndUpdate({ _id: request.params.assignmentId, eventId: request.params.id, deletedAt: null }, { ...request.body, updatedBy: request.user!.id }, { new: true, runValidators: true });
+  if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
+  await writeAuditLog(request, 'EVENT_STAFF_UPDATE', 'EventStaffAssignment', request.params.assignmentId);
+  return sendSuccess(response, { assignment });
+}));
+
+router.delete('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UPDATE), validateRequest(assignmentIdSchema), asyncHandler(async (request, response) => {
+  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  const assignment = await EventStaffAssignment.findOneAndUpdate({ _id: request.params.assignmentId, eventId: request.params.id, deletedAt: null }, { deletedAt: new Date(), deletedBy: request.user!.id, updatedBy: request.user!.id }, { new: true });
+  if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
+  await writeAuditLog(request, 'EVENT_STAFF_DELETE', 'EventStaffAssignment', request.params.assignmentId);
+  return sendSuccess(response, { deleted: true });
+}));
+
+for (const [path, status] of [['confirm', 'confirmed'], ['cancel', 'cancelled']] as const) {
+  router.post(`/:id/staff/:assignmentId/${path}`, requirePermission(Permission.EVENTS_UPDATE), validateRequest(assignmentIdSchema), asyncHandler(async (request, response) => {
+    const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+    await ensureEventAccess(request, event);
+    const assignment = await EventStaffAssignment.findOneAndUpdate({ _id: request.params.assignmentId, eventId: request.params.id, deletedAt: null }, { status, updatedBy: request.user!.id }, { new: true });
+    if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
+    await writeAuditLog(request, `EVENT_STAFF_${status.toUpperCase()}`, 'EventStaffAssignment', request.params.assignmentId);
+    return sendSuccess(response, { assignment });
+  }));
+}
 
 router.get('/:id/payment-summary', requirePermission(Permission.PAYMENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();

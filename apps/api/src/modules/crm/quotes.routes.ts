@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { Permission, Role, hasPermission } from '@mym/shared';
+import { Permission, QuoteLineItemSourceType, QuoteMode, Role, hasPermission } from '@mym/shared';
 import { Customer, Lead, LeadActivity, PackageTemplate, Quote, QuoteRevision, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
@@ -50,6 +50,64 @@ const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id:
 const statusSchema = z.object({ body: z.object({ status: z.enum(quoteStatuses) }), params: z.object({ id: objectId }), query: z.object({}) });
 const convertToEventSchema = z.object({ body: z.object({ eventName: z.string().trim().optional(), notes: z.string().trim().optional() }).optional().default({}), params: z.object({ id: objectId }), query: z.object({}) });
 const ruleSchema = z.object({ body: ruleFields, params: z.object({ id: objectId, salonId: objectId }), query: z.object({}) });
+const lineItemSchema = z.object({
+  sourceType: z.nativeEnum(QuoteLineItemSourceType).default(QuoteLineItemSourceType.MANUAL),
+  catalogItemId: objectId.optional(),
+  serviceExtraId: objectId.optional(),
+  name: z.string().trim().min(1),
+  description: z.string().trim().optional(),
+  quantity: z.coerce.number().min(0),
+  unitOfMeasure: z.string().trim().min(1).default('unidad'),
+  unitCost: z.coerce.number().min(0).default(0),
+  unitPrice: z.coerce.number().min(0).default(0),
+  discountAmount: z.coerce.number().min(0).default(0),
+  affectsInventory: z.boolean().default(false),
+  notes: z.string().trim().optional()
+});
+const customCalculationSchema = z.object({
+  body: z.object({
+    quoteMode: z.nativeEnum(QuoteMode).default(QuoteMode.CUSTOM),
+    salonId: objectId.optional(),
+    eventType: z.string().trim().optional(),
+    guestCount: z.coerce.number().int().positive(),
+    adultsCount: z.coerce.number().min(0).default(0),
+    minorsCount: z.coerce.number().min(0).default(0),
+    childrenCount: z.coerce.number().min(0).default(0),
+    teenagersCount: z.coerce.number().min(0).default(0),
+    adultsWithAlcoholCount: z.coerce.number().min(0).default(0),
+    includesAlcohol: z.boolean().default(false),
+    lineItems: z.array(lineItemSchema).min(1)
+  }),
+  params: z.object({}),
+  query: z.object({})
+});
+const fromCustomCalculationSchema = z.object({
+  body: quoteFields.pick({
+    leadId: true,
+    customerId: true,
+    salonId: true,
+    salonIds: true,
+    contactName: true,
+    firstName: true,
+    lastName: true,
+    phone: true,
+    email: true,
+    eventType: true,
+    eventDate: true,
+    guestCount: true,
+    depositAmount: true,
+    paymentTerms: true,
+    notes: true
+  }).extend(customCalculationSchema.shape.body.shape).refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.').superRefine((body, context) => {
+    if (!body.leadId && !body.customerId) {
+      for (const field of ['phone', 'eventType', 'guestCount'] as const) if (body[field] === undefined) context.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Campo obligatorio para una persona nueva.' });
+      if (!body.contactName && !(body.firstName && body.lastName)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['contactName'], message: 'Debe indicar el nombre de la persona.' });
+    }
+  }),
+  params: z.object({}),
+  query: z.object({})
+});
+const lineItemsPatchSchema = z.object({ body: z.object({ lineItems: z.array(lineItemSchema).min(1) }), params: z.object({ id: objectId }), query: z.object({}) });
 
 const router = Router();
 
@@ -76,6 +134,19 @@ function calculateQuote(values: Record<string, any>): Record<string, any> {
   const totalAmount = Math.round(finalPricePerPerson * guestCount);
   const depositAmount = Number(values.depositAmount ?? 0);
   return { ...values, pricePerPerson, discountPercentage, finalPricePerPerson, totalAmount, depositAmount, balanceAmount: Math.max(0, totalAmount - depositAmount) };
+}
+function calculateLineItems(lineItems: Array<Record<string, any>>): { lineItems: Array<Record<string, any>>; subtotalCost: number; totalAmount: number } {
+  const calculated = lineItems.map((item) => {
+    const quantity = Number(item.quantity ?? 0);
+    const unitCost = Number(item.unitCost ?? 0);
+    const unitPrice = Number(item.unitPrice ?? 0);
+    const subtotalCost = quantity * unitCost;
+    const subtotalPrice = quantity * unitPrice;
+    const discountAmount = Number(item.discountAmount ?? 0);
+    const totalPrice = Math.max(0, subtotalPrice - discountAmount);
+    return { ...item, quantity, unitCost, unitPrice, subtotalCost, subtotalPrice, discountAmount, totalPrice };
+  });
+  return { lineItems: calculated, subtotalCost: calculated.reduce((sum, item) => sum + item.subtotalCost, 0), totalAmount: calculated.reduce((sum, item) => sum + item.totalPrice, 0) };
 }
 async function getApplicableTemplate(templateId: string, salonId: string, requireCommercialRule = false): Promise<Record<string, any>> {
   const template: any = await PackageTemplate.findOne({ _id: templateId, active: true, deletedAt: null }).lean();
@@ -155,6 +226,93 @@ router.get('/', requirePermission(Permission.QUOTES_READ), asyncHandler(async (r
   return sendSuccess(response, { items: quotes.map(serializeQuote), meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)) } });
 }));
 
+router.post('/custom-calculate', requirePermission(Permission.QUOTES_CREATE), validateRequest(customCalculationSchema), asyncHandler(async (request, response) => {
+  const calculation = calculateLineItems(request.body.lineItems);
+  return sendSuccess(response, {
+    quoteMode: request.body.quoteMode,
+    guestBreakdown: {
+      totalGuests: request.body.guestCount,
+      adultsCount: request.body.adultsCount,
+      minorsCount: request.body.minorsCount,
+      childrenCount: request.body.childrenCount,
+      teenagersCount: request.body.teenagersCount,
+      adultsWithAlcoholCount: request.body.adultsWithAlcoholCount,
+      includesAlcohol: request.body.includesAlcohol
+    },
+    ...calculation
+  });
+}));
+
+router.post('/from-custom-calculation', requirePermission(Permission.QUOTES_CREATE), validateRequest(fromCustomCalculationSchema), asyncHandler(async (request, response) => {
+  const salonIds = uniqueIds([...(request.body.salonIds ?? []), ...(request.body.salonId ? [request.body.salonId] : [])]);
+  await ensureAccessibleSalons(request, salonIds);
+  const calculation = calculateLineItems(request.body.lineItems);
+  if (calculation.totalAmount <= 0) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
+  let lead: any = null;
+  let customer: any = null;
+  if (request.body.leadId) lead = await Lead.findOne({ _id: request.body.leadId, deletedAt: null });
+  if (request.body.customerId) customer = await Customer.findOne({ _id: request.body.customerId, deletedAt: null });
+  if (!lead && !customer) {
+    const result = await findOrCreateLead({
+      contactName: request.body.contactName ?? `${request.body.firstName ?? ''} ${request.body.lastName ?? ''}`.trim(),
+      firstName: request.body.firstName,
+      lastName: request.body.lastName,
+      phone: request.body.phone,
+      email: request.body.email || undefined,
+      eventType: request.body.eventType,
+      estimatedEventDate: request.body.eventDate,
+      guestCount: request.body.guestCount,
+      salonIds,
+      source: 'manual',
+      userId: request.user!.id
+    });
+    lead = result.lead;
+    customer = result.existingCustomer;
+  }
+  const quotes = [];
+  for (const salonId of salonIds) {
+    const totalAmount = calculation.totalAmount;
+    const depositAmount = Number(request.body.depositAmount ?? 0);
+    const quote: any = await Quote.create({
+      quoteNumber: quoteNumber(),
+      quoteMode: request.body.quoteMode,
+      salonId,
+      leadId: lead?._id,
+      customerId: customer?._id,
+      source: customer ? 'customer' : lead ? 'lead' : 'manual',
+      contactName: request.body.contactName ?? lead?.fullName ?? customer?.fullName,
+      phone: request.body.phone ?? lead?.phone ?? customer?.phone,
+      email: request.body.email ?? lead?.email ?? customer?.email,
+      eventType: request.body.eventType,
+      eventDate: request.body.eventDate,
+      guestCount: request.body.guestCount,
+      totalGuests: request.body.guestCount,
+      adultsCount: request.body.adultsCount,
+      minorsCount: request.body.minorsCount,
+      childrenCount: request.body.childrenCount,
+      teenagersCount: request.body.teenagersCount,
+      adultsWithAlcoholCount: request.body.adultsWithAlcoholCount,
+      includesAlcohol: request.body.includesAlcohol,
+      packageName: request.body.quoteMode === QuoteMode.HYBRID ? 'Híbrido personalizado' : 'Personalizado',
+      pricePerPerson: request.body.guestCount ? Math.round(totalAmount / request.body.guestCount) : totalAmount,
+      discountPercentage: 0,
+      finalPricePerPerson: request.body.guestCount ? Math.round(totalAmount / request.body.guestCount) : totalAmount,
+      totalAmount,
+      depositAmount,
+      balanceAmount: Math.max(0, totalAmount - depositAmount),
+      lineItems: calculation.lineItems,
+      customCalculationSnapshot: { ...request.body, ...calculation },
+      paymentTerms: request.body.paymentTerms,
+      notes: request.body.notes,
+      createdBy: request.user!.id,
+      updatedBy: request.user!.id
+    });
+    await createRevision(quote, request, 'Presupuesto personalizado creado');
+    quotes.push(quote);
+  }
+  return sendSuccess(response, { quotes, leadId: lead?._id, customerId: customer?._id }, 201, getApiMessage('QUOTE_CREATED'));
+}));
+
 router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(createQuoteSchema), asyncHandler(async (request, response) => {
   const salonIds = uniqueIds([...(request.body.salonIds ?? []), ...(request.body.salonId ? [request.body.salonId] : [])]);
   await ensureAccessibleSalons(request, salonIds);
@@ -215,6 +373,33 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
 router.get('/:id', requirePermission(Permission.QUOTES_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const quote = await Quote.findOne({ _id: request.params.id, deletedAt: null }).populate('leadId', 'fullName phone email').populate('customerId', 'fullName phone email').populate('convertedCustomerId', 'fullName phone email').populate('convertedEventId', 'eventName eventType eventDate status').lean(); await ensureQuoteAccess(request, quote);
   return sendSuccess(response, { quote: serializeQuote(quote) });
+}));
+
+router.patch('/:id/line-items', requirePermission(Permission.QUOTES_UPDATE), validateRequest(lineItemsPatchSchema), asyncHandler(async (request, response) => {
+  const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureQuoteAccess(request, quote);
+  const calculation = calculateLineItems(request.body.lineItems);
+  quote.lineItems = calculation.lineItems;
+  quote.customCalculationSnapshot = { ...(quote.customCalculationSnapshot ?? {}), ...calculation };
+  quote.totalAmount = calculation.totalAmount;
+  quote.balanceAmount = Math.max(0, calculation.totalAmount - Number(quote.depositAmount ?? 0));
+  quote.updatedBy = request.user!.id;
+  await quote.save();
+  await createRevision(quote, request, 'Line items actualizados');
+  return sendSuccess(response, { quote });
+}));
+
+router.post('/:id/recalculate', requirePermission(Permission.QUOTES_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureQuoteAccess(request, quote);
+  const calculation = calculateLineItems(quote.lineItems ?? []);
+  quote.totalAmount = calculation.totalAmount;
+  quote.balanceAmount = Math.max(0, calculation.totalAmount - Number(quote.depositAmount ?? 0));
+  quote.customCalculationSnapshot = { ...(quote.customCalculationSnapshot ?? {}), ...calculation };
+  quote.updatedBy = request.user!.id;
+  await quote.save();
+  await createRevision(quote, request, 'Presupuesto recalculado');
+  return sendSuccess(response, { quote });
 }));
 
 router.patch('/:id', requirePermission(Permission.QUOTES_UPDATE), validateRequest(updateQuoteSchema), asyncHandler(async (request, response) => {

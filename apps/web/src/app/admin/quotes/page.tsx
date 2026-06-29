@@ -153,7 +153,7 @@ export default function QuotesPage() {
   };
 
   return <section className="space-y-6">
-    <PageHeader title="Presupuestos" description="Solicitudes comerciales y presupuestos emitidos por salón." action={<Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo presupuesto</Button>} />
+    <PageHeader title="Presupuestos" description="Solicitudes comerciales y presupuestos emitidos por salón." action={<div className="flex flex-wrap gap-2"><Link href="/admin/quotes/custom"><Button variant="secondary">Cotizador personalizado</Button></Link><Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo presupuesto</Button></div>} />
     <div className="flex flex-wrap gap-2 border-b border-zinc-200">
       <button type="button" onClick={() => { setActiveTab('requests'); updateFilters({ page: 1, status: '' }); }} className={`px-4 py-3 text-sm font-medium ${activeTab === 'requests' ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>Solicitudes</button>
       <button type="button" onClick={() => { setActiveTab('quotes'); updateFilters({ page: 1, status: '' }); }} className={`px-4 py-3 text-sm font-medium ${activeTab === 'quotes' ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>Presupuestos</button>

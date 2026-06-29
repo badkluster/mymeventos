@@ -100,6 +100,18 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     startTime: quote.startTime,
     endTime: quote.endTime,
     guestCount: quote.guestCount,
+    quoteMode: quote.quoteMode ?? 'PACKAGE',
+    guestBreakdown: {
+      totalGuests: quote.totalGuests ?? quote.guestCount,
+      adultsCount: quote.adultsCount,
+      minorsCount: quote.minorsCount,
+      childrenCount: quote.childrenCount,
+      teenagersCount: quote.teenagersCount,
+      adultsWithAlcoholCount: quote.adultsWithAlcoholCount,
+      includesAlcohol: quote.includesAlcohol
+    },
+    lineItemsSnapshot: quote.lineItems ?? [],
+    customCalculationSnapshot: quote.customCalculationSnapshot,
     status: 'quoted',
     estimatedAmount: quote.totalAmount,
     finalAmount: quote.totalAmount,

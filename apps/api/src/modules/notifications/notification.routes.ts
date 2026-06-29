@@ -1,2 +1,47 @@
-import { Router } from 'express'; import { z } from 'zod'; import { Notification } from './notification.model'; import { requireAuth } from '../../middlewares/auth'; import { validateRequest } from '../../middlewares/validateRequest'; import { asyncHandler } from '../../utils/asyncHandler'; import { sendSuccess } from '../../utils/api'; import { idParams } from '../common.schemas';
-const router = Router(); const readSchema = z.object({ body: z.unknown().optional(), params: idParams.shape.params, query: z.object({}) }); router.use(requireAuth); router.get('/', asyncHandler(async (req, res) => sendSuccess(res, { notifications: await Notification.find({ userId: req.user!.id, deletedAt: null }).sort({ createdAt: -1 }).lean() }))); router.patch('/:id/read', validateRequest(readSchema), asyncHandler(async (req, res) => { const notification = await Notification.findOneAndUpdate({ _id: req.params.id, userId: req.user!.id, deletedAt: null }, { readAt: new Date(), updatedBy: req.user!.id }, { new: true }); return sendSuccess(res, { notification }); })); router.patch('/read-all', asyncHandler(async (req, res) => { const result = await Notification.updateMany({ userId: req.user!.id, readAt: null, deletedAt: null }, { readAt: new Date(), updatedBy: req.user!.id }); return sendSuccess(res, { updated: result.modifiedCount }); })); export default router;
+import { Router } from 'express';
+import { z } from 'zod';
+import { Notification } from './notification.model';
+import { requireAuth } from '../../middlewares/auth';
+import { validateRequest } from '../../middlewares/validateRequest';
+import { asyncHandler } from '../../utils/asyncHandler';
+import { sendSuccess } from '../../utils/api';
+import { idParams } from '../common.schemas';
+
+const router = Router();
+const notificationIdSchema = z.object({ body: z.unknown().optional(), params: idParams.shape.params, query: z.object({}) });
+
+router.use(requireAuth);
+
+router.get('/', asyncHandler(async (request, response) => {
+  const notifications = await Notification.find({ userId: request.user!.id, deletedAt: null }).sort({ createdAt: -1 }).lean();
+  const unreadCount = await Notification.countDocuments({ userId: request.user!.id, readAt: null, deletedAt: null });
+  return sendSuccess(response, { notifications, unreadCount });
+}));
+
+router.patch('/read-all', asyncHandler(async (request, response) => {
+  const result = await Notification.updateMany(
+    { userId: request.user!.id, readAt: null, deletedAt: null },
+    { readAt: new Date(), updatedBy: request.user!.id },
+  );
+  return sendSuccess(response, { updated: result.modifiedCount });
+}));
+
+router.patch('/:id/read', validateRequest(notificationIdSchema), asyncHandler(async (request, response) => {
+  const notification = await Notification.findOneAndUpdate(
+    { _id: request.params.id, userId: request.user!.id, deletedAt: null },
+    { readAt: new Date(), updatedBy: request.user!.id },
+    { new: true },
+  );
+  return sendSuccess(response, { notification });
+}));
+
+router.delete('/:id', validateRequest(notificationIdSchema), asyncHandler(async (request, response) => {
+  const notification = await Notification.findOneAndUpdate(
+    { _id: request.params.id, userId: request.user!.id, deletedAt: null },
+    { deletedAt: new Date(), deletedBy: request.user!.id, updatedBy: request.user!.id },
+    { new: true },
+  );
+  return sendSuccess(response, { notification });
+}));
+
+export default router;

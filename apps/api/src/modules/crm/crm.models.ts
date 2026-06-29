@@ -79,6 +79,13 @@ const packageTemplateSchema = new Schema({
   pricePerPerson: Number, discountPercentage: { type: Number, default: 0 }, finalPricePerPerson: Number,
   depositAmount: { type: Number, default: 0 }, paymentTerms: String, promotionText: String, giftText: String,
   menuSections: { type: [menuSectionSchema], default: [] }, includedServices: { type: [String], default: [] }, notes: String,
+  publicTitle: String,
+  publicDescription: String,
+  publicHighlights: { type: [String], default: [] },
+  badgeLabel: String,
+  visibleOnWebsite: { type: Boolean, default: true, index: true },
+  displayOrder: { type: Number, default: 0, index: true },
+  featured: { type: Boolean, default: false, index: true },
   ...base
 }, { timestamps: true });
 
@@ -98,6 +105,7 @@ const quoteSchema = new Schema({
   leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
   source: { type: String, enum: ['new_person', 'lead', 'customer', 'quote_request', 'manual', 'other'], default: 'manual', index: true },
+  quoteMode: { type: String, enum: ['PACKAGE', 'CUSTOM', 'HYBRID'], default: 'PACKAGE', index: true },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
   packageTemplateId: { type: Schema.Types.ObjectId, ref: 'PackageTemplate', index: true },
   status: { type: String, enum: ['draft', 'sent', 'follow_up', 'accepted', 'rejected', 'expired', 'converted'], default: 'draft', index: true },
@@ -108,6 +116,15 @@ const quoteSchema = new Schema({
   paymentTerms: String, promotionText: String, giftText: String,
   menuSections: { type: [menuSectionSchema], default: [] }, includedServices: { type: [String], default: [] }, notes: String,
   validUntil: Date, sentAt: Date, acceptedAt: Date, rejectedAt: Date,
+  totalGuests: Number,
+  adultsCount: Number,
+  minorsCount: Number,
+  childrenCount: Number,
+  teenagersCount: Number,
+  adultsWithAlcoholCount: Number,
+  includesAlcohol: Boolean,
+  lineItems: { type: [Schema.Types.Mixed], default: [] },
+  customCalculationSnapshot: Schema.Types.Mixed,
   pdfUrl: String, pdfSecureUrl: String, pdfPublicId: String, pdfGeneratedAt: Date,
   templateSnapshot: Schema.Types.Mixed,
   contactSnapshot: Schema.Types.Mixed,
@@ -130,6 +147,11 @@ const eventSchema = new Schema({
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true }, leadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, quoteId: { type: Schema.Types.ObjectId, ref: 'Quote' }, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' }, createdFromQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true }, eventType: String, eventName: String, eventDate: Date,
   startTime: String, endTime: String, guestCount: Number, status: { type: String, enum: ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'], default: 'draft' },
+  quoteMode: { type: String, enum: ['PACKAGE', 'CUSTOM', 'HYBRID'], default: 'PACKAGE', index: true },
+  guestBreakdown: Schema.Types.Mixed,
+  lineItemsSnapshot: { type: [Schema.Types.Mixed], default: [] },
+  resourcePlanSnapshot: Schema.Types.Mixed,
+  customCalculationSnapshot: Schema.Types.Mixed,
   estimatedAmount: Number, finalAmount: Number, notes: String,
   commercialSnapshot: Schema.Types.Mixed,
   menuSnapshot: Schema.Types.Mixed,
@@ -138,6 +160,23 @@ const eventSchema = new Schema({
   contractReadyChecklist: Schema.Types.Mixed,
   ...base
 }, { timestamps: true });
+
+const eventStaffAssignmentSchema = new Schema({
+  eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
+  staffUserId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  roleLabel: { type: String, trim: true },
+  staffSubrole: { type: String, enum: ['WAITER', 'MAITRE', 'COOK', 'KITCHEN_ASSISTANT', 'BARTENDER', 'DJ', 'DECORATION', 'CLEANING', 'SECURITY', 'COORDINATOR', 'RECEPTION', 'OTHER'] },
+  shiftStart: Date,
+  shiftEnd: Date,
+  status: { type: String, enum: ['proposed', 'assigned', 'confirmed', 'checked_in', 'completed', 'cancelled', 'no_show'], default: 'assigned', index: true },
+  notes: String,
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+eventStaffAssignmentSchema.index({ eventId: 1, staffUserId: 1, shiftStart: 1, shiftEnd: 1, deletedAt: 1 });
 
 const securityDepositSchema = new Schema({
   amount: { type: Number, default: 0 },
@@ -164,6 +203,8 @@ const contractSchema = new Schema({
   leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
   status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'requires_changes', 'cancelled', 'superseded'], default: 'pending_approval', index: true },
+  contractMode: { type: String, enum: ['PACKAGE', 'CUSTOM', 'HYBRID'], default: 'PACKAGE', index: true },
+  lineItemsSnapshot: { type: [Schema.Types.Mixed], default: [] },
   customerSnapshot: Schema.Types.Mixed,
   eventSnapshot: Schema.Types.Mixed,
   commercialSnapshot: Schema.Types.Mixed,
@@ -244,6 +285,7 @@ export const VenuePackageRule = models.VenuePackageRule || model('VenuePackageRu
 export const Quote = models.Quote || model('Quote', quoteSchema);
 export const QuoteRevision = models.QuoteRevision || model('QuoteRevision', revisionSchema);
 export const Event = models.Event || model('Event', eventSchema);
+export const EventStaffAssignment = models.EventStaffAssignment || model('EventStaffAssignment', eventStaffAssignmentSchema);
 export const Contract = models.Contract || model('Contract', contractSchema);
 export const ContractAddendum = models.ContractAddendum || model('ContractAddendum', contractAddendumSchema);
 export const Payment = models.Payment || model('Payment', paymentSchema);

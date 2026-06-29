@@ -11,28 +11,28 @@ describe('Permission Helpers', () => {
     });
 
     it('should grant based on RolePresets', () => {
-      expect(hasPermission(Role.VALIDATOR, Permission.TICKETS_VALIDATE)).toBe(true);
-      expect(hasPermission(Role.VALIDATOR, Permission.SETTINGS_UPDATE)).toBe(false);
+      expect(hasPermission(Role.SALON_MANAGER, Permission.EVENTS_READ)).toBe(true);
+      expect(hasPermission(Role.SALON_MANAGER, Permission.SETTINGS_UPDATE)).toBe(false);
     });
 
     it('should add customOverrides to role presets', () => {
-      expect(hasPermission(Role.VALIDATOR, Permission.TICKETS_VALIDATE, [Permission.SETTINGS_UPDATE])).toBe(true);
-      expect(hasPermission(Role.VALIDATOR, Permission.SETTINGS_UPDATE, [Permission.SETTINGS_UPDATE])).toBe(true);
+      expect(hasPermission(Role.STAFF, Permission.EVENTS_READ, [Permission.SETTINGS_UPDATE])).toBe(true);
+      expect(hasPermission(Role.STAFF, Permission.SETTINGS_UPDATE, [Permission.SETTINGS_UPDATE])).toBe(true);
     });
 
     it('should deny permissions explicitly listed in deniedOverrides for non-admin roles', () => {
-      expect(hasPermission(Role.VALIDATOR, Permission.TICKETS_VALIDATE, [], [Permission.TICKETS_VALIDATE])).toBe(false);
+      expect(hasPermission(Role.STAFF, Permission.EVENTS_READ, [], [Permission.EVENTS_READ])).toBe(false);
       expect(hasPermission(Role.ADMIN, Permission.USERS_DELETE, [], [Permission.USERS_DELETE])).toBe(true);
     });
   });
 
   describe('hasAnyPermission', () => {
     it('should return true if user has at least one permission', () => {
-      expect(hasAnyPermission(Role.SALES, [Permission.LEADS_CREATE, Permission.SETTINGS_UPDATE])).toBe(true);
+      expect(hasAnyPermission(Role.MANAGER, [Permission.LEADS_CREATE, Permission.SETTINGS_UPDATE])).toBe(true);
     });
 
     it('should return false if user has none of the permissions', () => {
-      expect(hasAnyPermission(Role.SALES, [Permission.SETTINGS_UPDATE, Permission.USERS_DELETE])).toBe(false);
+      expect(hasAnyPermission(Role.STAFF, [Permission.SETTINGS_UPDATE, Permission.USERS_DELETE])).toBe(false);
     });
   });
 

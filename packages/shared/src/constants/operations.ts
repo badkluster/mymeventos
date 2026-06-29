@@ -1,0 +1,105 @@
+export enum CatalogItemType {
+  FOOD = 'FOOD',
+  BEVERAGE = 'BEVERAGE',
+  DISPOSABLE = 'DISPOSABLE',
+  CLEANING = 'CLEANING',
+  DECORATION = 'DECORATION',
+  OTHER = 'OTHER',
+}
+
+export enum BeverageType {
+  NON_ALCOHOLIC = 'NON_ALCOHOLIC',
+  ALCOHOLIC = 'ALCOHOLIC',
+}
+
+export enum InventoryItemType {
+  CONSUMABLE = 'CONSUMABLE',
+  NON_CONSUMABLE = 'NON_CONSUMABLE',
+}
+
+export enum InventoryCategory {
+  FOOD = 'FOOD',
+  BEVERAGE = 'BEVERAGE',
+  TABLEWARE = 'TABLEWARE',
+  LINEN = 'LINEN',
+  FURNITURE = 'FURNITURE',
+  DECORATION = 'DECORATION',
+  EQUIPMENT = 'EQUIPMENT',
+  CLEANING = 'CLEANING',
+  DISPOSABLE = 'DISPOSABLE',
+  OTHER = 'OTHER',
+}
+
+export enum ServiceExtraType {
+  FIXED_PRICE = 'FIXED_PRICE',
+  PER_PERSON = 'PER_PERSON',
+  PER_HOUR = 'PER_HOUR',
+  PER_UNIT = 'PER_UNIT',
+  CUSTOM = 'CUSTOM',
+}
+
+export enum ConsumptionRuleTarget {
+  TOTAL_GUESTS = 'TOTAL_GUESTS',
+  ADULTS = 'ADULTS',
+  MINORS = 'MINORS',
+  CHILDREN = 'CHILDREN',
+  TEENAGERS = 'TEENAGERS',
+  ADULTS_WITH_ALCOHOL = 'ADULTS_WITH_ALCOHOL',
+  TABLES = 'TABLES',
+  EVENT_DURATION_HOURS = 'EVENT_DURATION_HOURS',
+}
+
+export enum RoundingMode {
+  NONE = 'NONE',
+  CEIL = 'CEIL',
+  FLOOR = 'FLOOR',
+  ROUND = 'ROUND',
+  PACKAGE_SIZE = 'PACKAGE_SIZE',
+}
+
+export enum PricingMode {
+  COST_ONLY = 'COST_ONLY',
+  SALE_PRICE = 'SALE_PRICE',
+  MARKUP_PERCENTAGE = 'MARKUP_PERCENTAGE',
+  MANUAL = 'MANUAL',
+}
+
+export enum QuoteMode {
+  PACKAGE = 'PACKAGE',
+  CUSTOM = 'CUSTOM',
+  HYBRID = 'HYBRID',
+}
+
+export enum SupplierCategory {
+  BEVERAGES = 'BEVERAGES',
+  FOOD = 'FOOD',
+  BAKERY = 'BAKERY',
+  PASTRY = 'PASTRY',
+  MEAT = 'MEAT',
+  DECORATION = 'DECORATION',
+  SOUND_DJ = 'SOUND_DJ',
+  PHOTOGRAPHY = 'PHOTOGRAPHY',
+  CLEANING = 'CLEANING',
+  DISPOSABLES = 'DISPOSABLES',
+  TABLEWARE = 'TABLEWARE',
+  LINEN = 'LINEN',
+  STAFFING = 'STAFFING',
+  OTHER = 'OTHER',
+}
+
+export enum InventoryAdjustmentType {
+  IN = 'IN',
+  OUT = 'OUT',
+  ADJUSTMENT = 'ADJUSTMENT',
+  DAMAGE = 'DAMAGE',
+  LOSS = 'LOSS',
+  RETURN = 'RETURN',
+}
+
+export enum QuoteLineItemSourceType {
+  PACKAGE = 'PACKAGE',
+  CATALOG_ITEM = 'CATALOG_ITEM',
+  SERVICE_EXTRA = 'SERVICE_EXTRA',
+  MANUAL = 'MANUAL',
+  ADDENDUM = 'ADDENDUM',
+}

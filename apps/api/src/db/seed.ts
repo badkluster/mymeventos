@@ -4,6 +4,7 @@ import { Salon } from '../modules/salons/salon.model';
 import { User } from '../modules/users/user.model';
 import { SystemSetting } from '../modules/settings/systemSetting.model';
 import { PackageTemplate, VenuePackageRule } from '../modules/crm/crm.models';
+import { LandingEventType, LandingFaq, LandingGalleryItem, LandingPromotion, LandingServiceBlock, LandingSettings, LandingTestimonial } from '../modules/landing/landing.models';
 import { hashPassword } from '../utils/password';
 import { Permission, Role } from '@mym/shared';
 import { buildUserFullName, normalizeUserEmail, normalizeUserPhone } from '../modules/users/user.model';
@@ -40,6 +41,9 @@ const salonSeeds = [
     phone: '221 555-0101',
     whatsapp: '5492215550101',
     email: 'sancarlos@mm-eventos.com',
+    instagramUrl: 'https://www.instagram.com/mm.eventos.sancarlos/',
+    facebookUrl: 'https://www.facebook.com/mm.eventos.sancarlos',
+    tiktokUrl: 'https://www.tiktok.com/@mmeventossancarlos',
     active: true,
     internalDescription: 'Salón operativo de M&M Eventos en San Carlos.',
     publicTitle: 'M&M San Carlos',
@@ -83,6 +87,9 @@ const salonSeeds = [
     phone: '221 555-0102',
     whatsapp: '5492215550102',
     email: 'villaelisa@mm-eventos.com',
+    instagramUrl: 'https://www.instagram.com/mm.eventos.villaelisa/',
+    facebookUrl: 'https://www.facebook.com/mm.eventos.villaelisa',
+    tiktokUrl: 'https://www.tiktok.com/@mmeventosvillaelisa',
     active: true,
     internalDescription: 'Salón operativo de M&M Eventos en Villa Elisa.',
     publicTitle: 'M&M Villa Elisa',
@@ -126,6 +133,9 @@ const salonSeeds = [
     phone: '221 555-0103',
     whatsapp: '5492215550103',
     email: 'laplata@mm-eventos.com',
+    instagramUrl: 'https://www.instagram.com/mm.eventos.laplata/',
+    facebookUrl: 'https://www.facebook.com/mm.eventos.laplata',
+    tiktokUrl: 'https://www.tiktok.com/@mmeventoslaplata',
     active: true,
     internalDescription: 'Salón operativo de M&M Eventos en La Plata.',
     publicTitle: 'M&M La Plata',
@@ -195,7 +205,7 @@ const backofficeUserSeeds = [
     firstName: 'Equipo',
     lastName: 'Comercial',
     phone: '221 555-1201',
-    roles: [Role.SALES],
+    roles: [Role.MANAGER],
     position: 'Ventas y seguimiento comercial',
     department: 'Comercial',
     canReceiveLeadNotifications: true,
@@ -208,7 +218,7 @@ const backofficeUserSeeds = [
     firstName: 'Equipo',
     lastName: 'Operaciones',
     phone: '221 555-1202',
-    roles: [Role.OPERATIONS],
+    roles: [Role.MANAGER],
     position: 'Coordinación operativa',
     department: 'Operaciones',
     canReceiveLeadNotifications: false,
@@ -221,12 +231,12 @@ const backofficeUserSeeds = [
     firstName: 'Administración',
     lastName: 'Cobros',
     phone: '221 555-1203',
-    roles: [Role.ACCOUNTING],
+    roles: [Role.MANAGER],
     position: 'Pagos y cobranzas',
     department: 'Administración',
     canReceiveLeadNotifications: false,
     canReceiveQuoteRequestNotifications: false,
-    permissionOverrides: [Permission.PAYMENTS_READ, Permission.CONTRACTS_READ]
+    permissionOverrides: [Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_UPDATE, Permission.CONTRACTS_READ]
   },
   {
     username: 'staff.eventos',
@@ -235,18 +245,71 @@ const backofficeUserSeeds = [
     lastName: 'Eventos',
     phone: '221 555-1204',
     roles: [Role.STAFF],
-    position: 'Staff de eventos',
+    position: 'Mozo / staff de eventos',
     department: 'Eventos',
     canReceiveLeadNotifications: false,
     canReceiveQuoteRequestNotifications: false,
-    permissionOverrides: []
+    permissionOverrides: [],
+    staffSubroles: ['WAITER']
   }
 ];
+
+const landingImages = [
+  'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1600&q=80',
+  'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1478146896981-b80fe463b330?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1200&q=80'
+];
+
+const landingPromotions = [
+  { title: 'Fechas disponibles', subtitle: 'Consultá las mejores fechas para tu evento.', description: 'Últimas fechas seleccionadas para reservar con condiciones vigentes.', badgeText: 'Agenda abierta', icon: 'CalendarDays', displayOrder: 1 },
+  { title: 'Promos especiales', subtitle: 'Descuentos activos por tiempo limitado.', description: 'Beneficios comerciales para eventos sociales y empresariales.', badgeText: 'Tiempo limitado', icon: 'Star', displayOrder: 2 },
+  { title: 'Congelá valor con seña', subtitle: 'Asegurá hoy el precio de tu evento.', description: 'Reservá tu fecha y conservá las condiciones acordadas.', badgeText: 'Reserva segura', icon: 'Gift', displayOrder: 3 },
+  { title: 'Stand de glitter de regalo', subtitle: 'En paquetes seleccionados.', description: 'Un beneficio para sumar experiencia y fotos durante la fiesta.', badgeText: 'Beneficio', icon: 'Sparkles', displayOrder: 4 }
+];
+
+const landingGallery = [
+  { title: 'Salón ambientado', category: 'Salones', imageUrl: landingImages[0], displayOrder: 1, featured: true },
+  { title: 'Recepción premium', category: 'Catering', imageUrl: landingImages[1], displayOrder: 2, featured: true },
+  { title: 'Mesa principal', category: 'Decoración', imageUrl: landingImages[2], displayOrder: 3 },
+  { title: 'Catering servido', category: 'Catering', imageUrl: landingImages[3], displayOrder: 4 },
+  { title: 'Noche de fiesta', category: '15 años', imageUrl: landingImages[4], displayOrder: 5 },
+  { title: 'Momento especial', category: 'Casamientos', imageUrl: landingImages[5], displayOrder: 6 }
+];
+
+const landingTestimonials = [
+  { quote: 'El mejor salón de La Plata, todo salió perfecto. El equipo de M&M nos acompañó en cada detalle.', customerName: 'Valentina S.', eventType: '15 años', rating: 5, displayOrder: 1, featured: true },
+  { quote: 'Increíble la calidad del servicio y la ambientación. Nuestros invitados no pararon de felicitarnos.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5, displayOrder: 2, featured: true },
+  { quote: 'Profesionales, atentos y súper organizados. Hicieron de nuestro evento algo inolvidable.', customerName: 'Luciano R.', eventType: 'Evento empresarial', rating: 5, displayOrder: 3 }
+];
+
+const landingFaqs = [
+  { question: '¿Con cuánta anticipación debo reservar?', answer: 'Recomendamos consultar cuanto antes para asegurar disponibilidad y congelar condiciones comerciales.', displayOrder: 1 },
+  { question: '¿Qué incluye el servicio de catering?', answer: 'Depende del paquete elegido, pero podemos incluir recepción, plato principal, postre, mesa dulce, bebidas y barra.', displayOrder: 2 },
+  { question: '¿Puedo llevar mi propia bebida o DJ?', answer: 'Lo revisamos caso por caso según el salón, el tipo de evento y la propuesta contratada.', displayOrder: 3 },
+  { question: '¿Cómo reservo mi fecha?', answer: 'Luego de recibir la propuesta, coordinamos seña y condiciones para bloquear la fecha.', displayOrder: 4 },
+  { question: '¿Qué formas de pago aceptan?', answer: 'Trabajamos con seña y saldo según condiciones comerciales vigentes. Consultanos para armar un plan.', displayOrder: 5 },
+  { question: '¿Se puede visitar el salón antes del evento?', answer: 'Sí, coordinamos una visita para que conozcas el espacio y conversemos tu idea.', displayOrder: 6 }
+];
+
+const landingServices = [
+  { title: 'Catering', description: 'Menús gourmet y opciones para cada tipo de evento.', icon: 'Utensils', displayOrder: 1 },
+  { title: 'Barra y bebidas', description: 'Tragos y bebidas premium durante la noche.', icon: 'GlassWater', displayOrder: 2 },
+  { title: 'DJ e iluminación', description: 'Sonido profesional e iluminación para pista y ambientación.', icon: 'Music', displayOrder: 3 },
+  { title: 'Ambientación', description: 'Diseño y decoración para crear una experiencia elegante.', icon: 'Sparkles', displayOrder: 4 },
+  { title: 'Sector de fotos', description: 'Espacios pensados para recuerdos y contenido social.', icon: 'Camera', displayOrder: 5 },
+  { title: 'Organización completa', description: 'Coordinación integral para que disfrutes sin preocupaciones.', icon: 'PartyPopper', displayOrder: 6 }
+];
+
+const landingEventTypes = ['15 años', 'Casamientos', 'Cumpleaños', 'Egresados', 'Empresariales', 'Infantiles'].map((title, index) => ({ title, description: 'Propuestas a medida para celebrar con estética, servicio y coordinación M&M.', icon: 'PartyPopper', displayOrder: index + 1 }));
 
 const defaultManagerPassword = 'MymEventos2026!';
 const defaultBackofficePassword = 'MymEventos2026!';
 
-function userSeedSet(seed: { username: string; email: string; firstName: string; lastName: string; phone: string; roles: Role[]; position: string; department: string; canReceiveLeadNotifications: boolean; canReceiveQuoteRequestNotifications: boolean; permissionOverrides?: Permission[] }, salonIds: unknown[]) {
+function userSeedSet(seed: { username: string; email: string; firstName: string; lastName: string; phone: string; roles: Role[]; position: string; department: string; canReceiveLeadNotifications: boolean; canReceiveQuoteRequestNotifications: boolean; permissionOverrides?: Permission[]; staffSubroles?: string[] }, salonIds: unknown[]) {
+  const canAccessBackoffice = !seed.roles.includes(Role.STAFF);
   return {
     email: normalizeUserEmail(seed.email),
     normalizedEmail: normalizeUserEmail(seed.email),
@@ -257,6 +320,7 @@ function userSeedSet(seed: { username: string; email: string; firstName: string;
     normalizedPhone: normalizeUserPhone(seed.phone),
     roles: seed.roles,
     primaryRole: seed.roles[0],
+    canAccessBackoffice,
     permissionOverrides: seed.permissionOverrides ?? [],
     permissionDeniedOverrides: [],
     active: true,
@@ -265,7 +329,7 @@ function userSeedSet(seed: { username: string; email: string; firstName: string;
     primarySalonId: salonIds[0],
     canReceiveLeadNotifications: seed.canReceiveLeadNotifications,
     canReceiveQuoteRequestNotifications: seed.canReceiveQuoteRequestNotifications,
-    mustChangePassword: true,
+    mustChangePassword: canAccessBackoffice,
     notificationPreferences: {
       emailNotificationsEnabled: true,
       systemNotificationsEnabled: true,
@@ -274,11 +338,14 @@ function userSeedSet(seed: { username: string; email: string; firstName: string;
       notifyOnNewQuoteRequest: seed.canReceiveQuoteRequestNotifications,
       notifyOnQuoteApproved: true,
       notifyOnContractApproved: true,
-      notifyOnPaymentReceived: seed.roles.includes(Role.ACCOUNTING),
+      notifyOnPaymentReceived: seed.permissionOverrides?.includes(Permission.PAYMENTS_READ) ?? false,
       notifyOnEventReminder: true,
       notifyOnAssignedTask: true
     },
     employeeProfile: { position: seed.position, department: seed.department, employmentStatus: 'active' },
+    staffProfile: seed.roles.includes(Role.STAFF) ? { staffCode: seed.username.toUpperCase(), staffSubroles: seed.staffSubroles ?? ['OTHER'], employmentStatus: 'ACTIVE', notes: 'Staff demo creado por seed.' } : undefined,
+    workSchedule: seed.roles.includes(Role.STAFF) ? { type: 'EVENT_BASED', weeklyAvailability: [], notes: 'Disponibilidad por evento.' } : undefined,
+    payrollProfile: seed.roles.includes(Role.STAFF) ? { paymentType: 'PER_EVENT', currency: 'ARS', active: true } : undefined,
     attendanceConfig: { enabled: false, canUseMobileApp: true, requiresGeolocation: false, requiresWifiOrIpValidation: false, allowedIpAddresses: [], allowManualAdjustment: false }
   };
 }
@@ -312,6 +379,7 @@ async function seed(): Promise<void> {
           normalizedPhone: normalizeUserPhone(managerSeed.phone),
           roles: [Role.SALON_MANAGER],
           primaryRole: Role.SALON_MANAGER,
+          canAccessBackoffice: true,
           active: true,
           deletedAt: null,
           primarySalonId: salon._id,
@@ -350,7 +418,7 @@ async function seed(): Promise<void> {
   }
   const hasAdminCredentials = Boolean(env.SEED_ADMIN_USERNAME && env.SEED_ADMIN_EMAIL && env.SEED_ADMIN_PASSWORD && env.SEED_ADMIN_PASSWORD.length >= 12);
   if (hasAdminCredentials) await User.findOneAndUpdate({ username: env.SEED_ADMIN_USERNAME!.toLowerCase() }, {
-    $set: { email: env.SEED_ADMIN_EMAIL!.toLowerCase(), normalizedEmail: normalizeUserEmail(env.SEED_ADMIN_EMAIL!), firstName: 'Administrador', lastName: 'Inicial', fullName: 'Administrador Inicial', roles: [Role.ADMIN], primaryRole: Role.ADMIN, salonIds: allSalonIds, primarySalonId: allSalonIds[0], active: true, deletedAt: null },
+    $set: { email: env.SEED_ADMIN_EMAIL!.toLowerCase(), normalizedEmail: normalizeUserEmail(env.SEED_ADMIN_EMAIL!), firstName: 'Administrador', lastName: 'Inicial', fullName: 'Administrador Inicial', roles: [Role.ADMIN], primaryRole: Role.ADMIN, canAccessBackoffice: true, salonIds: allSalonIds, primarySalonId: allSalonIds[0], active: true, deletedAt: null },
     $setOnInsert: { username: env.SEED_ADMIN_USERNAME!.toLowerCase(), passwordHash: await hashPassword(env.SEED_ADMIN_PASSWORD!) }
   }, { upsert: true });
   else console.warn('Seed de usuario administrador omitido: faltan credenciales válidas. Se continuará con la precarga comercial.');
@@ -375,7 +443,37 @@ async function seed(): Promise<void> {
       if (!existingRule) createdRules++;
     }
   }
-  console.info(`Initial data seeded: ${createdPackages} packages created, ${updatedPackages} packages updated, ${createdRules} venue rules created, ${createdManagers} salon managers created, ${updatedManagers} salon managers updated, ${createdBackofficeUsers} backoffice users created, ${updatedBackofficeUsers} backoffice users updated.`);
+  await LandingSettings.findOneAndUpdate(
+    { key: 'default' },
+    {
+      $set: {
+        key: 'default',
+        heroTitle: 'Tu evento, en el lugar que siempre imaginaste',
+        heroSubtitle: 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.',
+        heroImageUrl: landingImages[0],
+        heroPrimaryCtaLabel: 'Solicitá presupuesto',
+        heroSecondaryCtaLabel: 'Ver salones',
+        whatsappNumber: '5492211234567',
+        whatsappDefaultMessage: 'Hola M&M Eventos, quiero solicitar un presupuesto para mi evento.',
+        contactEmail: 'info@mm-eventos.com.ar',
+        contactPhone: '+54 9 221 123-4567',
+        footerText: 'Creamos momentos únicos que permanecen para siempre.',
+        seoTitle: 'M&M Eventos | Salones y eventos premium',
+        seoDescription: 'Salones, catering, ambientación, DJ y organización integral para eventos inolvidables.',
+        openGraphImageUrl: landingImages[0],
+        active: true,
+        deletedAt: null
+      }
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  await Promise.all(landingPromotions.map((item) => LandingPromotion.findOneAndUpdate({ title: item.title }, { $set: { ...item, active: true, visibleOnHome: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+  await Promise.all(landingGallery.map((item) => LandingGalleryItem.findOneAndUpdate({ title: item.title }, { $set: { ...item, altText: item.title, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+  await Promise.all(landingTestimonials.map((item) => LandingTestimonial.findOneAndUpdate({ customerName: item.customerName, eventType: item.eventType }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+  await Promise.all(landingFaqs.map((item) => LandingFaq.findOneAndUpdate({ question: item.question }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+  await Promise.all(landingServices.map((item) => LandingServiceBlock.findOneAndUpdate({ title: item.title }, { $set: { ...item, section: 'services', active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+  await Promise.all(landingEventTypes.map((item) => LandingEventType.findOneAndUpdate({ title: item.title }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+  console.info(`Initial data seeded: ${createdPackages} packages created, ${updatedPackages} packages updated, ${createdRules} venue rules created, ${createdManagers} salon managers created, ${updatedManagers} salon managers updated, ${createdBackofficeUsers} backoffice users created, ${updatedBackofficeUsers} backoffice users updated. Landing content prepared.`);
 }
 
 seed().then(disconnectDatabase).catch(async (error) => { console.error('Seed failed:', error); await disconnectDatabase(); process.exitCode = 1; });

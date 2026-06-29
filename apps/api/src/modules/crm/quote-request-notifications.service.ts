@@ -16,7 +16,7 @@ export async function resolveQuoteRequestRecipients(salonIds: string[]): Promise
     ? await User.find({ _id: { $in: managerIds }, active: true, deletedAt: null }).select('_id email firstName notificationPreferences').lean()
     : [];
   if (managerRecipients.length) return managerRecipients;
-  return User.find({ roles: { $in: [Role.ADMIN, Role.MANAGER, Role.SALES] }, active: true, deletedAt: null }).select('_id email firstName notificationPreferences').lean();
+  return User.find({ roles: { $in: [Role.ADMIN, Role.MANAGER] }, active: true, deletedAt: null }).select('_id email firstName notificationPreferences').lean();
 }
 
 export async function createQuoteRequestNotifications(input: NotifyInput): Promise<void> {

@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
-:root { --background: #fafafa; --foreground: #171717; --card: #fff; --muted: #f1f1f1; --primary: #171717; --primary-foreground: #fff; }
-.dark { --background: #0b0b0c; --foreground: #f7f7f7; --card: #151517; --muted: #262629; --primary: #f7f7f7; --primary-foreground: #171717; }
+:root { --background: #fafafa; --foreground: #171717; --card: #fff; --muted: #f1f1f1; --muted-foreground: #5f6472; --border: #e4e4e7; --primary: #171717; --primary-foreground: #fff; }
+.dark { --background: #0b0b0c; --foreground: #f7f7f7; --card: #151517; --muted: #262629; --muted-foreground: #a1a1aa; --border: #2f3037; --primary: #f7f7f7; --primary-foreground: #171717; }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
-  --color-card: var(--card); --color-muted: var(--muted); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-card: var(--card); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground); --color-border: var(--border); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,3 +19,54 @@
 }
 
 body { background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
+
+.dark [data-admin-shell] .bg-white { background-color: #151517; }
+.dark [data-admin-shell] .bg-zinc-50,
+.dark [data-admin-shell] .bg-zinc-50\/80 { background-color: #1f2024; }
+.dark [data-admin-shell] .bg-zinc-100 { background-color: #27282e; }
+.dark [data-admin-shell] .bg-amber-50 { background-color: rgba(120, 80, 16, 0.22); }
+.dark [data-admin-shell] .bg-amber-50\/60 { background-color: rgba(120, 80, 16, 0.16); }
+.dark [data-admin-shell] .bg-red-50 { background-color: rgba(127, 29, 29, 0.2); }
+.dark [data-admin-shell] .bg-red-100 { background-color: rgba(127, 29, 29, 0.28); }
+.dark [data-admin-shell] .bg-emerald-50 { background-color: rgba(6, 78, 59, 0.22); }
+.dark [data-admin-shell] .bg-zinc-950 { background-color: #f7f7f7; }
+
+.dark [data-admin-shell] .text-zinc-950,
+.dark [data-admin-shell] .text-zinc-900,
+.dark [data-admin-shell] .text-zinc-800 { color: #f4f4f5; }
+.dark [data-admin-shell] .text-zinc-700,
+.dark [data-admin-shell] .text-zinc-600 { color: #d4d4d8; }
+.dark [data-admin-shell] .text-zinc-500,
+.dark [data-admin-shell] .text-zinc-400 { color: #a1a1aa; }
+.dark [data-admin-shell] .text-amber-950 { color: #fde68a; }
+.dark [data-admin-shell] .text-red-700 { color: #fca5a5; }
+.dark [data-admin-shell] .text-emerald-950 { color: #bbf7d0; }
+.dark [data-admin-shell] .text-white { color: #0b0b0c; }
+
+.dark [data-admin-shell] .border-zinc-100,
+.dark [data-admin-shell] .border-zinc-200,
+.dark [data-admin-shell] .border-zinc-200\/80,
+.dark [data-admin-shell] .border-zinc-300 { border-color: #30313a; }
+.dark [data-admin-shell] .divide-zinc-100 > :not(:last-child) { border-color: #30313a; }
+.dark [data-admin-shell] .ring-zinc-500\/15 { --tw-ring-color: rgba(161, 161, 170, 0.25); }
+.dark [data-admin-shell] input,
+.dark [data-admin-shell] select,
+.dark [data-admin-shell] textarea { color-scheme: dark; }
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+summary,
+label[for],
+select,
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
