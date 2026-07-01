@@ -27,7 +27,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   const [addendums, setAddendums] = useState<ContractAddendum[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'resumen');
+  const [activeTab, setActiveTab] = useState(searchParams?.get('tab') || 'resumen');
   const [observations, setObservations] = useState('');
   const [clausesText, setClausesText] = useState('');
   const [newAddendum, setNewAddendum] = useState(emptyAddendum);

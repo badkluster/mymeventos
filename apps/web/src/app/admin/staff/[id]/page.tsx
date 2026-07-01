@@ -26,6 +26,7 @@ const staffName = (staff?: Staff) => staff?.fullName || [staff?.firstName, staff
 
 export default function StaffDetailPage() {
   const params = useParams<{ id: string }>();
+  const staffId = params?.id ?? '';
   const { showToast } = useToast();
   const [staff, setStaff] = useState<Staff | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -34,15 +35,15 @@ export default function StaffDetailPage() {
   const load = useCallback(async () => {
     try {
       const [staffResponse, assignmentResponse] = await Promise.all([
-        api.get<{ staff: Staff }>(`/staff/${params.id}`),
-        api.get<{ items: Assignment[] }>(`/staff/${params.id}/event-assignments`),
+        api.get<{ staff: Staff }>(`/staff/${staffId}`),
+        api.get<{ items: Assignment[] }>(`/staff/${staffId}/event-assignments`),
       ]);
       setStaff(staffResponse.staff);
       setAssignments(assignmentResponse.items ?? []);
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudo cargar el staff.', variant: 'error' });
     }
-  }, [params.id, showToast]);
+  }, [staffId, showToast]);
 
   useEffect(() => { void load(); }, [load]);
 

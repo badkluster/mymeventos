@@ -21,7 +21,7 @@ function userInitials(user: ReturnType<typeof useSession>['user']) {
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useSession();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const { resolvedTheme, setTheme } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);

@@ -32,7 +32,7 @@ const toggle = (items: string[], value: string) => items.includes(value) ? items
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
-  const userId = params.id;
+  const userId = params?.id ?? '';
   const { showToast } = useToast();
   const { user: sessionUser } = useSession();
   const isAdmin = sessionUser?.roles?.includes('ADMIN') ?? false;

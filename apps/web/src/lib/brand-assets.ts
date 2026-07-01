@@ -6,5 +6,5 @@ export const brandAssets = {
   icon192: '/brand/mym-icon-192.png',
   icon512: '/brand/mym-icon-512.png',
   openGraphImage: '/brand/mym-og-image.png',
-  favicon: '/favicon.ico'
+  favicon: '/brand/mym-icon-32.png?v=2'
 } as const;

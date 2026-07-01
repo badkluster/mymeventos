@@ -93,7 +93,7 @@ export default function SalonDetailPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { showToast } = useToast();
-  const initialTab = searchParams.get('tab');
+  const initialTab = searchParams?.get('tab');
   const [tab, setTab] = useState<Tab>(tabIds.includes(initialTab as Tab) ? initialTab as Tab : 'general');
   const [salon, setSalon] = useState<Salon>();
   const [users, setUsers] = useState<UserOption[]>([]);
@@ -110,7 +110,7 @@ export default function SalonDetailPage() {
   const [notice, setNoticeState] = useState('');
   const [landingMedia, setLandingMedia] = useState({ heroImageUrl: '', galleryImageUrlsText: '' });
   const [removeOpen, setRemoveOpen] = useState(false);
-  const salonId = params.id;
+  const salonId = params?.id ?? '';
 
   function setNotice(message: string) {
     setNoticeState(message);

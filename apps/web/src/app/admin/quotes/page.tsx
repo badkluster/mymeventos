@@ -108,7 +108,7 @@ export default function QuotesPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
   useEffect(() => {
-    const customerId = searchParams.get('customerId');
+    const customerId = searchParams?.get('customerId');
     if (!customerId || !customers.some((customer) => customer._id === customerId)) return;
     const timer = window.setTimeout(() => {
       setInitialCustomerId(customerId);
