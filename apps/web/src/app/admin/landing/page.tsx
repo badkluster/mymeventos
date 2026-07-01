@@ -52,11 +52,14 @@ function itemTitle(item: LandingItem, tab: ResourceKey) {
   return String(item.title ?? '');
 }
 
+const clearableItemFields = new Set(['imageUrl']);
+
 function normalizePayload(form: LandingItem) {
   const payload: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(form)) {
     if (key === '_id') continue;
     if (['displayOrder', 'rating'].includes(key)) payload[key] = Number(value ?? 0);
+    else if (clearableItemFields.has(key) && value === '') payload[key] = '';
     else payload[key] = value === '' ? undefined : value;
   }
   return payload;
@@ -69,7 +72,10 @@ function ImageUploadField({ label = 'Imagen', value, required, onChange }: { lab
         <p className="text-sm font-medium text-zinc-800">{label}{required ? ' *' : ''}</p>
         <p className="mt-1 text-xs text-zinc-500">Subí la imagen a Cloudinary para usarla en la landing.</p>
       </div>
-      <CloudinaryUpload context="general" accept="image/*" label={value ? 'Cambiar imagen' : 'Subir imagen'} onUploaded={(asset) => onChange(asset.secureUrl || asset.url)} />
+      <div className="flex flex-wrap gap-2">
+        <CloudinaryUpload context="general" accept="image/*" label={value ? 'Cambiar imagen' : 'Subir imagen'} onUploaded={(asset) => onChange(asset.secureUrl || asset.url)} />
+        {value ? <Button type="button" variant="danger" onClick={() => onChange('')}><Trash2 className="mr-2 h-4 w-4" />Quitar imagen</Button> : null}
+      </div>
     </div>
     {value ? <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 bg-white">
       <div className="h-36 bg-cover bg-center" style={{ backgroundImage: `url(${value})` }} />

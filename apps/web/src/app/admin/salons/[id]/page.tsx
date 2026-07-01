@@ -12,7 +12,7 @@ import { CloudinaryUpload, type UploadedAsset } from '@/components/cloudinary-up
 import { useToast } from '@/components/ui/toast-provider';
 import { eventTypeOptions, menuToText, money, textToMenu, type PackageRule, type Salon, type SalonExtra, type SalonMedia, type UserOption } from '@/features/salons/types';
 
-type Tab = 'general' | 'commercial' | 'packages' | 'extras' | 'landing' | 'activity';
+type Tab = 'general' | 'commercial' | 'packages' | 'extras' | 'landing';
 type RuleForm = {
   active: boolean;
   pricePerPerson: number;
@@ -46,14 +46,28 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'commercial', label: 'Comercial' },
   { id: 'packages', label: 'Paquetes' },
   { id: 'extras', label: 'Extras' },
-  { id: 'landing', label: 'Landing' },
-  { id: 'activity', label: 'Actividad' }
+  { id: 'landing', label: 'Landing' }
 ];
+const tabIds = tabs.map((item) => item.id);
 
 const emptyExtra: SalonExtra = { name: '', description: '', basePrice: 0, active: true, includedByDefault: false, publicVisible: false };
 const emptyTemplate: TemplateForm = { name: '', durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 0, discountPercentage: 0, depositAmount: 0, paymentTerms: '', promotionText: '', giftText: '', includedServices: '', menuSections: '', notes: '' };
 const toNumber = (value: FormDataEntryValue | null) => Number(value || 0);
 const toText = (value: FormDataEntryValue | null) => String(value ?? '');
+const assetUrl = (asset: UploadedAsset) => asset.secureUrl || asset.url;
+const galleryTextToUrls = (value: string) => value.split('\n').map((item) => item.trim()).filter(Boolean);
+const uniqueUrls = (urls: string[]) => urls.filter(Boolean).filter((url, index, allUrls) => allUrls.indexOf(url) === index);
+function cloudinaryImageUrl(url: string): string {
+  if (!url || !url.includes('/upload/') || url.includes('/upload/f_auto,q_auto/')) return url;
+  return url.replace('/upload/', '/upload/f_auto,q_auto/');
+}
+function mediaUrl(url: string, resourceType?: string): string {
+  return resourceType === 'image' ? cloudinaryImageUrl(url) : url;
+}
+function assetDeliveryUrl(asset: UploadedAsset): string {
+  const url = assetUrl(asset);
+  return asset.resourceType === 'image' ? cloudinaryImageUrl(url) : url;
+}
 const errorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && 'code' in error && error.code === 'ROUTE_NOT_FOUND') return 'La API no encontró el endpoint de Salones. Revisá que el backend esté actualizado y en ejecución.';
   return error instanceof Error ? error.message : fallback;
@@ -79,7 +93,8 @@ export default function SalonDetailPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { showToast } = useToast();
-  const [tab, setTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'general');
+  const initialTab = searchParams.get('tab');
+  const [tab, setTab] = useState<Tab>(tabIds.includes(initialTab as Tab) ? initialTab as Tab : 'general');
   const [salon, setSalon] = useState<Salon>();
   const [users, setUsers] = useState<UserOption[]>([]);
   const [packageRules, setPackageRules] = useState<PackageRule[]>([]);
@@ -93,13 +108,14 @@ export default function SalonDetailPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notice, setNoticeState] = useState('');
+  const [landingMedia, setLandingMedia] = useState({ heroImageUrl: '', galleryImageUrlsText: '' });
   const [removeOpen, setRemoveOpen] = useState(false);
   const salonId = params.id;
 
   function setNotice(message: string) {
     setNoticeState(message);
     if (!message) return;
-    const isSuccess = /correctamente|creada|creado|guardada|guardado|actualizada|actualizado|activado|desactivado/i.test(message);
+    const isSuccess = /correctamente|cread[ao]s?|guardad[ao]s?|actualizad[ao]s?|activad[ao]s?|desactivad[ao]s?|agregad[ao]s?|subid[ao]s?|eliminad[ao]s?|registrad[ao]s?|duplicad[ao]s?|recibida/i.test(message);
     showToast({ message, variant: isSuccess ? 'success' : 'error' });
   }
 
@@ -130,6 +146,13 @@ export default function SalonDetailPage() {
   }
 
   useEffect(() => { void load(); }, [salonId]);
+  useEffect(() => {
+    if (!salon) return;
+    setLandingMedia({
+      heroImageUrl: cloudinaryImageUrl(salon.heroImageUrl ?? ''),
+      galleryImageUrlsText: salon.galleryImageUrls?.map(cloudinaryImageUrl).join('\n') ?? ''
+    });
+  }, [salon?._id]);
 
   function selectTab(next: Tab) {
     setTab(next);
@@ -143,15 +166,17 @@ export default function SalonDetailPage() {
     return `${name}${user.email ? ` · ${user.email}` : ''}${roles}`;
   }
 
-  async function saveSalon(payload: Record<string, unknown>, successMessage: string) {
+  async function saveSalon(payload: Record<string, unknown>, successMessage: string): Promise<boolean> {
     setSaving(true);
     setNotice('');
     try {
       const response = await api.patch<{ salon: Salon }>(`/salons/${salonId}`, payload);
       setSalon(response.salon);
       setNotice(successMessage);
+      return true;
     } catch (error) {
       setNotice(errorMessage(error, 'No se pudo guardar el salón.'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -189,17 +214,12 @@ export default function SalonDetailPage() {
     const form = new FormData(event.currentTarget);
     await saveSalon({
       name: toText(form.get('name')),
-      slug: toText(form.get('slug')),
-      address: toText(form.get('address')),
       city: toText(form.get('city')),
       locality: toText(form.get('locality')),
       province: toText(form.get('province')),
       phone: toText(form.get('phone')),
       whatsapp: toText(form.get('whatsapp')),
       email: toText(form.get('email')),
-      instagramUrl: toText(form.get('instagramUrl')),
-      facebookUrl: toText(form.get('facebookUrl')),
-      tiktokUrl: toText(form.get('tiktokUrl')),
       managerUserId: toText(form.get('managerUserId')) || undefined,
       minCapacity: toNumber(form.get('minCapacity')),
       maxCapacity: toNumber(form.get('maxCapacity')),
@@ -237,10 +257,11 @@ export default function SalonDetailPage() {
       publicShortDescription: toText(form.get('publicShortDescription')),
       publicDescription: toText(form.get('publicDescription')),
       slug: toText(form.get('slug')),
+      address: toText(form.get('address')),
       visibleOnWebsite: Boolean(form.get('visibleOnWebsite')),
       displayOrder: toNumber(form.get('displayOrder')),
-      heroImageUrl: toText(form.get('heroImageUrl')),
-      galleryImageUrls: toText(form.get('galleryImageUrls')).split('\n').map((item) => item.trim()).filter(Boolean),
+      heroImageUrl: cloudinaryImageUrl(landingMedia.heroImageUrl),
+      galleryImageUrls: galleryTextToUrls(landingMedia.galleryImageUrlsText).map(cloudinaryImageUrl),
       seoTitle: toText(form.get('seoTitle')),
       seoDescription: toText(form.get('seoDescription')),
       locationText: toText(form.get('locationText')),
@@ -252,31 +273,72 @@ export default function SalonDetailPage() {
   }
 
   async function setHeroFromUpload(asset: UploadedAsset) {
-    await saveSalon({ heroImageUrl: asset.secureUrl }, 'Imagen principal actualizada correctamente.');
+    const url = assetDeliveryUrl(asset);
+    if (!url) return setNotice('Cloudinary no devolvió una URL válida para la imagen principal.');
+    if (await saveSalon({ heroImageUrl: url }, 'Imagen principal actualizada correctamente.')) {
+      setLandingMedia((current) => ({ ...current, heroImageUrl: url }));
+    }
+  }
+
+  async function removeHeroImage() {
+    if (await saveSalon({ heroImageUrl: '' }, 'Imagen principal eliminada correctamente.')) {
+      setLandingMedia((current) => ({ ...current, heroImageUrl: '' }));
+    }
+  }
+
+  async function addGalleryAssets(assets: UploadedAsset[]) {
+    const baseMedia = salon?.mediaGallery ?? [];
+    const incomingMedia: SalonMedia[] = assets.map((asset, index) => {
+      const resourceType: SalonMedia['resourceType'] = asset.resourceType === 'video' ? 'video' : asset.resourceType === 'raw' ? 'raw' : 'image';
+      const url = mediaUrl(assetUrl(asset), resourceType);
+      return {
+        url,
+        secureUrl: url,
+        publicId: asset.publicId,
+        resourceType,
+        format: asset.format,
+        title: asset.originalFilename ?? '',
+        altText: asset.originalFilename ?? salon?.name ?? 'M&M Eventos',
+        displayOrder: baseMedia.length + index,
+        publicVisible: true,
+        bytes: asset.bytes,
+        width: asset.width,
+        height: asset.height,
+        duration: asset.duration
+      };
+    }).filter((item) => item.url);
+    if (!incomingMedia.length) return setNotice('Cloudinary no devolvió URLs válidas para los archivos de galería.');
+    const nextMedia: SalonMedia[] = [...baseMedia, ...incomingMedia];
+    const galleryImageUrls = uniqueUrls([
+      ...galleryTextToUrls(landingMedia.galleryImageUrlsText),
+      ...nextMedia.filter((item) => item.resourceType === 'image').map((item) => item.secureUrl || item.url)
+    ]);
+    const message = incomingMedia.length === 1 ? 'Archivo agregado a la galería.' : 'Archivos agregados a la galería.';
+    if (await saveSalon({ mediaGallery: nextMedia, galleryImageUrls }, message)) {
+      setLandingMedia((current) => ({ ...current, galleryImageUrlsText: galleryImageUrls.join('\n') }));
+    }
   }
 
   async function addGalleryAsset(asset: UploadedAsset) {
-    const nextMedia: SalonMedia[] = [...(salon?.mediaGallery ?? []), {
-      url: asset.secureUrl,
-      secureUrl: asset.secureUrl,
-      publicId: asset.publicId,
-      resourceType: asset.resourceType === 'video' ? 'video' : asset.resourceType === 'raw' ? 'raw' : 'image',
-      format: asset.format,
-      title: asset.originalFilename ?? '',
-      altText: asset.originalFilename ?? salon?.name ?? 'M&M Eventos',
-      displayOrder: salon?.mediaGallery?.length ?? 0,
-      publicVisible: true,
-      bytes: asset.bytes,
-      width: asset.width,
-      height: asset.height,
-      duration: asset.duration
-    }];
-    await saveSalon({ mediaGallery: nextMedia, galleryImageUrls: nextMedia.filter((item) => item.resourceType === 'image').map((item) => item.secureUrl || item.url) }, 'Archivo agregado a la galería.');
+    await addGalleryAssets([asset]);
   }
 
   async function removeGalleryAsset(index: number) {
+    const removedMedia = salon?.mediaGallery?.[index];
+    const removedUrl = removedMedia ? removedMedia.secureUrl || removedMedia.url : '';
     const nextMedia = (salon?.mediaGallery ?? []).filter((_, itemIndex) => itemIndex !== index);
-    await saveSalon({ mediaGallery: nextMedia, galleryImageUrls: nextMedia.filter((item) => item.resourceType === 'image').map((item) => item.secureUrl || item.url) }, 'Archivo eliminado de la galería.');
+    const removedUrls = new Set([removedUrl, cloudinaryImageUrl(removedUrl)].filter(Boolean));
+    const galleryImageUrls = uniqueUrls(galleryTextToUrls(landingMedia.galleryImageUrlsText).filter((url) => !removedUrls.has(url)));
+    if (await saveSalon({ mediaGallery: nextMedia, galleryImageUrls }, 'Archivo eliminado de la galería.')) {
+      setLandingMedia((current) => ({ ...current, galleryImageUrlsText: galleryImageUrls.join('\n') }));
+      if (removedMedia?.publicId) {
+        try {
+          await api.delete(`/uploads?context=salons&publicId=${encodeURIComponent(removedMedia.publicId)}&resourceType=${removedMedia.resourceType}`);
+        } catch (error) {
+          setNotice(errorMessage(error, 'El archivo se quitó del salón, pero no se pudo eliminar de Cloudinary.'));
+        }
+      }
+    }
   }
 
   function openRule(rule: PackageRule) {
@@ -397,10 +459,9 @@ export default function SalonDetailPage() {
       {salon.manager ? <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-4"><Metric label="Nombre" value={[salon.manager.firstName, salon.manager.lastName].filter(Boolean).join(' ') || 'Sin nombre'} /><Metric label="Email" value={salon.manager.email || 'Sin email'} /><Metric label="Teléfono" value={salon.manager.phone || 'Sin teléfono'} /><Metric label="Rol" value={salon.manager.roles?.join(', ') || 'Sin rol'} /></dl> : <p className="mt-2 text-sm text-zinc-500">Sin encargado asignado.</p>}
     </article>
     {tab === 'general' && <form onSubmit={saveGeneral} className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-3">
-      <Field label="Nombre"><Input name="name" defaultValue={salon.name} required /></Field><Field label="Slug"><Input name="slug" defaultValue={salon.slug} required /></Field><Field label="Localidad"><Input name="locality" defaultValue={salon.locality || salon.city} /></Field>
-      <Field label="Dirección"><Input name="address" defaultValue={salon.address} /></Field><Field label="Ciudad"><Input name="city" defaultValue={salon.city} /></Field><Field label="Provincia"><Input name="province" defaultValue={salon.province} /></Field>
+      <Field label="Nombre interno"><Input name="name" defaultValue={salon.name} required /></Field><Field label="Localidad"><Input name="locality" defaultValue={salon.locality || salon.city} /></Field>
+      <Field label="Ciudad"><Input name="city" defaultValue={salon.city} /></Field><Field label="Provincia"><Input name="province" defaultValue={salon.province} /></Field>
       <Field label="Teléfono"><Input name="phone" defaultValue={salon.phone} /></Field><Field label="WhatsApp"><Input name="whatsapp" defaultValue={salon.whatsapp} /></Field><Field label="Email"><Input name="email" type="email" defaultValue={salon.email} /></Field>
-      <Field label="Instagram"><Input name="instagramUrl" defaultValue={salon.instagramUrl} placeholder="https://instagram.com/..." /></Field><Field label="Facebook"><Input name="facebookUrl" defaultValue={salon.facebookUrl} placeholder="https://facebook.com/..." /></Field><Field label="TikTok"><Input name="tiktokUrl" defaultValue={salon.tiktokUrl} placeholder="https://tiktok.com/@..." /></Field>
       <Field label="Encargado del salón"><Select name="managerUserId" defaultValue={typeof salon.managerUserId === 'string' ? salon.managerUserId : salon.manager?._id ?? ''}><option value="">Sin encargado asignado</option>{users.map((user) => <option key={user._id} value={user._id}>{managerLabel(user)}</option>)}</Select></Field>
       <Field label="Capacidad mínima"><Input name="minCapacity" type="number" min={0} defaultValue={salon.minCapacity ?? 0} /></Field><Field label="Capacidad máxima"><Input name="maxCapacity" type="number" min={0} defaultValue={salon.maxCapacity ?? 0} /></Field><Field label="Capacidad recomendada"><Input name="recommendedCapacity" type="number" min={0} defaultValue={salon.recommendedCapacity ?? 0} /></Field>
       <div className="lg:col-span-3"><p className="text-sm font-medium text-zinc-700">Tipos de evento permitidos</p><div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{eventTypeOptions.map(([value, label]) => <label key={value} className="flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-sm"><input name={`eventType:${value}`} type="checkbox" defaultChecked={salon.allowedEventTypes?.includes(value)} />{label}</label>)}</div></div>
@@ -425,18 +486,17 @@ export default function SalonDetailPage() {
       <form onSubmit={saveExtra} className="h-fit rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><Plus className="h-4 w-4" />{editingExtraIndex === null ? 'Nuevo extra' : 'Editar extra'}</h2><div className="mt-4 grid gap-3"><Field label="Nombre"><Input value={extraForm.name} onChange={(event) => setExtraForm((current) => ({ ...current, name: event.target.value }))} required /></Field><Field label="Descripción"><Textarea value={extraForm.description} onChange={(event) => setExtraForm((current) => ({ ...current, description: event.target.value }))} /></Field><Field label="Precio sugerido"><Input type="number" min={0} value={extraForm.basePrice} onChange={(event) => setExtraForm((current) => ({ ...current, basePrice: Number(event.target.value) }))} /></Field><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extraForm.active} onChange={(event) => setExtraForm((current) => ({ ...current, active: event.target.checked }))} />Activo</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extraForm.includedByDefault} onChange={(event) => setExtraForm((current) => ({ ...current, includedByDefault: event.target.checked }))} />Incluido por defecto</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extraForm.publicVisible} onChange={(event) => setExtraForm((current) => ({ ...current, publicVisible: event.target.checked }))} />Visible en web</label><Button disabled={saving}>{saving ? 'Guardando…' : 'Guardar extra'}</Button></div></form>
     </div>}
     {tab === 'landing' && <form onSubmit={saveLanding} className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-2">
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Imagen principal</h2><p className="mt-1 text-sm text-zinc-500">Se sube a Cloudinary y queda disponible para la futura landing.</p></div><CloudinaryUpload context="salons" salonId={salonId} accept="image/*" label="Subir imagen principal" onUploaded={(asset) => void setHeroFromUpload(asset)} /></div>{salon.heroImageUrl && <div className="mt-4 h-56 rounded-xl border border-zinc-200 bg-cover bg-center" style={{ backgroundImage: `url(${salon.heroImageUrl})` }} />}</div>
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Galería de imágenes y videos</h2><p className="mt-1 text-sm text-zinc-500">Acepta imágenes y videos. Los archivos se guardan en Cloudinary.</p></div><CloudinaryUpload context="salons" salonId={salonId} accept="image/*,video/*" label="Subir a galería" onUploaded={(asset) => void addGalleryAsset(asset)} /></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(salon.mediaGallery ?? []).map((item, index) => <article key={item.publicId ?? item.url} className="overflow-hidden rounded-xl border border-zinc-200 bg-white"><div className="grid h-36 place-items-center bg-zinc-100">{item.resourceType === 'video' ? <video src={item.secureUrl || item.url} className="h-full w-full object-cover" controls /> : <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${item.secureUrl || item.url})` }} />}</div><div className="p-3"><p className="truncate text-sm font-medium text-zinc-800">{item.title || item.publicId || 'Archivo de galería'}</p><p className="mt-1 text-xs text-zinc-500">{item.resourceType === 'video' ? 'Video' : 'Imagen'} · {item.publicVisible ? 'Visible' : 'Oculto'}</p><Button type="button" variant="danger" className="mt-3 w-full" onClick={() => void removeGalleryAsset(index)}>Eliminar</Button></div></article>)}{!(salon.mediaGallery ?? []).length && <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">Todavía no hay archivos en la galería.</p>}</div></div>
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Imagen principal</h2><p className="mt-1 text-sm text-zinc-500">Se sube a Cloudinary y queda disponible para la futura landing.</p></div><div className="flex flex-wrap gap-2"><CloudinaryUpload context="salons" salonId={salonId} accept="image/*,.heic,.heif" label={salon.heroImageUrl ? 'Cambiar imagen principal' : 'Subir imagen principal'} onUploaded={(asset) => void setHeroFromUpload(asset)} />{salon.heroImageUrl ? <Button type="button" variant="danger" onClick={() => void removeHeroImage()}><Trash2 className="mr-2 h-4 w-4" />Quitar imagen</Button> : null}</div></div>{salon.heroImageUrl && <div className="mt-4 h-56 rounded-xl border border-zinc-200 bg-cover bg-center" style={{ backgroundImage: `url(${cloudinaryImageUrl(salon.heroImageUrl)})` }} />}</div>
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Galería de imágenes y videos</h2><p className="mt-1 text-sm text-zinc-500">Acepta imágenes y videos. Los archivos se guardan en Cloudinary.</p></div><CloudinaryUpload context="salons" salonId={salonId} accept="image/*,.heic,.heif,video/*" label="Subir a galería" multiple onUploaded={(asset) => void addGalleryAsset(asset)} onUploadedBatch={(assets) => void addGalleryAssets(assets)} /></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(salon.mediaGallery ?? []).map((item, index) => <article key={item.publicId ?? item.url} className="overflow-hidden rounded-xl border border-zinc-200 bg-white"><div className="grid h-36 place-items-center bg-zinc-100">{item.resourceType === 'video' ? <video src={item.secureUrl || item.url} className="h-full w-full object-cover" controls /> : <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${mediaUrl(item.secureUrl || item.url, item.resourceType)})` }} />}</div><div className="p-3"><p className="truncate text-sm font-medium text-zinc-800">{item.title || item.publicId || 'Archivo de galería'}</p><p className="mt-1 text-xs text-zinc-500">{item.resourceType === 'video' ? 'Video' : 'Imagen'} · {item.publicVisible ? 'Visible' : 'Oculto'}</p><Button type="button" variant="danger" className="mt-3 w-full" onClick={() => void removeGalleryAsset(index)}>Eliminar</Button></div></article>)}{!(salon.mediaGallery ?? []).length && <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">Todavía no hay archivos en la galería.</p>}</div></div>
       <Field label="Título público"><Input name="publicTitle" defaultValue={salon.publicTitle} /></Field><Field label="Slug público"><Input name="slug" defaultValue={salon.slug} required /></Field>
       <Field label="Descripción corta" className="lg:col-span-2"><Textarea name="publicShortDescription" defaultValue={salon.publicShortDescription} /></Field><Field label="Descripción pública" className="lg:col-span-2"><Textarea name="publicDescription" defaultValue={salon.publicDescription} /></Field>
       <label className="flex items-center gap-2 text-sm text-zinc-700"><input name="visibleOnWebsite" type="checkbox" defaultChecked={salon.visibleOnWebsite} />Visible en web</label><Field label="Orden de aparición"><Input name="displayOrder" type="number" min={0} defaultValue={salon.displayOrder ?? 0} /></Field>
-      <Field label="URL imagen principal"><Input name="heroImageUrl" defaultValue={salon.heroImageUrl} /></Field><Field label="Ubicación visible"><Input name="locationText" defaultValue={salon.locationText} /></Field>
-      <Field label="URLs de galería (una por línea)" className="lg:col-span-2"><Textarea name="galleryImageUrls" defaultValue={salon.galleryImageUrls?.join('\n')} /></Field><Field label="SEO title"><Input name="seoTitle" defaultValue={salon.seoTitle} /></Field><Field label="SEO description"><Input name="seoDescription" defaultValue={salon.seoDescription} /></Field>
+      <Field label="URL imagen principal"><Input name="heroImageUrl" value={landingMedia.heroImageUrl} onChange={(event) => setLandingMedia((current) => ({ ...current, heroImageUrl: event.target.value }))} /></Field><Field label="Dirección pública"><Input name="address" defaultValue={salon.address} /></Field><Field label="Ubicación visible"><Input name="locationText" defaultValue={salon.locationText} /></Field>
+      <Field label="URLs de galería (una por línea)" className="lg:col-span-2"><Textarea name="galleryImageUrls" value={landingMedia.galleryImageUrlsText} onChange={(event) => setLandingMedia((current) => ({ ...current, galleryImageUrlsText: event.target.value }))} /></Field><Field label="SEO title"><Input name="seoTitle" defaultValue={salon.seoTitle} /></Field><Field label="SEO description"><Input name="seoDescription" defaultValue={salon.seoDescription} /></Field>
       <Field label="Instagram"><Input name="instagramUrl" defaultValue={salon.instagramUrl} placeholder="https://instagram.com/..." /></Field><Field label="Facebook"><Input name="facebookUrl" defaultValue={salon.facebookUrl} placeholder="https://facebook.com/..." /></Field><Field label="TikTok"><Input name="tiktokUrl" defaultValue={salon.tiktokUrl} placeholder="https://tiktok.com/@..." /></Field>
       <Field label="URL de mapa" className="lg:col-span-2"><Input name="mapUrl" defaultValue={salon.mapUrl} /></Field>
       <footer className="lg:col-span-2 flex justify-end"><Button disabled={saving}><Globe2 className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar landing'}</Button></footer>
     </form>}
-    {tab === 'activity' && <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6"><h2 className="font-semibold text-zinc-900">Actividad</h2><p className="mt-1 text-sm text-zinc-500">La API ya registra auditoría de cambios relevantes. La UI de actividad específica para salones queda preparada para conectar cuando exista el patrón visual común. Los presupuestos y eventos futuros por salón se consultan desde los filtros de Presupuestos y Eventos.</p></div>}
     <Modal open={Boolean(editingRule && ruleForm)} onClose={() => { setEditingRule(undefined); setRuleForm(undefined); }} title={`Editar regla · ${editingRule?.packageName ?? ''}`} description="Estos cambios afectan sólo la regla del salón, no la plantilla global del paquete.">
       {ruleForm && <form onSubmit={saveRule} className="grid gap-4 p-6 sm:grid-cols-2">
         <label className="flex items-center gap-2 text-sm text-zinc-700 sm:col-span-2"><input type="checkbox" checked={ruleForm.active} onChange={(event) => setRuleForm((current) => current && { ...current, active: event.target.checked })} />Paquete activo para este salón</label>

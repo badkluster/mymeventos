@@ -80,7 +80,7 @@ const salonSeeds = [
   {
     name: 'Villa Elisa',
     slug: 'villa-elisa',
-    address: 'Camino Centenario, Villa Elisa',
+    address: 'Calle 419 e/ 23 y Belgrano N°2253, Villa Elisa',
     city: 'Villa Elisa',
     locality: 'Villa Elisa',
     province: 'Buenos Aires',
@@ -115,8 +115,8 @@ const salonSeeds = [
     commercialNotes: 'Ideal para eventos familiares y sociales. Ofrecer extras premium cuando la cantidad supere 120 invitados.',
     seoTitle: 'Salón de eventos en Villa Elisa | M&M Eventos',
     seoDescription: 'M&M Villa Elisa: espacio cálido y elegante para fiestas, cumpleaños, casamientos y eventos empresariales.',
-    locationText: 'Villa Elisa, La Plata',
-    mapUrl: 'https://maps.google.com/?q=Villa%20Elisa%20La%20Plata',
+    locationText: 'Calle 419 e/ 23 y Belgrano N°2253, Villa Elisa',
+    mapUrl: 'https://maps.google.com/maps?q=Calle%20419%202253%2C%20Villa%20Elisa%2C%20Buenos%20Aires%2C%20Argentina&z=17&output=embed',
     extraServices: [
       { name: 'Robot LED', description: 'Show de robot LED para tandas de baile.', basePrice: 160000, active: true, includedByDefault: false, publicVisible: true },
       { name: 'Mesa dulce premium', description: 'Ampliación premium de mesa dulce.', basePrice: 210000, active: true, includedByDefault: false, publicVisible: true },

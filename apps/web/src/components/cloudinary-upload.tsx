@@ -24,38 +24,58 @@ type CloudinaryUploadProps = {
   quoteId?: string;
   accept?: string;
   label?: string;
-  onUploaded: (asset: UploadedAsset) => void;
+  multiple?: boolean;
+  onUploaded?: (asset: UploadedAsset) => void | Promise<void>;
+  onUploadedBatch?: (assets: UploadedAsset[]) => void | Promise<void>;
 };
 
-export function CloudinaryUpload({ context, salonId, quoteId, accept = 'image/*,video/*,application/pdf', label = 'Subir archivo', onUploaded }: CloudinaryUploadProps) {
+export function CloudinaryUpload({ context, salonId, quoteId, accept = 'image/*,.heic,.heif,video/*,application/pdf', label = 'Subir archivo', multiple = false, onUploaded, onUploadedBatch }: CloudinaryUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [fileCount, setFileCount] = useState(0);
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = '';
-    if (!file) return;
+    if (!files.length) return;
     setUploading(true);
+    setFileCount(files.length);
     setError('');
     try {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('context', context);
-      if (salonId) form.append('salonId', salonId);
-      if (quoteId) form.append('quoteId', quoteId);
-      const response = await api.post<{ asset: UploadedAsset }>('/uploads', form);
-      onUploaded(response.asset);
+      const uploaded: UploadedAsset[] = [];
+      const failed: string[] = [];
+      for (const file of files) {
+        try {
+          const form = new FormData();
+          form.append('file', file);
+          form.append('context', context);
+          if (salonId) form.append('salonId', salonId);
+          if (quoteId) form.append('quoteId', quoteId);
+          const response = await api.post<{ asset: UploadedAsset }>('/uploads', form);
+          uploaded.push(response.asset);
+        } catch {
+          failed.push(file.name);
+        }
+      }
+      if (uploaded.length) {
+        if (onUploadedBatch) await onUploadedBatch(uploaded);
+        else if (onUploaded) {
+          for (const asset of uploaded) await onUploaded(asset);
+        }
+      }
+      if (failed.length) setError(`No se pudieron subir ${failed.length} archivo(s): ${failed.join(', ')}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudo subir el archivo.');
     } finally {
       setUploading(false);
+      setFileCount(0);
     }
   }
 
   return <div className="space-y-2">
     <label className="inline-flex cursor-pointer">
-      <input type="file" accept={accept} className="sr-only" disabled={uploading} onChange={(event) => void upload(event)} />
-      <Button type="button" disabled={uploading} className="pointer-events-none"><UploadCloud className="mr-2 h-4 w-4" />{uploading ? 'Subiendo…' : label}</Button>
+      <input type="file" accept={accept} multiple={multiple} className="sr-only" disabled={uploading} onChange={(event) => void upload(event)} />
+      <Button type="button" disabled={uploading} className="pointer-events-none"><UploadCloud className="mr-2 h-4 w-4" />{uploading ? `Subiendo${fileCount > 1 ? ` ${fileCount}` : ''}…` : label}</Button>
     </label>
     {error && <p className="text-sm text-red-600">{error}</p>}
   </div>;

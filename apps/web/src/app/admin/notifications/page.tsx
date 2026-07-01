@@ -30,19 +30,34 @@ function normalizeAdminUrl(actionUrl?: string): string | null {
 
 function notificationTypeLabel(type: string): string {
   const labels: Record<string, string> = {
+    quote_request_created: 'Nueva solicitud',
+    quote_request_updated: 'Solicitud actualizada',
+    quote_created: 'Presupuesto creado',
+    quote_sent: 'Presupuesto enviado',
+    quote_updated: 'Presupuesto actualizado',
+    quote_approved: 'Presupuesto aprobado',
+    contract_created: 'Contrato creado',
+    contract_approved: 'Contrato aprobado',
+    payment_created: 'Pago registrado',
+    payment_received: 'Pago recibido',
+    event_created: 'Evento creado',
+    event_reminder: 'Recordatorio de evento',
+    lead_created: 'Nuevo contacto',
+    lead_assigned: 'Contacto asignado',
+    task_assigned: 'Tarea asignada',
     system: 'Sistema',
-    quote_request: 'Solicitud',
+    quote_request: 'Solicitud de presupuesto',
     quote: 'Presupuesto',
-    lead: 'Lead',
+    lead: 'Contacto',
     event: 'Evento',
     contract: 'Contrato',
     payment: 'Pago',
   };
-  return labels[type] ?? type.replaceAll('_', ' ');
+  return labels[type] ?? 'Aviso del sistema';
 }
 
 function TypeBadge({ type }: { type: string }) {
-  return <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium capitalize text-zinc-700 ring-1 ring-inset ring-zinc-500/15">{notificationTypeLabel(type)}</span>;
+  return <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-500/15">{notificationTypeLabel(type)}</span>;
 }
 
 export default function NotificationsPage() {
@@ -79,7 +94,7 @@ export default function NotificationsPage() {
     const normalizedQuery = query.trim().toLocaleLowerCase('es-AR');
     return items.filter((notification) => {
       const matchesStatus = status === 'all' || (status === 'unread' ? !notification.readAt : Boolean(notification.readAt));
-      const matchesQuery = !normalizedQuery || [notification.title, notification.message, notification.type].some((value) => value.toLocaleLowerCase('es-AR').includes(normalizedQuery));
+      const matchesQuery = !normalizedQuery || [notification.title, notification.message, notificationTypeLabel(notification.type)].some((value) => value.toLocaleLowerCase('es-AR').includes(normalizedQuery));
       return matchesStatus && matchesQuery;
     });
   }, [items, query, status]);
@@ -206,7 +221,7 @@ export default function NotificationsPage() {
                       <div className="max-w-xl">
                         <p className="font-semibold text-zinc-950">{notification.title}</p>
                         <p className="mt-1 text-sm leading-6 text-zinc-600">{notification.message}</p>
-                        {destination && <p className="mt-1 text-xs font-medium text-zinc-400">{destination}</p>}
+                        {destination && <p className="mt-1 text-xs font-medium text-zinc-400">Tiene acceso directo al detalle</p>}
                       </div>
                     </td>
                     <td className="px-5 py-4"><TypeBadge type={notification.type} /></td>

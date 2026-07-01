@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { PackageTemplate, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
+import { User } from '../users/user.model';
 import { LandingEventType, LandingFaq, LandingGalleryItem, LandingPromotion, LandingServiceBlock, LandingSettings, LandingTestimonial } from '../landing/landing.models';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
@@ -11,16 +12,28 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { createQuoteRequest } from './quote-request.service';
 
 const router = Router();
+const messageMaxWords = 120;
+const phonePattern = /^[+()\d\s-]{6,24}$/;
+const countWords = (value?: string) => (value ?? '').trim().split(/\s+/).filter(Boolean).length;
+function isFutureDay(value?: Date): boolean {
+  if (!value) return true;
+  const candidate = new Date(value);
+  candidate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return candidate > today;
+}
+
 const schema = z.object({
   body: z.object({
     name: z.string().min(2),
-    phone: z.string().min(6),
+    phone: z.string().trim().min(6).max(24).regex(phonePattern),
     email: z.string().email().optional().or(z.literal('')),
     eventType: z.string().min(1),
-    eventDate: z.coerce.date().optional(),
-    guestCount: z.coerce.number().int().positive(),
+    eventDate: z.coerce.date().optional().refine(isFutureDay, 'La fecha tentativa debe ser posterior a hoy.'),
+    guestCount: z.coerce.number().int().min(1).max(1000),
     salonId: z.string().regex(/^[0-9a-fA-F]{24}$/),
-    message: z.string().optional()
+    message: z.string().max(700).optional().refine((value) => countWords(value) <= messageMaxWords, `El mensaje no puede superar ${messageMaxWords} palabras.`)
   }),
   params: z.object({}),
   query: z.object({})
@@ -36,17 +49,21 @@ async function readLeanList(query: any, sort?: Record<string, 1 | -1>): Promise<
 
 async function publicSalons() {
   const salons = await Salon.find({ active: true, deletedAt: null, $or: [{ visibleOnWebsite: true }, { visibleOnWebsite: { $exists: false } }] })
-    .select('_id name slug address city locality province phone whatsapp email instagramUrl facebookUrl tiktokUrl publicTitle publicShortDescription publicDescription heroImageUrl galleryImageUrls mediaGallery locationText mapUrl minCapacity maxCapacity recommendedCapacity allowedEventTypes defaultStartTime defaultEndTime defaultDurationHours allowsExtraHour extraHourPrice defaultDepositAmount defaultPaymentTerms visibleOnWebsite displayOrder extraServices active')
+    .select('_id name slug address city locality province phone whatsapp email instagramUrl facebookUrl tiktokUrl managerUserId publicTitle publicShortDescription publicDescription heroImageUrl galleryImageUrls mediaGallery locationText mapUrl minCapacity maxCapacity recommendedCapacity allowedEventTypes defaultStartTime defaultEndTime defaultDurationHours allowsExtraHour extraHourPrice defaultDepositAmount defaultPaymentTerms visibleOnWebsite displayOrder extraServices active')
     .sort({ displayOrder: 1, name: 1 })
     .lean();
   const salonIds = salons.map((salon: any) => salon._id);
-  const [templates, rules] = await Promise.all([
+  const managerIds = [...new Set(salons.map((salon: any) => salon.managerUserId?.toString()).filter(Boolean))];
+  const [templates, rules, managers] = await Promise.all([
     readLeanList(PackageTemplate.find({ active: true, deletedAt: null, $and: [{ $or: [{ visibleOnWebsite: true }, { visibleOnWebsite: { $exists: false } }] }, { $or: [{ isGlobal: true }, { salonIds: { $in: salonIds } }] }] }), { displayOrder: 1, name: 1 }),
-    readLeanList(VenuePackageRule.find({ active: true, deletedAt: null, salonId: { $in: salonIds } }))
+    readLeanList(VenuePackageRule.find({ active: true, deletedAt: null, salonId: { $in: salonIds } })),
+    managerIds.length ? readLeanList(User.find({ _id: { $in: managerIds }, active: true, deletedAt: null }).select('_id firstName lastName fullName phone email')) : Promise.resolve([])
   ]);
   const rulesBySalonAndPackage = new Map(rules.map((rule: any) => [`${rule.salonId.toString()}:${rule.packageTemplateId.toString()}`, rule]));
+  const managersById = new Map(managers.map((manager: any) => [manager._id.toString(), manager]));
   return salons.map((salon: any) => {
     const salonId = salon._id.toString();
+    const manager = salon.managerUserId ? managersById.get(salon.managerUserId.toString()) : undefined;
     const packages = templates
       .filter((template: any) => template.isGlobal || (template.salonIds ?? []).some((id: any) => id.toString() === salonId))
       .map((template: any) => {
@@ -82,6 +99,7 @@ async function publicSalons() {
       .filter(Boolean);
     return {
       ...salon,
+      manager,
       mediaGallery: (salon.mediaGallery ?? []).filter((asset: any) => asset.publicVisible !== false).sort((a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
       extraServices: (salon.extraServices ?? []).filter((extra: any) => extra.active !== false && extra.publicVisible !== false),
       packages

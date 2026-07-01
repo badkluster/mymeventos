@@ -3,6 +3,7 @@ import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { Notification } from '../notifications/notification.model';
 import { sendEmail } from '../email/email.service';
+import { env } from '../../config/env';
 
 type NotifyInput = {
   quoteRequest: any;
@@ -12,11 +13,95 @@ type NotifyInput = {
 export async function resolveQuoteRequestRecipients(salonIds: string[]): Promise<any[]> {
   const salons: any[] = salonIds.length ? await Salon.find({ _id: { $in: salonIds }, active: true, deletedAt: null }).select('_id name managerUserId').lean() : [];
   const managerIds = salons.map((salon) => salon.managerUserId?.toString()).filter(Boolean);
-  const managerRecipients = managerIds.length
-    ? await User.find({ _id: { $in: managerIds }, active: true, deletedAt: null }).select('_id email firstName notificationPreferences').lean()
-    : [];
-  if (managerRecipients.length) return managerRecipients;
-  return User.find({ roles: { $in: [Role.ADMIN, Role.MANAGER] }, active: true, deletedAt: null }).select('_id email firstName notificationPreferences').lean();
+  const recipients = await User.find({
+    active: true,
+    deletedAt: null,
+    $or: [
+      { roles: { $in: [Role.ADMIN, Role.MANAGER] } },
+      ...(managerIds.length ? [{ _id: { $in: managerIds } }] : [])
+    ]
+  }).select('_id email firstName notificationPreferences').lean();
+  return [...new Map(recipients.map((user: any) => [user._id.toString(), user])).values()];
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function emailTemplate(input: { request: any; salons: string; date: string; actionUrl: string }): string {
+  const { request, salons, date, actionUrl } = input;
+  const webUrl = env.CORS_ORIGIN.replace(/\/$/, '');
+  const logoUrl = `${webUrl}/brand/mym-logo-dark-on-light.jpg`;
+  const detailUrl = `${webUrl}${actionUrl}`;
+  const rows = [
+    ['Cliente', request.contactName],
+    ['Teléfono', request.phone || 'No informado'],
+    ['Email', request.email || 'No informado'],
+    ['Tipo de evento', request.eventType || 'No informado'],
+    ['Fecha tentativa', date],
+    ['Cantidad de personas', request.guestCount || 'No informada'],
+    ['Salón de interés', salons],
+    ['Mensaje', request.message || 'Sin mensaje'],
+  ];
+
+  return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nueva solicitud de presupuesto</title>
+  </head>
+  <body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f4f5;padding:28px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;overflow:hidden;border-radius:22px;background:#ffffff;border:1px solid #e4e4e7;box-shadow:0 18px 45px rgba(24,24,27,.08);">
+            <tr>
+              <td style="background:#09090b;padding:24px 28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td>
+                      <img src="${logoUrl}" alt="M&M Eventos" width="132" style="display:block;border-radius:10px;background:#ffffff;">
+                    </td>
+                    <td align="right" style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#d4d4d8;">Backoffice</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:30px 28px 8px;">
+                <p style="margin:0 0 10px;font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#71717a;">Nueva consulta web</p>
+                <h1 style="margin:0;font-size:28px;line-height:1.15;color:#09090b;">Solicitud de presupuesto recibida</h1>
+                <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#52525b;">Se registró una nueva consulta desde la landing. Ya quedó creada en el backoffice para seguimiento comercial.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 28px 8px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 10px;">
+                  ${rows.map(([label, value]) => `<tr>
+                    <td style="width:190px;padding:13px 16px;background:#f4f4f5;border-top-left-radius:12px;border-bottom-left-radius:12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#71717a;">${escapeHtml(label)}</td>
+                    <td style="padding:13px 16px;background:#fafafa;border-top-right-radius:12px;border-bottom-right-radius:12px;font-size:15px;line-height:1.45;color:#18181b;">${escapeHtml(value)}</td>
+                  </tr>`).join('')}
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 28px 30px;">
+                <a href="${detailUrl}" style="display:inline-block;border-radius:12px;background:#18181b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 18px;">Abrir solicitud en backoffice</a>
+                <p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#71717a;">Si el botón no funciona, ingresá al panel y buscá la solicitud por el nombre o teléfono del cliente.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 }
 
 export async function createQuoteRequestNotifications(input: NotifyInput): Promise<void> {
@@ -29,6 +114,7 @@ export async function createQuoteRequestNotifications(input: NotifyInput): Promi
   const date = request.estimatedEventDate ? new Intl.DateTimeFormat('es-AR').format(new Date(request.estimatedEventDate)) : 'Sin fecha tentativa';
   const message = `${request.contactName} (${request.phone || request.email || 'sin contacto'}) solicitó presupuesto para ${request.eventType || 'un evento'} el ${date}. Salón/es: ${salons}.`;
   const actionUrl = `/admin/quotes/requests/${request._id}`;
+  const html = emailTemplate({ request, salons, date, actionUrl });
 
   await Notification.insertMany(recipients.map((user: any) => ({
     userId: user._id,
@@ -39,12 +125,13 @@ export async function createQuoteRequestNotifications(input: NotifyInput): Promi
     metadata: { quoteRequestId: request._id, leadId: request.leadId, salonIds, relatedEntityType: 'quote_request', relatedEntityId: request._id }
   })));
 
-  await Promise.allSettled(recipients
-    .filter((user: any) => user.email && user.notificationPreferences?.email !== false && user.notificationPreferences?.emailNotificationsEnabled !== false && user.notificationPreferences?.newQuoteRequest !== false && user.notificationPreferences?.notifyOnNewQuoteRequest !== false)
-    .map((user: any) => sendEmail({
-      to: user.email,
+  await Promise.allSettled([...new Set(recipients.map((user: any) => user.email).filter(Boolean))]
+    .map((email) => sendEmail({
+      to: email,
       subject: 'Nueva solicitud de presupuesto - M&M Eventos',
       text: [
+        'Se registró una nueva consulta desde la web.',
+        '',
         `Nombre: ${request.contactName}`,
         `Teléfono: ${request.phone || 'No informado'}`,
         `Email: ${request.email || 'No informado'}`,
@@ -53,7 +140,9 @@ export async function createQuoteRequestNotifications(input: NotifyInput): Promi
         `Cantidad de personas: ${request.guestCount || 'No informada'}`,
         `Salón/es de interés: ${salons}`,
         `Mensaje: ${request.message || 'Sin mensaje'}`,
+        '',
         `Link interno: ${actionUrl}`
-      ].join('\n')
+      ].join('\n'),
+      html
     })));
 }

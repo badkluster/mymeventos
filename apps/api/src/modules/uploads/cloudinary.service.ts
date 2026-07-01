@@ -51,3 +51,9 @@ export function uploadBuffer(buffer: Buffer, options: UploadApiOptions): Promise
     stream.end(buffer);
   });
 }
+
+export async function deleteAsset(publicId: string, resourceType: 'image' | 'video' | 'raw'): Promise<void> {
+  configureCloudinary();
+  const result = await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, invalidate: true });
+  if (!['ok', 'not found'].includes(result.result)) throw new Error(`Cloudinary no pudo eliminar el archivo: ${result.result}`);
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Camera, KeyRound, Save, UserRound } from 'lucide-react';
+import { Camera, KeyRound, Save, Trash2, UserRound } from 'lucide-react';
 import { Button, Input, PageHeader } from '@/components/ui/primitives';
 import { useSession } from '@/components/session-provider';
 import { useToast } from '@/components/ui/toast-provider';
@@ -101,6 +101,7 @@ export default function AdminProfilePage() {
             <p className="text-sm font-medium text-zinc-700">Avatar</p>
             <div className="mt-1.5 flex flex-wrap items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
               <CloudinaryUpload context="users" accept="image/*" label="Subir avatar" onUploaded={(asset) => setAvatarPreview(asset.secureUrl || asset.url)} />
+              {avatarPreview ? <Button type="button" variant="danger" onClick={() => setAvatarPreview('')}><Trash2 className="mr-2 h-4 w-4" />Quitar avatar</Button> : null}
               <span className="inline-flex items-center gap-2 text-sm text-zinc-500"><Camera className="h-4 w-4" />La imagen se guarda en la nube.</span>
             </div>
             <input type="hidden" name="avatarUrl" value={avatarPreview} />

@@ -3,16 +3,18 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, ChevronUp, Clock3, ExternalLink, Gift, GlassWater, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
+import { ArrowRight, Baby, BriefcaseBusiness, CakeSlice, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, ChevronUp, Clock3, Crown, ExternalLink, Gift, GlassWater, GraduationCap, Heart, LogIn, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { brandAssets } from '@/lib/brand-assets';
 
 type Media = { url: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
 type ExtraService = { _id?: string; name: string; description?: string; basePrice?: number; includedByDefault?: boolean };
-type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
+type SalonManager = { _id?: string; firstName?: string; lastName?: string; fullName?: string; phone?: string; email?: string };
+type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; province?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; manager?: SalonManager; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
 type Package = { _id: string; name: string; salonId?: string; salonName?: string; durationHours?: number; pricePerPerson?: number; finalPricePerPerson?: number; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
 type LandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
 type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
@@ -33,16 +35,55 @@ const fallbackServices = [
   { title: 'DJ e iluminación', description: 'Sonido profesional y ambientación lumínica.', icon: 'Music' },
   { title: 'Organización completa', description: 'Coordinación integral antes y durante el evento.', icon: 'Sparkles' },
 ];
-const fallbackEventTypes = ['15 años', 'Casamientos', 'Cumpleaños', 'Egresados', 'Empresariales', 'Infantiles'].map((title) => ({ title, description: 'Propuestas a medida para celebrar sin preocuparte.', icon: 'PartyPopper' }));
+const fallbackEventTypes = [
+  { title: '15 años', icon: 'Crown' },
+  { title: 'Casamientos', icon: 'Heart' },
+  { title: 'Cumpleaños', icon: 'CakeSlice' },
+  { title: 'Egresados', icon: 'GraduationCap' },
+  { title: 'Empresariales', icon: 'BriefcaseBusiness' },
+  { title: 'Infantiles', icon: 'Baby' },
+].map((item) => ({ ...item, description: 'Propuestas a medida para celebrar sin preocuparte.' }));
 const fallbackFaqs = [
   { question: '¿Con cuánta anticipación debo reservar?', answer: 'Recomendamos consultar cuanto antes para asegurar disponibilidad y congelar condiciones comerciales.' },
   { question: '¿Puedo visitar el salón antes del evento?', answer: 'Sí, coordinamos una visita para que conozcas el espacio y revisemos tu idea en detalle.' },
   { question: '¿Qué incluye el servicio de catering?', answer: 'Depende del paquete, pero podemos incluir recepción, plato principal, postre, mesa dulce, bebidas y barra.' },
   { question: '¿Se puede congelar el precio con seña?', answer: 'Sí, las condiciones vigentes se pueden reservar abonando la seña indicada en la propuesta.' },
 ];
+const contactPhonePattern = /^[+()\d\s-]{6,24}$/;
+const contactGuestMin = 1;
+const contactGuestMax = 1000;
+const contactMessageMaxWords = 120;
+const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 
 const money = (value?: number) => value ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value) : 'Consultar';
-const iconMap = { Utensils, GlassWater, Music, Sparkles, PartyPopper, CalendarDays, Gift, Camera, Users };
+const iconMap = { Utensils, GlassWater, Music, Sparkles, PartyPopper, CalendarDays, Gift, Camera, Users, Crown, Heart, CakeSlice, GraduationCap, BriefcaseBusiness, Baby };
+const eventTypeIcons: Record<string, keyof typeof iconMap> = {
+  '15 anos': 'Crown',
+  '15 años': 'Crown',
+  casamientos: 'Heart',
+  casamiento: 'Heart',
+  cumpleanos: 'CakeSlice',
+  cumpleaños: 'CakeSlice',
+  egresados: 'GraduationCap',
+  egresado: 'GraduationCap',
+  empresariales: 'BriefcaseBusiness',
+  empresarial: 'BriefcaseBusiness',
+  infantiles: 'Baby',
+  infantil: 'Baby',
+};
+const sectionAccents = [
+  { card: 'border-sky-300/25 bg-sky-400/[0.06] hover:border-sky-200/60', icon: 'border-sky-300/35 bg-sky-400/10 text-sky-100', text: 'text-sky-100', badge: 'border-sky-300/20 bg-sky-400/10 text-sky-100', line: 'bg-sky-300/70' },
+  { card: 'border-cyan-300/25 bg-cyan-400/[0.06] hover:border-cyan-200/60', icon: 'border-cyan-300/35 bg-cyan-400/10 text-cyan-100', text: 'text-cyan-100', badge: 'border-cyan-300/20 bg-cyan-400/10 text-cyan-100', line: 'bg-cyan-300/70' },
+  { card: 'border-violet-300/25 bg-violet-400/[0.06] hover:border-violet-200/60', icon: 'border-violet-300/35 bg-violet-400/10 text-violet-100', text: 'text-violet-100', badge: 'border-violet-300/20 bg-violet-400/10 text-violet-100', line: 'bg-violet-300/70' },
+  { card: 'border-emerald-300/20 bg-emerald-400/[0.055] hover:border-emerald-200/55', icon: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100', text: 'text-emerald-100', badge: 'border-emerald-300/20 bg-emerald-400/10 text-emerald-100', line: 'bg-emerald-300/65' },
+  { card: 'border-rose-300/20 bg-rose-400/[0.055] hover:border-rose-200/50', icon: 'border-rose-300/30 bg-rose-400/10 text-rose-100', text: 'text-rose-100', badge: 'border-rose-300/20 bg-rose-400/10 text-rose-100', line: 'bg-rose-300/60' },
+  { card: 'border-indigo-300/25 bg-indigo-400/[0.06] hover:border-indigo-200/55', icon: 'border-indigo-300/35 bg-indigo-400/10 text-indigo-100', text: 'text-indigo-100', badge: 'border-indigo-300/20 bg-indigo-400/10 text-indigo-100', line: 'bg-indigo-300/65' }
+];
+const accentFor = (index: number) => sectionAccents[index % sectionAccents.length];
+function cloudinaryImageUrl(url: string): string {
+  if (!url || !url.includes('/upload/') || url.includes('/upload/f_auto,q_auto/')) return url;
+  return url.replace('/upload/', '/upload/f_auto,q_auto/');
+}
 
 function InstagramIcon({ className = '' }: { className?: string }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.9" fill="currentColor" stroke="none" /></svg>;
@@ -62,19 +103,25 @@ function WhatsAppIcon({ className = '' }: { className?: string }) {
 
 function titleForSalon(salon: Salon) { return salon.publicTitle || salon.name; }
 function locationForSalon(salon: Salon) { return salon.locationText || salon.locality || salon.city || salon.address || 'La Plata'; }
+function heroLocationForSalon(salon: Salon) { return salon.locality || salon.city || titleForSalon(salon); }
 function descriptionForSalon(salon: Salon) { return salon.publicShortDescription || salon.publicDescription || 'Un espacio M&M preparado para celebrar con servicio integral.'; }
-function imageForSalon(salon: Salon) { return salon.heroImageUrl || salon.mediaGallery?.[0]?.secureUrl || salon.mediaGallery?.[0]?.url || salon.galleryImageUrls?.[0] || fallbackHero; }
+function imageForSalon(salon: Salon) { return cloudinaryImageUrl(salon.heroImageUrl || salon.mediaGallery?.[0]?.secureUrl || salon.mediaGallery?.[0]?.url || salon.galleryImageUrls?.[0] || fallbackHero); }
 function capacityForSalon(salon: Salon) {
   if (salon.minCapacity && salon.maxCapacity) return `${salon.minCapacity} a ${salon.maxCapacity} personas`;
   if (salon.maxCapacity || salon.recommendedCapacity) return `Hasta ${salon.maxCapacity || salon.recommendedCapacity} personas`;
   return 'Capacidad a confirmar';
 }
 function mediaForSalon(salon: Salon): Media[] {
-  const items: Media[] = [
+  const rawItems: Media[] = [
     ...(salon.heroImageUrl ? [{ url: salon.heroImageUrl, title: titleForSalon(salon), resourceType: 'image', displayOrder: -1 } satisfies Media] : []),
     ...(salon.mediaGallery ?? []),
     ...(salon.galleryImageUrls ?? []).map((url, index) => ({ url, resourceType: 'image', displayOrder: index + 50 })),
   ];
+  const items = rawItems.map((item) => {
+    if (item.resourceType === 'video') return item;
+    const source = cloudinaryImageUrl(item.secureUrl || item.url);
+    return { ...item, url: source, secureUrl: source };
+  });
   const seen = new Set<string>();
   return items.filter((item) => {
     const source = item.secureUrl || item.url;
@@ -86,31 +133,90 @@ function mediaForSalon(salon: Salon): Media[] {
 function waLink(number?: string, message = 'Hola M&M Eventos, quiero solicitar un presupuesto para mi evento.') {
   return `https://wa.me/${(number || '').replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
 }
+function textValue(value: FormDataEntryValue | null) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+function wordCount(value: string) {
+  return value.split(/\s+/).filter(Boolean).length;
+}
+function isFutureIsoDate(value: string) {
+  return !value || value > todayIsoDate();
+}
+function salonWhatsAppNumber(salon: Salon, fallback?: string) {
+  return salon.manager?.phone || salon.whatsapp || salon.phone || fallback;
+}
 function scrollTo(id: string) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 function salonWaMessage(salon: Salon) {
   return `Hola M&M Eventos, vengo de la web y quiero más información sobre ${titleForSalon(salon)} (${locationForSalon(salon)}).`;
 }
+function packageWaMessage(salon: Salon, item: Package) {
+  const price = money(item.finalPricePerPerson || item.pricePerPerson);
+  const benefit = item.promotionText || item.giftText;
+  return [
+    `Hola M&M Eventos, vengo de la web y me interesa el paquete "${item.name}" para ${titleForSalon(salon)}.`,
+    `Valor publicado: ${price} por persona.`,
+    benefit ? `Beneficio: ${benefit}` : '',
+    'Quiero recibir más información para reservar.',
+  ].filter(Boolean).join('\n');
+}
+function quoteRequestManagerMessage(input: { quoteRequestId?: string; salon: Salon; name: string; phone: string; email?: string; eventType: string; eventDate?: string; guestCount: number; message?: string }) {
+  return [
+    'Nueva consulta desde la web de M&M Eventos.',
+    `Salón: ${titleForSalon(input.salon)}`,
+    `Cliente: ${input.name}`,
+    `Teléfono: ${input.phone}`,
+    input.email ? `Email: ${input.email}` : '',
+    `Tipo de evento: ${input.eventType}`,
+    input.eventDate ? `Fecha tentativa: ${input.eventDate}` : 'Fecha tentativa: Sin definir',
+    `Cantidad de personas: ${input.guestCount}`,
+    input.message ? `Mensaje: ${input.message}` : 'Mensaje: Sin mensaje',
+    input.quoteRequestId ? `Solicitud: ${input.quoteRequestId}` : '',
+  ].filter(Boolean).join('\n');
+}
 function mapUrlForSalon(salon: Salon) {
-  const query = salon.address || salon.locationText || [titleForSalon(salon), salon.locality || salon.city].filter(Boolean).join(', ');
   if (salon.mapUrl && (salon.mapUrl.includes('/embed') || salon.mapUrl.includes('output=embed'))) return salon.mapUrl;
-  return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+  return `https://maps.google.com/maps?q=${encodeURIComponent(mapQueryForSalon(salon))}&z=17&output=embed`;
 }
 function mapExternalUrlForSalon(salon: Salon) {
-  const query = salon.address || salon.locationText || [titleForSalon(salon), salon.locality || salon.city].filter(Boolean).join(', ');
-  return salon.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  if (salon.mapUrl && !salon.mapUrl.includes('/embed') && !salon.mapUrl.includes('output=embed')) return salon.mapUrl;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQueryForSalon(salon))}`;
+}
+function mapQueryForSalon(salon: Salon) {
+  const fromMapUrl = queryFromMapUrl(salon.mapUrl);
+  if (fromMapUrl) return normalizeMapQuery(fromMapUrl, salon);
+  return normalizeMapQuery(salon.address || salon.locationText || [titleForSalon(salon), salon.locality || salon.city].filter(Boolean).join(', '), salon);
+}
+function queryFromMapUrl(mapUrl?: string) {
+  if (!mapUrl) return '';
+  try {
+    const url = new URL(mapUrl);
+    return url.searchParams.get('query') || url.searchParams.get('q') || '';
+  } catch {
+    return '';
+  }
+}
+function normalizeMapQuery(value: string, salon: Salon) {
+  if (/calle\s*419/i.test(value) && /2253/.test(value)) return 'Calle 419 2253, Villa Elisa, Buenos Aires, Argentina';
+  const withCity = [value, salon.locality || salon.city, salon.province || 'Buenos Aires', 'Argentina'].filter(Boolean).join(', ');
+  return withCity.replace(/\s+/g, ' ').trim();
 }
 
 function SectionTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
   return <div className="mx-auto mb-8 max-w-3xl text-center">
-    <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#d8b56d]">{eyebrow}</p>
+    <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]">{eyebrow}</p>
     <h2 className="mt-3 text-3xl font-semibold text-white md:text-5xl">{title}</h2>
     {subtitle ? <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">{subtitle}</p> : null}
   </div>;
 }
 
-function IconBadge({ name }: { name?: string }) {
+function IconBadge({ name, tone = 'border-[#c8cdd3]/30 bg-[#c8cdd3]/10 text-[#f1f5f9]' }: { name?: string; tone?: string }) {
   const Icon = iconMap[(name || 'Sparkles') as keyof typeof iconMap] || Sparkles;
-  return <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#d8b56d]/30 bg-[#d8b56d]/10 text-[#e8c77a]"><Icon className="h-5 w-5" /></span>;
+  return <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${tone}`}><Icon className="h-5 w-5" /></span>;
+}
+
+function eventTypeIconName(item: LandingItem, index: number): keyof typeof iconMap {
+  const title = (item.title || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return eventTypeIcons[title] || (item.icon as keyof typeof iconMap) || fallbackEventTypes[index % fallbackEventTypes.length].icon;
 }
 
 function Portal({ children }: { children: React.ReactNode }) {
@@ -146,18 +252,18 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
 
   return <AnimatePresence>
     <motion.div className="fixed inset-0 z-50 overflow-y-auto bg-black/82 px-4 py-5 backdrop-blur-md md:px-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.article className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-[#d8b56d]/25 bg-[#080807] text-white shadow-2xl" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} onClick={(event) => event.stopPropagation()}>
-        <div className="relative h-[46vh] min-h-80 overflow-hidden bg-[#14110b]">
+      <motion.article className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-[#c8cdd3]/25 bg-[#080807] text-white shadow-2xl" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} onClick={(event) => event.stopPropagation()}>
+        <div className="relative h-[46vh] min-h-80 overflow-hidden bg-[#111113]">
           <button type="button" onClick={() => media.length && setLightboxIndex(Math.min(selectedIndex, Math.max(media.length - 1, 0)))} className="block h-full w-full text-left" aria-label={`Abrir galería de ${titleForSalon(salon)}`}>
             {selectedMedia?.resourceType === 'video' ? <video src={selectedSource} className="h-full w-full object-cover" controls playsInline /> : <img src={selectedSource} alt={selectedMedia?.altText || selectedMedia?.title || titleForSalon(salon)} className="h-full w-full object-cover" />}
           </button>
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#080807] via-black/20 to-transparent" />
           <button type="button" onClick={onClose} aria-label="Cerrar detalle del salón" className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-black/50 text-white backdrop-blur transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
-          <button type="button" onClick={() => media.length && setLightboxIndex(Math.min(selectedIndex, Math.max(media.length - 1, 0)))} className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:border-[#d8b56d] hover:text-[#e8c77a]"><Camera className="h-4 w-4" />Ver fotos</button>
+          <button type="button" onClick={() => media.length && setLightboxIndex(Math.min(selectedIndex, Math.max(media.length - 1, 0)))} className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]"><Camera className="h-4 w-4" />Ver fotos</button>
           <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.34em] text-[#e8c77a]">Detalle del salón</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.34em] text-[#f1f5f9]">Detalle del salón</p>
             <h2 className="mt-3 max-w-3xl text-4xl font-semibold md:text-6xl">{titleForSalon(salon)}</h2>
-            <button type="button" onClick={() => setMapOpen(true)} className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-1.5 text-sm text-zinc-200 backdrop-blur transition hover:border-[#d8b56d] hover:text-[#e8c77a]" aria-label={`Ver ubicación de ${titleForSalon(salon)}`}><MapPin className="h-4 w-4 text-[#d8b56d]" />Ver ubicación: {locationForSalon(salon)}</button>
+            <button type="button" onClick={() => setMapOpen(true)} className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-1.5 text-sm text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]" aria-label={`Ver ubicación de ${titleForSalon(salon)}`}><MapPin className="h-4 w-4 text-[#c8cdd3]" />Ver ubicación: {locationForSalon(salon)}</button>
           </div>
         </div>
 
@@ -165,41 +271,42 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
           <div className="space-y-7">
             {media.length > 1 ? <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">{media.slice(0, 12).map((item, index) => {
               const source = item.secureUrl || item.url;
-              return <button key={`${source}-${index}`} type="button" onClick={() => { setSelectedIndex(index); setLightboxIndex(index); }} aria-label={`Abrir imagen ${index + 1} de ${titleForSalon(salon)}`} className={`h-20 overflow-hidden rounded-xl border transition ${index === selectedIndex ? 'border-[#d8b56d]' : 'border-white/10 hover:border-[#d8b56d]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={source} alt={item.altText || item.title || titleForSalon(salon)} className="h-full w-full object-cover" />}</button>;
+              return <button key={`${source}-${index}`} type="button" onClick={() => { setSelectedIndex(index); setLightboxIndex(index); }} aria-label={`Abrir imagen ${index + 1} de ${titleForSalon(salon)}`} className={`h-20 overflow-hidden rounded-xl border transition ${index === selectedIndex ? 'border-[#c8cdd3]' : 'border-white/10 hover:border-[#c8cdd3]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={source} alt={item.altText || item.title || titleForSalon(salon)} className="h-full w-full object-cover" />}</button>;
             })}</div> : null}
 
             <section>
               <h3 className="text-2xl font-semibold">Información del salón</h3>
               <p className="mt-4 text-sm leading-7 text-zinc-300 md:text-base">{salon.publicDescription || descriptionForSalon(salon)}</p>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Users className="h-5 w-5 text-[#d8b56d]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Capacidad</p><p className="mt-1 font-semibold">{capacityForSalon(salon)}</p></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Clock3 className="h-5 w-5 text-[#d8b56d]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Horario</p><p className="mt-1 font-semibold">{salon.defaultStartTime && salon.defaultEndTime ? `${salon.defaultStartTime} a ${salon.defaultEndTime}` : salon.defaultDurationHours ? `${salon.defaultDurationHours} horas` : 'A coordinar'}</p></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><PackageCheck className="h-5 w-5 text-[#d8b56d]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Paquetes</p><p className="mt-1 font-semibold">{packages.length || 'A consultar'}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Users className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Capacidad</p><p className="mt-1 font-semibold">{capacityForSalon(salon)}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Clock3 className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Horario</p><p className="mt-1 font-semibold">{salon.defaultStartTime && salon.defaultEndTime ? `${salon.defaultStartTime} a ${salon.defaultEndTime}` : salon.defaultDurationHours ? `${salon.defaultDurationHours} horas` : 'A coordinar'}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><PackageCheck className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Paquetes</p><p className="mt-1 font-semibold">{packages.length || 'A consultar'}</p></div>
               </div>
             </section>
 
             {packages.length ? <section>
               <h3 className="text-2xl font-semibold">Paquetes disponibles</h3>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">{packages.slice(0, 4).map((item) => <article key={item._id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex items-start justify-between gap-3"><h4 className="font-semibold">{item.name}</h4>{item.badgeLabel ? <span className="rounded-md bg-[#d8b56d] px-2 py-1 text-[10px] font-bold uppercase text-black">{item.badgeLabel}</span> : null}</div>
-                <p className="mt-3 text-xl font-semibold text-[#e8c77a]">{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs font-normal text-zinc-500">por persona</span></p>
-                {item.includedServices?.length ? <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">{item.includedServices.slice(0, 4).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#d8b56d]" />{service}</li>)}</ul> : null}
-                {item.promotionText || item.giftText ? <p className="mt-3 text-sm text-[#f3dca2]">{item.promotionText || item.giftText}</p> : null}
+              <div className="mt-4 grid gap-3 md:grid-cols-2">{packages.slice(0, 4).map((item) => <article key={item._id} className="flex min-h-[260px] flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-start justify-between gap-3"><h4 className="font-semibold">{item.name}</h4>{item.badgeLabel ? <span className="rounded-md bg-[#c8cdd3] px-2 py-1 text-[10px] font-bold uppercase text-black">{item.badgeLabel}</span> : null}</div>
+                <p className="mt-3 text-xl font-semibold text-[#f1f5f9]">{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs font-normal text-zinc-500">por persona</span></p>
+                {item.includedServices?.length ? <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">{item.includedServices.slice(0, 4).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c8cdd3]" />{service}</li>)}</ul> : null}
+                {item.promotionText || item.giftText ? <p className="mt-3 text-sm text-[#d4d4d8]">{item.promotionText || item.giftText}</p> : null}
+                <div className="mt-auto pt-5"><a href={waLink(salonWhatsAppNumber(salon), packageWaMessage(salon, item))} target="_blank" rel="noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#25d366]/35 px-4 py-2.5 text-sm font-semibold text-[#d8ffe5] transition hover:border-[#25d366] hover:bg-[#25d366] hover:text-black">Me interesa <ExternalLink className="h-4 w-4" /></a></div>
               </article>)}</div>
             </section> : null}
           </div>
 
           <aside className="space-y-4">
-            <div className="rounded-2xl border border-[#d8b56d]/25 bg-[#12100c] p-5">
+            <div className="rounded-2xl border border-[#c8cdd3]/25 bg-[#111113] p-5">
               <h3 className="text-lg font-semibold">Acciones rápidas</h3>
               <div className="mt-4 grid gap-2">
-                <button type="button" onClick={() => onRequestQuote(salon)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8b56d] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#efcf85]">Pedir presupuesto <Send className="h-4 w-4" /></button>
-                <a href={waLink(salon.whatsapp, salonWaMessage(salon))} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#25d366] hover:text-[#25d366]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a>
-                <button type="button" onClick={() => setMapOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#d8b56d] hover:text-[#e8c77a]">Ver ubicación <MapPin className="h-4 w-4" /></button>
+                <button type="button" onClick={() => onRequestQuote(salon)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto <Send className="h-4 w-4" /></button>
+                <a href={waLink(salonWhatsAppNumber(salon), salonWaMessage(salon))} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#25d366] hover:text-[#25d366]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a>
+                <button type="button" onClick={() => setMapOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">Ver ubicación <MapPin className="h-4 w-4" /></button>
               </div>
               <div className="mt-5 space-y-2 text-sm text-zinc-400">
                 {salon.address ? <p><span className="text-zinc-200">Dirección:</span> {salon.address}</p> : null}
-                {salon.phone ? <p><span className="text-zinc-200">Teléfono:</span> {salon.phone}</p> : null}
+                {salonWhatsAppNumber(salon) ? <p><span className="text-zinc-200">Teléfono:</span> {salonWhatsAppNumber(salon)}</p> : null}
                 {salon.email ? <p><span className="text-zinc-200">Email:</span> {salon.email}</p> : null}
                 {salon.defaultDepositAmount ? <p><span className="text-zinc-200">Seña sugerida:</span> {money(salon.defaultDepositAmount)}</p> : null}
               </div>
@@ -210,14 +317,14 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
               <div className="mt-4 grid gap-3">{extras.slice(0, 6).map((extra) => <div key={extra._id || extra.name} className="rounded-xl border border-white/10 p-3">
                 <p className="font-semibold">{extra.name}</p>
                 {extra.description ? <p className="mt-1 text-sm leading-5 text-zinc-400">{extra.description}</p> : null}
-                {extra.basePrice ? <p className="mt-2 text-sm text-[#e8c77a]">{money(extra.basePrice)}</p> : null}
+                {extra.basePrice ? <p className="mt-2 text-sm text-[#f1f5f9]">{money(extra.basePrice)}</p> : null}
               </div>)}</div>
             </div> : null}
 
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
               <button type="button" onClick={() => setMapOpen(true)} className="group relative block h-64 w-full overflow-hidden text-left" aria-label={`Ver ubicación de ${titleForSalon(salon)}`}>
                 <iframe title={`Mapa de ${titleForSalon(salon)}`} src={mapUrlForSalon(salon)} className="pointer-events-none h-full w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-                <span className="absolute inset-x-4 bottom-4 inline-flex items-center justify-center gap-2 rounded-lg bg-black/75 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition group-hover:bg-[#d8b56d] group-hover:text-black"><MapPin className="h-4 w-4" />Ver ubicación</span>
+                <span className="absolute inset-x-4 bottom-4 inline-flex items-center justify-center gap-2 rounded-lg bg-black/75 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition group-hover:bg-[#c8cdd3] group-hover:text-black"><MapPin className="h-4 w-4" />Ver ubicación</span>
               </button>
             </div>
           </aside>
@@ -231,16 +338,16 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
           {lightboxMedia?.resourceType === 'video' ? <video src={lightboxSource} className="mx-auto max-h-[78vh] w-full rounded-2xl object-contain" controls playsInline autoPlay /> : <img src={lightboxSource} alt={lightboxMedia?.altText || lightboxMedia?.title || titleForSalon(salon)} className="mx-auto max-h-[78vh] w-full rounded-2xl object-contain" />}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{media.map((item, index) => {
             const source = item.secureUrl || item.url;
-            return <button key={`${source}-lightbox-${index}`} type="button" onClick={() => setLightboxIndex(index)} aria-label={`Ver imagen ${index + 1}`} className={`h-14 w-20 overflow-hidden rounded-lg border transition ${index === lightboxIndex ? 'border-[#d8b56d]' : 'border-white/15 hover:border-[#d8b56d]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={source} alt={item.altText || item.title || titleForSalon(salon)} className="h-full w-full object-cover" />}</button>;
+            return <button key={`${source}-lightbox-${index}`} type="button" onClick={() => setLightboxIndex(index)} aria-label={`Ver imagen ${index + 1}`} className={`h-14 w-20 overflow-hidden rounded-lg border transition ${index === lightboxIndex ? 'border-[#c8cdd3]' : 'border-white/15 hover:border-[#c8cdd3]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={source} alt={item.altText || item.title || titleForSalon(salon)} className="h-full w-full object-cover" />}</button>;
           })}</div>
         </div>
         {media.length > 1 ? <button type="button" onClick={() => changeLightbox(1)} aria-label="Imagen siguiente" className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronRight className="h-6 w-6" /></button> : null}
       </div></Portal> : null}
 
       {mapOpen ? <Portal><div className="fixed inset-0 z-[100] grid place-items-center bg-black/88 p-4" role="dialog" aria-modal="true" aria-label={`Mapa de ${titleForSalon(salon)}`} onClick={(event) => event.stopPropagation()}>
-        <section className="w-full max-w-5xl overflow-hidden rounded-3xl border border-[#d8b56d]/30 bg-[#080807] shadow-2xl">
+        <section className="w-full max-w-5xl overflow-hidden rounded-3xl border border-[#c8cdd3]/30 bg-[#080807] shadow-2xl">
           <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b56d]">Ubicación</p><h3 className="mt-1 text-2xl font-semibold text-white">{titleForSalon(salon)}</h3><p className="mt-1 text-sm text-zinc-400">{salon.address || locationForSalon(salon)}</p><a href={mapExternalUrlForSalon(salon)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#e8c77a] hover:text-white">Abrir en Google Maps <ExternalLink className="h-4 w-4" /></a></div>
+            <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#c8cdd3]">Ubicación</p><h3 className="mt-1 text-2xl font-semibold text-white">{titleForSalon(salon)}</h3><p className="mt-1 text-sm text-zinc-400">{salon.address || locationForSalon(salon)}</p><a href={mapExternalUrlForSalon(salon)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#f1f5f9] hover:text-white">Abrir en Google Maps <ExternalLink className="h-4 w-4" /></a></div>
             <button type="button" onClick={() => setMapOpen(false)} aria-label="Cerrar mapa" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
           </header>
           <iframe title={`Mapa ampliado de ${titleForSalon(salon)}`} src={mapUrlForSalon(salon)} className="h-[70vh] w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
@@ -253,6 +360,7 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
 export default function Home() {
   const [landing, setLanding] = useState<LandingPayload>({ salons: [], packages: [], promotions: [], gallery: [], testimonials: [], faqs: [], serviceBlocks: [], eventTypes: [] });
   const [selectedSalonId, setSelectedSalonId] = useState('');
+  const [selectedPackageSalonId, setSelectedPackageSalonId] = useState('');
   const [selectedSalon, setSelectedSalon] = useState<Salon | null>(null);
   const [socialNetwork, setSocialNetwork] = useState<'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -265,32 +373,102 @@ export default function Home() {
 
   const settings = landing.settings ?? {};
   const salons = landing.salons;
-  const heroImage = settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' });
+  const heroImage = cloudinaryImageUrl(settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' }));
   const serviceBlocks = landing.serviceBlocks.length ? landing.serviceBlocks : fallbackServices;
   const eventTypes = landing.eventTypes.length ? landing.eventTypes : fallbackEventTypes;
   const faqs: LandingItem[] = landing.faqs.length ? landing.faqs : fallbackFaqs;
-  const gallery: LandingItem[] = landing.gallery.length ? landing.gallery : fallbackGallery.map((imageUrl, index) => ({ title: `Momento M&M ${index + 1}`, imageUrl, category: 'Momentos' }));
+  const gallery: LandingItem[] = landing.gallery.length ? landing.gallery.map((item) => ({ ...item, imageUrl: item.imageUrl ? cloudinaryImageUrl(item.imageUrl) : item.imageUrl })) : fallbackGallery.map((imageUrl, index) => ({ title: `Momento M&M ${index + 1}`, imageUrl, category: 'Momentos' }));
   const packages = useMemo(() => landing.packages.length ? landing.packages : salons.flatMap((salon) => (salon.packages ?? []).map((item) => ({ ...item, salonName: titleForSalon(salon) }))).slice(0, 3), [landing.packages, salons]);
   const displaySalons = useMemo(() => salons.length ? salons : [...new Map(packages.map((item, index) => [String(item.salonName || `M&M Eventos ${index + 1}`), { _id: String(item.salonId || item._id || index), name: String(item.salonName || 'M&M Eventos'), publicTitle: String(item.salonName || 'M&M Eventos'), publicShortDescription: 'Un espacio M&M preparado para celebrar con servicio integral.', locationText: 'La Plata', minCapacity: 60, maxCapacity: 250, heroImageUrl: fallbackGallery[index % fallbackGallery.length] } as Salon])).values()], [salons, packages]);
-  const locations = useMemo(() => [...new Set(displaySalons.map(locationForSalon).filter(Boolean))].slice(0, 4), [displaySalons]);
+  const selectedPackageSalon = useMemo(() => displaySalons.find((salon) => salon._id === selectedPackageSalonId) ?? displaySalons[0], [displaySalons, selectedPackageSalonId]);
+  const selectedPackageCards = useMemo(() => {
+    if (!selectedPackageSalon) return packages.slice(0, 3);
+    const salonPackages = selectedPackageSalon.packages?.length
+      ? selectedPackageSalon.packages
+      : packages.filter((item) => item.salonId === selectedPackageSalon._id || item.salonName === titleForSalon(selectedPackageSalon));
+    return salonPackages.slice(0, 3);
+  }, [packages, selectedPackageSalon]);
+  const heroSalons = useMemo(() => {
+    const seen = new Set<string>();
+    return displaySalons.filter((salon) => {
+      const label = heroLocationForSalon(salon);
+      if (!label || seen.has(label)) return false;
+      seen.add(label);
+      return true;
+    }).slice(0, 4);
+  }, [displaySalons]);
+
+  useEffect(() => {
+    if (!displaySalons.length) return;
+    if (!selectedPackageSalonId || !displaySalons.some((salon) => salon._id === selectedPackageSalonId)) {
+      setSelectedPackageSalonId(displaySalons[0]._id);
+    }
+  }, [displaySalons, selectedPackageSalonId]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const phone = textValue(formData.get('phone'));
+    const email = textValue(formData.get('email'));
+    const guestCount = Number(textValue(formData.get('guestCount')));
+    const message = textValue(formData.get('message'));
+    const eventDate = textValue(formData.get('eventDate'));
+    const eventType = textValue(formData.get('eventType'));
+    const salonId = textValue(formData.get('salonId'));
+    const selectedSalonForRequest = displaySalons.find((salon) => salon._id === salonId);
+    if (!contactPhonePattern.test(phone)) {
+      setFormState('error');
+      setFormMessage('Ingresá un teléfono válido, con 6 a 24 caracteres.');
+      return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFormState('error');
+      setFormMessage('Ingresá un email válido o dejá el campo vacío.');
+      return;
+    }
+    if (!Number.isInteger(guestCount) || guestCount < contactGuestMin || guestCount > contactGuestMax) {
+      setFormState('error');
+      setFormMessage(`La cantidad de personas debe ser un número entre ${contactGuestMin} y ${contactGuestMax}.`);
+      return;
+    }
+    if (!isFutureIsoDate(eventDate)) {
+      setFormState('error');
+      setFormMessage('La fecha tentativa debe ser posterior a hoy.');
+      return;
+    }
+    if (wordCount(message) > contactMessageMaxWords) {
+      setFormState('error');
+      setFormMessage(`El mensaje no puede superar ${contactMessageMaxWords} palabras.`);
+      return;
+    }
     setFormState('loading');
     setFormMessage('');
     try {
-      await api.post('/public/quick-quote', {
-        name: formData.get('name'),
-        phone: formData.get('phone'),
-        email: formData.get('email'),
-        eventType: formData.get('eventType'),
-        eventDate: formData.get('eventDate') || undefined,
-        guestCount: Number(formData.get('guestCount')),
-        salonId: formData.get('salonId'),
-        message: formData.get('message'),
+      const result = await api.post<{ quoteRequestId?: string }>('/public/quick-quote', {
+        name: textValue(formData.get('name')),
+        phone,
+        email,
+        eventType,
+        eventDate: eventDate || undefined,
+        guestCount,
+        salonId,
+        message,
       });
+      if (selectedSalonForRequest && salonWhatsAppNumber(selectedSalonForRequest)) {
+        const whatsappUrl = waLink(salonWhatsAppNumber(selectedSalonForRequest), quoteRequestManagerMessage({
+          quoteRequestId: result.quoteRequestId,
+          salon: selectedSalonForRequest,
+          name: textValue(formData.get('name')),
+          phone,
+          email,
+          eventType,
+          eventDate,
+          guestCount,
+          message,
+        }));
+        window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      }
       form.reset();
       setSelectedSalonId('');
       setFormState('success');
@@ -320,15 +498,25 @@ export default function Home() {
   return <main className="min-h-screen bg-[#050505] text-white">
     <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/65 backdrop-blur-xl">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 md:px-8">
-        <button type="button" onClick={() => scrollTo('inicio')} className="shrink-0" aria-label="Ir al inicio"><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" priority /></button>
-        <nav className="hidden items-center gap-9 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-200 md:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="transition hover:text-[#e8c77a]">{label}</button>)}</nav>
-        <div className="hidden items-center gap-3 md:flex"><button type="button" onClick={() => scrollTo('contacto')} className="rounded-lg bg-[#d8b56d] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(216,181,109,.22)] transition hover:bg-[#efcf85]">Solicitá presupuesto</button></div>
-        <button type="button" onClick={() => setMobileOpen(true)} className="grid h-10 w-10 place-items-center rounded-lg border border-white/15 md:hidden" aria-label="Abrir menú"><Menu className="h-5 w-5" /></button>
+        <button type="button" onClick={() => scrollTo('inicio')} className="group inline-flex shrink-0 items-center rounded-xl px-1 py-1 transition hover:opacity-85" aria-label="Ir al inicio">
+          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={132} height={56} className="h-11 w-auto object-contain brightness-110 contrast-125 drop-shadow-[0_8px_18px_rgba(0,0,0,.45)]" priority />
+        </button>
+        <nav className="hidden items-center gap-8 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-200 lg:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="transition hover:text-[#f1f5f9]">{label}</button>)}</nav>
+        <div className="hidden items-center gap-3 lg:flex"><Link href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 text-zinc-400 transition hover:border-[#c8cdd3]/45 hover:bg-white/[0.04] hover:text-white"><LogIn className="h-4.5 w-4.5" /></Link><button type="button" onClick={() => scrollTo('contacto')} className="rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(229,231,235,.18)] transition hover:bg-[#e5e7eb]">Solicitá presupuesto</button></div>
+        <button type="button" onClick={() => setMobileOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/[0.04] text-white lg:hidden" aria-label="Abrir menú"><Menu className="h-5 w-5" /></button>
       </div>
-      {mobileOpen ? <div className="fixed inset-0 z-50 bg-black/95 p-5 md:hidden">
-        <div className="flex items-center justify-between"><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={130} height={56} className="h-12 w-auto object-contain" /><button type="button" onClick={() => setMobileOpen(false)} className="grid h-10 w-10 place-items-center rounded-lg border border-white/15" aria-label="Cerrar menú"><X className="h-5 w-5" /></button></div>
-        <nav className="mt-10 grid gap-3">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); scrollTo(id); }} className="rounded-xl border border-white/10 px-4 py-4 text-left text-sm uppercase tracking-[0.2em]">{label}</button>)}</nav>
-      </div> : null}
+      {mobileOpen ? <Portal><div className="fixed inset-0 z-[100] overflow-y-auto bg-[#050505] px-5 py-5 lg:hidden">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(200,205,211,.12),transparent_36%),linear-gradient(180deg,rgba(255,255,255,.04),transparent_42%)]" />
+        <div className="relative flex items-center justify-between border-b border-white/10 pb-5">
+          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={136} height={58} className="h-12 w-auto object-contain brightness-110 contrast-125" />
+          <button type="button" onClick={() => setMobileOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/[0.03] text-white" aria-label="Cerrar menú"><X className="h-5 w-5" /></button>
+        </div>
+        <nav className="relative mt-8 grid gap-2">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo(id), 0); }} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-zinc-100 transition hover:border-[#c8cdd3]/50"><span>{label}</span><ArrowRight className="h-4 w-4 text-[#c8cdd3]" /></button>)}</nav>
+        <div className="relative mt-8 grid gap-3">
+          <button type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo('contacto'), 0); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#c8cdd3] px-5 py-4 text-sm font-semibold text-black">Solicitá presupuesto <ArrowRight className="h-4 w-4" /></button>
+          <Link href="/admin/login" onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center rounded-xl border border-white/10 px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Ingresar al backoffice</Link>
+        </div>
+      </div></Portal> : null}
     </header>
 
     <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-20">
@@ -336,93 +524,128 @@ export default function Home() {
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(5,5,5,1),rgba(5,5,5,.08)_38%,rgba(5,5,5,.64))]" />
       <div className="relative mx-auto grid min-h-[calc(92vh-5rem)] max-w-7xl content-center px-5 py-16 md:px-8">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#e8c77a]">M&M Eventos</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#f1f5f9]">M&M Eventos</p>
           <h1 className="mt-5 text-5xl font-semibold leading-[0.96] tracking-tight text-white md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre imaginaste'}</h1>
           <p className="mt-6 max-w-xl text-base leading-7 text-zinc-200 md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</p>
-          <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => scrollTo('contacto')} className="inline-flex items-center gap-2 rounded-lg bg-[#d8b56d] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#efcf85]">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></button><button type="button" onClick={() => scrollTo('salones')} className="inline-flex items-center gap-2 rounded-lg border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-[#d8b56d] hover:text-[#e8c77a]">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></button></div>
-          <div className="mt-7 flex flex-wrap gap-2">{(locations.length ? locations : ['San Carlos', 'Villa Elisa', 'La Plata']).map((item) => <span key={item} className="inline-flex items-center gap-2 rounded-full border border-[#d8b56d]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur"><MapPin className="h-3.5 w-3.5 text-[#e8c77a]" />{item}</span>)}</div>
+          <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => scrollTo('contacto')} className="inline-flex items-center gap-2 rounded-lg bg-[#c8cdd3] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></button><button type="button" onClick={() => scrollTo('salones')} className="inline-flex items-center gap-2 rounded-lg border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></button></div>
+          <div className="mt-7 flex flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="inline-flex items-center gap-2 rounded-full border border-[#c8cdd3]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 text-[#f1f5f9]" />{heroLocationForSalon(salon)}</button>)}</div>
         </motion.div>
       </div>
     </section>
 
     <section id="salones" className="mx-auto max-w-7xl px-5 py-14 md:px-8">
       <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones reales publicados desde backoffice, con ubicación, capacidad, imágenes y paquetes activos." />
-      <div className="grid gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <article key={salon._id} className="group overflow-hidden rounded-2xl border border-[#d8b56d]/25 bg-[#10100f] shadow-2xl shadow-black/30">
-        <div className="relative h-56 overflow-hidden"><img src={imageForSalon(salon)} alt={titleForSalon(salon)} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></div>
-        <div className="p-5"><h3 className="text-xl font-semibold">{titleForSalon(salon)}</h3><div className="mt-3 flex flex-wrap gap-3 text-xs text-zinc-300"><span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-[#d8b56d]" />{locationForSalon(salon)}</span><span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5 text-[#d8b56d]" />{capacityForSalon(salon)}</span></div><p className="mt-3 min-h-12 text-sm leading-6 text-zinc-400">{descriptionForSalon(salon)}</p><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#d8b56d]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#d8b56d] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#efcf85]">Pedir presupuesto</button></div></div>
+      <div className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <article key={salon._id} className="group flex h-full min-h-[470px] flex-col overflow-hidden rounded-2xl border border-[#c8cdd3]/25 bg-[#10100f] shadow-2xl shadow-black/30">
+        <div className="relative h-56 shrink-0 overflow-hidden"><img src={imageForSalon(salon)} alt={titleForSalon(salon)} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></div>
+        <div className="flex flex-1 flex-col p-5"><h3 className="truncate text-xl font-semibold" title={titleForSalon(salon)}>{titleForSalon(salon)}</h3><div className="mt-3 grid min-h-9 grid-cols-2 gap-3 text-xs text-zinc-300"><span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#c8cdd3]" /><span className="truncate" title={locationForSalon(salon)}>{heroLocationForSalon(salon)}</span></span><span className="inline-flex min-w-0 items-center gap-1"><Users className="h-3.5 w-3.5 shrink-0 text-[#c8cdd3]" /><span className="truncate" title={capacityForSalon(salon)}>{capacityForSalon(salon)}</span></span></div><p className="mt-3 line-clamp-2 min-h-12 text-sm leading-6 text-zinc-400">{descriptionForSalon(salon)}</p><div className="mt-auto grid grid-cols-2 gap-2 pt-5"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#c8cdd3]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#c8cdd3] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto</button></div></div>
       </article>)}</div>
     </section>
 
-    <section className="border-y border-[#d8b56d]/15 bg-[#0b0b0a] px-5 py-8 md:px-8">
-      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <div key={step} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4"><span className="text-2xl font-semibold text-[#d8b56d]">{index + 1}</span><div><h3 className="font-semibold">{step}</h3><p className="text-xs leading-5 text-zinc-500">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div></div>)}</div>
+    <section className="border-y border-[#c8cdd3]/15 bg-[#0b0b0c] px-5 py-8 md:px-8">
+      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <div key={step} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4"><span className="text-2xl font-semibold text-[#c8cdd3]">{index + 1}</span><div><h3 className="font-semibold">{step}</h3><p className="text-xs leading-5 text-zinc-500">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div></div>)}</div>
     </section>
 
     <section id="paquetes" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
-      <SectionTitle eyebrow="Paquetes para celebrar" title="Propuestas comerciales claras" subtitle="Valores publicados desde paquetes y reglas comerciales del backoffice." />
-      <div className="grid gap-5 lg:grid-cols-3">{packages.slice(0, 3).map((item, index) => <article key={`${item._id}-${index}`} className={`rounded-2xl border p-6 ${index === 1 ? 'border-[#d8b56d] bg-[#14110b]' : 'border-[#d8b56d]/35 bg-[#0f0f0e]'}`}>
-        <div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-semibold uppercase tracking-[0.12em]">{item.name}</h3><p className="mt-1 text-xs text-zinc-500">{item.salonName || 'M&M Eventos'}</p></div><span className="rounded-md bg-[#d8b56d] px-2 py-1 text-[10px] font-bold uppercase text-black">{item.badgeLabel || ['Más elegido', 'Premium', 'Exclusivo'][index]}</span></div>
-        <p className="mt-6 text-sm text-zinc-400">Desde</p><p className="text-3xl font-semibold text-[#e8c77a]">{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs text-zinc-400">por persona</span></p>
-        <ul className="mt-5 space-y-2 text-sm text-zinc-300">{(item.includedServices ?? []).slice(0, 6).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#d8b56d]" />{service}</li>)}</ul>
-        {item.promotionText || item.giftText ? <p className="mt-4 rounded-lg border border-[#d8b56d]/20 bg-[#d8b56d]/10 p-3 text-sm text-[#f3dca2]">{item.promotionText || item.giftText}</p> : null}
-        <button type="button" onClick={() => scrollTo('contacto')} className="mt-6 w-full rounded-lg border border-[#d8b56d]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#d8b56d] hover:text-black">Ver detalles</button>
-      </article>)}</div>
+      <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, configurados desde el backoffice." />
+      <div className="mb-6 flex flex-wrap justify-center gap-2">{displaySalons.map((salon) => {
+        const active = selectedPackageSalon?._id === salon._id;
+        return <button key={salon._id} type="button" onClick={() => setSelectedPackageSalonId(salon._id)} className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${active ? 'border-[#c8cdd3] bg-[#c8cdd3] text-black' : 'border-white/15 bg-white/[0.03] text-zinc-300 hover:border-[#c8cdd3]/70 hover:text-white'}`}>{titleForSalon(salon)}</button>;
+      })}</div>
+      {selectedPackageSalon ? <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#c8cdd3]/20 bg-white/[0.03] p-5 md:flex-row md:items-center md:justify-between">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#c8cdd3]">Salón seleccionado</p><h3 className="mt-2 text-2xl font-semibold">{titleForSalon(selectedPackageSalon)}</h3><p className="mt-1 text-sm text-zinc-400">{heroLocationForSalon(selectedPackageSalon)} · {capacityForSalon(selectedPackageSalon)}</p></div>
+        <button type="button" onClick={() => setSelectedSalon(selectedPackageSalon)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">Ver salón <ArrowRight className="h-4 w-4" /></button>
+      </div> : null}
+      {selectedPackageCards.length ? <div className="grid items-stretch gap-5 lg:grid-cols-3">{selectedPackageCards.map((item, index) => {
+        const accent = accentFor(index + 2);
+        return <article key={`${selectedPackageSalon?._id || 'paquete'}-${item._id}-${index}`} className={`flex min-h-[430px] flex-col rounded-2xl border p-6 transition hover:-translate-y-1 ${accent.card}`}>
+        <span className={`mb-5 block h-1.5 w-14 rounded-full ${accent.line}`} />
+        <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className={`truncate text-xl font-semibold uppercase tracking-[0.12em] ${accent.text}`} title={item.name}>{item.name}</h3><p className="mt-1 text-xs text-zinc-500">{selectedPackageSalon ? titleForSalon(selectedPackageSalon) : item.salonName || 'M&M Eventos'}</p></div><span className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${accent.badge}`}>{item.badgeLabel || ['Más elegido', 'Premium', 'Exclusivo'][index]}</span></div>
+        <p className="mt-6 text-sm text-zinc-400">Desde</p><p className={`text-3xl font-semibold ${accent.text}`}>{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs text-zinc-400">por persona</span></p>
+        <ul className="mt-5 space-y-2 text-sm text-zinc-300">{(item.includedServices ?? []).slice(0, 6).map((service) => <li key={service} className="flex gap-2"><Check className={`mt-0.5 h-4 w-4 shrink-0 ${accent.text}`} />{service}</li>)}</ul>
+        {item.promotionText || item.giftText ? <p className={`mt-4 rounded-lg border p-3 text-sm ${accent.badge}`}>{item.promotionText || item.giftText}</p> : null}
+        <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2">
+          {selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), packageWaMessage(selectedPackageSalon, item))} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Me interesa <ExternalLink className="h-4 w-4" /></a> : null}
+          <button type="button" onClick={() => selectedPackageSalon ? setSelectedSalon(selectedPackageSalon) : scrollTo('contacto')} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
+        </div>
+      </article>;
+      })}</div> : <div className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</div>}
     </section>
 
     <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
       <SectionTitle eyebrow="Tipos de eventos" title="Celebraciones que sabemos resolver" />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">{eventTypes.slice(0, 6).map((item) => <div key={item.title} className="rounded-xl border border-[#d8b56d]/25 bg-white/[0.03] p-4 text-center"><IconBadge name={item.icon} /><h3 className="mt-3 text-sm font-semibold uppercase tracking-[0.08em]">{item.title}</h3></div>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">{eventTypes.slice(0, 6).map((item, index) => {
+        const accent = accentFor(index);
+        return <div key={item.title} className={`group rounded-xl border p-4 text-center transition hover:-translate-y-1 ${accent.card}`}><IconBadge name={eventTypeIconName(item, index)} tone={accent.icon} /><h3 className={`mt-3 text-sm font-semibold uppercase tracking-[0.08em] ${accent.text}`}>{item.title}</h3></div>;
+      })}</div>
     </section>
 
-    <section className="border-y border-white/10 bg-[#0b0b0a] px-5 py-16 md:px-8">
-      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><div><p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#d8b56d]">Servicios incluidos</p><h2 className="mt-3 text-3xl font-semibold md:text-4xl">Todo lo que necesitás, nosotros lo hacemos.</h2></div><div className="grid gap-4 sm:grid-cols-2">{serviceBlocks.slice(0, 8).map((item) => <div key={item.title} className="flex gap-3"><IconBadge name={item.icon} /><div><h3 className="font-semibold">{item.title}</h3><p className="mt-1 text-sm leading-5 text-zinc-400">{item.description}</p></div></div>)}</div></div>
+    <section className="border-y border-white/10 bg-[#0b0b0c] px-5 py-16 md:px-8">
+      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><div><p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]">Servicios incluidos</p><h2 className="mt-3 text-3xl font-semibold md:text-4xl">Todo lo que necesitás, nosotros lo hacemos.</h2></div><div className="grid gap-4 sm:grid-cols-2">{serviceBlocks.slice(0, 8).map((item, index) => {
+        const accent = accentFor(index + 1);
+        return <div key={item.title} className={`flex gap-3 rounded-xl border p-3 transition hover:-translate-y-0.5 ${accent.card}`}><IconBadge name={item.icon} tone={accent.icon} /><div><h3 className={`font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-1 text-sm leading-5 text-zinc-400">{item.description}</p></div></div>;
+      })}</div></div>
     </section>
 
     <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
       <SectionTitle eyebrow="Promociones y beneficios" title="Motivos para reservar hoy" />
-      <div className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item) => <article key={item._id || item.title} className="group overflow-hidden rounded-xl border border-[#d8b56d]/25 bg-[#10100f] p-5 transition hover:-translate-y-1 hover:border-[#d8b56d]">{item.imageUrl ? <img src={item.imageUrl} alt={item.title || 'Promoción M&M'} className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" /> : <IconBadge name={item.icon || 'Gift'} />}<h3 className="mt-4 font-semibold">{item.title}</h3><p className="mt-2 text-sm leading-5 text-zinc-400">{item.description || item.subtitle}</p>{item.badgeText ? <span className="mt-4 inline-block rounded-full bg-[#d8b56d]/15 px-3 py-1 text-xs text-[#e8c77a]">{item.badgeText}</span> : null}</article>)}</div>
+      <div className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item, index) => {
+        const accent = accentFor(index + 2);
+        return <article key={item._id || item.title} className={`group overflow-hidden rounded-xl border p-5 transition hover:-translate-y-1 ${accent.card}`}><span className={`mb-4 block h-1.5 w-12 rounded-full ${accent.line}`} />{item.imageUrl ? <img src={item.imageUrl} alt={item.title || 'Promoción M&M'} className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" /> : <IconBadge name={item.icon || 'Gift'} tone={accent.icon} />}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-2 text-sm leading-5 text-zinc-400">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}</article>;
+      })}</div>
     </section>
 
-    <section id="galeria" className="border-y border-white/10 bg-[#0b0b0a] px-5 py-16 md:px-8">
-      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería protagonista" subtitle="Momentos únicos que perduran para toda la vida" /><div className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <button key={item._id || item.imageUrl || index} type="button" aria-label={item.altText || item.title || 'Momento M&M'} className={`group relative overflow-hidden rounded-xl border border-[#d8b56d]/20 bg-[#14110b] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${item.imageUrl || fallbackGallery[index % fallbackGallery.length]})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition group-hover:opacity-100">{item.title}</span></button>)}</div></div>
+    <section id="galeria" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-16 md:px-8">
+      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería protagonista" subtitle="Momentos únicos que perduran para toda la vida" /><div className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <button key={item._id || item.imageUrl || index} type="button" aria-label={item.altText || item.title || 'Momento M&M'} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${item.imageUrl || fallbackGallery[index % fallbackGallery.length]})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition group-hover:opacity-100">{item.title}</span></button>)}</div></div>
     </section>
 
     <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
       <SectionTitle eyebrow="Testimonios" title="Lo que dicen quienes ya celebraron" />
-      <div className="grid gap-4 md:grid-cols-3">{(landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }]).slice(0, 3).map((item) => <blockquote key={item._id || item.customerName} className="rounded-xl border border-white/10 bg-white/[0.03] p-5"><p className="text-sm leading-6 text-zinc-300">“{item.quote}”</p><footer className="mt-5 flex items-center justify-between"><div><p className="font-semibold">{item.customerName}</p><p className="text-xs text-zinc-500">{item.eventType}</p></div><span className="flex text-[#d8b56d]">{Array.from({ length: item.rating || 5 }).map((_, index) => <Star key={index} className="h-3.5 w-3.5 fill-current" />)}</span></footer></blockquote>)}</div>
+      <div className="grid gap-4 md:grid-cols-3">{(landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }]).slice(0, 3).map((item, index) => {
+        const accent = accentFor(index);
+        return <blockquote key={item._id || item.customerName} className={`rounded-xl border p-5 ${accent.card}`}><span className={`mb-5 block h-1 w-10 rounded-full ${accent.line}`} /><p className="text-sm leading-6 text-zinc-300">“{item.quote}”</p><footer className="mt-5 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-xs text-zinc-500">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, index) => <Star key={index} className="h-3.5 w-3.5 fill-current" />)}</span></footer></blockquote>;
+      })}</div>
     </section>
 
-    <section id="faq" className="border-y border-white/10 bg-[#0b0b0a] px-5 py-16 md:px-8">
-      <div className="mx-auto max-w-5xl"><SectionTitle eyebrow="Preguntas frecuentes" title="Respuestas rápidas antes de consultar" /><div className="grid gap-3 md:grid-cols-2">{faqs.slice(0, 8).map((item) => <details key={item._id || item.question} className="group rounded-xl border border-white/10 bg-black/25 p-4"><summary className="cursor-pointer list-none text-sm font-semibold text-white">{item.question}</summary><p className="mt-3 text-sm leading-6 text-zinc-400">{item.answer}</p></details>)}</div></div>
+    <section id="faq" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-16 md:px-8">
+      <div className="mx-auto max-w-5xl"><SectionTitle eyebrow="Preguntas frecuentes" title="Respuestas rápidas antes de consultar" /><div className="grid gap-3 md:grid-cols-2">{faqs.slice(0, 8).map((item, index) => {
+        return <details key={item._id || item.question || index} className="group rounded-xl border border-white/10 bg-white/[0.025] p-4 transition hover:border-[#c8cdd3]/45">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-white">
+            <span>{item.question}</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400 transition group-open:rotate-90 group-open:text-[#c8cdd3]" />
+          </summary>
+          <p className="mt-3 text-sm leading-6 text-zinc-400">{item.answer}</p>
+        </details>;
+      })}</div></div>
     </section>
 
     <section id="contacto" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
-      <div className="overflow-hidden rounded-3xl border border-[#d8b56d]/35 bg-[#0e0d0b] shadow-[0_0_50px_rgba(216,181,109,.12)] lg:grid lg:grid-cols-[0.75fr_1.25fr]">
-        <div className="relative min-h-80 p-8"><img src={gallery[0]?.imageUrl || heroImage} alt="Detalle de evento M&M" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#d8b56d]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><span><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#d8b56d]" />Respuesta rápida</span><span><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#d8b56d]" />Propuesta a medida</span><span><Check className="mx-auto mb-2 h-5 w-5 text-[#d8b56d]" />Sin compromiso</span></div></div></div>
+      <div className="overflow-hidden rounded-3xl border border-[#c8cdd3]/35 bg-[#0f0f10] shadow-[0_0_50px_rgba(229,231,235,.10)] lg:grid lg:grid-cols-[0.75fr_1.25fr]">
+        <div className="relative min-h-80 p-8"><img src={gallery[0]?.imageUrl || heroImage} alt="Detalle de evento M&M" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><span><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Respuesta rápida</span><span><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Propuesta a medida</span><span><Check className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Sin compromiso</span></div></div></div>
         <form onSubmit={submit} className="grid gap-4 p-5 md:grid-cols-2 md:p-8">
           {formMessage ? <p className={`rounded-xl border p-3 text-sm md:col-span-2 ${formState === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-red-400/30 bg-red-400/10 text-red-100'}`}>{formMessage}</p> : null}
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Nombre<input required name="name" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="Tu nombre" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Teléfono<input required name="phone" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="Tu teléfono" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Email<input name="email" type="email" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="tu@email.com" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Tipo de evento<input required name="eventType" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="15 años, casamiento..." /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Fecha tentativa<input name="eventDate" type="date" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Cantidad de personas<input required name="guestCount" type="number" min="1" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="Nº de personas" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => setSelectedSalonId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400 md:col-span-2">Mensaje<textarea name="message" className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#d8b56d]" placeholder="Contanos más detalles de tu evento..." /></label>
-          <button disabled={formState === 'loading'} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#d8b56d] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#efcf85] disabled:opacity-60 md:col-span-2">{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></button>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Nombre<input required name="name" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu nombre" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Teléfono<input required name="phone" type="tel" minLength={6} maxLength={24} pattern="[+()0-9\s-]{6,24}" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu teléfono" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Email<input name="email" type="email" maxLength={120} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="tu@email.com" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Tipo de evento<input required name="eventType" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="15 años, casamiento..." /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Fecha tentativa<input name="eventDate" type="date" min={todayIsoDate()} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Cantidad de personas<input required name="guestCount" type="number" min={contactGuestMin} max={contactGuestMax} step={1} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Nº de personas" /></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => setSelectedSalonId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></label>
+          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400 md:col-span-2">Mensaje<textarea name="message" maxLength={700} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Contanos más detalles de tu evento..." /></label>
+          <button disabled={formState === 'loading'} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] disabled:opacity-60 md:col-span-2">{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></button>
         </form>
       </div>
     </section>
 
     <footer className="border-t border-white/10 bg-[#080808] px-5 py-10 md:px-8">
-      <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-4"><div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-500">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d8b56d]/30 text-[#d8b56d] transition hover:bg-[#d8b56d] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#d8b56d]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#d8b56d]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <span key={salon._id}>{titleForSalon(salon)}</span>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#d8b56d]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || '+54 9 221 123-4567'}</span><span>{settings.contactEmail || 'info@mm-eventos.com.ar'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#d8b56d] hover:text-[#efcf85]">Escribinos por WhatsApp</button></div></div></div>
+      <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-4"><div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-500">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || '+54 9 221 123-4567'}</span><span>{settings.contactEmail || 'info@mm-eventos.com.ar'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div></div>
     </footer>
 
     {activeSocial ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Elegir salón para ${activeSocial.label}`}>
-      <section className="w-full max-w-lg rounded-2xl border border-[#d8b56d]/35 bg-[#0e0d0b] p-5 shadow-2xl">
-        <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#d8b56d]">Contacto por salón</p><h2 className="mt-2 text-2xl font-semibold">Elegí a cuál {activeSocial.label} acceder</h2><p className="mt-2 text-sm text-zinc-400">Cada salón administra su propio canal.</p></div><button type="button" onClick={() => setSocialNetwork(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/15 text-white transition hover:bg-white hover:text-black" aria-label="Cerrar selector"><X className="h-4 w-4" /></button></div>
+      <section className="w-full max-w-lg rounded-2xl border border-[#c8cdd3]/35 bg-[#0f0f10] p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#c8cdd3]">Contacto por salón</p><h2 className="mt-2 text-2xl font-semibold">Elegí a cuál {activeSocial.label} acceder</h2><p className="mt-2 text-sm text-zinc-400">Cada salón administra su propio canal.</p></div><button type="button" onClick={() => setSocialNetwork(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/15 text-white transition hover:bg-white hover:text-black" aria-label="Cerrar selector"><X className="h-4 w-4" /></button></div>
         <div className="mt-5 grid gap-3">{displaySalons.map((salon) => {
-          const href = activeSocial.key === 'whatsapp' ? waLink(salon.whatsapp, settings.whatsappDefaultMessage) : salon[activeSocial.field];
-          return href ? <a key={salon._id} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm transition hover:border-[#d8b56d] hover:bg-[#d8b56d]/10"><span><strong className="block text-white">{titleForSalon(salon)}</strong><span className="text-zinc-500">{locationForSalon(salon)}</span></span><activeSocial.icon className="h-5 w-5 text-[#d8b56d]" /></a> : <div key={salon._id} className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-500"><strong className="block text-zinc-300">{titleForSalon(salon)}</strong>Sin {activeSocial.label} configurado</div>;
+          const href = activeSocial.key === 'whatsapp' ? waLink(salonWhatsAppNumber(salon, settings.whatsappNumber), settings.whatsappDefaultMessage) : salon[activeSocial.field];
+          return href ? <a key={salon._id} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/10"><span><strong className="block text-white">{titleForSalon(salon)}</strong><span className="text-zinc-500">{locationForSalon(salon)}</span></span><activeSocial.icon className="h-5 w-5 text-[#c8cdd3]" /></a> : <div key={salon._id} className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-500"><strong className="block text-zinc-300">{titleForSalon(salon)}</strong>Sin {activeSocial.label} configurado</div>;
         })}</div>
       </section>
     </div> : null}
@@ -430,7 +653,7 @@ export default function Home() {
     <SalonDetailModal key={selectedSalon?._id ?? 'salon-detail'} salon={selectedSalon} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
 
     <button type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>
-    <button type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 right-4 z-30 rounded-lg bg-[#d8b56d] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:right-24">Solicitá tu presupuesto</button>
+    <button type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 right-4 z-30 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:right-24">Solicitá tu presupuesto</button>
     <button type="button" onClick={() => scrollTo('inicio')} aria-label="Volver arriba" className="fixed bottom-4 left-4 z-30 hidden rounded-lg border border-white/20 bg-black/60 p-3 backdrop-blur md:grid"><ChevronUp className="h-4 w-4" /></button>
   </main>;
 }

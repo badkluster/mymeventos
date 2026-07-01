@@ -129,6 +129,19 @@ function cleanBody(body: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(body).map(([key, value]) => [key, value === '' ? undefined : value]));
 }
 
+function updateBody(body: Record<string, unknown>) {
+  const $set: Record<string, unknown> = {};
+  const $unset: Record<string, 1> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (value === '') $unset[key] = 1;
+    else if (value !== undefined) $set[key] = value;
+  }
+  return {
+    ...($set && Object.keys($set).length ? $set : {}),
+    ...(Object.keys($unset).length ? { $unset } : {})
+  };
+}
+
 router.use(requireAuth);
 router.use(requirePermission(Permission.LANDING_READ));
 
@@ -176,7 +189,7 @@ router.patch('/:resource/:id', requirePermission(Permission.LANDING_UPDATE), asy
   return validateRequest(z.object({ body: resource.body.partial(), params: z.object({ resource: z.string(), id: objectId }), query: z.object({}) }))(request, response, next);
 }), asyncHandler(async (request, response) => {
   const resource = resourceFor(request.params.resource);
-  const item = await resource.model.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { ...cleanBody(request.body), updatedBy: request.user!.id }, { new: true });
+  const item = await resource.model.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { ...updateBody(request.body), updatedBy: request.user!.id }, { new: true });
   if (!item) throw new ApiError(404, 'LANDING_ITEM_NOT_FOUND');
   await writeAuditLog(request, 'LANDING_ITEM_UPDATE', resource.entity, item._id.toString());
   return sendSuccess(response, { item });
