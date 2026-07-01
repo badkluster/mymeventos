@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "cd \"$(git rev-parse --show-toplevel)\" && corepack enable && corepack pnpm@10.24.0 install --frozen-lockfile",
-  "buildCommand": "cd \"$(git rev-parse --show-toplevel)\" && corepack pnpm@10.24.0 --filter @mym/api build && corepack pnpm@10.24.0 --filter @mym/web build",
+  "buildCommand": "cd \"$(git rev-parse --show-toplevel)\" && corepack pnpm@10.24.0 --filter @mym/shared build && corepack pnpm@10.24.0 --filter @mym/api build && corepack pnpm@10.24.0 --filter @mym/web build",
   "devCommand": "cd \"$(git rev-parse --show-toplevel)\" && corepack pnpm@10.24.0 dev",
   "outputDirectory": "../web/.next",
   "functions": {
