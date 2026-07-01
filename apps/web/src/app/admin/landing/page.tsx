@@ -2,8 +2,8 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Edit3, Eye, Plus, Trash2 } from 'lucide-react';
+import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Edit3, Eye, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { Button, Input, Modal, PageHeader, Textarea } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
@@ -43,8 +43,41 @@ const emptyForms: Record<ResourceKey, LandingItem> = {
   'event-types': { title: '', description: '', icon: 'Sparkles', imageUrl: '', active: true, displayOrder: 0 },
 };
 
-const settingsFields = ['heroTitle', 'heroSubtitle', 'heroImageUrl', 'heroPrimaryCtaLabel', 'heroSecondaryCtaLabel', 'whatsappNumber', 'whatsappDefaultMessage', 'contactEmail', 'contactPhone', 'instagramUrl', 'facebookUrl', 'tiktokUrl', 'footerText', 'seoTitle', 'seoDescription', 'openGraphImageUrl'];
-const settingsImageFields = new Set(['heroImageUrl', 'openGraphImageUrl']);
+const settingsSections: Array<{
+  title: string;
+  description: string;
+  fields: Array<{ key: string; label: string; helper?: string; type?: 'text' | 'textarea' | 'image'; span?: boolean }>;
+}> = [
+  {
+    title: 'Contenido principal',
+    description: 'Textos y llamadas a la acción que aparecen en la primera pantalla de la landing.',
+    fields: [
+      { key: 'heroTitle', label: 'Título principal' },
+      { key: 'heroSubtitle', label: 'Texto de apoyo', type: 'textarea', span: true },
+      { key: 'heroPrimaryCtaLabel', label: 'Botón principal' },
+      { key: 'heroSecondaryCtaLabel', label: 'Botón secundario' },
+      { key: 'heroImageUrl', label: 'Imagen principal', helper: 'Imagen de fondo del hero.', type: 'image', span: true },
+    ],
+  },
+  {
+    title: 'Contacto general',
+    description: 'Datos institucionales del pie de página. Las redes y WhatsApp se configuran por salón.',
+    fields: [
+      { key: 'contactPhone', label: 'Teléfono general' },
+      { key: 'contactEmail', label: 'Email general' },
+      { key: 'footerText', label: 'Texto del pie de página', type: 'textarea', span: true },
+    ],
+  },
+  {
+    title: 'SEO',
+    description: 'Información para buscadores y vista previa al compartir la web.',
+    fields: [
+      { key: 'seoTitle', label: 'Título SEO' },
+      { key: 'seoDescription', label: 'Descripción SEO', type: 'textarea', span: true },
+      { key: 'openGraphImageUrl', label: 'Imagen para compartir', helper: 'Se usa al compartir el sitio en redes o mensajería.', type: 'image', span: true },
+    ],
+  },
+];
 
 function itemTitle(item: LandingItem, tab: ResourceKey) {
   if (tab === 'faqs') return String(item.question ?? '');
@@ -91,6 +124,8 @@ export default function LandingAdminPage() {
   const [settings, setSettings] = useState<LandingSettings>({});
   const [editing, setEditing] = useState<LandingItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const currentItems = useMemo(() => {
     if (activeTab === 'settings') return [];
@@ -149,6 +184,36 @@ export default function LandingAdminPage() {
     }
   }
 
+  async function reorderGallery(targetItem: LandingItem) {
+    if (!draggingId || !targetItem._id || draggingId === targetItem._id) return;
+    const fromIndex = data.gallery.findIndex((item) => item._id === draggingId);
+    const toIndex = data.gallery.findIndex((item) => item._id === targetItem._id);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const nextGallery = [...data.gallery];
+    const [moved] = nextGallery.splice(fromIndex, 1);
+    nextGallery.splice(toIndex, 0, moved);
+    const orderedGallery = nextGallery.map((item, index) => ({ ...item, displayOrder: index + 1 }));
+    setData((current) => ({ ...current, gallery: orderedGallery }));
+    setDraggingId(null);
+    setSavingOrder(true);
+    try {
+      await Promise.all(orderedGallery.filter((item) => item._id).map((item) => api.patch(`/landing/gallery/${item._id}`, { displayOrder: item.displayOrder })));
+      showToast({ message: 'Orden de galería actualizado.', variant: 'success' });
+    } catch (error) {
+      await load();
+      showToast({ message: error instanceof Error ? error.message : 'No se pudo guardar el orden.', variant: 'error' });
+    } finally {
+      setSavingOrder(false);
+    }
+  }
+
+  function startGalleryDrag(event: DragEvent<HTMLButtonElement>, item: LandingItem) {
+    if (!item._id) return;
+    setDraggingId(item._id);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', item._id);
+  }
+
   function renderFields(tab: ResourceKey, form: LandingItem) {
     const set = (key: string, value: string | number | boolean) => setEditing((current) => ({ ...(current ?? emptyForms[tab]), [key]: value }));
     if (tab === 'faqs') return <>
@@ -169,6 +234,7 @@ export default function LandingAdminPage() {
       <div className="md:col-span-2"><ImageUploadField label="Imagen de galería" required value={String(form.imageUrl ?? '')} onChange={(value) => set('imageUrl', value)} /></div>
       <Input placeholder="Alt text" value={String(form.altText ?? '')} onChange={(event) => set('altText', event.target.value)} />
       <Input placeholder="Categoría" value={String(form.category ?? '')} onChange={(event) => set('category', event.target.value)} />
+      <Input type="number" placeholder="Orden" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
       <Textarea placeholder="Descripción" value={String(form.description ?? '')} onChange={(event) => set('description', event.target.value)} />
     </>;
     return <>
@@ -196,17 +262,46 @@ export default function LandingAdminPage() {
       {tabs.map((tab) => <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className={`rounded-xl px-3 py-2 text-sm font-medium transition ${activeTab === tab.key ? 'bg-zinc-950 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}>{tab.label}</button>)}
     </div>
 
-    {activeTab === 'settings' ? <form onSubmit={saveSettings} className="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm md:grid-cols-2">
-      {settingsFields.map((field) => settingsImageFields.has(field)
-        ? <div key={field} className="md:col-span-2"><ImageUploadField label={field} value={String(settings[field] ?? '')} onChange={(value) => setSettings((current) => ({ ...current, [field]: value }))} /></div>
-        : <label key={field} className={field.includes('Subtitle') || field.includes('footer') || field.includes('Description') ? 'md:col-span-2' : ''}><span className="text-xs font-medium uppercase text-zinc-500">{field}</span>{field.includes('Subtitle') || field.includes('footer') || field.includes('Description') || field.includes('Message') ? <Textarea value={String(settings[field] ?? '')} onChange={(event) => setSettings((current) => ({ ...current, [field]: event.target.value }))} /> : <Input value={String(settings[field] ?? '')} onChange={(event) => setSettings((current) => ({ ...current, [field]: event.target.value }))} />}</label>)}
-      <div className="md:col-span-2"><Button>Guardar hero/configuración</Button></div>
+    {activeTab === 'settings' ? <form onSubmit={saveSettings} className="space-y-5">
+      {settingsSections.map((section) => <section key={section.title} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold text-zinc-950">{section.title}</h2>
+          <p className="mt-1 text-sm text-zinc-500">{section.description}</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {section.fields.map((field) => {
+            const value = String(settings[field.key] ?? '');
+            const className = field.span ? 'md:col-span-2' : '';
+            if (field.type === 'image') return <div key={field.key} className={className}><ImageUploadField label={field.label} value={value} onChange={(nextValue) => setSettings((current) => ({ ...current, [field.key]: nextValue }))} />{field.helper ? <p className="mt-2 text-xs text-zinc-500">{field.helper}</p> : null}</div>;
+            return <label key={field.key} className={className}>
+              <span className="text-sm font-medium text-zinc-800">{field.label}</span>
+              {field.helper ? <span className="mt-1 block text-xs text-zinc-500">{field.helper}</span> : null}
+              {field.type === 'textarea'
+                ? <Textarea className="mt-1.5" value={value} onChange={(event) => setSettings((current) => ({ ...current, [field.key]: event.target.value }))} />
+                : <Input className="mt-1.5" value={value} onChange={(event) => setSettings((current) => ({ ...current, [field.key]: event.target.value }))} />}
+            </label>;
+          })}
+        </div>
+      </section>)}
+      <div className="flex justify-end rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><Button>Guardar cambios</Button></div>
     </form> : <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500">{loading ? 'Cargando...' : `${currentItems.length} elementos`}</p>
+        <p className="text-sm text-zinc-500">{loading ? 'Cargando...' : savingOrder ? 'Guardando orden...' : `${currentItems.length} elementos`}</p>
         <Button onClick={() => setEditing({ ...emptyForms[activeTab] })}><Plus className="mr-2 h-4 w-4" />Nuevo</Button>
       </div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead className="text-left text-xs uppercase text-zinc-400"><tr><th className="py-2">Título</th><th>Estado</th><th>Orden</th><th>Detalle</th><th></th></tr></thead><tbody className="divide-y divide-zinc-100">{currentItems.map((item) => <tr key={item._id}><td className="py-3 font-medium text-zinc-950">{itemTitle(item, activeTab)}</td><td>{item.active === false ? 'Inactivo' : 'Activo'}</td><td>{item.displayOrder ?? 0}</td><td className="max-w-md truncate text-zinc-500">{String(item.description ?? item.answer ?? item.quote ?? '')}</td><td className="flex justify-end gap-1 py-2"><TableActionButton icon={Edit3} label="Editar" onClick={() => setEditing(item)} /><TableActionButton icon={Trash2} label="Eliminar" onClick={() => void removeItem(item)} /></td></tr>)}</tbody></table></div>
+      {activeTab === 'gallery' ? <p className="mb-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-600">Arrastrá las filas desde el ícono para cambiar el orden de la galería pública.</p> : null}
+      <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead className="text-left text-xs uppercase text-zinc-400"><tr>{activeTab === 'gallery' ? <th className="w-12 py-2">Mover</th> : null}<th className="py-2">Título</th><th>Estado</th><th>Orden</th><th>Detalle</th><th></th></tr></thead><tbody className="divide-y divide-zinc-100">{currentItems.map((item) => {
+        const isDragging = draggingId === item._id;
+        return <tr
+          key={item._id}
+          onDragOver={activeTab === 'gallery' ? (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } : undefined}
+          onDrop={activeTab === 'gallery' ? (event) => { event.preventDefault(); void reorderGallery(item); } : undefined}
+          className={isDragging ? 'bg-amber-50 opacity-60' : activeTab === 'gallery' ? 'transition hover:bg-zinc-50' : undefined}
+        >
+          {activeTab === 'gallery' ? <td className="py-3"><button type="button" draggable={Boolean(item._id)} onDragStart={(event) => startGalleryDrag(event, item)} onDragEnd={() => setDraggingId(null)} aria-label={`Mover ${itemTitle(item, activeTab)}`} className="grid h-9 w-9 cursor-grab place-items-center rounded-lg border border-zinc-200 text-zinc-400 transition hover:border-zinc-400 hover:text-zinc-900 active:cursor-grabbing"><GripVertical className="h-4 w-4" /></button></td> : null}
+          <td className="py-3 font-medium text-zinc-950">{itemTitle(item, activeTab)}</td><td>{item.active === false ? 'Inactivo' : 'Activo'}</td><td>{item.displayOrder ?? 0}</td><td className="max-w-md truncate text-zinc-500">{String(item.description ?? item.answer ?? item.quote ?? '')}</td><td className="flex justify-end gap-1 py-2"><TableActionButton icon={Edit3} label="Editar" onClick={() => setEditing(item)} /><TableActionButton icon={Trash2} label="Eliminar" onClick={() => void removeItem(item)} /></td>
+        </tr>;
+      })}</tbody></table></div>
     </div>}
 
     <Modal open={Boolean(editing && activeTab !== 'settings')} title={activeTab !== 'settings' ? `Editar ${resourceTitles[activeTab]}` : ''} onClose={() => setEditing(null)}>

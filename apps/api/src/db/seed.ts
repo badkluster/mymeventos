@@ -11,22 +11,73 @@ import { buildUserFullName, normalizeUserEmail, normalizeUserPhone } from '../mo
 
 const packageTemplates = [
   {
-    name: 'Magic Night', durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 85000, discountPercentage: 20, finalPricePerPerson: 68000, depositAmount: 500000,
+    name: 'Magic Night', salonNames: ['Villa Elisa', 'La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 85000, discountPercentage: 20, finalPricePerPerson: 68000, depositAmount: 500000,
     giftText: 'Stand de glitter', promotionText: '20% de descuento durante junio.', paymentTerms: 'Congelar valor abonando seña y resto en cuotas fijas.',
     menuSections: [{ title: 'Recepción', items: ['Sándwiches de bondiola y pollo', 'Triples de jamón y queso'] }, { title: 'Plato principal', items: ['Colita de cuadril con papas rústicas', 'Milanesa con papas para niños y adolescentes'] }, { title: 'Final', items: ['Brownie con helado', 'Mesa dulce y show de pizzas'] }],
     includedServices: ['Bebidas durante toda la noche', 'Barra de tragos', 'Organización y staff', 'Vajilla y mantelería', 'DJ, sonido e iluminación', 'Proyector y espacio climatizado']
   },
   {
-    name: 'Platinum Night', durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 90000, discountPercentage: 20, finalPricePerPerson: 72000, depositAmount: 500000,
+    name: 'Platinum Night', salonNames: ['Villa Elisa', 'La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 90000, discountPercentage: 20, finalPricePerPerson: 72000, depositAmount: 500000,
     giftText: 'Fotografía para el evento', promotionText: '20% de descuento durante junio.', paymentTerms: 'Congelar valor abonando seña y resto en cuotas fijas.',
     menuSections: [{ title: 'Recepción', items: ['Empanadas, brusquetas y fiambres'] }, { title: 'Plato principal', items: ['Vacío con papas fritas', 'Hamburguesas con cheddar para niños y adolescentes'] }, { title: 'Final', items: ['Bombón Suizo', 'Mesa dulce y show de pizzas'] }],
     includedServices: ['Salón con mesas y sillas', 'Vajilla y mantelería', 'Bebidas para el evento', 'Barra de tragos', 'Sectores de fotos, torta y mesa principal', 'Staff, DJ, proyector y espacio climatizado']
   },
   {
-    name: 'Exclusive Night', durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 95000, discountPercentage: 20, finalPricePerPerson: 76000, depositAmount: 500000,
+    name: 'Exclusive Night', salonNames: ['Villa Elisa', 'La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 95000, discountPercentage: 20, finalPricePerPerson: 76000, depositAmount: 500000,
     giftText: '10% adicional si se abona el total.', promotionText: '20% de descuento durante junio.', paymentTerms: 'Congelar valor abonando seña y resto en cuotas sin interés.',
     menuSections: [{ title: 'Recepción', items: ['Empanadas, triples y brusquetas'] }, { title: 'Plato principal', items: ['Vacío con papas fritas', 'Milanesas con jamón y queso para niños y adolescentes'] }, { title: 'Final', items: ['Bombón Suizo', 'Tartas, cascada de chocolate, show de panchos y desayuno'] }],
     includedServices: ['Bebidas a mesa', 'Barra para recepción y tandas de baile', 'Vajilla y mantelería', 'DJ, sonido e iluminación', 'Proyector', 'Sectores de fotos, torta y mesa principal', 'Staff y espacio climatizado']
+  },
+  {
+    name: 'Banquete Premium', salonNames: ['San Carlos'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 75000, discountPercentage: 0, finalPricePerPerson: 75000, depositAmount: 550000,
+    promotionText: 'Valor para 80 personas: $6.000.000. Se congela el valor con seña.', paymentTerms: 'Seña de $550.000 para congelar el valor y saldo en cuotas.',
+    notes: 'Paquete vigente informado el 01/07/2026 para el salón San Carlos.',
+    menuSections: [
+      { title: 'Recepción', items: ['Triples de jamón y queso', 'Sándwich de pollo con tomate y lechuga', 'Sándwich de bondiola a la cerveza'] },
+      { title: 'Entrada en isla', items: ['Cazuelas de ravioles al verdeo', 'Cazuelas de ñoquis con salsa boloñesa', 'Cazuelas de albóndigas con salsa fileto'] },
+      { title: 'Entrada a mesa', items: ['Empanadas de jamón y queso', 'Tacos de carne con lechuga y tomate'] },
+      { title: 'Plato principal', items: ['Adultos: colita de cuadril rellena con salsa de jamón y queso, acompañada con papas rústicas', 'Niños y adolescentes: milanesas con jamón y queso, acompañadas con papas fritas'] },
+      { title: 'Postre y mesa dulce', items: ['Bombón suizo', 'Variedad de tortas y tartas a elección del cliente', 'Show de pernil de cerdo'] },
+      { title: 'Bebida a mesa', items: ['Coca-Cola / Sprite', 'Vino tinto Callia o similar', 'Cerveza Quilmes o similar', 'Hielo', 'Agua mineral'] }
+    ],
+    includedServices: ['Vajilla completa', 'Manteles blancos o negros', 'Staff de servicio: maître, mozos, jefe de cocina y ayudante de cocina']
+  },
+  {
+    name: 'Luxury Night', salonNames: ['San Carlos'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 80000, discountPercentage: 0, finalPricePerPerson: 80000, depositAmount: 600000,
+    promotionText: 'Valor para 80 personas: $6.400.000. Promo de salón y catering por 8 hs.', paymentTerms: 'Seña de $600.000 para congelar el valor y saldo en cuotas sin interés.',
+    notes: 'Servicio nocturno de 21:00 a 05:00 informado el 01/07/2026 para el salón San Carlos.',
+    menuSections: [
+      { title: 'Recepción', items: ['Bandejeo de fernet con Coca-Cola, Campari y Gancia', 'Brusquetas de queso crema, roquefort y nuez / cheddar y jamón crudo', 'Triples de jamón y queso', 'Pinches de mini salchichas en hojaldre con dips de mostaza'] },
+      { title: 'Entrada caliente', items: ['Cazuelas de albóndigas con salsa fileto', 'Sacramentos de jamón y queso', 'Brochettes de bondiola y verduras con dips de mayonesa y perejil'] },
+      { title: 'Entrada fría', items: ['Bandejas de fiambres con pan de campo', 'Sándwich de pollo a la provenzal'] },
+      { title: 'Plato principal', items: ['Adultos: vacío con ensalada rusa', 'Niños y adolescentes: hamburguesas con doble cheddar acompañadas de papas fritas'] },
+      { title: 'Postre y mesa dulce', items: ['Brownie con helado y salsa de chocolate', 'Variedad de tartas a elección del cliente', 'Cascada de chocolate con frutas de estación'] },
+      { title: 'Súper fin de fiesta', items: ['Show de pizzas con 5 sabores a elección del cliente', 'Desayuno: café con medialunas'] },
+      { title: 'Bebidas y barra', items: ['Cerveza Quilmes o similar', 'Coca-Cola y Sprite', 'Hielo', 'Barra de 00:00 a 05:00: fernet con Coca-Cola, Gancia con Sprite y gin con tónica'] }
+    ],
+    includedServices: ['Vajilla completa', 'Manteles blancos o negros, caminos y servilletas acorde a la temática', 'Staff: maître, mozos, jefe de cocina, ayudante de cocina y bartender', 'DJ: sonido e iluminación', 'Mesas y sillas', 'Cocina completa', 'Sector de mesa principal: mesa de estilo, candelabros, sillón trono y 2 sillas Tiffany', 'Sector de fotos: shimmer wall y diván', 'Sector de torta: aro redondo con luces LED, medio semicírculo de globos y 3 mesitas']
+  },
+  {
+    name: 'Promo Salón Full', salonNames: ['San Carlos'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 25000, discountPercentage: 0, finalPricePerPerson: 25000, depositAmount: 600000,
+    giftText: '20% de descuento abonando el total del servicio.', promotionText: 'Valor fijo para eventos 2027: $2.500.000 hasta 100 personas.', paymentTerms: 'Seña de $600.000 para congelar el valor.',
+    notes: 'La plataforma calcula por persona; este paquete representa el valor fijo de $2.500.000 dividido por 100 personas. Usar presupuesto manual si la cantidad cambia y se desea mantener precio fijo.',
+    menuSections: [{ title: 'Servicio de salón', items: ['Paquete de salón sin catering incluido'] }],
+    includedServices: ['Salón con capacidad para 100 personas', 'Mesas redondas y sillas', 'DJ con sonido e iluminación para la pista', 'Iluminación perimetral del salón acorde al color temático', 'Proyector para pasar videos', 'Cocina completa: cocina con horno, freezer, heladera y anafe', 'Mantelería básica: manteles blancos o negros, caminos y servilletas a elección del cliente', 'Vajilla completa', 'Sector de torta: mesitas, fondo con globos y luces', 'Sector mesa principal: mesa de estilo, sillón trono y 2 sillas Tiffany', 'Sector living: sillón diván y shimmer', 'Staff de servicio: maître, encargado de cocina y mozos']
+  },
+  {
+    name: 'Promo Infantil Sonrisitas', salonNames: ['San Carlos'], durationHours: 3, startTime: '13:00', endTime: '16:00', pricePerPerson: 6500, discountPercentage: 0, finalPricePerPerson: 6500, depositAmount: 0,
+    promotionText: 'Valor fijo: $650.000 hasta 100 personas.', paymentTerms: 'Consultar condiciones de reserva vigentes.',
+    giftText: 'Piñata de regalo.',
+    notes: 'Turnos disponibles: 13:00 a 16:00 o 17:00 a 20:00. La plataforma calcula por persona; este paquete representa $650.000 dividido por 100 personas.',
+    menuSections: [{ title: 'Menú para niños', items: ['Empanadas de jamón y queso', 'Pizzetas de muzzarella', 'Chips de jamón y queso', 'Snacks'] }],
+    includedServices: ['Servicio por 3 horas', 'Cocina completa: anafe, horno, freezer y heladera', 'Vajilla completa', 'Manteles blancos o negros', 'Servilletas de tela haciendo juego con la temática', 'Staff de servicio: mozos, ayudante de cocina y coordinador de evento', 'Inflable', 'Sonido', 'Tarjeta digital', 'Regalo exclusivo: piñata', 'Hasta 100 personas']
+  },
+  {
+    name: 'Promo Infantil Risitas', salonNames: ['San Carlos'], durationHours: 3, startTime: '13:00', endTime: '16:00', pricePerPerson: 4000, discountPercentage: 0, finalPricePerPerson: 4000, depositAmount: 100000,
+    promotionText: 'Valor fijo: $400.000 hasta 100 personas.', paymentTerms: 'Seña de $100.000 para congelar el valor.',
+    notes: 'Turnos disponibles: 13:00 a 16:00 o 17:00 a 20:00. La plataforma calcula por persona; este paquete representa $400.000 dividido por 100 personas.',
+    menuSections: [{ title: 'Servicio infantil', items: ['Paquete infantil sin menú incluido'] }],
+    includedServices: ['Servicio por 3 horas', 'Cocina completa: horno, anafe, freezer y heladera', 'Vajilla completa', 'Manteles negros', 'Staff de servicio: coordinador de evento, mozos y ayudante de cocina', 'Inflable', 'Sonido', 'Tarjeta digital', 'Hasta 100 personas']
   }
 ];
 
@@ -34,7 +85,7 @@ const salonSeeds = [
   {
     name: 'San Carlos',
     slug: 'san-carlos',
-    address: 'Av. 44 y 137, San Carlos',
+    address: 'Calle 144 N°664 e/ 45 y 46, San Carlos',
     city: 'San Carlos',
     locality: 'San Carlos',
     province: 'Buenos Aires',
@@ -52,8 +103,8 @@ const salonSeeds = [
     visibleOnWebsite: true,
     displayOrder: 1,
     minCapacity: 50,
-    maxCapacity: 180,
-    recommendedCapacity: 120,
+    maxCapacity: 100,
+    recommendedCapacity: 80,
     allowedEventTypes: ['birthday', 'wedding', 'fifteen', 'graduates', 'corporate', 'baptism_communion', 'other'],
     defaultStartTime: '21:00',
     defaultEndTime: '05:00',
@@ -69,8 +120,8 @@ const salonSeeds = [
     commercialNotes: 'Priorizar cierres con seña dentro de los 7 días. Consultar disponibilidad antes de confirmar promociones.',
     seoTitle: 'Salón de eventos en San Carlos | M&M Eventos',
     seoDescription: 'M&M San Carlos: salón para cumpleaños, casamientos, 15 años y eventos empresariales en La Plata.',
-    locationText: 'San Carlos, La Plata',
-    mapUrl: 'https://maps.google.com/?q=San%20Carlos%20La%20Plata',
+    locationText: 'Calle 144 N°664 e/ 45 y 46, San Carlos, La Plata',
+    mapUrl: 'https://maps.app.goo.gl/x6khjwSbRpPkdnL8A?g_st=ic',
     extraServices: [
       { name: 'Fotografía', description: 'Cobertura fotográfica del evento.', basePrice: 180000, active: true, includedByDefault: false, publicVisible: true },
       { name: 'Stand de glitter', description: 'Stand de glitter para invitados.', basePrice: 120000, active: true, includedByDefault: false, publicVisible: true },
@@ -427,17 +478,22 @@ async function seed(): Promise<void> {
   let updatedPackages = 0;
   let createdRules = 0;
   for (const template of packageTemplates) {
+    const { salonNames, ...templateData } = template;
+    const targetSalons = salonNames?.length ? salonNames.map((name) => salonsByName.get(name)).filter(Boolean) : salons;
+    if (targetSalons.length !== (salonNames?.length ?? salons.length)) throw new Error(`No se encontraron todos los salones para el paquete ${template.name}.`);
+    const targetSalonIds = targetSalons.map((salon) => salon!._id);
     const existing = await PackageTemplate.findOne({ name: { $regex: `^${template.name}$`, $options: 'i' } });
     const packageTemplate = existing
-      ? await PackageTemplate.findByIdAndUpdate(existing._id, { $set: { name: template.name, active: true, isGlobal: true, salonIds: salons.map((salon) => salon._id), deletedAt: null } }, { new: true })
-      : await PackageTemplate.create({ ...template, active: true, isGlobal: true, salonIds: salons.map((salon) => salon._id) });
+      ? await PackageTemplate.findByIdAndUpdate(existing._id, { $set: { ...templateData, active: true, isGlobal: !salonNames?.length, salonIds: targetSalonIds, deletedAt: null } }, { new: true })
+      : await PackageTemplate.create({ ...templateData, active: true, isGlobal: !salonNames?.length, salonIds: targetSalonIds });
     if (!packageTemplate) throw new Error(`No se pudo preparar el paquete ${template.name}.`);
     existing ? updatedPackages++ : createdPackages++;
-    for (const salon of salons) {
+    for (const salon of targetSalons) {
+      if (!salon) continue;
       const existingRule = await VenuePackageRule.exists({ packageTemplateId: packageTemplate._id, salonId: salon._id });
       await VenuePackageRule.findOneAndUpdate(
         { packageTemplateId: packageTemplate._id, salonId: salon._id },
-        { $set: { active: true, deletedAt: null }, $setOnInsert: { ...template, packageTemplateId: packageTemplate._id, salonId: salon._id } },
+        { $set: { ...templateData, active: true, deletedAt: null }, $setOnInsert: { packageTemplateId: packageTemplate._id, salonId: salon._id } },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
       if (!existingRule) createdRules++;

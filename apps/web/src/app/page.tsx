@@ -15,7 +15,7 @@ type Media = { url: string; secureUrl?: string; title?: string; altText?: string
 type ExtraService = { _id?: string; name: string; description?: string; basePrice?: number; includedByDefault?: boolean };
 type SalonManager = { _id?: string; firstName?: string; lastName?: string; fullName?: string; phone?: string; email?: string };
 type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; province?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; manager?: SalonManager; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
-type Package = { _id: string; name: string; salonId?: string; salonName?: string; durationHours?: number; pricePerPerson?: number; finalPricePerPerson?: number; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
+type Package = { _id: string; name: string; salonId?: string; salonName?: string; description?: string; notes?: string; durationHours?: number; startTime?: string; endTime?: string; pricePerPerson?: number; finalPricePerPerson?: number; depositAmount?: number; paymentTerms?: string; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
 type LandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
 type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
 type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[] };
@@ -214,6 +214,75 @@ function IconBadge({ name, tone = 'border-[#c8cdd3]/30 bg-[#c8cdd3]/10 text-[#f1
   return <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${tone}`}><Icon className="h-5 w-5" /></span>;
 }
 
+function PackageFullDetail({ item, accentText = 'text-[#c8cdd3]' }: { item: Package; accentText?: string }) {
+  const [open, setOpen] = useState(false);
+  const hasMenu = Boolean(item.menuSections?.length);
+  const hasServices = Boolean(item.includedServices?.length);
+  const hasCommercial = Boolean(item.depositAmount || item.paymentTerms || item.promotionText || item.giftText || item.notes || item.description);
+  if (!hasMenu && !hasServices && !hasCommercial) return null;
+
+  return <>
+    <button type="button" onClick={() => setOpen(true)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/20 px-4 py-2.5 text-sm font-semibold text-zinc-100 transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3] hover:text-black">
+      Ver detalle completo <ExternalLink className="h-4 w-4" />
+    </button>
+    {open ? <PackageDetailModal item={item} accentText={accentText} onClose={() => setOpen(false)} /> : null}
+  </>;
+}
+
+function PackageDetailModal({ item, accentText, onClose }: { item: Package; accentText: string; onClose: () => void }) {
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, []);
+
+  return <Portal>
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-md md:px-8" role="dialog" aria-modal="true" aria-label={`Detalle de ${item.name}`} onClick={onClose}>
+      <article className="mx-auto max-w-5xl overflow-hidden rounded-3xl border border-[#c8cdd3]/30 bg-[#080807] text-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="relative border-b border-white/10 bg-[#10100f] p-5 md:p-7">
+          <button type="button" onClick={onClose} aria-label="Cerrar detalle del paquete" className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-black/45 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
+          <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Detalle del paquete</p>
+          <h2 className="mt-3 max-w-3xl text-3xl font-semibold md:text-5xl">{item.name}</h2>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Valor</p><p className={`mt-1 text-xl font-semibold ${accentText}`}>{money(item.finalPricePerPerson || item.pricePerPerson)}</p><p className="text-xs text-zinc-500">por persona</p></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Duración</p><p className="mt-1 font-semibold">{item.durationHours ? `${item.durationHours} hs` : 'A coordinar'}</p>{item.startTime && item.endTime ? <p className="text-xs text-zinc-500">{item.startTime} a {item.endTime}</p> : null}</div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Seña</p><p className="mt-1 font-semibold">{item.depositAmount ? money(item.depositAmount) : 'A consultar'}</p></div>
+          </div>
+          {item.description ? <p className="mt-5 max-w-4xl text-sm leading-7 text-zinc-300 md:text-base">{item.description}</p> : null}
+        </header>
+
+        <div className="grid gap-5 p-5 md:p-7 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h3 className="text-xl font-semibold">Menú</h3>
+            {item.menuSections?.length ? <div className="mt-5 space-y-5">{item.menuSections.map((section, index) => <div key={`${section.title ?? section.name ?? 'menu'}-${index}`} className="border-b border-white/10 pb-4 last:border-b-0 last:pb-0">
+              <p className={`font-semibold ${accentText}`}>{section.title ?? section.name ?? 'Sección'}</p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-6 text-zinc-300">{section.items.map((menuItem) => <li key={menuItem}>{menuItem}</li>)}</ul>
+            </div>)}</div> : <p className="mt-4 text-sm text-zinc-500">No hay menú cargado para este paquete.</p>}
+          </section>
+
+          <aside className="space-y-5">
+            <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <h3 className="text-xl font-semibold">Servicios incluidos</h3>
+              {item.includedServices?.length ? <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-300">{item.includedServices.map((service) => <li key={service} className="flex gap-2"><Check className={`mt-1 h-4 w-4 shrink-0 ${accentText}`} />{service}</li>)}</ul> : <p className="mt-4 text-sm text-zinc-500">No hay servicios cargados.</p>}
+            </section>
+
+            <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <h3 className="text-xl font-semibold">Condiciones comerciales</h3>
+              <div className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
+                {item.paymentTerms ? <p><span className={accentText}>Pago:</span> {item.paymentTerms}</p> : null}
+                {item.promotionText ? <p><span className={accentText}>Promoción:</span> {item.promotionText}</p> : null}
+                {item.giftText ? <p><span className={accentText}>Beneficio:</span> {item.giftText}</p> : null}
+                {item.notes ? <p className="border-t border-white/10 pt-3 text-zinc-400">{item.notes}</p> : null}
+                {!item.paymentTerms && !item.promotionText && !item.giftText && !item.notes ? <p className="text-zinc-500">Condiciones a confirmar con el salón.</p> : null}
+              </div>
+            </section>
+          </aside>
+        </div>
+      </article>
+    </div>
+  </Portal>;
+}
+
 function eventTypeIconName(item: LandingItem, index: number): keyof typeof iconMap {
   const title = (item.title || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   return eventTypeIcons[title] || (item.icon as keyof typeof iconMap) || fallbackEventTypes[index % fallbackEventTypes.length].icon;
@@ -222,6 +291,74 @@ function eventTypeIconName(item: LandingItem, index: number): keyof typeof iconM
 function Portal({ children }: { children: React.ReactNode }) {
   if (typeof document === 'undefined') return null;
   return createPortal(children, document.body);
+}
+
+function LandingLoader() {
+  return <main className="grid min-h-screen place-items-center overflow-hidden bg-[#050505] px-5 text-white">
+    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(200,205,211,.11),transparent_32%,rgba(255,255,255,.045)_56%,transparent_78%)]" />
+    <section className="relative w-full max-w-xl text-center">
+      <div className="mx-auto grid h-28 w-28 place-items-center rounded-3xl border border-[#c8cdd3]/30 bg-white/[0.035] shadow-[0_0_48px_rgba(200,205,211,.16)]">
+        <motion.div className="absolute h-28 w-28 rounded-3xl border border-[#c8cdd3]/20" animate={{ rotate: 360 }} transition={{ duration: 5, repeat: Infinity, ease: 'linear' }} />
+        <motion.div className="absolute h-20 w-20 rounded-2xl border border-[#f1f5f9]/30" animate={{ rotate: -360 }} transition={{ duration: 3.5, repeat: Infinity, ease: 'linear' }} />
+        <Image src={brandAssets.icon512} alt="M&M Eventos" width={54} height={54} className="relative h-14 w-14 rounded-2xl object-contain" priority />
+      </div>
+      <motion.p className="mt-8 text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>Preparando tu experiencia</motion.p>
+      <motion.h1 className="mt-4 text-3xl font-semibold md:text-5xl" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.08 }}>M&M Eventos</motion.h1>
+      <div className="mx-auto mt-8 grid max-w-sm gap-3">
+        {['Salones', 'Paquetes', 'Galería'].map((label, index) => <motion.div key={label} className="h-3 overflow-hidden rounded-full border border-white/10 bg-white/[0.045]" initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35, delay: 0.16 + index * 0.08 }}>
+          <motion.span className="block h-full rounded-full bg-[#c8cdd3]" initial={{ x: '-100%' }} animate={{ x: '100%' }} transition={{ duration: 1.25, repeat: Infinity, ease: 'easeInOut', delay: index * 0.16 }} />
+        </motion.div>)}
+      </div>
+      <p className="mt-6 text-sm text-zinc-500">Cargando salones, combos y disponibilidad comercial.</p>
+    </section>
+  </main>;
+}
+
+function galleryImageSource(item: LandingItem, index: number) {
+  return item.imageUrl || fallbackGallery[index % fallbackGallery.length];
+}
+
+function GalleryLightbox({ items, index, onClose, onSelect }: { items: LandingItem[]; index: number | null; onClose: () => void; onSelect: (index: number) => void }) {
+  useEffect(() => {
+    if (index === null) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [index]);
+
+  if (index === null || !items.length) return null;
+
+  const activeIndex = Math.min(index, items.length - 1);
+  const active = items[activeIndex];
+  const activeSource = galleryImageSource(active, activeIndex);
+  const change = (direction: 1 | -1) => onSelect((activeIndex + direction + items.length) % items.length);
+
+  return <Portal>
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/92 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Galería M&M ampliada" onClick={onClose}>
+      <button type="button" onClick={onClose} aria-label="Cerrar galería" className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
+      {items.length > 1 ? <button type="button" onClick={(event) => { event.stopPropagation(); change(-1); }} aria-label="Imagen anterior" className="absolute left-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronLeft className="h-6 w-6" /></button> : null}
+      <section className="w-full max-w-6xl" onClick={(event) => event.stopPropagation()}>
+        <div className="overflow-hidden rounded-3xl border border-[#c8cdd3]/25 bg-[#080807] shadow-2xl">
+          <img src={activeSource} alt={active.altText || active.title || 'Momento M&M'} className="mx-auto max-h-[74vh] w-full object-contain" />
+          <div className="border-t border-white/10 bg-black/45 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#c8cdd3]">Momento {activeIndex + 1} de {items.length}</p>
+                {active.title ? <h3 className="mt-1 text-lg font-semibold text-white">{active.title}</h3> : null}
+              </div>
+              {active.category ? <span className="rounded-full border border-white/15 px-3 py-1 text-xs text-zinc-300">{active.category}</span> : null}
+            </div>
+            {active.description ? <p className="mt-2 text-sm leading-6 text-zinc-400">{active.description}</p> : null}
+          </div>
+        </div>
+        <div className="mt-4 flex max-h-20 flex-wrap items-center justify-center gap-2 overflow-y-auto">{items.map((item, itemIndex) => {
+          const source = galleryImageSource(item, itemIndex);
+          return <button key={`${source}-gallery-lightbox-${itemIndex}`} type="button" onClick={() => onSelect(itemIndex)} aria-label={`Ver imagen ${itemIndex + 1}`} className={`h-14 w-20 overflow-hidden rounded-lg border transition ${itemIndex === activeIndex ? 'border-[#c8cdd3]' : 'border-white/15 hover:border-[#c8cdd3]/70'}`}><img src={source} alt={item.altText || item.title || `Momento M&M ${itemIndex + 1}`} className="h-full w-full object-cover" /></button>;
+        })}</div>
+      </section>
+      {items.length > 1 ? <button type="button" onClick={(event) => { event.stopPropagation(); change(1); }} aria-label="Imagen siguiente" className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronRight className="h-6 w-6" /></button> : null}
+    </div>
+  </Portal>;
 }
 
 function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | null; onClose: () => void; onRequestQuote: (salon: Salon) => void }) {
@@ -286,11 +423,13 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
 
             {packages.length ? <section>
               <h3 className="text-2xl font-semibold">Paquetes disponibles</h3>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">{packages.slice(0, 4).map((item) => <article key={item._id} className="flex min-h-[260px] flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="mt-4 grid gap-3 md:grid-cols-2">{packages.map((item) => <article key={item._id} className="flex min-h-[260px] flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="flex items-start justify-between gap-3"><h4 className="font-semibold">{item.name}</h4>{item.badgeLabel ? <span className="rounded-md bg-[#c8cdd3] px-2 py-1 text-[10px] font-bold uppercase text-black">{item.badgeLabel}</span> : null}</div>
                 <p className="mt-3 text-xl font-semibold text-[#f1f5f9]">{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs font-normal text-zinc-500">por persona</span></p>
+                {item.description ? <p className="mt-3 text-sm leading-6 text-zinc-400">{item.description}</p> : null}
                 {item.includedServices?.length ? <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">{item.includedServices.slice(0, 4).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c8cdd3]" />{service}</li>)}</ul> : null}
                 {item.promotionText || item.giftText ? <p className="mt-3 text-sm text-[#d4d4d8]">{item.promotionText || item.giftText}</p> : null}
+                <PackageFullDetail item={item} />
                 <div className="mt-auto pt-5"><a href={waLink(salonWhatsAppNumber(salon), packageWaMessage(salon, item))} target="_blank" rel="noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#25d366]/35 px-4 py-2.5 text-sm font-semibold text-[#d8ffe5] transition hover:border-[#25d366] hover:bg-[#25d366] hover:text-black">Me interesa <ExternalLink className="h-4 w-4" /></a></div>
               </article>)}</div>
             </section> : null}
@@ -362,13 +501,20 @@ export default function Home() {
   const [selectedSalonId, setSelectedSalonId] = useState('');
   const [selectedPackageSalonId, setSelectedPackageSalonId] = useState('');
   const [selectedSalon, setSelectedSalon] = useState<Salon | null>(null);
+  const [galleryLightboxIndex, setGalleryLightboxIndex] = useState<number | null>(null);
   const [socialNetwork, setSocialNetwork] = useState<'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [formMessage, setFormMessage] = useState('');
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [landingLoading, setLandingLoading] = useState(true);
 
   useEffect(() => {
-    void api.get<LandingPayload>('/public/landing').then(setLanding).catch(() => undefined);
+    let mounted = true;
+    void api.get<LandingPayload>('/public/landing')
+      .then((response) => { if (mounted) setLanding(response); })
+      .catch(() => undefined)
+      .finally(() => { if (mounted) setLandingLoading(false); });
+    return () => { mounted = false; };
   }, []);
 
   const settings = landing.settings ?? {};
@@ -378,15 +524,15 @@ export default function Home() {
   const eventTypes = landing.eventTypes.length ? landing.eventTypes : fallbackEventTypes;
   const faqs: LandingItem[] = landing.faqs.length ? landing.faqs : fallbackFaqs;
   const gallery: LandingItem[] = landing.gallery.length ? landing.gallery.map((item) => ({ ...item, imageUrl: item.imageUrl ? cloudinaryImageUrl(item.imageUrl) : item.imageUrl })) : fallbackGallery.map((imageUrl, index) => ({ title: `Momento M&M ${index + 1}`, imageUrl, category: 'Momentos' }));
-  const packages = useMemo(() => landing.packages.length ? landing.packages : salons.flatMap((salon) => (salon.packages ?? []).map((item) => ({ ...item, salonName: titleForSalon(salon) }))).slice(0, 3), [landing.packages, salons]);
+  const packages = useMemo(() => landing.packages.length ? landing.packages : salons.flatMap((salon) => (salon.packages ?? []).map((item) => ({ ...item, salonName: titleForSalon(salon) }))), [landing.packages, salons]);
   const displaySalons = useMemo(() => salons.length ? salons : [...new Map(packages.map((item, index) => [String(item.salonName || `M&M Eventos ${index + 1}`), { _id: String(item.salonId || item._id || index), name: String(item.salonName || 'M&M Eventos'), publicTitle: String(item.salonName || 'M&M Eventos'), publicShortDescription: 'Un espacio M&M preparado para celebrar con servicio integral.', locationText: 'La Plata', minCapacity: 60, maxCapacity: 250, heroImageUrl: fallbackGallery[index % fallbackGallery.length] } as Salon])).values()], [salons, packages]);
   const selectedPackageSalon = useMemo(() => displaySalons.find((salon) => salon._id === selectedPackageSalonId) ?? displaySalons[0], [displaySalons, selectedPackageSalonId]);
   const selectedPackageCards = useMemo(() => {
-    if (!selectedPackageSalon) return packages.slice(0, 3);
+    if (!selectedPackageSalon) return packages;
     const salonPackages = selectedPackageSalon.packages?.length
       ? selectedPackageSalon.packages
       : packages.filter((item) => item.salonId === selectedPackageSalon._id || item.salonName === titleForSalon(selectedPackageSalon));
-    return salonPackages.slice(0, 3);
+    return salonPackages;
   }, [packages, selectedPackageSalon]);
   const heroSalons = useMemo(() => {
     const seen = new Set<string>();
@@ -489,6 +635,8 @@ export default function Home() {
   ];
   const activeSocial = socialOptions.find((item) => item.key === socialNetwork);
 
+  if (landingLoading) return <LandingLoader />;
+
   return <main className="min-h-screen bg-[#050505] text-white">
     <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/75 backdrop-blur-xl">
       <div className="mx-auto flex h-24 max-w-7xl items-center justify-between px-5 md:px-8">
@@ -519,7 +667,7 @@ export default function Home() {
       <div className="relative mx-auto grid min-h-[calc(92vh-6rem)] max-w-7xl content-center px-5 py-16 md:px-8">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#f1f5f9]">M&M Eventos</p>
-          <h1 className="mt-5 text-5xl font-semibold leading-[0.96] tracking-tight text-white md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre imaginaste'}</h1>
+          <h1 className="mt-5 text-5xl font-semibold leading-[0.96] tracking-tight text-white md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</h1>
           <p className="mt-6 max-w-xl text-base leading-7 text-zinc-200 md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</p>
           <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => scrollTo('contacto')} className="inline-flex items-center gap-2 rounded-lg bg-[#c8cdd3] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></button><button type="button" onClick={() => scrollTo('salones')} className="inline-flex items-center gap-2 rounded-lg border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></button></div>
           <div className="mt-7 flex flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="inline-flex items-center gap-2 rounded-full border border-[#c8cdd3]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 text-[#f1f5f9]" />{heroLocationForSalon(salon)}</button>)}</div>
@@ -528,7 +676,7 @@ export default function Home() {
     </section>
 
     <section id="salones" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
-      <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones reales publicados desde backoffice, con ubicación, capacidad, imágenes y paquetes activos." />
+      <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones totalmente equipados, listos para llevar adelante tu evento" />
       <div className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <article key={salon._id} className="group flex h-full min-h-[470px] flex-col overflow-hidden rounded-2xl border border-[#c8cdd3]/25 bg-[#10100f] shadow-2xl shadow-black/30">
         <div className="relative h-56 shrink-0 overflow-hidden"><img src={imageForSalon(salon)} alt={titleForSalon(salon)} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></div>
         <div className="flex flex-1 flex-col p-5"><h3 className="truncate text-xl font-semibold" title={titleForSalon(salon)}>{titleForSalon(salon)}</h3><div className="mt-3 grid min-h-9 grid-cols-2 gap-3 text-sm text-zinc-200"><span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={locationForSalon(salon)}>{heroLocationForSalon(salon)}</span></span><span className="inline-flex min-w-0 items-center gap-1"><Users className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={capacityForSalon(salon)}>{capacityForSalon(salon)}</span></span></div><p className="mt-4 line-clamp-2 min-h-12 text-base leading-7 text-zinc-300">{descriptionForSalon(salon)}</p><div className="mt-auto grid grid-cols-2 gap-2 pt-6"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#c8cdd3]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#c8cdd3] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto</button></div></div>
@@ -555,8 +703,10 @@ export default function Home() {
         <span className={`mb-5 block h-1.5 w-14 rounded-full ${accent.line}`} />
         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className={`truncate text-xl font-semibold uppercase tracking-[0.12em] ${accent.text}`} title={item.name}>{item.name}</h3><p className="mt-1 text-xs text-zinc-500">{selectedPackageSalon ? titleForSalon(selectedPackageSalon) : item.salonName || 'M&M Eventos'}</p></div><span className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${accent.badge}`}>{item.badgeLabel || ['Más elegido', 'Premium', 'Exclusivo'][index]}</span></div>
         <p className="mt-6 text-sm text-zinc-400">Desde</p><p className={`text-3xl font-semibold ${accent.text}`}>{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs text-zinc-400">por persona</span></p>
+        {item.description ? <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-300">{item.description}</p> : null}
         <ul className="mt-5 space-y-2 text-sm text-zinc-300">{(item.includedServices ?? []).slice(0, 6).map((service) => <li key={service} className="flex gap-2"><Check className={`mt-0.5 h-4 w-4 shrink-0 ${accent.text}`} />{service}</li>)}</ul>
         {item.promotionText || item.giftText ? <p className={`mt-4 rounded-lg border p-3 text-sm ${accent.badge}`}>{item.promotionText || item.giftText}</p> : null}
+        <PackageFullDetail item={item} accentText={accent.text} />
         <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2">
           {selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), packageWaMessage(selectedPackageSalon, item))} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Me interesa <ExternalLink className="h-4 w-4" /></a> : null}
           <button type="button" onClick={() => selectedPackageSalon ? setSelectedSalon(selectedPackageSalon) : scrollTo('contacto')} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
@@ -589,7 +739,7 @@ export default function Home() {
     </section>
 
     <section id="galeria" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
-      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería protagonista" subtitle="Momentos únicos que perduran para toda la vida" /><div className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <button key={item._id || item.imageUrl || index} type="button" aria-label={item.altText || item.title || 'Momento M&M'} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${item.imageUrl || fallbackGallery[index % fallbackGallery.length]})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition group-hover:opacity-100">{item.title}</span></button>)}</div></div>
+      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería" subtitle="Momentos únicos que perduran para toda la vida" /><div className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <button key={item._id || item.imageUrl || index} type="button" onClick={() => setGalleryLightboxIndex(index)} aria-label={`Abrir ${item.altText || item.title || 'momento M&M'}`} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${galleryImageSource(item, index)})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition group-hover:opacity-100">{item.title}</span><span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-black/45 text-white opacity-0 backdrop-blur transition group-hover:opacity-100"><Camera className="h-4 w-4" /></span></button>)}</div></div>
     </section>
 
     <section className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
@@ -665,7 +815,7 @@ export default function Home() {
     </section>
 
     <footer className="border-t border-white/10 bg-[#080808] px-5 py-10 md:px-8">
-      <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-4"><div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-500">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || '+54 9 221 123-4567'}</span><span>{settings.contactEmail || 'info@mm-eventos.com.ar'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div></div>
+      <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-4"><div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-500">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || ''}</span><span>{settings.contactEmail || 'info@mm-eventos.com.ar'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div></div>
     </footer>
 
     {activeSocial ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Elegir salón para ${activeSocial.label}`}>
@@ -679,6 +829,7 @@ export default function Home() {
     </div> : null}
 
     <SalonDetailModal key={selectedSalon?._id ?? 'salon-detail'} salon={selectedSalon} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
+    <GalleryLightbox items={gallery} index={galleryLightboxIndex} onClose={() => setGalleryLightboxIndex(null)} onSelect={setGalleryLightboxIndex} />
 
     <button type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>
     <button type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 right-4 z-30 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:right-24">Solicitá tu presupuesto</button>

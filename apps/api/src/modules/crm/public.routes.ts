@@ -123,7 +123,7 @@ router.get('/landing', asyncHandler(async (_request, response) => {
     LandingServiceBlock.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
     LandingEventType.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
   ]);
-  const packages = salons.flatMap((salon: any) => (salon.packages ?? []).map((item: any) => ({ ...item, salonId: salon._id, salonName: salon.publicTitle || salon.name }))).slice(0, 6);
+  const packages = salons.flatMap((salon: any) => (salon.packages ?? []).map((item: any) => ({ ...item, salonId: salon._id, salonName: salon.publicTitle || salon.name })));
   return sendSuccess(response, { settings, salons, packages, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes });
 }));
 

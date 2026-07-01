@@ -11,7 +11,7 @@ const base = {
 
 const landingSettingsSchema = new Schema({
   key: { type: String, default: 'default', unique: true, index: true },
-  heroTitle: { type: String, default: 'Tu evento, en el lugar que siempre imaginaste' },
+  heroTitle: { type: String, default: 'Tu evento, en el lugar que siempre soñaste' },
   heroSubtitle: { type: String, default: 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.' },
   heroImageUrl: String,
   heroPrimaryCtaLabel: { type: String, default: 'Solicitá presupuesto' },
