@@ -4,7 +4,7 @@
   "installCommand": "cd \"$(git rev-parse --show-toplevel)\" && corepack enable && corepack pnpm@10.24.0 install --frozen-lockfile",
   "buildCommand": "cd \"$(git rev-parse --show-toplevel)\" && corepack pnpm@10.24.0 --filter @mym/api build && corepack pnpm@10.24.0 --filter @mym/web build",
   "devCommand": "pnpm dev",
-  "outputDirectory": "../web/.next",
+  "outputDirectory": "apps/web/.next",
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 30,
