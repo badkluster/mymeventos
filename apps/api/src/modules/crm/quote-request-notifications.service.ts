@@ -35,6 +35,15 @@ function escapeHtml(value: unknown): string {
     .replaceAll("'", '&#039;');
 }
 
+function resolveEmailLogoPath(): string | undefined {
+  const candidates = [
+    path.resolve(process.cwd(), 'apps/web/public/brand/mym-logo-dark-on-light.jpg'),
+    path.resolve(process.cwd(), '../web/public/brand/mym-logo-dark-on-light.jpg'),
+    path.resolve(__dirname, '../../../../web/public/brand/mym-logo-dark-on-light.jpg'),
+  ];
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
 function emailTemplate(input: { request: any; salons: string; date: string; actionUrl: string }): string {
   const { request, salons, date, actionUrl } = input;
   const webUrl = env.CORS_ORIGIN.replace(/\/$/, '');
@@ -117,8 +126,8 @@ export async function createQuoteRequestNotifications(input: NotifyInput): Promi
   const message = `${request.contactName} (${request.phone || request.email || 'sin contacto'}) solicitó presupuesto para ${request.eventType || 'un evento'} el ${date}. Salón/es: ${salons}.`;
   const actionUrl = `/admin/quotes/requests/${request._id}`;
   const html = emailTemplate({ request, salons, date, actionUrl });
-  const logoPath = path.resolve(process.cwd(), '../web/public/brand/mym-logo-dark-on-light.jpg');
-  const attachments = existsSync(logoPath) ? [{
+  const logoPath = resolveEmailLogoPath();
+  const attachments = logoPath ? [{
     filename: 'mym-logo-dark-on-light.jpg',
     path: logoPath,
     cid: 'mym-logo-dark-on-light'

@@ -1,4 +1,4 @@
-const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3001/api');
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: { code: string; message: string } };
 export class ApiClientError extends Error { constructor(public code: string, message: string) { super(message); } }
 let refreshPromise: Promise<unknown> | null = null;

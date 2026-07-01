@@ -2,6 +2,7 @@
   "name": "mymeventos-monorepo",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@10.24.0",
   "scripts": {
     "dev": "pnpm -r --parallel run dev",
     "dev:web": "pnpm --filter @mym/web run dev",

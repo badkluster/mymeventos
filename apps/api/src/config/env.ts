@@ -10,7 +10,8 @@ const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   MONGODB_URI: z.string().min(1),
-  CORS_ORIGIN: z.string().url(),
+  CORS_ORIGIN: z.string().url().optional(),
+  VERCEL_URL: z.string().optional(),
   ACCESS_TOKEN_SECRET: z.string().min(32),
   REFRESH_TOKEN_SECRET: z.string().min(32),
   ACCESS_TOKEN_EXPIRES_IN: z.string().default('15m'),
@@ -40,4 +41,7 @@ if (!parsedEnvironment.success) {
   const invalidVariables = parsedEnvironment.error.issues.map((issue) => issue.path.join('.')).join(', ');
   throw new Error(`Configuración de entorno inválida: ${invalidVariables}`);
 }
-export const env: Environment = parsedEnvironment.data;
+export const env: Environment & { CORS_ORIGIN: string } = {
+  ...parsedEnvironment.data,
+  CORS_ORIGIN: parsedEnvironment.data.CORS_ORIGIN ?? (parsedEnvironment.data.VERCEL_URL ? `https://${parsedEnvironment.data.VERCEL_URL}` : 'http://localhost:3000')
+};
