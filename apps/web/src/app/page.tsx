@@ -202,10 +202,10 @@ function normalizeMapQuery(value: string, salon: Salon) {
 }
 
 function SectionTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
-  return <div className="mx-auto mb-8 max-w-3xl text-center">
-    <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]">{eyebrow}</p>
-    <h2 className="mt-3 text-3xl font-semibold text-white md:text-5xl">{title}</h2>
-    {subtitle ? <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">{subtitle}</p> : null}
+  return <div className="mx-auto mb-10 max-w-3xl text-center md:mb-12">
+    <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#dbe1e8]">{eyebrow}</p>
+    <h2 className="mt-4 text-3xl font-semibold text-white md:text-5xl">{title}</h2>
+    {subtitle ? <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-zinc-300 md:text-lg">{subtitle}</p> : null}
   </div>;
 }
 
@@ -398,13 +398,6 @@ export default function Home() {
     }).slice(0, 4);
   }, [displaySalons]);
 
-  useEffect(() => {
-    if (!displaySalons.length) return;
-    if (!selectedPackageSalonId || !displaySalons.some((salon) => salon._id === selectedPackageSalonId)) {
-      setSelectedPackageSalonId(displaySalons[0]._id);
-    }
-  }, [displaySalons, selectedPackageSalonId]);
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -485,6 +478,7 @@ export default function Home() {
     ['Galería', 'galeria'],
     ['FAQ', 'faq'],
     ['Contacto', 'contacto'],
+    ['Ubicaciones', 'ubicaciones'],
   ];
 
   const socialOptions = [
@@ -496,22 +490,22 @@ export default function Home() {
   const activeSocial = socialOptions.find((item) => item.key === socialNetwork);
 
   return <main className="min-h-screen bg-[#050505] text-white">
-    <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/65 backdrop-blur-xl">
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 md:px-8">
+    <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/75 backdrop-blur-xl">
+      <div className="mx-auto flex h-24 max-w-7xl items-center justify-between px-5 md:px-8">
         <button type="button" onClick={() => scrollTo('inicio')} className="group inline-flex shrink-0 items-center rounded-xl px-1 py-1 transition hover:opacity-85" aria-label="Ir al inicio">
-          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={132} height={56} className="h-11 w-auto object-contain brightness-110 contrast-125 drop-shadow-[0_8px_18px_rgba(0,0,0,.45)]" priority />
+          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={174} height={74} className="h-14 w-auto object-contain brightness-110 contrast-125 drop-shadow-[0_8px_18px_rgba(0,0,0,.45)] md:h-16" priority />
         </button>
-        <nav className="hidden items-center gap-8 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-200 lg:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="transition hover:text-[#f1f5f9]">{label}</button>)}</nav>
+        <nav className="hidden items-center gap-6 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100 xl:gap-8 lg:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="group relative pb-1 transition hover:text-[#dbe1e8]"><span>{label}</span><span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></button>)}</nav>
         <div className="hidden items-center gap-3 lg:flex"><Link href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 text-zinc-400 transition hover:border-[#c8cdd3]/45 hover:bg-white/[0.04] hover:text-white"><LogIn className="h-4.5 w-4.5" /></Link><button type="button" onClick={() => scrollTo('contacto')} className="rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(229,231,235,.18)] transition hover:bg-[#e5e7eb]">Solicitá presupuesto</button></div>
         <button type="button" onClick={() => setMobileOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/[0.04] text-white lg:hidden" aria-label="Abrir menú"><Menu className="h-5 w-5" /></button>
       </div>
       {mobileOpen ? <Portal><div className="fixed inset-0 z-[100] overflow-y-auto bg-[#050505] px-5 py-5 lg:hidden">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(200,205,211,.12),transparent_36%),linear-gradient(180deg,rgba(255,255,255,.04),transparent_42%)]" />
         <div className="relative flex items-center justify-between border-b border-white/10 pb-5">
-          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={136} height={58} className="h-12 w-auto object-contain brightness-110 contrast-125" />
+          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={174} height={74} className="h-16 w-auto object-contain brightness-110 contrast-125" />
           <button type="button" onClick={() => setMobileOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/[0.03] text-white" aria-label="Cerrar menú"><X className="h-5 w-5" /></button>
         </div>
-        <nav className="relative mt-8 grid gap-2">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo(id), 0); }} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-zinc-100 transition hover:border-[#c8cdd3]/50"><span>{label}</span><ArrowRight className="h-4 w-4 text-[#c8cdd3]" /></button>)}</nav>
+        <nav className="relative mt-8 grid gap-2">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo(id), 0); }} className="group flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-zinc-100 transition hover:border-[#dbe1e8]/60 hover:text-[#dbe1e8]"><span className="relative pb-1">{label}<span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></span><ArrowRight className="h-4 w-4 text-[#c8cdd3] transition group-hover:text-[#dbe1e8]" /></button>)}</nav>
         <div className="relative mt-8 grid gap-3">
           <button type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo('contacto'), 0); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#c8cdd3] px-5 py-4 text-sm font-semibold text-black">Solicitá presupuesto <ArrowRight className="h-4 w-4" /></button>
           <Link href="/admin/login" onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center rounded-xl border border-white/10 px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Ingresar al backoffice</Link>
@@ -519,10 +513,10 @@ export default function Home() {
       </div></Portal> : null}
     </header>
 
-    <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-20">
+    <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-24">
       <img src={heroImage} alt="Salón M&M preparado para evento" className="absolute inset-0 h-full w-full object-cover" />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(5,5,5,1),rgba(5,5,5,.08)_38%,rgba(5,5,5,.64))]" />
-      <div className="relative mx-auto grid min-h-[calc(92vh-5rem)] max-w-7xl content-center px-5 py-16 md:px-8">
+      <div className="relative mx-auto grid min-h-[calc(92vh-6rem)] max-w-7xl content-center px-5 py-16 md:px-8">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#f1f5f9]">M&M Eventos</p>
           <h1 className="mt-5 text-5xl font-semibold leading-[0.96] tracking-tight text-white md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre imaginaste'}</h1>
@@ -533,19 +527,19 @@ export default function Home() {
       </div>
     </section>
 
-    <section id="salones" className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+    <section id="salones" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones reales publicados desde backoffice, con ubicación, capacidad, imágenes y paquetes activos." />
       <div className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <article key={salon._id} className="group flex h-full min-h-[470px] flex-col overflow-hidden rounded-2xl border border-[#c8cdd3]/25 bg-[#10100f] shadow-2xl shadow-black/30">
         <div className="relative h-56 shrink-0 overflow-hidden"><img src={imageForSalon(salon)} alt={titleForSalon(salon)} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></div>
-        <div className="flex flex-1 flex-col p-5"><h3 className="truncate text-xl font-semibold" title={titleForSalon(salon)}>{titleForSalon(salon)}</h3><div className="mt-3 grid min-h-9 grid-cols-2 gap-3 text-xs text-zinc-300"><span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#c8cdd3]" /><span className="truncate" title={locationForSalon(salon)}>{heroLocationForSalon(salon)}</span></span><span className="inline-flex min-w-0 items-center gap-1"><Users className="h-3.5 w-3.5 shrink-0 text-[#c8cdd3]" /><span className="truncate" title={capacityForSalon(salon)}>{capacityForSalon(salon)}</span></span></div><p className="mt-3 line-clamp-2 min-h-12 text-sm leading-6 text-zinc-400">{descriptionForSalon(salon)}</p><div className="mt-auto grid grid-cols-2 gap-2 pt-5"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#c8cdd3]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#c8cdd3] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto</button></div></div>
+        <div className="flex flex-1 flex-col p-5"><h3 className="truncate text-xl font-semibold" title={titleForSalon(salon)}>{titleForSalon(salon)}</h3><div className="mt-3 grid min-h-9 grid-cols-2 gap-3 text-sm text-zinc-200"><span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={locationForSalon(salon)}>{heroLocationForSalon(salon)}</span></span><span className="inline-flex min-w-0 items-center gap-1"><Users className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={capacityForSalon(salon)}>{capacityForSalon(salon)}</span></span></div><p className="mt-4 line-clamp-2 min-h-12 text-base leading-7 text-zinc-300">{descriptionForSalon(salon)}</p><div className="mt-auto grid grid-cols-2 gap-2 pt-6"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#c8cdd3]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#c8cdd3] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto</button></div></div>
       </article>)}</div>
     </section>
 
-    <section className="border-y border-[#c8cdd3]/15 bg-[#0b0b0c] px-5 py-8 md:px-8">
-      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <div key={step} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4"><span className="text-2xl font-semibold text-[#c8cdd3]">{index + 1}</span><div><h3 className="font-semibold">{step}</h3><p className="text-xs leading-5 text-zinc-500">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div></div>)}</div>
+    <section className="border-y border-[#c8cdd3]/15 bg-[#0b0b0c] px-5 py-12 md:px-8">
+      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <div key={step} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.04] p-5"><span className="text-3xl font-semibold text-[#dbe1e8]">{index + 1}</span><div><h3 className="text-base font-semibold">{step}</h3><p className="mt-1 text-sm leading-6 text-zinc-300">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div></div>)}</div>
     </section>
 
-    <section id="paquetes" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+    <section id="paquetes" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, configurados desde el backoffice." />
       <div className="mb-6 flex flex-wrap justify-center gap-2">{displaySalons.map((salon) => {
         const active = selectedPackageSalon?._id === salon._id;
@@ -571,7 +565,7 @@ export default function Home() {
       })}</div> : <div className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</div>}
     </section>
 
-    <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
+    <section className="mx-auto max-w-7xl px-5 pb-20 md:px-8 md:pb-24">
       <SectionTitle eyebrow="Tipos de eventos" title="Celebraciones que sabemos resolver" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">{eventTypes.slice(0, 6).map((item, index) => {
         const accent = accentFor(index);
@@ -579,46 +573,46 @@ export default function Home() {
       })}</div>
     </section>
 
-    <section className="border-y border-white/10 bg-[#0b0b0c] px-5 py-16 md:px-8">
+    <section className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><div><p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]">Servicios incluidos</p><h2 className="mt-3 text-3xl font-semibold md:text-4xl">Todo lo que necesitás, nosotros lo hacemos.</h2></div><div className="grid gap-4 sm:grid-cols-2">{serviceBlocks.slice(0, 8).map((item, index) => {
         const accent = accentFor(index + 1);
-        return <div key={item.title} className={`flex gap-3 rounded-xl border p-3 transition hover:-translate-y-0.5 ${accent.card}`}><IconBadge name={item.icon} tone={accent.icon} /><div><h3 className={`font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-1 text-sm leading-5 text-zinc-400">{item.description}</p></div></div>;
+        return <div key={item.title} className={`flex gap-4 rounded-xl border p-4 transition hover:-translate-y-0.5 ${accent.card}`}><IconBadge name={item.icon} tone={accent.icon} /><div><h3 className={`font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-2 text-sm leading-6 text-zinc-300">{item.description}</p></div></div>;
       })}</div></div>
     </section>
 
-    <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+    <section className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Promociones y beneficios" title="Motivos para reservar hoy" />
       <div className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item, index) => {
         const accent = accentFor(index + 2);
-        return <article key={item._id || item.title} className={`group overflow-hidden rounded-xl border p-5 transition hover:-translate-y-1 ${accent.card}`}><span className={`mb-4 block h-1.5 w-12 rounded-full ${accent.line}`} />{item.imageUrl ? <img src={item.imageUrl} alt={item.title || 'Promoción M&M'} className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" /> : <IconBadge name={item.icon || 'Gift'} tone={accent.icon} />}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-2 text-sm leading-5 text-zinc-400">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}</article>;
+        return <article key={item._id || item.title} className={`group overflow-hidden rounded-xl border p-5 transition hover:-translate-y-1 ${accent.card}`}><span className={`mb-4 block h-1.5 w-12 rounded-full ${accent.line}`} />{item.imageUrl ? <img src={item.imageUrl} alt={item.title || 'Promoción M&M'} className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" /> : <IconBadge name={item.icon || 'Gift'} tone={accent.icon} />}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}</article>;
       })}</div>
     </section>
 
-    <section id="galeria" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-16 md:px-8">
+    <section id="galeria" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
       <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería protagonista" subtitle="Momentos únicos que perduran para toda la vida" /><div className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <button key={item._id || item.imageUrl || index} type="button" aria-label={item.altText || item.title || 'Momento M&M'} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${item.imageUrl || fallbackGallery[index % fallbackGallery.length]})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition group-hover:opacity-100">{item.title}</span></button>)}</div></div>
     </section>
 
-    <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+    <section className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Testimonios" title="Lo que dicen quienes ya celebraron" />
       <div className="grid gap-4 md:grid-cols-3">{(landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }]).slice(0, 3).map((item, index) => {
         const accent = accentFor(index);
-        return <blockquote key={item._id || item.customerName} className={`rounded-xl border p-5 ${accent.card}`}><span className={`mb-5 block h-1 w-10 rounded-full ${accent.line}`} /><p className="text-sm leading-6 text-zinc-300">“{item.quote}”</p><footer className="mt-5 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-xs text-zinc-500">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, index) => <Star key={index} className="h-3.5 w-3.5 fill-current" />)}</span></footer></blockquote>;
+        return <blockquote key={item._id || item.customerName} className={`rounded-xl border p-6 ${accent.card}`}><span className={`mb-5 block h-1 w-10 rounded-full ${accent.line}`} /><p className="text-base leading-7 text-zinc-200">“{item.quote}”</p><footer className="mt-6 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-sm text-zinc-300">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, index) => <Star key={index} className="h-3.5 w-3.5 fill-current" />)}</span></footer></blockquote>;
       })}</div>
     </section>
 
-    <section id="faq" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-16 md:px-8">
+    <section id="faq" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
       <div className="mx-auto max-w-5xl"><SectionTitle eyebrow="Preguntas frecuentes" title="Respuestas rápidas antes de consultar" /><div className="grid gap-3 md:grid-cols-2">{faqs.slice(0, 8).map((item, index) => {
         return <details key={item._id || item.question || index} className="group rounded-xl border border-white/10 bg-white/[0.025] p-4 transition hover:border-[#c8cdd3]/45">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-white">
             <span>{item.question}</span>
             <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400 transition group-open:rotate-90 group-open:text-[#c8cdd3]" />
           </summary>
-          <p className="mt-3 text-sm leading-6 text-zinc-400">{item.answer}</p>
+          <p className="mt-3 text-sm leading-6 text-zinc-300">{item.answer}</p>
         </details>;
       })}</div></div>
     </section>
 
-    <section id="contacto" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+    <section id="contacto" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <div className="overflow-hidden rounded-3xl border border-[#c8cdd3]/35 bg-[#0f0f10] shadow-[0_0_50px_rgba(229,231,235,.10)] lg:grid lg:grid-cols-[0.75fr_1.25fr]">
         <div className="relative min-h-80 p-8"><img src={gallery[0]?.imageUrl || heroImage} alt="Detalle de evento M&M" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><span><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Respuesta rápida</span><span><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Propuesta a medida</span><span><Check className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Sin compromiso</span></div></div></div>
         <form onSubmit={submit} className="grid gap-4 p-5 md:grid-cols-2 md:p-8">
@@ -633,6 +627,40 @@ export default function Home() {
           <label className="text-xs uppercase tracking-[0.14em] text-zinc-400 md:col-span-2">Mensaje<textarea name="message" maxLength={700} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Contanos más detalles de tu evento..." /></label>
           <button disabled={formState === 'loading'} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] disabled:opacity-60 md:col-span-2">{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></button>
         </form>
+      </div>
+    </section>
+
+    <section id="ubicaciones" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
+      <div className="mx-auto max-w-7xl">
+        <SectionTitle eyebrow="Ubicaciones" title="Encontrá el salón más cómodo para tu evento" subtitle="Cada espacio tiene su mapa para que puedas calcular tiempos, accesos y coordinar una visita." />
+        <div className="grid gap-6 lg:grid-cols-3">
+          {displaySalons.slice(0, 3).map((salon, index) => {
+            const accent = accentFor(index + 3);
+            return <article key={salon._id} className={`overflow-hidden rounded-2xl border ${accent.card}`}>
+              <div className="relative h-72 bg-[#111113]">
+                <iframe
+                  title={`Mapa de ${titleForSalon(salon)}`}
+                  src={mapUrlForSalon(salon)}
+                  className="h-full w-full"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  style={{ border: 0 }}
+                  allowFullScreen
+                />
+              </div>
+              <div className="p-5">
+                <span className={`mb-4 block h-1.5 w-12 rounded-full ${accent.line}`} />
+                <h3 className={`text-xl font-semibold ${accent.text}`}>{titleForSalon(salon)}</h3>
+                <p className="mt-3 flex gap-2 text-sm leading-6 text-zinc-200"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#dbe1e8]" />{locationForSalon(salon)}</p>
+                <p className="mt-2 flex gap-2 text-sm leading-6 text-zinc-300"><Users className="mt-0.5 h-4 w-4 shrink-0 text-[#dbe1e8]" />{capacityForSalon(salon)}</p>
+                <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                  <a href={mapExternalUrlForSalon(salon)} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Abrir mapa <ExternalLink className="h-4 w-4" /></a>
+                  <button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
+                </div>
+              </div>
+            </article>;
+          })}
+        </div>
       </div>
     </section>
 

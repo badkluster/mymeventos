@@ -1,4 +1,6 @@
 import { Role } from '@mym/shared';
+import { existsSync } from 'fs';
+import path from 'path';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { Notification } from '../notifications/notification.model';
@@ -36,7 +38,7 @@ function escapeHtml(value: unknown): string {
 function emailTemplate(input: { request: any; salons: string; date: string; actionUrl: string }): string {
   const { request, salons, date, actionUrl } = input;
   const webUrl = env.CORS_ORIGIN.replace(/\/$/, '');
-  const logoUrl = `${webUrl}/brand/mym-logo-dark-on-light.jpg`;
+  const logoCid = 'mym-logo-dark-on-light';
   const detailUrl = `${webUrl}${actionUrl}`;
   const rows = [
     ['Cliente', request.contactName],
@@ -66,7 +68,7 @@ function emailTemplate(input: { request: any; salons: string; date: string; acti
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
                     <td>
-                      <img src="${logoUrl}" alt="M&M Eventos" width="132" style="display:block;border-radius:10px;background:#ffffff;">
+                      <img src="cid:${logoCid}" alt="M&M Eventos" width="132" height="56" style="display:block;width:132px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;background:#ffffff;">
                     </td>
                     <td align="right" style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#d4d4d8;">Backoffice</td>
                   </tr>
@@ -115,6 +117,12 @@ export async function createQuoteRequestNotifications(input: NotifyInput): Promi
   const message = `${request.contactName} (${request.phone || request.email || 'sin contacto'}) solicitó presupuesto para ${request.eventType || 'un evento'} el ${date}. Salón/es: ${salons}.`;
   const actionUrl = `/admin/quotes/requests/${request._id}`;
   const html = emailTemplate({ request, salons, date, actionUrl });
+  const logoPath = path.resolve(process.cwd(), '../web/public/brand/mym-logo-dark-on-light.jpg');
+  const attachments = existsSync(logoPath) ? [{
+    filename: 'mym-logo-dark-on-light.jpg',
+    path: logoPath,
+    cid: 'mym-logo-dark-on-light'
+  }] : undefined;
 
   await Notification.insertMany(recipients.map((user: any) => ({
     userId: user._id,
@@ -143,6 +151,7 @@ export async function createQuoteRequestNotifications(input: NotifyInput): Promi
         '',
         `Link interno: ${actionUrl}`
       ].join('\n'),
-      html
+      html,
+      attachments
     })));
 }
