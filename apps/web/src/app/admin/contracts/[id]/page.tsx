@@ -9,6 +9,7 @@ import { contractAddendumStatusLabels, contractStatusLabels, displayLabel, payme
 import { Button, Input, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import type { Contract, ContractAddendum, Payment, PaymentSummary } from '@/features/quotes/types';
+        //
 
 const money = (value?: unknown) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(value ?? 0));
 const formatDate = (value?: unknown) => typeof value === 'string' ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(value)) : 'Sin fecha';
