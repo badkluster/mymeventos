@@ -540,15 +540,15 @@ async function seed(): Promise<void> {
     {
       $set: {
         key: 'default',
-        heroTitle: 'Tu evento, en el lugar que siempre imaginaste',
+        heroTitle: 'Tu evento, en el lugar que siempre soñaste',
         heroSubtitle: 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.',
         heroImageUrl: landingImages[0],
         heroPrimaryCtaLabel: 'Solicitá presupuesto',
         heroSecondaryCtaLabel: 'Ver salones',
-        whatsappNumber: '5492211234567',
+        whatsappNumber: '+54 9 2213 63-5466',
         whatsappDefaultMessage: 'Hola M&M Eventos, quiero solicitar un presupuesto para mi evento.',
         contactEmail: 'info@mm-eventos.com.ar',
-        contactPhone: '+54 9 221 123-4567',
+        contactPhone: '+54 9 2213 63-5466',
         footerText: 'Creamos momentos únicos que permanecen para siempre.',
         seoTitle: 'M&M Eventos | Salones y eventos premium',
         seoDescription: 'Salones, catering, ambientación, DJ y organización integral para eventos inolvidables.',

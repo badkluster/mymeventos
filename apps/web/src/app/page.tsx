@@ -688,7 +688,7 @@ export default function Home() {
     </section>
 
     <section id="paquetes" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
-      <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, configurados desde el backoffice." />
+      <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, descubrilos." />
       <div className="mb-6 flex flex-wrap justify-center gap-2">{displaySalons.map((salon) => {
         const active = selectedPackageSalon?._id === salon._id;
         return <button key={salon._id} type="button" onClick={() => setSelectedPackageSalonId(salon._id)} className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${active ? 'border-[#c8cdd3] bg-[#c8cdd3] text-black' : 'border-white/15 bg-white/[0.03] text-zinc-300 hover:border-[#c8cdd3]/70 hover:text-white'}`}>{titleForSalon(salon)}</button>;
