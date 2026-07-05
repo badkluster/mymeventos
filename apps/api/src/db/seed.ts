@@ -374,7 +374,7 @@ const landingTestimonials = [
 
 const landingFaqs = [
   { question: '¿Con cuánta anticipación debo reservar?', answer: 'Recomendamos consultar cuanto antes para asegurar disponibilidad y congelar condiciones comerciales.', displayOrder: 1 },
-  { question: '¿Qué incluye el servicio de catering?', answer: 'Depende del paquete elegido, pero podemos incluir recepción, plato principal, postre, mesa dulce, bebidas y barra.', displayOrder: 2 },
+  { question: '¿Qué incluye el servicio de catering?', answer: 'Depende del paquete elegido, pero podemos incluir recepción, entrada, plato principal, postre, mesa dulce, bebidas y barra.', displayOrder: 2 },
   { question: '¿Puedo llevar mi propia bebida o DJ?', answer: 'Lo revisamos caso por caso según el salón, el tipo de evento y la propuesta contratada.', displayOrder: 3 },
   { question: '¿Cómo reservo mi fecha?', answer: 'Luego de recibir la propuesta, coordinamos seña y condiciones para bloquear la fecha.', displayOrder: 4 },
   { question: '¿Qué formas de pago aceptan?', answer: 'Trabajamos con seña y saldo según condiciones comerciales vigentes. Consultanos para armar un plan.', displayOrder: 5 },

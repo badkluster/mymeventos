@@ -30,8 +30,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const currentModule = moduleForPath(pathname);
   const blocked = Boolean(currentModule && !userCanAccess(user, currentModule.permissions));
   const isActive = (href: string) => href === '/admin' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-  const configSubmenuPaths = new Set(['/admin/users', '/admin/staff', '/admin/landing', '/admin/consumption-rules', '/admin/inventory', '/admin/settings']);
-  const configSubmenuOrder = new Map([['/admin/users', 0], ['/admin/landing', 1], ['/admin/consumption-rules', 2], ['/admin/inventory', 3], ['/admin/settings', 4]]);
+  const configSubmenuPaths = new Set(['/admin/salons', '/admin/users', '/admin/staff', '/admin/landing', '/admin/consumption-rules', '/admin/inventory', '/admin/settings']);
+  const configSubmenuOrder = new Map([['/admin/salons', 0], ['/admin/users', 1], ['/admin/landing', 2], ['/admin/consumption-rules', 3], ['/admin/inventory', 4], ['/admin/settings', 5]]);
   const configSubitems = items
     .filter((item) => configSubmenuPaths.has(item.href) && item.href !== '/admin/staff')
     .sort((a, b) => (configSubmenuOrder.get(a.href) ?? 99) - (configSubmenuOrder.get(b.href) ?? 99))

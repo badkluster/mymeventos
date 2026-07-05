@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Baby, BriefcaseBusiness, CakeSlice, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, ChevronUp, Clock3, Crown, ExternalLink, Gift, GlassWater, GraduationCap, Heart, LogIn, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { brandAssets } from '@/lib/brand-assets';
+import { localSeoPages, salonSeoPages } from '@/lib/local-seo';
 
 type Media = { url: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
 type ExtraService = { _id?: string; name: string; description?: string; basePrice?: number; includedByDefault?: boolean };
@@ -48,6 +49,10 @@ const fallbackFaqs = [
   { question: '¿Puedo visitar el salón antes del evento?', answer: 'Sí, coordinamos una visita para que conozcas el espacio y revisemos tu idea en detalle.' },
   { question: '¿Qué incluye el servicio de catering?', answer: 'Depende del paquete, pero podemos incluir recepción, plato principal, postre, mesa dulce, bebidas y barra.' },
   { question: '¿Se puede congelar el precio con seña?', answer: 'Sí, las condiciones vigentes se pueden reservar abonando la seña indicada en la propuesta.' },
+];
+const footerSeoLinks = [
+  ...localSeoPages.slice(0, 7).map((item) => ({ href: `/${item.slug}`, label: item.title })),
+  ...salonSeoPages.map((item) => ({ href: `/salones/${item.slug}`, label: item.title }))
 ];
 const contactPhonePattern = /^[+()\d\s-]{6,24}$/;
 const contactGuestMin = 1;
@@ -145,7 +150,13 @@ function isFutureIsoDate(value: string) {
 function salonWhatsAppNumber(salon: Salon, fallback?: string) {
   return salon.manager?.phone || salon.whatsapp || salon.phone || fallback;
 }
-function scrollTo(id: string) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function scrollTo(id: string) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  const headerOffset = 104;
+  const top = target.getBoundingClientRect().top + window.scrollY - headerOffset;
+  window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+}
 function salonWaMessage(salon: Salon) {
   return `Hola M&M Eventos, vengo de la web y quiero más información sobre ${titleForSalon(salon)} (${locationForSalon(salon)}).`;
 }
@@ -517,6 +528,14 @@ export default function Home() {
     return () => { mounted = false; };
   }, []);
 
+  useEffect(() => {
+    if (landingLoading || typeof window === 'undefined') return;
+    const id = window.location.hash.replace('#', '');
+    if (!id) return;
+    const timer = window.setTimeout(() => scrollTo(id), 80);
+    return () => window.clearTimeout(timer);
+  }, [landingLoading]);
+
   const settings = landing.settings ?? {};
   const salons = landing.salons;
   const heroImage = cloudinaryImageUrl(settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' }));
@@ -815,7 +834,13 @@ export default function Home() {
     </section>
 
     <footer className="border-t border-white/10 bg-[#080808] px-5 py-10 md:px-8">
-      <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-4"><div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-500">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div><div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || ''}</span><span>{settings.contactEmail || 'info@mm-eventos.com.ar'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div></div>
+      <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-5">
+        <div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-500">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div>
+        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div>
+        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div>
+        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Búsquedas locales</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{footerSeoLinks.map((item) => <Link key={item.href} href={item.href} className="text-left hover:text-white">{item.label}</Link>)}</div></div>
+        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || ''}</span><span>{settings.contactEmail || 'info@mm-eventos.com.ar'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div>
+      </div>
     </footer>
 
     {activeSocial ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Elegir salón para ${activeSocial.label}`}>
