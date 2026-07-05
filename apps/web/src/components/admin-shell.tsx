@@ -24,11 +24,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
   const { resolvedTheme, setTheme } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const items = visibleAdminModules(user);
   const currentModule = moduleForPath(pathname);
   const blocked = Boolean(currentModule && !userCanAccess(user, currentModule.permissions));
   const isActive = (href: string) => href === '/admin' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  const configSubmenuPaths = new Set(['/admin/users', '/admin/staff', '/admin/landing', '/admin/consumption-rules', '/admin/inventory', '/admin/settings']);
+  const configSubmenuOrder = new Map([['/admin/users', 0], ['/admin/landing', 1], ['/admin/consumption-rules', 2], ['/admin/inventory', 3], ['/admin/settings', 4]]);
+  const configSubitems = items
+    .filter((item) => configSubmenuPaths.has(item.href) && item.href !== '/admin/staff')
+    .sort((a, b) => (configSubmenuOrder.get(a.href) ?? 99) - (configSubmenuOrder.get(b.href) ?? 99))
+    .map((item) => item.href === '/admin/settings' ? { ...item, label: 'General' } : item);
+  const mainItems = items.filter((item) => !configSubmenuPaths.has(item.href));
+  const configActive = [...configSubmenuPaths].some((href) => isActive(href));
+  const showConfigSubmenu = settingsOpen || configActive;
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Usuario';
 
   useEffect(() => {
@@ -47,17 +57,33 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div data-admin-shell className="min-h-screen bg-background text-foreground">
-      <aside className="fixed inset-y-0 w-64 border-r bg-card p-5">
-        <Link href="/admin" className="block" aria-label="Ir al panel de M&M Eventos">
+      <aside className="fixed inset-y-0 flex w-64 flex-col overflow-hidden border-r bg-card p-5">
+        <Link href="/admin" className="block shrink-0" aria-label="Ir al panel de M&M Eventos">
           <Image src={brandAssets.logoDarkOnLight} alt="M&M Eventos" width={150} height={150} className="h-auto w-32 object-contain" priority />
         </Link>
-        <nav className="mt-10 space-y-1" aria-label="Módulos del backoffice">
-          {items.map(({ href, label, icon: Icon }) => (
+        <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" aria-label="Módulos del backoffice">
+          {mainItems.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
               <Icon className="h-4 w-4" />
               {label}
             </Link>
           ))}
+          {configSubitems.length ? <div className="pt-2">
+            <button type="button" aria-expanded={showConfigSubmenu} onClick={() => setSettingsOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${configActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+              <Settings className="h-4 w-4" />
+              <span className="flex-1">Configuración</span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${showConfigSubmenu ? 'rotate-180' : ''}`} />
+            </button>
+            {showConfigSubmenu ? <div className="mt-1 space-y-1 border-l border-border/70 pl-3">
+              {configSubitems.map(({ href, label, icon: Icon }) => {
+                const active = href === '/admin/users' ? isActive('/admin/users') || isActive('/admin/staff') : isActive(href);
+                return <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Link>;
+              })}
+            </div> : null}
+          </div> : null}
         </nav>
       </aside>
       <main className="ml-64">

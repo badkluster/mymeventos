@@ -11,22 +11,58 @@ import { buildUserFullName, normalizeUserEmail, normalizeUserPhone } from '../mo
 
 const packageTemplates = [
   {
-    name: 'Magic Night', salonNames: ['Villa Elisa', 'La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 85000, discountPercentage: 20, finalPricePerPerson: 68000, depositAmount: 500000,
+    name: 'Magic Night', salonNames: ['Villa Elisa'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 85000, discountPercentage: 20, finalPricePerPerson: 68000, depositAmount: 500000,
     giftText: 'Stand de glitter', promotionText: '20% de descuento durante junio.', paymentTerms: 'Congelar valor abonando seña y resto en cuotas fijas.',
     menuSections: [{ title: 'Recepción', items: ['Sándwiches de bondiola y pollo', 'Triples de jamón y queso'] }, { title: 'Plato principal', items: ['Colita de cuadril con papas rústicas', 'Milanesa con papas para niños y adolescentes'] }, { title: 'Final', items: ['Brownie con helado', 'Mesa dulce y show de pizzas'] }],
     includedServices: ['Bebidas durante toda la noche', 'Barra de tragos', 'Organización y staff', 'Vajilla y mantelería', 'DJ, sonido e iluminación', 'Proyector y espacio climatizado']
   },
   {
-    name: 'Platinum Night', salonNames: ['Villa Elisa', 'La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 90000, discountPercentage: 20, finalPricePerPerson: 72000, depositAmount: 500000,
+    name: 'Platinum Night', salonNames: ['Villa Elisa'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 90000, discountPercentage: 20, finalPricePerPerson: 72000, depositAmount: 500000,
     giftText: 'Fotografía para el evento', promotionText: '20% de descuento durante junio.', paymentTerms: 'Congelar valor abonando seña y resto en cuotas fijas.',
     menuSections: [{ title: 'Recepción', items: ['Empanadas, brusquetas y fiambres'] }, { title: 'Plato principal', items: ['Vacío con papas fritas', 'Hamburguesas con cheddar para niños y adolescentes'] }, { title: 'Final', items: ['Bombón Suizo', 'Mesa dulce y show de pizzas'] }],
     includedServices: ['Salón con mesas y sillas', 'Vajilla y mantelería', 'Bebidas para el evento', 'Barra de tragos', 'Sectores de fotos, torta y mesa principal', 'Staff, DJ, proyector y espacio climatizado']
   },
   {
-    name: 'Exclusive Night', salonNames: ['Villa Elisa', 'La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 95000, discountPercentage: 20, finalPricePerPerson: 76000, depositAmount: 500000,
+    name: 'Exclusive Night', salonNames: ['Villa Elisa'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 95000, discountPercentage: 20, finalPricePerPerson: 76000, depositAmount: 500000,
     giftText: '10% adicional si se abona el total.', promotionText: '20% de descuento durante junio.', paymentTerms: 'Congelar valor abonando seña y resto en cuotas sin interés.',
     menuSections: [{ title: 'Recepción', items: ['Empanadas, triples y brusquetas'] }, { title: 'Plato principal', items: ['Vacío con papas fritas', 'Milanesas con jamón y queso para niños y adolescentes'] }, { title: 'Final', items: ['Bombón Suizo', 'Tartas, cascada de chocolate, show de panchos y desayuno'] }],
     includedServices: ['Bebidas a mesa', 'Barra para recepción y tandas de baile', 'Vajilla y mantelería', 'DJ, sonido e iluminación', 'Proyector', 'Sectores de fotos, torta y mesa principal', 'Staff y espacio climatizado']
+  },
+  {
+    name: 'Fiesta de egresados M&M La Plata', salonNames: ['La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 95000, discountPercentage: 0, finalPricePerPerson: 95000, depositAmount: 1000000,
+    promotionText: 'Valor para 120 personas: $11.400.000.', paymentTerms: 'Seña de $1.000.000 para congelar el valor y resto en cuotas fijas sin interés hasta 15 días antes del evento.',
+    giftText: 'Adicional disponible de 01:00 a 05:00: barra de tragos por $20.000 por persona, incluye 5 tragos.',
+    notes: 'Salón y catering completo para egresados. Adicional de barra: fernet con Coca-Cola, Gancia con Sprite, vodka con jugo de naranja y gin tonic.',
+    menuSections: [
+      { title: 'Recepción', items: ['Mesa central de fiambres y quesos decorada', 'Empanaditas variadas bandejeadas'] },
+      { title: 'Entrada', items: ['Triples de jamón y queso', 'Sándwich de bondiola con dips de salsa criolla', 'Sándwiches de matambre', 'Sacramentos de jamón y queso'] },
+      { title: 'Plato principal', items: ['Adultos: colita de cuadril rellena de jamón y queso con salsa de verdeo y papas rústicas', 'Adolescentes y niños: hamburguesas con cheddar y papas fritas'] },
+      { title: 'Postre', items: ['Porción de chocotorta'] },
+      { title: 'Bebida de 21:00 a 00:00', items: ['Coca-Cola', 'Sprite', 'Cerveza Stella Artois o similar', 'Vino tinto Callia o similar', 'Hielo para todo el evento'] }
+    ],
+    includedServices: ['DJ, sonido e iluminación', 'Sector de fotos: shimmer wall con globos', 'Sector de torta: aro con globos y 3 mesitas', 'Conducción del evento: ingreso de egresados y entrega de bandas', 'Cronograma y organización del evento', 'Vajilla completa', 'Mantelería básica: manteles blancos o negros y servilletas a gusto del cliente', 'Staff de servicio: metre, mozos y encargado de cocina']
+  },
+  {
+    name: 'Black Service La Plata', salonNames: ['La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 120000, discountPercentage: 0, finalPricePerPerson: 120000, depositAmount: 1000000,
+    promotionText: 'Valor para 120 personas: $14.400.000.', paymentTerms: 'Seña de $1.000.000 para congelar el valor y resto en cuotas fijas sin interés hasta 15 días antes del evento.',
+    giftText: 'Sorpresa final: carrito de helados y golosinas.',
+    notes: 'Servicio de salón y catering de 21:00 a 05:00.',
+    menuSections: [
+      { title: 'Recepción', items: ['Mesa central de fiambres decorada con frutas y verduras', 'Mesa central de sushi'] },
+      { title: 'Entrada', items: ['Show de pernil de cerdo', 'Cazuelas: ñoquis con fileto, sorrentinos con verdeo y ravioles con salsa mixta', 'Empanadas variadas de carne, pollo y jamón y queso', 'Triples de jamón y queso'] },
+      { title: 'Plato principal', items: ['Porción de vacío con papas fritas'] },
+      { title: 'Postre y mesa dulce', items: ['Bombón suizo', 'Variedad de tortas y tartas', 'Cascada de chocolate con frutas de estación'] },
+      { title: 'Bebida a mesa', items: ['Coca-Cola', 'Sprite', 'Cerveza Stella Artois o similar', 'Vino tinto Fond de Cave Malbec', 'Agua mineral', 'Agua saborizada', 'Hielo'] },
+      { title: 'Barra de tragos de 00:00 a 05:00', items: ['Fernet', 'Campari', 'Gancia', 'Gin'] }
+    ],
+    includedServices: ['Mesas y sillas Tiffany', 'Vajilla completa', 'Mantelería: manteles blancos o negros, caminos y servilletas', 'Sector de fotos: shimmer wall con diván', 'Sector de torta: arco redondo con globos y mesitas', 'Sector de mesa principal: mesa espejada, 2 candelabros y sillón trono', 'DJ con sonido e iluminación', 'Proyector para videos', 'Staff de servicio: metre, mozos y encargado de cocina']
+  },
+  {
+    name: 'Salón completo M&M La Plata', salonNames: ['La Plata'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 31250, discountPercentage: 0, finalPricePerPerson: 31250, depositAmount: 700000,
+    promotionText: 'Valor fijo hasta 160 personas: $5.000.000.', paymentTerms: 'Seña de $700.000 para congelar el valor y resto en cuotas sin interés hasta 15 días antes del evento.',
+    notes: 'Servicio de salón de 21:00 a 05:00. Capacidad máxima: 160 personas. La plataforma calcula por persona; este paquete representa el valor fijo de $5.000.000 dividido por 160 personas. Usar presupuesto manual si la cantidad cambia y se desea mantener precio fijo.',
+    menuSections: [{ title: 'Servicio de salón', items: ['Paquete de salón sin catering incluido'] }],
+    includedServices: ['Vajilla completa', 'Mantelería: manteles blancos o negros, caminos y servilletas', 'Salón con mesas y sillas Tiffany', 'DJ, sonido e iluminación', 'Proyector para videos', 'Sector de torta: mesitas con fondo y globos', 'Sector mesa principal: mesa de estilo, 2 candelabros y sillón trono', 'Sector de fotos: shimmer wall y diván', 'Espacio climatizado', 'Staff de servicio: metre, mozos y ayudante de cocina']
   },
   {
     name: 'Banquete Premium', salonNames: ['San Carlos'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 75000, discountPercentage: 0, finalPricePerPerson: 75000, depositAmount: 550000,

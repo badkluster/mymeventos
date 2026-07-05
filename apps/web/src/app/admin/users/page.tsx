@@ -8,6 +8,7 @@ import { displayLabel, roleLabels } from '@/lib/display-labels';
 import { userCanAccess } from '@/lib/admin-permissions';
 import { Button, Input, Modal, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
+import { UsersStaffTabs } from '@/components/admin/users-staff-tabs';
 import { useToast } from '@/components/ui/toast-provider';
 import { useSession } from '@/components/session-provider';
 import { Permission } from '@mym/shared';
@@ -107,7 +108,8 @@ export default function UsersPage() {
   };
 
   return <section className="space-y-6">
-    <PageHeader title="Usuarios" description="ABM, roles, permisos, salones y perfiles operativos del backoffice." action={canCreate ? <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo usuario</Button> : undefined} />
+    <PageHeader title="Usuarios" description="ABM, roles, permisos, salones y staff operativo del backoffice." action={canCreate ? <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo usuario</Button> : undefined} />
+    <UsersStaffTabs />
     <div className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_200px_170px_190px_auto]">
       <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, page: 1, search: event.target.value }))} className="h-11 pl-10" placeholder="Buscar por usuario, nombre, email, teléfono..." /></div>
       <Select value={filters.role} onChange={(event) => setFilters((current) => ({ ...current, page: 1, role: event.target.value }))}><option value="">Todos los roles</option>{roles.map((role) => <option key={role} value={role}>{displayLabel(roleLabels, role)}</option>)}</Select>

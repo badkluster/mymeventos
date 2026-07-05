@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarPlus, Eye, Pencil, Plus, Search, UserRoundCog } from 'lucide-react';
 import { TableActionButton } from '@/components/admin/table-action-button';
+import { UsersStaffTabs } from '@/components/admin/users-staff-tabs';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
@@ -122,7 +123,8 @@ export default function StaffPage() {
   }
 
   return <section className="space-y-6">
-    <PageHeader title="Staff" description="Empleados operativos, subroles, horarios simples y datos de liquidación futura." action={<Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo staff</Button>} />
+    <PageHeader title="Usuarios" description="Empleados operativos, subroles, horarios simples y datos de liquidación futura." action={<Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo staff</Button>} />
+    <UsersStaffTabs />
     <div className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_180px_180px_180px]">
       <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} className="h-11 pl-10" placeholder="Buscar staff..." /></div>
       <Select value={filters.salonId} onChange={(event) => setFilters((current) => ({ ...current, salonId: event.target.value }))}><option value="">Todos los salones</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select>

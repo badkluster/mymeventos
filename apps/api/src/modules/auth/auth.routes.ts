@@ -40,13 +40,16 @@ router.patch('/password', requireAuth, validateRequest(passwordSchema), asyncHan
   if (request.body.currentPassword === request.body.newPassword) throw new ApiError(400, 'PASSWORD_REUSED');
   const user = await User.findOne({ _id: request.user!.id, deletedAt: null }).select('+passwordHash');
   if (!user?.passwordHash || !(await verifyPassword(request.body.currentPassword, user.passwordHash))) throw new ApiError(401, 'INVALID_CURRENT_PASSWORD');
-  user.passwordHash = await hashPassword(request.body.newPassword);
-  user.mustChangePassword = false;
-  user.lastPasswordChangeAt = new Date();
-  user.failedLoginAttempts = 0;
-  user.updatedBy = request.user!.id;
-  user.lockedUntil = undefined;
-  await user.save();
+  await User.updateOne({ _id: request.user!.id, deletedAt: null }, {
+    $set: {
+      passwordHash: await hashPassword(request.body.newPassword),
+      mustChangePassword: false,
+      lastPasswordChangeAt: new Date(),
+      failedLoginAttempts: 0,
+      updatedBy: request.user!.id
+    },
+    $unset: { lockedUntil: 1 }
+  });
   await writeAuditLog(request, 'AUTH_PASSWORD_CHANGE', 'User', request.user!.id);
   return sendSuccess(response, { changed: true }, 200, 'Contraseña actualizada correctamente.');
 }));

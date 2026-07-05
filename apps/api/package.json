@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "seed": "ts-node src/db/seed.ts",
-    "reset:admin-password": "ts-node src/scripts/resetAdminPassword.ts"
+    "reset:admin-password": "ts-node src/scripts/resetAdminPassword.ts",
+    "update:la-plata-packages": "ts-node src/scripts/updateLaPlataPackages.ts"
   },
   "dependencies": {
     "@mym/shared": "workspace:*",
