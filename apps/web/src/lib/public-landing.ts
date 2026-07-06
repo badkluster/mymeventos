@@ -1,8 +1,8 @@
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3001/api');
-const appBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+const appBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mymeventos-api-ashy.vercel.app';
 const apiBaseUrl = configuredApiUrl.startsWith('http') ? configuredApiUrl : new URL(configuredApiUrl, appBaseUrl).toString().replace(/\/$/, '');
 
-export type PublicMedia = { url?: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
+export type PublicMedia = { url: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
 export type PublicPackage = {
   _id: string;
   name: string;
@@ -21,7 +21,10 @@ export type PublicPackage = {
   giftText?: string;
   includedServices?: string[];
   menuSections?: { title?: string; name?: string; items: string[] }[];
+  badgeLabel?: string;
+  featured?: boolean;
 };
+export type PublicLandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
 export type PublicSalon = {
   _id: string;
   name: string;
@@ -52,10 +55,15 @@ export type PublicSalon = {
   packages?: PublicPackage[];
 };
 export type PublicLanding = {
-  settings?: { whatsappNumber?: string; contactPhone?: string; contactEmail?: string; heroImageUrl?: string };
+  settings?: { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
   salons: PublicSalon[];
   packages: PublicPackage[];
-  faqs: { question?: string; answer?: string }[];
+  promotions: PublicLandingItem[];
+  gallery: PublicLandingItem[];
+  testimonials: PublicLandingItem[];
+  faqs: PublicLandingItem[];
+  serviceBlocks: PublicLandingItem[];
+  eventTypes: PublicLandingItem[];
 };
 
 type ApiEnvelope<T> = { success: boolean; data?: T };
