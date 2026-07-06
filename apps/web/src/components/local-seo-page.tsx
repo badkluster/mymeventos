@@ -75,19 +75,19 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
   const faqs = landing?.faqs?.filter((faq) => faq.question && faq.answer).slice(0, 4) ?? [];
   const visibleFaqs = faqs.length ? faqs.map((faq) => ({ question: faq.question!, answer: faq.answer! })) : page.faqs;
 
-  return <main className="min-h-screen bg-zinc-950 text-white">
+  return <main className="min-h-screen overflow-x-hidden bg-zinc-950 text-white">
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdForPage(page, path, salon, packages, landing)) }} />
     <section className="relative isolate min-h-[620px] overflow-hidden">
       <img src={heroImage} alt={heading} className="absolute inset-0 h-full w-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/72 to-black/20" />
-      <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-6 md:px-8">
-        <Link href="/" aria-label="Ir a M&M Eventos"><img src={brandAssets.logoLightOnDark} alt="M&M Eventos" className="h-14 w-auto object-contain" /></Link>
+      <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-5 md:px-8 md:py-6">
+        <Link href="/" aria-label="Ir a M&M Eventos"><img src={brandAssets.logoLightOnDark} alt="M&M Eventos" className="h-11 w-auto max-w-[150px] object-contain md:h-14 md:max-w-none" /></Link>
         <Link href="/#contacto" className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold transition hover:bg-white hover:text-black">Consultar</Link>
       </header>
-      <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-5 pb-16 pt-16 md:px-8 lg:grid-cols-[1fr_360px] lg:pt-24">
-        <div className="max-w-3xl">
+      <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-16 pt-14 md:px-8 lg:grid-cols-[1fr_360px] lg:pt-24">
+        <div className="min-w-0 max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-zinc-300">{page.eyebrow}</p>
-          <h1 className="mt-5 text-4xl font-semibold leading-tight md:text-6xl">{heading}</h1>
+          <h1 className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-tight md:text-6xl">{heading}</h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-200">{intro}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/#contacto" className="inline-flex items-center gap-2 rounded-lg bg-[#25d366] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#35e176]"><MessageCircle className="h-4 w-4" />Pedir presupuesto</Link>

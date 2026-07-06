@@ -253,7 +253,7 @@ function PackageDetailModal({ item, accentText, onClose }: { item: Package; acce
         <header className="relative border-b border-white/10 bg-[#10100f] p-5 md:p-7">
           <button type="button" onClick={onClose} aria-label="Cerrar detalle del paquete" className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-black/45 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
           <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Detalle del paquete</p>
-          <h2 className="mt-3 max-w-3xl text-3xl font-semibold md:text-5xl">{item.name}</h2>
+          <h2 className="mt-3 max-w-3xl break-words pr-12 text-3xl font-semibold md:text-5xl">{item.name}</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Valor</p><p className={`mt-1 text-xl font-semibold ${accentText}`}>{money(item.finalPricePerPerson || item.pricePerPerson)}</p><p className="text-xs text-zinc-500">por persona</p></div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Duración</p><p className="mt-1 font-semibold">{item.durationHours ? `${item.durationHours} hs` : 'A coordinar'}</p>{item.startTime && item.endTime ? <p className="text-xs text-zinc-500">{item.startTime} a {item.endTime}</p> : null}</div>
@@ -267,14 +267,14 @@ function PackageDetailModal({ item, accentText, onClose }: { item: Package; acce
             <h3 className="text-xl font-semibold">Menú</h3>
             {item.menuSections?.length ? <div className="mt-5 space-y-5">{item.menuSections.map((section, index) => <div key={`${section.title ?? section.name ?? 'menu'}-${index}`} className="border-b border-white/10 pb-4 last:border-b-0 last:pb-0">
               <p className={`font-semibold ${accentText}`}>{section.title ?? section.name ?? 'Sección'}</p>
-              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-6 text-zinc-300">{section.items.map((menuItem) => <li key={menuItem}>{menuItem}</li>)}</ul>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-6 text-zinc-300">{section.items.map((menuItem) => <li key={menuItem} className="break-words">{menuItem}</li>)}</ul>
             </div>)}</div> : <p className="mt-4 text-sm text-zinc-500">No hay menú cargado para este paquete.</p>}
           </section>
 
           <aside className="space-y-5">
             <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
               <h3 className="text-xl font-semibold">Servicios incluidos</h3>
-              {item.includedServices?.length ? <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-300">{item.includedServices.map((service) => <li key={service} className="flex gap-2"><Check className={`mt-1 h-4 w-4 shrink-0 ${accentText}`} />{service}</li>)}</ul> : <p className="mt-4 text-sm text-zinc-500">No hay servicios cargados.</p>}
+              {item.includedServices?.length ? <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-300">{item.includedServices.map((service) => <li key={service} className="flex min-w-0 gap-2"><Check className={`mt-1 h-4 w-4 shrink-0 ${accentText}`} /><span className="min-w-0 break-words">{service}</span></li>)}</ul> : <p className="mt-4 text-sm text-zinc-500">No hay servicios cargados.</p>}
             </section>
 
             <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -656,11 +656,11 @@ export default function Home() {
 
   if (landingLoading) return <LandingLoader />;
 
-  return <main className="min-h-screen bg-[#050505] text-white">
+  return <main className="min-h-screen overflow-x-hidden bg-[#050505] text-white">
     <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/75 backdrop-blur-xl">
-      <div className="mx-auto flex h-24 max-w-7xl items-center justify-between px-5 md:px-8">
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-3 px-4 md:h-24 md:px-8">
         <button type="button" onClick={() => scrollTo('inicio')} className="group inline-flex shrink-0 items-center rounded-xl px-1 py-1 transition hover:opacity-85" aria-label="Ir al inicio">
-          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={174} height={74} className="h-14 w-auto object-contain brightness-110 contrast-125 drop-shadow-[0_8px_18px_rgba(0,0,0,.45)] md:h-16" priority />
+          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={174} height={74} className="h-11 w-auto max-w-[150px] object-contain brightness-110 contrast-125 drop-shadow-[0_8px_18px_rgba(0,0,0,.45)] md:h-16 md:max-w-none" priority />
         </button>
         <nav className="hidden items-center gap-6 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100 xl:gap-8 lg:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="group relative pb-1 transition hover:text-[#dbe1e8]"><span>{label}</span><span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></button>)}</nav>
         <div className="hidden items-center gap-3 lg:flex"><Link href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 text-zinc-400 transition hover:border-[#c8cdd3]/45 hover:bg-white/[0.04] hover:text-white"><LogIn className="h-4.5 w-4.5" /></Link><button type="button" onClick={() => scrollTo('contacto')} className="rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(229,231,235,.18)] transition hover:bg-[#e5e7eb]">Solicitá presupuesto</button></div>
@@ -680,16 +680,16 @@ export default function Home() {
       </div></Portal> : null}
     </header>
 
-    <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-24">
+    <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
       <img src={heroImage} alt="Salón M&M preparado para evento" className="absolute inset-0 h-full w-full object-cover" />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(5,5,5,1),rgba(5,5,5,.08)_38%,rgba(5,5,5,.64))]" />
-      <div className="relative mx-auto grid min-h-[calc(92vh-6rem)] max-w-7xl content-center px-5 py-16 md:px-8">
-        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#f1f5f9]">M&M Eventos</p>
-          <h1 className="mt-5 text-5xl font-semibold leading-[0.96] tracking-tight text-white md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</h1>
-          <p className="mt-6 max-w-xl text-base leading-7 text-zinc-200 md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</p>
-          <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => scrollTo('contacto')} className="inline-flex items-center gap-2 rounded-lg bg-[#c8cdd3] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></button><button type="button" onClick={() => scrollTo('salones')} className="inline-flex items-center gap-2 rounded-lg border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></button></div>
-          <div className="mt-7 flex flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="inline-flex items-center gap-2 rounded-full border border-[#c8cdd3]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 text-[#f1f5f9]" />{heroLocationForSalon(salon)}</button>)}</div>
+      <div className="relative mx-auto grid min-h-[calc(92vh-5rem)] max-w-7xl content-center px-4 py-12 md:min-h-[calc(92vh-6rem)] md:px-8 md:py-16">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="min-w-0 max-w-3xl">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f1f5f9] sm:text-xs sm:tracking-[0.42em]">M&M Eventos</p>
+          <h1 className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</h1>
+          <p className="mt-6 max-w-xl text-sm leading-7 text-zinc-200 sm:text-base md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</p>
+          <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><button type="button" onClick={() => scrollTo('contacto')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] sm:px-6">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></button><button type="button" onClick={() => scrollTo('salones')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9] sm:px-6">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></button></div>
+          <div className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#c8cdd3]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f1f5f9]" /><span className="truncate">{heroLocationForSalon(salon)}</span></button>)}</div>
         </motion.div>
       </div>
     </section>
@@ -718,12 +718,18 @@ export default function Home() {
       </div> : null}
       {selectedPackageCards.length ? <div className="grid items-stretch gap-5 lg:grid-cols-3">{selectedPackageCards.map((item, index) => {
         const accent = accentFor(index + 2);
-        return <article key={`${selectedPackageSalon?._id || 'paquete'}-${item._id}-${index}`} className={`flex min-h-[430px] flex-col rounded-2xl border p-6 transition hover:-translate-y-1 ${accent.card}`}>
+        return <article key={`${selectedPackageSalon?._id || 'paquete'}-${item._id}-${index}`} className={`min-w-0 max-w-full overflow-hidden flex min-h-[430px] flex-col rounded-2xl border p-4 transition hover:-translate-y-1 sm:p-6 ${accent.card}`}>
         <span className={`mb-5 block h-1.5 w-14 rounded-full ${accent.line}`} />
-        <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className={`truncate text-xl font-semibold uppercase tracking-[0.12em] ${accent.text}`} title={item.name}>{item.name}</h3><p className="mt-1 text-xs text-zinc-500">{selectedPackageSalon ? titleForSalon(selectedPackageSalon) : item.salonName || 'M&M Eventos'}</p></div><span className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${accent.badge}`}>{item.badgeLabel || ['Más elegido', 'Premium', 'Exclusivo'][index]}</span></div>
+        <div className="grid min-w-0 gap-3 sm:flex sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h3 className={`max-w-full break-words text-lg font-semibold uppercase tracking-[0.1em] sm:text-xl sm:tracking-[0.12em] ${accent.text}`} title={item.name}>{item.name}</h3>
+            <p className="mt-1 text-xs text-zinc-500">{selectedPackageSalon ? titleForSalon(selectedPackageSalon) : item.salonName || 'M&M Eventos'}</p>
+          </div>
+          <span className={`w-fit max-w-full shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${accent.badge}`}>{item.badgeLabel || ['Más elegido', 'Premium', 'Exclusivo'][index]}</span>
+        </div>
         <p className="mt-6 text-sm text-zinc-400">Desde</p><p className={`text-3xl font-semibold ${accent.text}`}>{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs text-zinc-400">por persona</span></p>
         {item.description ? <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-300">{item.description}</p> : null}
-        <ul className="mt-5 space-y-2 text-sm text-zinc-300">{(item.includedServices ?? []).slice(0, 6).map((service) => <li key={service} className="flex gap-2"><Check className={`mt-0.5 h-4 w-4 shrink-0 ${accent.text}`} />{service}</li>)}</ul>
+        <ul className="mt-5 space-y-2 text-sm text-zinc-300">{(item.includedServices ?? []).slice(0, 6).map((service) => <li key={service} className="flex min-w-0 gap-2"><Check className={`mt-0.5 h-4 w-4 shrink-0 ${accent.text}`} /><span className="min-w-0 break-words">{service}</span></li>)}</ul>
         {item.promotionText || item.giftText ? <p className={`mt-4 rounded-lg border p-3 text-sm ${accent.badge}`}>{item.promotionText || item.giftText}</p> : null}
         <PackageFullDetail item={item} accentText={accent.text} />
         <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2">
