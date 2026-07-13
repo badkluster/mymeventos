@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Eye, Search } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Eye, Plus, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { eventStatusLabels } from '@/lib/display-labels';
 import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
+import { EventCreateModal } from '@/features/events/event-create-modal';
 import type { Event, PaginationMeta, Salon } from '@/features/quotes/types';
 
 type ListResponse = { items?: Event[]; meta?: Partial<PaginationMeta> };
@@ -36,10 +38,12 @@ function normalize(response: ListResponse): { items: Event[]; meta: PaginationMe
 }
 
 export default function EventsPage() {
+  const router = useRouter();
   const { showToast } = useToast();
   const [items, setItems] = useState<Event[]>([]);
   const [salons, setSalons] = useState<Salon[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
   const [filters, setFilters] = useState({ page: 1, limit: 20, query: '', status: '', salonId: '' });
   const [searchInput, setSearchInput] = useState('');
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, totalItems: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false });
@@ -88,9 +92,16 @@ export default function EventsPage() {
       setSavingId('');
     }
   };
+  const handleCreated = async (eventId: string, message?: string) => {
+    setCreateOpen(false);
+    showToast({ message: message ?? 'Evento creado correctamente.', variant: 'success' });
+    await load();
+    router.push(`/admin/events/${eventId}`);
+  };
+  const handleCreateError = useCallback((message: string) => showToast({ message, variant: 'error' }), [showToast]);
 
   return <section className="space-y-6">
-    <PageHeader title="Eventos" description="Eventos creados desde presupuestos aceptados y futuras reservas." />
+    <PageHeader title="Eventos" description="Eventos creados desde presupuestos aceptados, carga directa y futuras reservas." action={<Button onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Nuevo evento</Button>} />
     <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,auto)]">
         <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-11 pl-10" placeholder="Buscar por evento o notas..." /></div>
@@ -105,5 +116,6 @@ export default function EventsPage() {
       {!loading && items.length === 0 && <div className="grid place-items-center px-6 py-16 text-center"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-100 text-zinc-500"><CalendarDays className="h-6 w-6" /></span><h2 className="mt-4 font-semibold text-zinc-900">No hay eventos</h2><p className="mt-1 max-w-sm text-sm text-zinc-500">Los presupuestos convertidos aparecerán en este listado.</p></div>}
     </div>
     <footer className="flex flex-col gap-4 rounded-2xl border border-zinc-200/80 bg-white px-5 py-4 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between"><span className="text-zinc-600">Mostrando <strong className="font-semibold text-zinc-950">{items.length}</strong> de <strong className="font-semibold text-zinc-950">{meta.totalItems}</strong></span><div className="flex items-center gap-2"><Button variant="secondary" className="px-3" disabled={!meta.hasPreviousPage} onClick={() => updateFilters({ page: meta.page - 1 })}><ChevronLeft className="h-4 w-4" /><span className="sr-only">Anterior</span></Button><span className="min-w-32 text-center text-zinc-600">Página {meta.page} de {meta.totalPages}</span><Button variant="secondary" className="px-3" disabled={!meta.hasNextPage} onClick={() => updateFilters({ page: meta.page + 1 })}><ChevronRight className="h-4 w-4" /><span className="sr-only">Siguiente</span></Button></div></footer>
+    {createOpen ? <EventCreateModal open={createOpen} salons={salons} onClose={() => setCreateOpen(false)} onCreated={(eventId, message) => void handleCreated(eventId, message)} onError={handleCreateError} /> : null}
   </section>;
 }

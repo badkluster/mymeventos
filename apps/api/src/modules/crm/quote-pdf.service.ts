@@ -45,16 +45,27 @@ export async function generateAndUploadQuotePdf(quote: any): Promise<{ pdfSecure
     .text(`Teléfono: ${quote.phone || 'No informado'}`)
     .text(`Email: ${quote.email || 'No informado'}`)
     .text(`Tipo de evento: ${quote.eventType || 'No informado'}`)
+    .text(`Agasajado/a: ${quote.honoreeName || 'No informado'}`)
     .text(`Fecha tentativa: ${date(quote.eventDate)}`)
     .text(`Personas: ${quote.guestCount || 0}`)
-    .text(`Horario: ${quote.startTime || '—'} a ${quote.endTime || '—'}`);
+    .text(`Horario: ${quote.startTime || '—'} a ${quote.endTime || '—'}`)
+    .text(`Restricciones alimentarias: vegetarianos ${quote.vegetarianCount ?? 0}, veganos ${quote.veganCount ?? 0}, celíacos ${quote.celiacCount ?? 0}, intolerancia a lactosa ${quote.lactoseIntolerantCount ?? 0}`)
+    .text(`Mantelería: ${quote.tableLinenColor || 'A definir'}`);
 
   addSection(document, 'Propuesta comercial');
-  document.text(`Paquete: ${quote.packageName || 'Personalizado'}`)
-    .text(`Valor por persona: ${money(quote.pricePerPerson)}`)
-    .text(`Descuento: ${quote.discountPercentage ?? 0}%`)
-    .text(`Valor final por persona: ${money(quote.finalPricePerPerson)}`)
-    .text(`Seña: ${money(quote.depositAmount)}`)
+  document.text(`Paquete: ${quote.packageName || 'Personalizado'}`);
+  if (quote.pricingMode === 'fixed') {
+    document.text(`Modalidad: precio total del evento`)
+      .text(`Precio total base: ${money(quote.fixedPrice)}`)
+      .text(`Descuento: ${quote.discountPercentage ?? 0}%`)
+      .text(`Precio total final: ${money(quote.finalFixedPrice ?? quote.totalAmount)}`);
+  } else {
+    document.text(`Modalidad: precio por persona`)
+      .text(`Valor por persona: ${money(quote.pricePerPerson)}`)
+      .text(`Descuento: ${quote.discountPercentage ?? 0}%`)
+      .text(`Valor final por persona: ${money(quote.finalPricePerPerson)}`);
+  }
+  document.text(`Seña: ${money(quote.depositAmount)}`)
     .text(`Saldo: ${money(quote.balanceAmount)}`);
 
   if (quote.promotionText || quote.giftText || quote.paymentTerms) {

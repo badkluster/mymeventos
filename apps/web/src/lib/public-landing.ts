@@ -13,8 +13,11 @@ export type PublicPackage = {
   durationHours?: number;
   startTime?: string;
   endTime?: string;
+  pricingMode?: 'per_person' | 'fixed';
   pricePerPerson?: number;
   finalPricePerPerson?: number;
+  fixedPrice?: number;
+  finalFixedPrice?: number;
   depositAmount?: number;
   paymentTerms?: string;
   promotionText?: string;

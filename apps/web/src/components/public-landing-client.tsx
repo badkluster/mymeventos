@@ -16,7 +16,7 @@ type Media = { url: string; secureUrl?: string; title?: string; altText?: string
 type ExtraService = { _id?: string; name: string; description?: string; basePrice?: number; includedByDefault?: boolean };
 type SalonManager = { _id?: string; firstName?: string; lastName?: string; fullName?: string; phone?: string; email?: string };
 type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; province?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; manager?: SalonManager; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
-type Package = { _id: string; name: string; salonId?: string; salonName?: string; description?: string; notes?: string; durationHours?: number; startTime?: string; endTime?: string; pricePerPerson?: number; finalPricePerPerson?: number; depositAmount?: number; paymentTerms?: string; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
+type Package = { _id: string; name: string; salonId?: string; salonName?: string; description?: string; notes?: string; durationHours?: number; startTime?: string; endTime?: string; pricingMode?: 'per_person' | 'fixed'; pricePerPerson?: number; finalPricePerPerson?: number; fixedPrice?: number; finalFixedPrice?: number; depositAmount?: number; paymentTerms?: string; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
 type LandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
 type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
 type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[] };
@@ -62,6 +62,8 @@ const contactMessageMaxWords = 120;
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 
 const money = (value?: number) => value ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value) : 'Consultar';
+const packagePrice = (item: Package) => item.pricingMode === 'fixed' ? item.finalFixedPrice || item.fixedPrice : item.finalPricePerPerson || item.pricePerPerson;
+const packagePriceUnit = (item: Package) => item.pricingMode === 'fixed' ? 'precio total' : 'por persona';
 const iconMap = { Utensils, GlassWater, Music, Sparkles, PartyPopper, CalendarDays, Gift, Camera, Users, Crown, Heart, CakeSlice, GraduationCap, BriefcaseBusiness, Baby };
 const eventTypeIcons: Record<string, keyof typeof iconMap> = {
   '15 anos': 'Crown',
@@ -162,11 +164,11 @@ function salonWaMessage(salon: Salon) {
   return `Hola M&M Eventos, vengo de la web y quiero más información sobre ${titleForSalon(salon)} (${locationForSalon(salon)}).`;
 }
 function packageWaMessage(salon: Salon, item: Package) {
-  const price = money(item.finalPricePerPerson || item.pricePerPerson);
+  const price = money(item.pricingMode === 'fixed' ? item.finalFixedPrice || item.fixedPrice : item.finalPricePerPerson || item.pricePerPerson);
   const benefit = item.promotionText || item.giftText;
   return [
     `Hola M&M Eventos, vengo de la web y me interesa el paquete "${item.name}" para ${titleForSalon(salon)}.`,
-    `Valor publicado: ${price} por persona.`,
+    `Valor publicado: ${price}${item.pricingMode === 'fixed' ? ' por el evento' : ' por persona'}.`,
     benefit ? `Beneficio: ${benefit}` : '',
     'Quiero recibir más información para reservar.',
   ].filter(Boolean).join('\n');
@@ -290,7 +292,7 @@ function PackageDetailModal({ item, accentText, onClose }: { item: Package; acce
           <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Detalle del paquete</p>
           <h2 className="mt-3 max-w-3xl break-words pr-12 text-3xl font-semibold md:text-5xl">{item.name}</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Valor</p><p className={`mt-1 text-xl font-semibold ${accentText}`}>{money(item.finalPricePerPerson || item.pricePerPerson)}</p><p className="text-xs text-zinc-500">por persona</p></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Valor</p><p className={`mt-1 text-xl font-semibold ${accentText}`}>{money(packagePrice(item))}</p><p className="text-xs text-zinc-500">{packagePriceUnit(item)}</p></div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Duración</p><p className="mt-1 font-semibold">{item.durationHours ? `${item.durationHours} hs` : 'A coordinar'}</p>{item.startTime && item.endTime ? <p className="text-xs text-zinc-500">{item.startTime} a {item.endTime}</p> : null}</div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Seña</p><p className="mt-1 font-semibold">{item.depositAmount ? money(item.depositAmount) : 'A consultar'}</p></div>
           </div>
@@ -450,7 +452,7 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
               <h3 className="text-2xl font-semibold">Paquetes disponibles</h3>
               <div className="mt-4 grid gap-3 md:grid-cols-2">{packages.map((item) => <article key={item._id} className="flex min-h-[260px] flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="flex items-start justify-between gap-3"><h4 className="font-semibold">{item.name}</h4>{item.badgeLabel ? <span className="rounded-md bg-[#c8cdd3] px-2 py-1 text-[10px] font-bold uppercase text-black">{item.badgeLabel}</span> : null}</div>
-                <p className="mt-3 text-xl font-semibold text-[#f1f5f9]">{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs font-normal text-zinc-500">por persona</span></p>
+                <p className="mt-3 text-xl font-semibold text-[#f1f5f9]">{money(packagePrice(item))} <span className="text-xs font-normal text-zinc-500">{packagePriceUnit(item)}</span></p>
                 {item.description ? <p className="mt-3 text-sm leading-6 text-zinc-400">{item.description}</p> : null}
                 {item.includedServices?.length ? <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">{item.includedServices.slice(0, 4).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c8cdd3]" />{service}</li>)}</ul> : null}
                 {item.promotionText || item.giftText ? <p className="mt-3 text-sm text-[#d4d4d8]">{item.promotionText || item.giftText}</p> : null}
@@ -524,6 +526,7 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
 export function PublicLandingClient({ initialLanding }: { initialLanding?: LandingPayload | null }) {
   const [landing, setLanding] = useState<LandingPayload>(initialLanding ?? emptyLanding);
   const [selectedSalonId, setSelectedSalonId] = useState('');
+  const [selectedContactPackageId, setSelectedContactPackageId] = useState('');
   const [selectedPackageSalonId, setSelectedPackageSalonId] = useState('');
   const [selectedSalon, setSelectedSalon] = useState<Salon | null>(null);
   const [galleryLightboxIndex, setGalleryLightboxIndex] = useState<number | null>(null);
@@ -567,6 +570,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       : packages.filter((item) => item.salonId === selectedPackageSalon._id || item.salonName === titleForSalon(selectedPackageSalon));
     return salonPackages;
   }, [packages, selectedPackageSalon]);
+  const contactPackages = useMemo(() => selectedSalonId ? packages.filter((item) => item.salonId === selectedSalonId || displaySalons.find((salon) => salon._id === selectedSalonId)?.packages?.some((salonPackage) => salonPackage._id === item._id)) : [], [displaySalons, packages, selectedSalonId]);
   const heroSalons = useMemo(() => {
     const seen = new Set<string>();
     return displaySalons.filter((salon) => {
@@ -588,6 +592,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     const eventDate = textValue(formData.get('eventDate'));
     const eventType = textValue(formData.get('eventType'));
     const salonId = textValue(formData.get('salonId'));
+    const packageTemplateId = textValue(formData.get('packageTemplateId'));
     const selectedSalonForRequest = displaySalons.find((salon) => salon._id === salonId);
     if (!contactPhonePattern.test(phone)) {
       setFormState('error');
@@ -625,6 +630,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
         eventDate: eventDate || undefined,
         guestCount,
         salonId,
+        packageTemplateId: packageTemplateId || undefined,
         message,
       });
       if (selectedSalonForRequest && salonWhatsAppNumber(selectedSalonForRequest)) {
@@ -643,6 +649,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       }
       form.reset();
       setSelectedSalonId('');
+      setSelectedContactPackageId('');
       setFormState('success');
       setFormMessage('Recibimos tu solicitud. Un asesor de M&M Eventos se contactará para enviarte una propuesta personalizada.');
     } catch (error) {
@@ -743,13 +750,13 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
           </div>
           <span className={`w-fit max-w-full shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${accent.badge}`}>{item.badgeLabel || ['Más elegido', 'Premium', 'Exclusivo'][index]}</span>
         </div>
-        <p className="mt-6 text-sm text-zinc-400">Desde</p><p className={`text-3xl font-semibold ${accent.text}`}>{money(item.finalPricePerPerson || item.pricePerPerson)} <span className="text-xs text-zinc-400">por persona</span></p>
+        <p className="mt-6 text-sm text-zinc-400">{item.pricingMode === 'fixed' ? 'Precio del evento' : 'Desde'}</p><p className={`text-3xl font-semibold ${accent.text}`}>{money(packagePrice(item))} <span className="text-xs text-zinc-400">{packagePriceUnit(item)}</span></p>
         {item.description ? <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-300">{item.description}</p> : null}
         <ul className="mt-5 space-y-2 text-sm text-zinc-300">{(item.includedServices ?? []).slice(0, 6).map((service) => <li key={service} className="flex min-w-0 gap-2"><Check className={`mt-0.5 h-4 w-4 shrink-0 ${accent.text}`} /><span className="min-w-0 break-words">{service}</span></li>)}</ul>
         {item.promotionText || item.giftText ? <p className={`mt-4 rounded-lg border p-3 text-sm ${accent.badge}`}>{item.promotionText || item.giftText}</p> : null}
         <PackageFullDetail item={item} accentText={accent.text} />
         <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2">
-          {selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), packageWaMessage(selectedPackageSalon, item))} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Me interesa <ExternalLink className="h-4 w-4" /></a> : null}
+          {selectedPackageSalon ? <button type="button" onClick={() => { setSelectedSalonId(selectedPackageSalon._id); setSelectedContactPackageId(item._id); scrollTo('contacto'); }} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Solicitar propuesta <ArrowRight className="h-4 w-4" /></button> : null}
           <button type="button" onClick={() => selectedPackageSalon ? setSelectedSalon(selectedPackageSalon) : scrollTo('contacto')} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
         </div>
       </motion.article>;
@@ -815,7 +822,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Tipo de evento<input required name="eventType" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="15 años, casamiento..." /></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Fecha tentativa<input name="eventDate" type="date" min={todayIsoDate()} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" /></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Cantidad de personas<input required name="guestCount" type="number" min={contactGuestMin} max={contactGuestMax} step={1} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Nº de personas" /></motion.label>
-          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => setSelectedSalonId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => { setSelectedSalonId(event.target.value); setSelectedContactPackageId(''); }} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Propuesta de interés<select name="packageTemplateId" value={selectedContactPackageId} onChange={(event) => setSelectedContactPackageId(event.target.value)} disabled={!selectedSalonId} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3] disabled:opacity-50"><option value="">Propuesta personalizada</option>{contactPackages.map((item) => <option key={item._id} value={item._id}>{item.name} · {money(packagePrice(item))} {packagePriceUnit(item)}</option>)}</select></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400 md:col-span-2">Mensaje<textarea name="message" maxLength={700} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Contanos más detalles de tu evento..." /></motion.label>
           <motion.button variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} disabled={formState === 'loading'} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] disabled:opacity-60 md:col-span-2">{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></motion.button>
         </motion.form>

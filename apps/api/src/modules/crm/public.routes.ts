@@ -33,6 +33,7 @@ const schema = z.object({
     eventDate: z.coerce.date().optional().refine(isFutureDay, 'La fecha tentativa debe ser posterior a hoy.'),
     guestCount: z.coerce.number().int().min(1).max(1000),
     salonId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+    packageTemplateId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
     message: z.string().max(700).optional().refine((value) => countWords(value) <= messageMaxWords, `El mensaje no puede superar ${messageMaxWords} palabras.`)
   }),
   params: z.object({}),
@@ -83,9 +84,12 @@ async function publicSalons() {
           durationHours: source.durationHours,
           startTime: source.startTime,
           endTime: source.endTime,
+          pricingMode: source.pricingMode ?? 'per_person',
           pricePerPerson,
+          fixedPrice: Number(source.fixedPrice ?? 0),
           discountPercentage,
           finalPricePerPerson,
+          finalFixedPrice: Number(source.finalFixedPrice ?? Math.round(Number(source.fixedPrice ?? 0) * (1 - discountPercentage / 100))),
           depositAmount: source.depositAmount,
           paymentTerms: source.paymentTerms,
           promotionText: source.promotionText,
@@ -134,6 +138,13 @@ router.get('/salons', asyncHandler(async (_request, response) => {
 router.post('/quick-quote', validateRequest(schema), asyncHandler(async (request, response) => {
   const salon = await Salon.exists({ _id: request.body.salonId, active: true, deletedAt: null });
   if (!salon) throw new ApiError(404, 'SALON_NOT_FOUND');
+  const selectedPackage: any = request.body.packageTemplateId ? await PackageTemplate.findOne({
+    _id: request.body.packageTemplateId,
+    active: true,
+    deletedAt: null,
+    $or: [{ isGlobal: true }, { salonIds: request.body.salonId }]
+  }).select('_id name publicTitle').lean() : null;
+  if (request.body.packageTemplateId && !selectedPackage) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   const result = await createQuoteRequest({
     source: 'quick_quote',
     contactName: request.body.name,
@@ -143,6 +154,8 @@ router.post('/quick-quote', validateRequest(schema), asyncHandler(async (request
     estimatedEventDate: request.body.eventDate,
     guestCount: request.body.guestCount,
     interestedSalonIds: [request.body.salonId],
+    interestedPackageTemplateId: selectedPackage?._id?.toString(),
+    interestedPackageName: selectedPackage?.publicTitle ?? selectedPackage?.name,
     message: request.body.message,
     originalPayload: request.body
   });

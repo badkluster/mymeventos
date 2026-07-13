@@ -46,6 +46,8 @@ const quoteRequestSchema = new Schema({
   estimatedEventDate: Date,
   guestCount: Number,
   interestedSalonIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Salon' }], default: [], index: true },
+  interestedPackageTemplateId: { type: Schema.Types.ObjectId, ref: 'PackageTemplate', index: true },
+  interestedPackageName: String,
   message: String,
   originalPayload: Schema.Types.Mixed,
   assignedToUserId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
@@ -61,6 +63,7 @@ const quoteRequestSchema = new Schema({
 
 const customerSchema = new Schema({
   firstName: String, lastName: String, fullName: { type: String, index: true }, phone: { type: String, index: true }, normalizedPhone: { type: String, index: true }, email: { type: String, index: true }, normalizedEmail: { type: String, index: true },
+  documentNumber: String, address: String, occupation: String,
   alternativeContacts: [Schema.Types.Mixed], notes: String, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceLeadIds: [{ type: Schema.Types.ObjectId, ref: 'Lead' }],
   createdFromLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, createdFromQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
   salonIds: [{ type: Schema.Types.ObjectId, ref: 'Salon', index: true }], ...base
@@ -76,7 +79,9 @@ const packageTemplateSchema = new Schema({
   isGlobal: { type: Boolean, default: true },
   salonIds: [{ type: Schema.Types.ObjectId, ref: 'Salon', index: true }],
   durationHours: Number, startTime: String, endTime: String,
+  pricingMode: { type: String, enum: ['per_person', 'fixed'], default: 'per_person', index: true },
   pricePerPerson: Number, discountPercentage: { type: Number, default: 0 }, finalPricePerPerson: Number,
+  fixedPrice: Number, finalFixedPrice: Number,
   depositAmount: { type: Number, default: 0 }, paymentTerms: String, promotionText: String, giftText: String,
   menuSections: { type: [menuSectionSchema], default: [] }, includedServices: { type: [String], default: [] }, notes: String,
   publicTitle: String,
@@ -93,7 +98,9 @@ const venuePackageRuleSchema = new Schema({
   packageTemplateId: { type: Schema.Types.ObjectId, ref: 'PackageTemplate', required: true, index: true },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
   active: { type: Boolean, default: true },
+  pricingMode: { type: String, enum: ['per_person', 'fixed'] },
   pricePerPerson: Number, discountPercentage: Number, finalPricePerPerson: Number, depositAmount: Number,
+  fixedPrice: Number, finalFixedPrice: Number,
   paymentTerms: String, promotionText: String, giftText: String, notes: String,
   menuSections: { type: [menuSectionSchema], default: undefined }, includedServices: { type: [String], default: undefined },
   ...base
@@ -110,8 +117,11 @@ const quoteSchema = new Schema({
   packageTemplateId: { type: Schema.Types.ObjectId, ref: 'PackageTemplate', index: true },
   status: { type: String, enum: ['draft', 'sent', 'follow_up', 'accepted', 'rejected', 'expired', 'converted'], default: 'draft', index: true },
   contactName: String, phone: String, email: String, eventType: String, eventDate: Date, guestCount: Number,
+  honoreeName: String, vegetarianCount: Number, veganCount: Number, celiacCount: Number, lactoseIntolerantCount: Number, tableLinenColor: String,
   packageName: String, durationHours: Number, startTime: String, endTime: String,
+  pricingMode: { type: String, enum: ['per_person', 'fixed'], default: 'per_person', index: true },
   pricePerPerson: Number, discountPercentage: { type: Number, default: 0 }, finalPricePerPerson: Number,
+  fixedPrice: Number, finalFixedPrice: Number,
   totalAmount: Number, depositAmount: { type: Number, default: 0 }, balanceAmount: Number,
   paymentTerms: String, promotionText: String, giftText: String,
   menuSections: { type: [menuSectionSchema], default: [] }, includedServices: { type: [String], default: [] }, notes: String,
@@ -146,6 +156,7 @@ const revisionSchema = new Schema({
 const eventSchema = new Schema({
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true }, leadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, quoteId: { type: Schema.Types.ObjectId, ref: 'Quote' }, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' }, createdFromQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true }, eventType: String, eventName: String, eventDate: Date,
+  honoreeName: String, vegetarianCount: Number, veganCount: Number, celiacCount: Number, lactoseIntolerantCount: Number, tableLinenColor: String,
   startTime: String, endTime: String, guestCount: Number, status: { type: String, enum: ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'], default: 'draft' },
   quoteMode: { type: String, enum: ['PACKAGE', 'CUSTOM', 'HYBRID'], default: 'PACKAGE', index: true },
   guestBreakdown: Schema.Types.Mixed,

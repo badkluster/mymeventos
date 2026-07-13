@@ -408,6 +408,7 @@ export default function CalendarPage() {
   const [selectedEntry, setSelectedEntry] = useState<CalendarEntry | null>(null);
   const [dayStackDate, setDayStackDate] = useState<Date | null>(null);
   const canReadEvents = userCanAccess(user, [Permission.EVENTS_READ]);
+  const currentUserId = user?._id ?? user?.id ?? '';
 
   const visibleRange = useMemo(() => rangeFor(view, focusDate), [focusDate, view]);
   const canShowEvents = filters.source === 'all' || filters.source === 'events';
@@ -541,7 +542,7 @@ export default function CalendarPage() {
     setFormOpen(true);
   };
   const openEdit = (entry: CalendarEntry) => {
-    if (!entry.item) return;
+    if (!entry.item || entityId(entry.item.createdBy) !== currentUserId) return;
     setSelectedEntry(null);
     setForm(formFromEntry(entry));
     setEditingId(entry.id);
@@ -586,7 +587,7 @@ export default function CalendarPage() {
     }
   };
   const updateCalendarItem = async (entry: CalendarEntry, patch: Record<string, unknown>, message: string) => {
-    if (!entry.item) return;
+    if (!entry.item || entityId(entry.item.createdBy) !== currentUserId) return;
     try {
       await api.patch(`/calendar-items/${entry.id}`, patch);
       setSelectedEntry(null);
@@ -597,7 +598,7 @@ export default function CalendarPage() {
     }
   };
   const deleteCalendarItem = async (entry: CalendarEntry) => {
-    if (!entry.item) return;
+    if (!entry.item || entityId(entry.item.createdBy) !== currentUserId) return;
     try {
       await api.delete(`/calendar-items/${entry.id}`);
       setSelectedEntry(null);
@@ -675,7 +676,7 @@ export default function CalendarPage() {
     </div>
 
     <CalendarItemFormModal open={formOpen} mode={formMode} form={form} salons={salons} users={users} leads={leads} customers={customers} events={linkEvents} quotes={quotes} contracts={contracts} payments={payments} suppliers={suppliers} saving={saving} onClose={() => setFormOpen(false)} onSubmit={saveCalendarItem} onChange={setForm} />
-    <EntryDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} onEdit={openEdit} onDelete={deleteCalendarItem} onPatch={updateCalendarItem} />
+    <EntryDetailModal entry={selectedEntry} currentUserId={currentUserId} onClose={() => setSelectedEntry(null)} onEdit={openEdit} onDelete={deleteCalendarItem} onPatch={updateCalendarItem} />
     <DayStackModal date={dayStackDate} entries={dayStackEntries} onClose={() => setDayStackDate(null)} onOpen={(entry) => { setDayStackDate(null); setSelectedEntry(entry); }} onCreate={(date) => { setDayStackDate(null); openCreate(date); }} />
   </section>;
 }
@@ -924,12 +925,13 @@ function CalendarItemFormModal({ open, mode, form, salons, users, leads, custome
   </Modal>;
 }
 
-function EntryDetailModal({ entry, onClose, onEdit, onDelete, onPatch }: { entry: CalendarEntry | null; onClose: () => void; onEdit: (entry: CalendarEntry) => void; onDelete: (entry: CalendarEntry) => void; onPatch: (entry: CalendarEntry, patch: Record<string, unknown>, message: string) => void }) {
+function EntryDetailModal({ entry, currentUserId, onClose, onEdit, onDelete, onPatch }: { entry: CalendarEntry | null; currentUserId: string; onClose: () => void; onEdit: (entry: CalendarEntry) => void; onDelete: (entry: CalendarEntry) => void; onPatch: (entry: CalendarEntry, patch: Record<string, unknown>, message: string) => void }) {
   const [confirmAction, setConfirmAction] = useState<null | { title: string; description: string; confirmLabel: string; action: () => void }>(null);
   if (!entry) return null;
   const meta = typeMeta[entry.type];
   const Icon = meta.icon;
   const links = relatedLinks(entry);
+  const canModify = Boolean(entry.item && entityId(entry.item.createdBy) === currentUserId);
   return <>
   <Modal open={Boolean(entry)} title={entry.title} description={meta.label} onClose={onClose}>
     <div className="space-y-5 p-5">
@@ -939,9 +941,10 @@ function EntryDetailModal({ entry, onClose, onEdit, onDelete, onPatch }: { entry
           <div className="flex flex-wrap gap-2"><TypeBadge type={entry.type} /><span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${entry.visibility === 'shared' ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-700'}`}>{entry.visibility === 'shared' ? <Share2 className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}{entry.visibility === 'shared' ? 'Todos' : 'Personal'}</span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${priorityMeta[entry.priority].className}`}>{priorityMeta[entry.priority].label}</span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[entry.status] ?? 'bg-zinc-100 text-zinc-700'}`}>{eventStatusOptions[entry.status as keyof typeof eventStatusOptions] ?? entry.status}</span></div>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <InfoCard icon={Info} label="Detalle" value={entry.description || 'Sin detalle cargado.'} />
         <InfoCard icon={Mail} label="Recordatorio" value={entry.notification?.enabled ? `Activo: ${entry.notification.offsetValue ?? 1} ${entry.notification.offsetUnit ?? 'dias'} antes por ${(entry.notification.channels ?? ['system']).join(', ')}` : 'Sin recordatorio configurado.'} />
+        <InfoCard icon={UserRound} label="Creado por" value={entry.item ? entityName(entry.item.createdBy) : 'Generado automáticamente por el sistema'} />
       </div>
       {links.length ? <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <p className="text-xs font-semibold uppercase text-zinc-400">Vínculos rápidos</p>
@@ -953,10 +956,11 @@ function EntryDetailModal({ entry, onClose, onEdit, onDelete, onPatch }: { entry
         </div>
       </section> : null}
       {entry.type === 'event' ? <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">Este item viene del módulo Eventos. Para cambiar datos comerciales, salón, pagos o contrato, abrí el evento original.</div> : null}
+      {entry.item && !canModify ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Este ítem fue creado por {entityName(entry.item.createdBy)}. Sólo esa persona puede editarlo, completarlo, cancelarlo o eliminarlo.</div> : null}
       <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 pt-4">
         <Button type="button" variant="secondary" onClick={onClose}>Salir</Button>
         {entry.href ? <Link href={entry.href}><Button variant="secondary"><Eye className="mr-2 h-4 w-4" />Abrir evento</Button></Link> : null}
-        {entry.item ? <><Button variant="secondary" onClick={() => onEdit(entry)}><Pencil className="mr-2 h-4 w-4" />Editar</Button><Button variant="secondary" onClick={() => setConfirmAction({ title: 'Completar item', description: '¿Estás seguro que deseas completar este item?', confirmLabel: 'Sí, completar', action: () => onPatch(entry, { status: 'done' }, 'Item marcado como completado.') })}><CheckCircle2 className="mr-2 h-4 w-4" />Completar</Button><Button variant="secondary" onClick={() => setConfirmAction({ title: 'Cancelar item', description: '¿Estás seguro que deseas cancelar este item?', confirmLabel: 'Sí, cancelar', action: () => onPatch(entry, { status: 'cancelled' }, 'Item cancelado.') })}><XCircle className="mr-2 h-4 w-4" />Cancelar</Button><Button variant="danger" onClick={() => setConfirmAction({ title: 'Eliminar item', description: '¿Estás seguro que deseas eliminar este item? Esta acción no se mostrará más en el calendario.', confirmLabel: 'Sí, eliminar', action: () => onDelete(entry) })}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button></> : null}
+        {canModify ? <><Button variant="secondary" onClick={() => onEdit(entry)}><Pencil className="mr-2 h-4 w-4" />Editar</Button><Button variant="secondary" onClick={() => setConfirmAction({ title: 'Completar item', description: '¿Estás seguro que deseas completar este item?', confirmLabel: 'Sí, completar', action: () => onPatch(entry, { status: 'done' }, 'Item marcado como completado.') })}><CheckCircle2 className="mr-2 h-4 w-4" />Completar</Button><Button variant="secondary" onClick={() => setConfirmAction({ title: 'Cancelar item', description: '¿Estás seguro que deseas cancelar este item?', confirmLabel: 'Sí, cancelar', action: () => onPatch(entry, { status: 'cancelled' }, 'Item cancelado.') })}><XCircle className="mr-2 h-4 w-4" />Cancelar</Button><Button variant="danger" onClick={() => setConfirmAction({ title: 'Eliminar item', description: '¿Estás seguro que deseas eliminar este item? Esta acción no se mostrará más en el calendario.', confirmLabel: 'Sí, eliminar', action: () => onDelete(entry) })}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button></> : null}
       </div>
     </div>
   </Modal>

@@ -1,16 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Bell, BriefcaseBusiness, Clock3, KeyRound, MapPin, Save, ShieldCheck, UserRound } from 'lucide-react';
 import { api } from '@/lib/api';
-import { displayLabel, permissionLabels, roleLabels } from '@/lib/display-labels';
+import { displayLabel, roleLabels } from '@/lib/display-labels';
 import { userCanAccess } from '@/lib/admin-permissions';
+import { permissionAreas } from '@/lib/permission-areas';
 import { Button, Input, PageHeader, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { useSession } from '@/components/session-provider';
-import { Permission } from '@mym/shared';
+import { Permission, Role, RolePresets } from '@mym/shared';
 
 type Salon = { _id: string; name?: string; slug?: string; active?: boolean };
 type User = {
@@ -29,9 +30,17 @@ const entityName = (value: unknown) => typeof value === 'string' ? value : (valu
 const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin acceso';
 const name = (user?: User) => user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || user?.email || 'Usuario';
 const toggle = (items: string[], value: string) => items.includes(value) ? items.filter((item) => item !== value) : [...items, value];
+function grantedByRole(roles: string[], permission: Permission): boolean { return roles.includes(Role.ADMIN) || roles.some((role) => (RolePresets[role as Role] ?? []).includes(permission)); }
+function effectivePermission(roles: string[], draft: { allow: string[]; deny: string[] }, permission: Permission): boolean { if (roles.includes(Role.ADMIN)) return true; if (draft.deny.includes(permission)) return false; return grantedByRole(roles, permission) || draft.allow.includes(permission); }
+function setExplicitPermission(draft: { allow: string[]; deny: string[] }, roles: string[], permission: Permission, enabled: boolean) {
+  const inherited = grantedByRole(roles, permission);
+  if (enabled) return { allow: inherited ? draft.allow.filter((item) => item !== permission) : [...new Set([...draft.allow, permission])], deny: draft.deny.filter((item) => item !== permission) };
+  return { allow: draft.allow.filter((item) => item !== permission), deny: inherited ? [...new Set([...draft.deny, permission])] : draft.deny.filter((item) => item !== permission) };
+}
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const userId = params?.id ?? '';
   const { showToast } = useToast();
   const { user: sessionUser } = useSession();
@@ -39,8 +48,8 @@ export default function UserDetailPage() {
   const canUpdate = userCanAccess(sessionUser, [Permission.USERS_UPDATE]);
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<string[]>(Object.keys(roleLabels));
-  const [permissions, setPermissions] = useState<string[]>(Object.keys(permissionLabels));
-  const [tab, setTab] = useState<Tab>('profile');
+  const [permissions, setPermissions] = useState<string[]>(Object.values(Permission));
+  const [tab, setTab] = useState<Tab>(searchParams?.get('tab') === 'access' ? 'access' : 'profile');
   const [saving, setSaving] = useState('');
   const [roleDraft, setRoleDraft] = useState<string[]>([]);
   const [permissionDraft, setPermissionDraft] = useState({ allow: [] as string[], deny: [] as string[] });
@@ -53,7 +62,7 @@ export default function UserDetailPage() {
     const response = await api.get<DetailResponse>(`/users/${userId}`);
     setUser(response.user);
     setRoles(response.roles ?? Object.keys(roleLabels));
-    setPermissions(response.permissions ?? Object.keys(permissionLabels));
+    setPermissions(response.permissions ?? Object.values(Permission));
     setRoleDraft(response.user.roles ?? []);
     setPermissionDraft({ allow: response.user.permissionOverrides ?? [], deny: response.user.permissionDeniedOverrides ?? [] });
     setNotifications(response.user.notificationPreferences ?? {});
@@ -88,6 +97,8 @@ export default function UserDetailPage() {
       if (section === 'access') {
         await api.patch(`/users/${userId}/roles`, { roles: roleDraft, primaryRole: roleDraft[0] });
         await api.patch(`/users/${userId}/permissions`, { permissionOverrides: permissionDraft.allow, permissionDeniedOverrides: permissionDraft.deny });
+        const canAccessBackoffice = roleDraft.includes(Role.ADMIN) || permissionAreas.some((area) => effectivePermission(roleDraft, permissionDraft, area.accessPermission));
+        await api.patch(`/users/${userId}`, { canAccessBackoffice });
       }
       if (section === 'notifications') await api.patch(`/users/${userId}/notification-preferences`, notifications);
       if (section === 'employee') await api.patch(`/users/${userId}/employee-profile`, employee);
@@ -147,9 +158,9 @@ export default function UserDetailPage() {
       <SalonList title="Salones con acceso" items={user.salonIds} />
       <SalonList title="Salones a cargo" items={user.managedSalonIds} />
     </Panel>}
-    {tab === 'access' && <Panel title="Roles y permisos explícitos" action={<Button disabled={saving === 'access' || !roleDraft.length} onClick={() => void save('access')}><Save className="mr-2 h-4 w-4" />Guardar</Button>}>
-      <section><h3 className="text-sm font-semibold text-zinc-900">Roles</h3><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{roles.map((role) => <Check key={role} label={displayLabel(roleLabels, role)} checked={roleDraft.includes(role)} onChange={() => setRoleDraft((current) => toggle(current, role))} />)}</div></section>
-      <section className="grid gap-5 xl:grid-cols-2"><PermissionBox title="Permisos adicionales" values={permissionDraft.allow} permissions={permissions} onToggle={(permission) => setPermissionDraft((current) => ({ ...current, allow: toggle(current.allow, permission), deny: current.deny.filter((item) => item !== permission) }))} /><PermissionBox title="Permisos denegados" values={permissionDraft.deny} permissions={permissions} onToggle={(permission) => setPermissionDraft((current) => ({ ...current, deny: toggle(current.deny, permission), allow: current.allow.filter((item) => item !== permission) }))} /></section>
+    {tab === 'access' && <Panel title="Accesos y permisos" action={<Button disabled={saving === 'access' || !roleDraft.length} onClick={() => void save('access')}><Save className="mr-2 h-4 w-4" />Guardar accesos</Button>}>
+      <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4"><h3 className="text-sm font-semibold text-zinc-900">Rol base</h3><p className="mt-1 text-sm text-zinc-500">El rol propone permisos iniciales. Los accesos por área de abajo permiten ajustarlos de forma simple.</p><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{roles.map((role) => <Check key={role} label={displayLabel(roleLabels, role)} checked={roleDraft.includes(role)} onChange={() => setRoleDraft((current) => toggle(current, role))} />)}</div></section>
+      {roleDraft.includes(Role.ADMIN) ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><b>Administrador:</b> tiene acceso completo a todas las áreas y acciones. Sus permisos no pueden limitarse.</div> : <section><div className="mb-4"><h3 className="text-base font-semibold text-zinc-950">Áreas del backoffice</h3><p className="mt-1 text-sm text-zinc-500">El interruptor controla si el área aparece en el menú y si el usuario puede ingresar. Al habilitarla se muestran sus acciones.</p></div><div className="grid gap-4 xl:grid-cols-2">{permissionAreas.filter((area) => permissions.includes(area.accessPermission)).map((area) => { const enabled = effectivePermission(roleDraft, permissionDraft, area.accessPermission); return <article key={area.id} className={`rounded-2xl border p-4 transition ${enabled ? 'border-zinc-300 bg-white shadow-sm' : 'border-zinc-200 bg-zinc-50/70'}`}><header className="flex items-start justify-between gap-4"><div><h4 className="font-semibold text-zinc-950">{area.title}</h4><p className="mt-1 text-sm text-zinc-500">{area.description}</p></div><AreaSwitch checked={enabled} label={area.title} onChange={() => setPermissionDraft((current) => enabled ? area.permissions.reduce((draft, item) => setExplicitPermission(draft, roleDraft, item.permission, false), current) : setExplicitPermission(current, roleDraft, area.accessPermission, true))} /></header>{enabled ? <div className="mt-4 border-t border-zinc-100 pt-4"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Acciones permitidas</p><div className="flex flex-wrap gap-2">{area.permissions.map((item) => { const checked = effectivePermission(roleDraft, permissionDraft, item.permission); const inherited = grantedByRole(roleDraft, item.permission) && !permissionDraft.deny.includes(item.permission); return <button key={item.permission} type="button" onClick={() => setPermissionDraft((current) => setExplicitPermission(current, roleDraft, item.permission, !checked))} className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${checked ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-400'}`}>{item.label}{inherited ? <span className="ml-1 opacity-60">· rol</span> : ''}</button>; })}</div></div> : <p className="mt-4 border-t border-zinc-200 pt-3 text-sm text-zinc-500">No visible en el menú y sin acceso a la sección.</p>}</article>; })}</div></section>}
       <section className="rounded-xl border border-zinc-100 bg-zinc-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-zinc-900">Contraseña</h3><p className="mt-1 text-sm text-zinc-500">El reseteo es una acción separada de la edición del usuario.</p></div><Button variant="danger" disabled={saving === 'password'} onClick={() => void resetPassword()}>Resetear contraseña</Button></div>{temporaryPassword ? <p className="mt-3 rounded-lg bg-white px-3 py-2 font-mono text-sm text-zinc-900">Temporal: {temporaryPassword}</p> : null}</section>
     </Panel>}
     {tab === 'notifications' && <Panel title="Preferencias de notificación" action={canUpdate ? <Button disabled={saving === 'notifications'} onClick={() => void save('notifications')}><Save className="mr-2 h-4 w-4" />Guardar</Button> : undefined}>
@@ -172,4 +183,4 @@ function Panel({ title, action, children }: { title: string; action?: React.Reac
 function Field({ label, value }: { label: string; value?: string }) { return <div><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p><p className="mt-1 text-sm text-zinc-900">{value || 'No informado'}</p></div>; }
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) { return <label className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-100 px-3 py-2 text-sm text-zinc-800"><input type="checkbox" checked={checked} onChange={onChange} />{label}</label>; }
 function SalonList({ title, items }: { title: string; items?: Array<string | Salon> }) { return <section><h3 className="text-sm font-semibold text-zinc-900">{title}</h3><div className="mt-3 flex flex-wrap gap-2">{items?.length ? items.map((item) => <span key={entityId(item)} className="rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700">{entityName(item)}</span>) : <span className="text-sm text-zinc-500">Sin asignar</span>}</div></section>; }
-function PermissionBox({ title, values, permissions, onToggle }: { title: string; values: string[]; permissions: string[]; onToggle: (permission: string) => void }) { return <section><h3 className="text-sm font-semibold text-zinc-900">{title}</h3><div className="mt-3 grid max-h-[380px] gap-2 overflow-y-auto pr-1">{permissions.map((permission) => <Check key={permission} label={displayLabel(permissionLabels, permission)} checked={values.includes(permission)} onChange={() => onToggle(permission)} />)}</div></section>; }
+function AreaSwitch({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) { return <button type="button" role="switch" aria-checked={checked} aria-label={`${checked ? 'Quitar' : 'Dar'} acceso a ${label}`} onClick={onChange} className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? 'bg-emerald-500' : 'bg-zinc-300'}`}><span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} /></button>; }

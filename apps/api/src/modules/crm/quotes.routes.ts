@@ -13,28 +13,31 @@ import { writeAuditLog } from '../audit/audit.service';
 import { generateAndUploadQuotePdf } from './quote-pdf.service';
 import { convertQuoteToEvent } from './quote-to-event.service';
 import { findOrCreateLead } from './lead-dedupe.service';
+import { calculateCommercialQuote } from './quote-pricing';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const quoteStatuses = ['draft', 'sent', 'follow_up', 'accepted', 'rejected', 'expired', 'converted'] as const;
+const pricingModes = ['per_person', 'fixed'] as const;
 const leadSources = ['web_form', 'quick_quote', 'whatsapp', 'phone', 'email', 'instagram', 'facebook', 'tiktok', 'google', 'referral', 'walk_in', 'manual', 'promotion', 'ticket', 'invitation', 'other'] as const;
 const menuSectionsSchema = z.array(z.object({ title: z.string().trim().min(1), items: z.array(z.string().trim().min(1)) }));
 
 const packageFields = z.object({
   name: z.string().trim().min(2), active: z.boolean().optional(), isGlobal: z.boolean().optional(), salonIds: z.array(objectId).optional(),
   durationHours: z.coerce.number().positive().optional(), startTime: z.string().trim().optional(), endTime: z.string().trim().optional(),
-  pricePerPerson: z.coerce.number().min(0).optional(), discountPercentage: z.coerce.number().min(0).max(100).optional(), finalPricePerPerson: z.coerce.number().min(0).optional(),
+  pricingMode: z.enum(pricingModes).optional(), pricePerPerson: z.coerce.number().min(0).optional(), fixedPrice: z.coerce.number().min(0).optional(), discountPercentage: z.coerce.number().min(0).max(100).optional(), finalPricePerPerson: z.coerce.number().min(0).optional(), finalFixedPrice: z.coerce.number().min(0).optional(),
   depositAmount: z.coerce.number().min(0).optional(), paymentTerms: z.string().trim().optional(), promotionText: z.string().trim().optional(), giftText: z.string().trim().optional(),
   menuSections: menuSectionsSchema.optional(), includedServices: z.array(z.string().trim().min(1)).optional(), notes: z.string().trim().optional()
 });
-const ruleFields = packageFields.pick({ active: true, pricePerPerson: true, discountPercentage: true, finalPricePerPerson: true, depositAmount: true, paymentTerms: true, promotionText: true, giftText: true, menuSections: true, includedServices: true, notes: true }).partial();
+const ruleFields = packageFields.pick({ active: true, pricingMode: true, pricePerPerson: true, fixedPrice: true, discountPercentage: true, finalPricePerPerson: true, finalFixedPrice: true, depositAmount: true, paymentTerms: true, promotionText: true, giftText: true, menuSections: true, includedServices: true, notes: true }).partial();
 const quoteFields = z.object({
   leadId: objectId.optional(), customerId: objectId.optional(), salonId: objectId.optional(), salonIds: z.array(objectId).min(1).optional(), packageTemplateId: objectId.optional(),
   manualMode: z.boolean().optional(),
   applyCommercialOverrides: z.boolean().optional(),
   contactName: z.string().trim().min(2).optional(), firstName: z.string().trim().min(1).optional(), lastName: z.string().trim().min(1).optional(), phone: z.string().trim().min(6).optional(), email: z.string().trim().email().optional().or(z.literal('')),
   eventType: z.string().trim().min(1).optional(), eventDate: z.coerce.date().optional(), guestCount: z.coerce.number().int().positive().optional(),
+  honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional(),
   packageName: z.string().trim().min(1).optional(), durationHours: z.coerce.number().positive().optional(), startTime: z.string().trim().optional(), endTime: z.string().trim().optional(),
-  pricePerPerson: z.coerce.number().min(0).optional(), discountPercentage: z.coerce.number().min(0).max(100).optional(), finalPricePerPerson: z.coerce.number().min(0).optional(), depositAmount: z.coerce.number().min(0).optional(),
+  pricingMode: z.enum(pricingModes).optional(), pricePerPerson: z.coerce.number().min(0).optional(), fixedPrice: z.coerce.number().min(0).optional(), discountPercentage: z.coerce.number().min(0).max(100).optional(), finalPricePerPerson: z.coerce.number().min(0).optional(), finalFixedPrice: z.coerce.number().min(0).optional(), depositAmount: z.coerce.number().min(0).optional(),
   paymentTerms: z.string().trim().optional(), promotionText: z.string().trim().optional(), giftText: z.string().trim().optional(), menuSections: menuSectionsSchema.optional(), includedServices: z.array(z.string().trim().min(1)).optional(), notes: z.string().trim().optional(), validUntil: z.coerce.date().optional()
 });
 const createQuoteSchema = z.object({ body: quoteFields.refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.').superRefine((body, context) => {
@@ -43,7 +46,8 @@ const createQuoteSchema = z.object({ body: quoteFields.refine((body) => Boolean(
     if (!body.contactName && !(body.firstName && body.lastName)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['contactName'], message: 'Debe indicar el nombre de la persona.' });
   }
   if (!body.packageTemplateId && !body.manualMode) context.addIssue({ code: z.ZodIssueCode.custom, path: ['packageTemplateId'], message: 'Seleccione una plantilla o use Presupuesto manual.' });
-  if (body.manualMode && (!body.pricePerPerson || !body.finalPricePerPerson)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['pricePerPerson'], message: 'En modo manual debe indicar valores por persona mayores a cero.' });
+  if (body.manualMode && body.pricingMode === 'fixed' && !body.fixedPrice) context.addIssue({ code: z.ZodIssueCode.custom, path: ['fixedPrice'], message: 'En modalidad precio total debe indicar un importe mayor a cero.' });
+  if (body.manualMode && body.pricingMode !== 'fixed' && !body.pricePerPerson) context.addIssue({ code: z.ZodIssueCode.custom, path: ['pricePerPerson'], message: 'En modalidad por persona debe indicar un importe mayor a cero.' });
 }), params: z.object({}), query: z.object({}) });
 const updateQuoteSchema = z.object({ body: quoteFields.omit({ leadId: true, customerId: true, salonIds: true }).partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo para actualizar.'), params: z.object({ id: objectId }), query: z.object({}) });
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
@@ -127,13 +131,7 @@ function pickDefined(source: Record<string, unknown>, keys: string[]): Record<st
   return Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));
 }
 function calculateQuote(values: Record<string, any>): Record<string, any> {
-  const pricePerPerson = Number(values.pricePerPerson ?? 0);
-  const discountPercentage = Number(values.discountPercentage ?? 0);
-  const finalPricePerPerson = Math.round(pricePerPerson * (1 - discountPercentage / 100));
-  const guestCount = Number(values.guestCount ?? 0);
-  const totalAmount = Math.round(finalPricePerPerson * guestCount);
-  const depositAmount = Number(values.depositAmount ?? 0);
-  return { ...values, pricePerPerson, discountPercentage, finalPricePerPerson, totalAmount, depositAmount, balanceAmount: Math.max(0, totalAmount - depositAmount) };
+  return calculateCommercialQuote(values);
 }
 function calculateLineItems(lineItems: Array<Record<string, any>>): { lineItems: Array<Record<string, any>>; subtotalCost: number; totalAmount: number } {
   const calculated = lineItems.map((item) => {
@@ -154,7 +152,7 @@ async function getApplicableTemplate(templateId: string, salonId: string, requir
   const rule: any = await VenuePackageRule.findOne({ packageTemplateId: templateId, salonId, deletedAt: null }).lean();
   if (rule && !rule.active) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   if (requireCommercialRule && !rule) throw new ApiError(422, 'PACKAGE_RULE_NOT_CONFIGURED');
-  const overrideKeys = ['pricePerPerson', 'discountPercentage', 'finalPricePerPerson', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
+  const overrideKeys = ['pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
   return { ...template, ...(rule ? pickDefined(rule, overrideKeys) : {}), ruleConfigured: Boolean(rule) };
 }
 async function createRevision(quote: any, request: Request, changeReason: string): Promise<void> {
@@ -294,6 +292,9 @@ router.post('/from-custom-calculation', requirePermission(Permission.QUOTES_CREA
       adultsWithAlcoholCount: request.body.adultsWithAlcoholCount,
       includesAlcohol: request.body.includesAlcohol,
       packageName: request.body.quoteMode === QuoteMode.HYBRID ? 'Híbrido personalizado' : 'Personalizado',
+      pricingMode: 'fixed',
+      fixedPrice: totalAmount,
+      finalFixedPrice: totalAmount,
       pricePerPerson: request.body.guestCount ? Math.round(totalAmount / request.body.guestCount) : totalAmount,
       discountPercentage: 0,
       finalPricePerPerson: request.body.guestCount ? Math.round(totalAmount / request.body.guestCount) : totalAmount,
@@ -353,12 +354,12 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
   for (const [index, salonId] of salonIds.entries()) {
     const template = templates[index];
     const { applyCommercialOverrides, manualMode, ...body } = request.body;
-    const commercialFields = ['durationHours', 'startTime', 'endTime', 'pricePerPerson', 'discountPercentage', 'finalPricePerPerson', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
+    const commercialFields = ['durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
     const nonCommercialBody = Object.fromEntries(Object.entries(body).filter(([key]) => !commercialFields.includes(key)));
     const contactName = request.body.contactName ?? lead?.fullName ?? customer?.fullName;
     const raw = { ...template, ...nonCommercialBody, ...(applyCommercialOverrides ? pickDefined(body, commercialFields) : {}), salonId, leadId: lead?._id, customerId: customer?._id, source: customer ? 'customer' : lead ? (request.body.leadId ? 'lead' : 'new_person') : 'manual', contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email, eventType: request.body.eventType ?? lead?.eventType, eventDate: request.body.eventDate ?? lead?.eventDate, guestCount: request.body.guestCount ?? lead?.guestCount, packageName: request.body.packageName ?? template.name, packageTemplateId: request.body.packageTemplateId, quoteNumber: quoteNumber(), createdBy: request.user!.id, updatedBy: request.user!.id, templateSnapshot: request.body.packageTemplateId ? template : undefined, packageSnapshot: request.body.packageTemplateId ? template : undefined, contactSnapshot: { leadId: lead?._id, customerId: customer?._id, contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email } };
     const calculated = calculateQuote(raw);
-    if (!calculated.guestCount || !calculated.pricePerPerson || !calculated.finalPricePerPerson || !calculated.totalAmount) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
+    if (!calculated.guestCount || !calculated.totalAmount || (calculated.pricingMode === 'fixed' ? !calculated.finalFixedPrice : !calculated.finalPricePerPerson)) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
     const quote: any = await Quote.create(calculated);
     const pdf = await generateAndUploadQuotePdf(quote.toObject ? quote.toObject() : quote);
     Object.assign(quote, pdf);

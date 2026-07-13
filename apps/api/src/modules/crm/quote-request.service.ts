@@ -14,6 +14,8 @@ export type QuoteRequestInput = {
   estimatedEventDate?: Date;
   guestCount?: number;
   interestedSalonIds?: string[];
+  interestedPackageTemplateId?: string;
+  interestedPackageName?: string;
   message?: string;
   assignedToUserId?: string;
   internalNotes?: string;
@@ -59,6 +61,8 @@ export async function createQuoteRequest(input: QuoteRequestInput): Promise<{ le
     estimatedEventDate: input.estimatedEventDate,
     guestCount: input.guestCount,
     interestedSalonIds: salonIds,
+    interestedPackageTemplateId: input.interestedPackageTemplateId,
+    interestedPackageName: input.interestedPackageName,
     message: input.message,
     originalPayload: input.originalPayload,
     assignedToUserId: input.assignedToUserId,

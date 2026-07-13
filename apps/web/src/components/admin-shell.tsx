@@ -11,6 +11,7 @@ import { brandAssets } from '@/lib/brand-assets';
 import { api } from '@/lib/api';
 import { moduleForPath, userCanAccess, visibleAdminModules } from '@/lib/admin-permissions';
 import { useSession } from './session-provider';
+import { Permission } from '@mym/shared';
 
 function userInitials(user: ReturnType<typeof useSession>['user']) {
   const source = [user?.firstName, user?.lastName].filter(Boolean);
@@ -25,6 +26,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { resolvedTheme, setTheme } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newQuoteRequests, setNewQuoteRequests] = useState(0);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const items = visibleAdminModules(user);
   const currentModule = moduleForPath(pathname);
@@ -40,6 +42,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const configActive = [...configSubmenuPaths].some((href) => isActive(href));
   const showConfigSubmenu = settingsOpen || configActive;
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Usuario';
+  const canSeeQuotes = userCanAccess(user, [Permission.QUOTES_READ]);
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -48,6 +51,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
+
+  useEffect(() => {
+    if (!canSeeQuotes) return;
+    let mounted = true;
+    const loadCount = () => api.get<{ meta?: { totalItems?: number } }>('/quote-requests?status=new&page=1&limit=1')
+      .then((response) => { if (mounted) setNewQuoteRequests(Number(response.meta?.totalItems ?? 0)); })
+      .catch(() => { if (mounted) setNewQuoteRequests(0); });
+    void loadCount();
+    const interval = window.setInterval(() => void loadCount(), 30000);
+    return () => { mounted = false; window.clearInterval(interval); };
+  }, [canSeeQuotes, pathname]);
 
   async function logoutAll() {
     await api.post('/auth/logout-all');
@@ -65,7 +79,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {mainItems.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
               <Icon className="h-4 w-4" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {href === '/admin/quotes' && canSeeQuotes && newQuoteRequests > 0 ? <span title={`${newQuoteRequests} solicitudes nuevas`} aria-label={`${newQuoteRequests} solicitudes nuevas`} className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold ${isActive(href) ? 'bg-white text-zinc-950' : 'bg-red-500 text-white'}`}>{newQuoteRequests > 99 ? '99+' : newQuoteRequests}</span> : null}
             </Link>
           ))}
           {configSubitems.length ? <div className="pt-2">

@@ -13,11 +13,13 @@ import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
 import { generateAndUploadQuotePdf } from './quote-pdf.service';
 import { createQuoteRequest } from './quote-request.service';
+import { calculateCommercialQuote } from './quote-pricing';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const statuses = ['new', 'in_review', 'converted', 'discarded', 'duplicated'] as const;
 const sources = ['website', 'admin', 'whatsapp', 'office', 'phone', 'quick_quote', 'other'] as const;
 const menuSectionsSchema = z.array(z.object({ title: z.string().trim().min(1), items: z.array(z.string().trim().min(1)) }));
+const pricingModes = ['per_person', 'fixed'] as const;
 const createSchema = z.object({
   body: z.object({
     source: z.enum(sources).default('admin'),
@@ -52,9 +54,12 @@ const convertSchema = z.object({
     durationHours: z.coerce.number().positive().optional(),
     startTime: z.string().trim().optional(),
     endTime: z.string().trim().optional(),
+    pricingMode: z.enum(pricingModes).optional(),
     pricePerPerson: z.coerce.number().min(0).optional(),
+    fixedPrice: z.coerce.number().min(0).optional(),
     discountPercentage: z.coerce.number().min(0).max(100).optional(),
     finalPricePerPerson: z.coerce.number().min(0).optional(),
+    finalFixedPrice: z.coerce.number().min(0).optional(),
     depositAmount: z.coerce.number().min(0).optional(),
     paymentTerms: z.string().trim().optional(),
     promotionText: z.string().trim().optional(),
@@ -62,7 +67,8 @@ const convertSchema = z.object({
     menuSections: menuSectionsSchema.optional(),
     includedServices: z.array(z.string().trim().min(1)).optional(),
     notes: z.string().trim().optional(),
-    validUntil: z.coerce.date().optional()
+    validUntil: z.coerce.date().optional(),
+    honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional()
   }).refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.'),
   params: z.object({ id: objectId }),
   query: z.object({})
@@ -74,13 +80,7 @@ function queryValue(value: unknown): string | undefined { return typeof value ==
 function uniqueIds(ids: string[]): string[] { return [...new Set(ids.filter(Boolean))]; }
 function quoteNumber(): string { return `P-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`; }
 function calculateQuote(values: Record<string, any>): Record<string, any> {
-  const pricePerPerson = Number(values.pricePerPerson ?? 0);
-  const discountPercentage = Number(values.discountPercentage ?? 0);
-  const finalPricePerPerson = values.finalPricePerPerson !== undefined ? Number(values.finalPricePerPerson) : Math.round(pricePerPerson * (1 - discountPercentage / 100));
-  const guestCount = Number(values.guestCount ?? 0);
-  const totalAmount = Math.round(finalPricePerPerson * guestCount);
-  const depositAmount = Number(values.depositAmount ?? 0);
-  return { ...values, pricePerPerson, discountPercentage, finalPricePerPerson, totalAmount, depositAmount, balanceAmount: Math.max(0, totalAmount - depositAmount) };
+  return calculateCommercialQuote(values);
 }
 function pickDefined(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   return Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));
@@ -101,7 +101,7 @@ async function getApplicableTemplate(templateId: string, salonId: string, requir
   const rule: any = await VenuePackageRule.findOne({ packageTemplateId: templateId, salonId, deletedAt: null }).lean();
   if (rule && !rule.active) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   if (requireCommercialRule && !rule) throw new ApiError(422, 'PACKAGE_RULE_NOT_CONFIGURED');
-  const overrideKeys = ['pricePerPerson', 'discountPercentage', 'finalPricePerPerson', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
+  const overrideKeys = ['pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
   return { ...template, ...(rule ? pickDefined(rule, overrideKeys) : {}) };
 }
 async function createRevision(quote: any, request: Request): Promise<void> {
@@ -132,7 +132,7 @@ router.get('/', requirePermission(Permission.QUOTES_READ), asyncHandler(async (r
   const sortOrder = queryValue(request.query.sortOrder) === 'asc' ? 1 : -1;
   const query = buildQuery(request);
   const totalItems = await QuoteRequest.countDocuments(query);
-  const items = await QuoteRequest.find(query).populate('leadId', 'fullName phone email eventType guestCount eventDate').populate('customerId', 'fullName phone email').populate('interestedSalonIds', 'name').populate('assignedToUserId takenByUserId', 'firstName lastName email').sort({ [sortBy]: sortOrder }).skip((page - 1) * limit).limit(limit).lean();
+  const items = await QuoteRequest.find(query).populate('leadId', 'fullName phone email eventType guestCount eventDate').populate('customerId', 'fullName phone email').populate('interestedSalonIds', 'name').populate('interestedPackageTemplateId', 'name').populate('assignedToUserId takenByUserId', 'firstName lastName email').sort({ [sortBy]: sortOrder }).skip((page - 1) * limit).limit(limit).lean();
   return sendSuccess(response, { items, meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 } });
 }));
 
@@ -148,7 +148,7 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
 }));
 
 router.get('/:id', requirePermission(Permission.QUOTES_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
-  const quoteRequest = await QuoteRequest.findOne({ _id: request.params.id, deletedAt: null }).populate('leadId').populate('customerId').populate('interestedSalonIds', 'name').populate('possibleDuplicateLeadIds', 'fullName phone email').lean();
+  const quoteRequest = await QuoteRequest.findOne({ _id: request.params.id, deletedAt: null }).populate('leadId').populate('customerId').populate('interestedSalonIds', 'name').populate('interestedPackageTemplateId', 'name').populate('possibleDuplicateLeadIds', 'fullName phone email').lean();
   await ensureRequestAccess(request, quoteRequest);
   const leadId = (quoteRequest as any).leadId?._id ?? (quoteRequest as any).leadId;
   const customerId = (quoteRequest as any).customerId?._id ?? (quoteRequest as any).customerId;
@@ -225,7 +225,7 @@ router.post('/:id/convert-to-quotes', requirePermission(Permission.QUOTES_CREATE
   const quotes = [];
   for (const [index, salonId] of salonIds.entries()) {
     const template = templates[index];
-    const commercialKeys = ['durationHours', 'startTime', 'endTime', 'pricePerPerson', 'discountPercentage', 'finalPricePerPerson', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
+    const commercialKeys = ['durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
     const raw = {
       ...template,
       ...(request.body.applyCommercialOverrides || request.body.manualMode ? pickDefined(request.body, commercialKeys) : {}),
@@ -239,6 +239,12 @@ router.post('/:id/convert-to-quotes', requirePermission(Permission.QUOTES_CREATE
       eventType: quoteRequest.eventType ?? lead?.eventType,
       eventDate: quoteRequest.estimatedEventDate ?? lead?.eventDate,
       guestCount: quoteRequest.guestCount ?? lead?.guestCount,
+      honoreeName: request.body.honoreeName,
+      vegetarianCount: request.body.vegetarianCount,
+      veganCount: request.body.veganCount,
+      celiacCount: request.body.celiacCount,
+      lactoseIntolerantCount: request.body.lactoseIntolerantCount,
+      tableLinenColor: request.body.tableLinenColor,
       packageName: request.body.packageName ?? (template as { name?: string }).name,
       packageTemplateId: request.body.packageTemplateId,
       notes: [request.body.notes, quoteRequest.message].filter(Boolean).join('\n\n'),
@@ -251,7 +257,7 @@ router.post('/:id/convert-to-quotes', requirePermission(Permission.QUOTES_CREATE
       contactSnapshot: { leadId: lead?._id, customerId: customer?._id, contactName: quoteRequest.contactName, phone: quoteRequest.phone ?? lead?.phone ?? customer?.phone, email: quoteRequest.email ?? lead?.email ?? customer?.email }
     };
     const calculated = calculateQuote(raw);
-    if (!calculated.guestCount || !calculated.pricePerPerson || !calculated.finalPricePerPerson || !calculated.totalAmount) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
+    if (!calculated.guestCount || !calculated.totalAmount || (calculated.pricingMode === 'fixed' ? !calculated.finalFixedPrice : !calculated.finalPricePerPerson)) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
     const quote: any = await Quote.create(calculated);
     const pdf = await generateAndUploadQuotePdf(quote.toObject ? quote.toObject() : quote);
     Object.assign(quote, pdf);

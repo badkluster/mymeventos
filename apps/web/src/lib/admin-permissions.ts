@@ -20,7 +20,7 @@ export const adminModules: AdminModule[] = [
   { href: '/admin/salons', label: 'Salones', title: 'Salones', description: 'Salones, paquetes y reglas comerciales.', icon: Building2, permissions: [Permission.SALONS_READ] },
   { href: '/admin/users', label: 'Usuarios', title: 'Usuarios', description: 'Usuarios activos del backoffice.', icon: Users, permissions: [Permission.USERS_READ] },
   { href: '/admin/staff', label: 'Staff', title: 'Staff', description: 'Empleados operativos, horarios y asignaciones a eventos.', icon: UserRoundCog, permissions: [Permission.USERS_READ] },
-  { href: '/admin/settings', label: 'Configuración', title: 'Configuración', description: 'Parámetros operativos del sistema.', icon: Settings, permissions: [Permission.SETTINGS_READ, Permission.SETTINGS_UPDATE] }
+  { href: '/admin/settings', label: 'Configuración', title: 'Configuración', description: 'Parámetros operativos del sistema.', icon: Settings, permissions: [Permission.SETTINGS_READ] }
 ];
 
 export function userCanAccess(user: SessionUser | null | undefined, permissions: Permission[]): boolean {

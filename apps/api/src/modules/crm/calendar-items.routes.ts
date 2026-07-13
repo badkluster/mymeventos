@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { Permission, Role } from '@mym/shared';
+import { Permission } from '@mym/shared';
 import { CalendarItem } from './crm.models';
 import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
@@ -8,6 +8,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
 import { sendSuccess } from '../../utils/api';
 import { writeAuditLog } from '../audit/audit.service';
+import { isCalendarItemOwner } from './calendar-item-access';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const itemTypes = ['event', 'alert', 'reminder', 'note', 'task', 'payment_window'] as const;
@@ -95,7 +96,7 @@ async function ensureItemAccess(request: Request, item: any): Promise<void> {
 
 async function ensureItemMutationAccess(request: Request, item: any): Promise<void> {
   await ensureItemAccess(request, item);
-  if (item.createdBy?.toString() !== request.user!.id && !request.user!.roles.includes(Role.ADMIN)) throw new ApiError(403, 'FORBIDDEN');
+  if (!isCalendarItemOwner(item, request.user!.id)) throw new ApiError(403, 'FORBIDDEN');
 }
 
 router.use(requireAuth);

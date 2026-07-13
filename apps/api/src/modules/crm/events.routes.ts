@@ -1,8 +1,9 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role, StaffSubrole } from '@mym/shared';
-import { Contract, Customer, Event, EventStaffAssignment, Payment } from './crm.models';
+import { Contract, Customer, Event, EventStaffAssignment, LeadActivity, Payment, Quote } from './crm.models';
 import { User } from '../users/user.model';
+import { Salon } from '../salons/salon.model';
 import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -10,13 +11,74 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
+import { findOrCreateCustomer } from './contact-dedupe.service';
+import { buildInitialResourcePlan } from './event-resource-plan';
 import { createContractFromEvent } from './event-to-contract.service';
+import { convertQuoteToEvent } from './quote-to-event.service';
 import { paymentSummary } from './payments.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
+const optionalObjectId = objectId.optional().or(z.literal(''));
 const eventStatuses = ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'] as const;
+const pricingModes = ['per_person', 'fixed'] as const;
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const assignmentIdSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
+const menuSectionsSchema = z.array(z.object({ title: z.string().trim().min(1), items: z.array(z.string().trim().min(1)) }));
+const newCustomerSchema = z.object({
+  fullName: z.string().trim().optional(),
+  firstName: z.string().trim().optional(),
+  lastName: z.string().trim().optional(),
+  phone: z.string().trim().optional(),
+  email: z.string().trim().email().optional().or(z.literal('')),
+  documentNumber: z.string().trim().optional(),
+  address: z.string().trim().optional(),
+  occupation: z.string().trim().optional(),
+  notes: z.string().trim().optional()
+});
+const createEventSchema = z.object({
+  body: z.object({
+    quoteId: optionalObjectId,
+    customerId: optionalObjectId,
+    customer: newCustomerSchema.optional(),
+    createContract: z.boolean().optional(),
+    salonId: optionalObjectId,
+    eventType: z.string().trim().optional(),
+    eventName: z.string().trim().optional(),
+    eventDate: z.coerce.date().optional(),
+    startTime: z.string().trim().optional(),
+    endTime: z.string().trim().optional(),
+    guestCount: z.coerce.number().int().positive().optional(),
+    honoreeName: z.string().trim().optional(),
+    vegetarianCount: z.coerce.number().int().min(0).optional(),
+    veganCount: z.coerce.number().int().min(0).optional(),
+    celiacCount: z.coerce.number().int().min(0).optional(),
+    lactoseIntolerantCount: z.coerce.number().int().min(0).optional(),
+    tableLinenColor: z.string().trim().optional(),
+    packageName: z.string().trim().optional(),
+    pricingMode: z.enum(pricingModes).optional(),
+    pricePerPerson: z.coerce.number().min(0).optional(),
+    finalPricePerPerson: z.coerce.number().min(0).optional(),
+    fixedPrice: z.coerce.number().min(0).optional(),
+    finalFixedPrice: z.coerce.number().min(0).optional(),
+    estimatedAmount: z.coerce.number().min(0).optional(),
+    finalAmount: z.coerce.number().min(0).optional(),
+    depositAmount: z.coerce.number().min(0).optional(),
+    paymentTerms: z.string().trim().optional(),
+    promotionText: z.string().trim().optional(),
+    giftText: z.string().trim().optional(),
+    menuSnapshot: menuSectionsSchema.optional(),
+    servicesSnapshot: z.array(z.string().trim().min(1)).optional(),
+    resourcePlanSnapshot: z.unknown().optional(),
+    notes: z.string().trim().optional()
+  }).superRefine((body, context) => {
+    if (body.quoteId) return;
+    if (!body.salonId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['salonId'], message: 'Debe seleccionar un salón.' });
+    if (!body.customerId && !body.customer?.fullName && !body.customer?.firstName) context.addIssue({ code: z.ZodIssueCode.custom, path: ['customer'], message: 'Debe seleccionar o crear un cliente.' });
+    if (!body.eventName && !body.eventType) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventName'], message: 'Debe indicar nombre o tipo de evento.' });
+  }),
+  params: z.object({}),
+  query: z.object({})
+});
 const assignmentBaseBody = z.object({
   staffUserId: objectId,
   roleLabel: z.string().trim().optional(),
@@ -38,6 +100,7 @@ const updateSchema = z.object({
     startTime: z.string().trim().optional(),
     endTime: z.string().trim().optional(),
     guestCount: z.coerce.number().int().positive().optional(),
+    honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional(),
     status: z.enum(eventStatuses).optional(),
     estimatedAmount: z.coerce.number().min(0).optional(),
     finalAmount: z.coerce.number().min(0).optional(),
@@ -46,6 +109,7 @@ const updateSchema = z.object({
     menuSnapshot: z.unknown().optional(),
     servicesSnapshot: z.unknown().optional(),
     paymentSnapshot: z.unknown().optional(),
+    resourcePlanSnapshot: z.unknown().optional(),
     contractReadyChecklist: z.unknown().optional()
   }).refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'),
   params: z.object({ id: objectId }),
@@ -58,9 +122,118 @@ function getQueryString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function cleanId(value?: string): string | undefined {
+  return value && value.trim() ? value.trim() : undefined;
+}
+
+function pickDefined(source: Record<string, any>, keys: string[]): Record<string, any> {
+  return Object.fromEntries(keys.filter((key) => source[key] !== undefined && source[key] !== '').map((key) => [key, source[key]]));
+}
+
+function uniqueIds(ids: Array<string | undefined>): string[] {
+  return [...new Set(ids.filter((id): id is string => Boolean(id)))];
+}
+
 async function ensureEventAccess(request: Request, event: any): Promise<void> {
   if (!event || event.deletedAt) throw new ApiError(404, 'EVENT_NOT_FOUND');
   if (event.salonId && !canAccessSalon(request.user!, event.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+}
+
+async function ensureSalonAccess(request: Request, salonId: string): Promise<void> {
+  if (!canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  const salon = await Salon.findOne({ _id: salonId, active: true, deletedAt: null }).lean();
+  if (!salon) throw new ApiError(404, 'SALON_NOT_FOUND');
+}
+
+async function getAccessibleQuote(request: Request, quoteId: string): Promise<any> {
+  const quote: any = await Quote.findOne({ _id: quoteId, deletedAt: null }).lean();
+  if (!quote) throw new ApiError(404, 'QUOTE_NOT_FOUND');
+  if (!canAccessSalon(request.user!, quote.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  return quote;
+}
+
+async function resolveCustomerForEvent(request: Request, body: any, salonId: string, quote?: any): Promise<any> {
+  const customerId = cleanId(body.customerId) ?? quote?.customerId?.toString?.();
+  if (customerId) {
+    const customer: any = await Customer.findOne({ _id: customerId, deletedAt: null });
+    if (!customer) throw new ApiError(404, 'CUSTOMER_NOT_FOUND');
+    const salonIds = (customer.salonIds ?? []).map((id: { toString(): string }) => id.toString());
+    if (!request.user!.roles.includes(Role.ADMIN) && salonIds.length && !salonIds.some((id: string) => canAccessSalon(request.user!, id))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+    if (!salonIds.includes(salonId)) {
+      customer.salonIds = uniqueIds([...salonIds, salonId]);
+      customer.updatedBy = request.user!.id;
+      await customer.save();
+    }
+    return customer;
+  }
+
+  const customerInput = body.customer ?? {};
+  const contactName = customerInput.fullName || [customerInput.firstName, customerInput.lastName].filter(Boolean).join(' ') || quote?.contactName;
+  const result = await findOrCreateCustomer({
+    contactName,
+    firstName: customerInput.firstName,
+    lastName: customerInput.lastName,
+    phone: customerInput.phone || quote?.phone,
+    email: customerInput.email || quote?.email,
+    eventType: body.eventType || quote?.eventType,
+    estimatedEventDate: body.eventDate || quote?.eventDate,
+    guestCount: body.guestCount || quote?.guestCount,
+    salonIds: [salonId],
+    quoteId: quote?._id?.toString?.(),
+    message: customerInput.notes || body.notes || quote?.notes,
+    userId: request.user!.id
+  });
+  const customer: any = result.customer;
+  const customerPatch = pickDefined(customerInput, ['documentNumber', 'address', 'occupation', 'notes']);
+  if (Object.keys(customerPatch).length) {
+    Object.assign(customer, customerPatch, { updatedBy: request.user!.id });
+    await customer.save();
+  }
+  return customer;
+}
+
+function commercialSnapshotFromBody(body: any): Record<string, unknown> {
+  const pricingMode = body.pricingMode ?? (body.fixedPrice || body.finalFixedPrice ? 'fixed' : 'per_person');
+  const perPersonTotal = Number(body.finalPricePerPerson ?? body.pricePerPerson ?? 0) * Number(body.guestCount ?? 0);
+  const fixedTotal = Number(body.finalFixedPrice ?? body.fixedPrice ?? 0);
+  const totalAmount = Number(body.finalAmount ?? body.estimatedAmount ?? (pricingMode === 'fixed' ? fixedTotal : perPersonTotal) ?? 0);
+  const depositAmount = Number(body.depositAmount ?? 0);
+  return {
+    packageName: body.packageName,
+    pricingMode,
+    startTime: body.startTime,
+    endTime: body.endTime,
+    pricePerPerson: body.pricePerPerson,
+    finalPricePerPerson: body.finalPricePerPerson ?? body.pricePerPerson,
+    fixedPrice: body.fixedPrice,
+    finalFixedPrice: body.finalFixedPrice ?? body.fixedPrice,
+    totalAmount,
+    depositAmount,
+    balanceAmount: Math.max(0, totalAmount - depositAmount),
+    paymentTerms: body.paymentTerms,
+    promotionText: body.promotionText,
+    giftText: body.giftText
+  };
+}
+
+function eventPatchFromCreateBody(body: any): Record<string, unknown> {
+  return pickDefined(body, [
+    'eventType',
+    'eventName',
+    'eventDate',
+    'startTime',
+    'endTime',
+    'guestCount',
+    'honoreeName',
+    'vegetarianCount',
+    'veganCount',
+    'celiacCount',
+    'lactoseIntolerantCount',
+    'tableLinenColor',
+    'estimatedAmount',
+    'finalAmount',
+    'notes'
+  ]);
 }
 
 function buildQuery(request: Request): Record<string, unknown> {
@@ -110,6 +283,98 @@ router.get('/', requirePermission(Permission.EVENTS_READ), asyncHandler(async (r
     .limit(limit)
     .lean();
   return sendSuccess(response, { items, meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 } });
+}));
+
+router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(createEventSchema), asyncHandler(async (request, response) => {
+  const quoteId = cleanId(request.body.quoteId);
+  if (quoteId) {
+    const quote = await getAccessibleQuote(request, quoteId);
+    const result = await convertQuoteToEvent({ quoteId, userId: request.user!.id, eventName: request.body.eventName, notes: request.body.notes });
+    const event: any = await Event.findOne({ _id: result.event._id, deletedAt: null });
+    await ensureEventAccess(request, event);
+    const patch = eventPatchFromCreateBody(request.body);
+    if (request.body.resourcePlanSnapshot !== undefined) patch.resourcePlanSnapshot = request.body.resourcePlanSnapshot;
+    if (request.body.menuSnapshot !== undefined) patch.menuSnapshot = request.body.menuSnapshot;
+    if (request.body.servicesSnapshot !== undefined) patch.servicesSnapshot = request.body.servicesSnapshot;
+    if (Object.keys(patch).length) {
+      Object.assign(event, patch, { updatedBy: request.user!.id });
+      await event.save();
+    }
+    let contract: any;
+    let contractCreated = false;
+    let contractError: string | undefined;
+    if (request.body.createContract) {
+      try {
+        const contractResult = await createContractFromEvent({ eventId: event._id.toString(), userId: request.user!.id });
+        contract = contractResult.contract;
+        contractCreated = contractResult.created;
+      } catch (error) {
+        contractError = error instanceof ApiError ? error.message : getApiMessage('INTERNAL_ERROR');
+      }
+    }
+    const freshEvent = await Event.findOne({ _id: event._id, deletedAt: null }).populate('customerId', 'fullName phone email').populate('salonId', 'name').populate('sourceQuoteId', 'quoteNumber totalAmount status').lean();
+    await writeAuditLog(request, result.createdEvent ? 'EVENT_CREATE_FROM_QUOTES_PAGE' : 'EVENT_LINK_EXISTING_QUOTE', 'Event', event._id.toString(), { quoteId: quote._id.toString(), contractCreated });
+    return sendSuccess(response, { event: freshEvent, customer: result.customer, quote: result.quote, contract, contractCreated, contractError, createdFromQuote: true }, result.createdEvent ? 201 : 200, getApiMessage(result.createdEvent ? 'EVENT_CREATED_FROM_QUOTE' : 'EVENT_ALREADY_CREATED_FROM_QUOTE'));
+  }
+
+  const salonId = cleanId(request.body.salonId)!;
+  await ensureSalonAccess(request, salonId);
+  const customer = await resolveCustomerForEvent(request, request.body, salonId);
+  const commercialSnapshot = commercialSnapshotFromBody(request.body);
+  const totalAmount = Number(commercialSnapshot.totalAmount ?? 0);
+  const resourcePlanSnapshot = request.body.resourcePlanSnapshot ?? buildInitialResourcePlan({ source: 'manual_event' });
+  const event = await Event.create({
+    customerId: customer._id,
+    salonId,
+    ...eventPatchFromCreateBody(request.body),
+    eventName: request.body.eventName || `${request.body.eventType || 'Evento'} - ${customer.fullName || 'Cliente'}`,
+    quoteMode: 'CUSTOM',
+    status: 'draft',
+    estimatedAmount: request.body.estimatedAmount ?? totalAmount,
+    finalAmount: request.body.finalAmount ?? totalAmount,
+    commercialSnapshot,
+    menuSnapshot: request.body.menuSnapshot ?? [],
+    servicesSnapshot: request.body.servicesSnapshot ?? [],
+    resourcePlanSnapshot,
+    paymentSnapshot: {
+      depositAmount: commercialSnapshot.depositAmount,
+      balanceAmount: commercialSnapshot.balanceAmount,
+      paymentTerms: request.body.paymentTerms
+    },
+    contractReadyChecklist: {
+      customerComplete: Boolean(customer.fullName && (customer.phone || customer.email)),
+      document: Boolean(customer.documentNumber),
+      address: Boolean(customer.address),
+      salonDefined: true,
+      dateDefined: Boolean(request.body.eventDate),
+      timeDefined: Boolean(request.body.startTime && request.body.endTime),
+      guestCount: Boolean(request.body.guestCount),
+      totalPrice: Boolean(totalAmount),
+      deposit: Boolean(request.body.depositAmount),
+      paymentTerms: Boolean(request.body.paymentTerms),
+      menu: Boolean(request.body.menuSnapshot?.length),
+      includedServices: Boolean(request.body.servicesSnapshot?.length)
+    },
+    createdBy: request.user!.id,
+    updatedBy: request.user!.id
+  });
+  await LeadActivity.create({ customerId: customer._id, eventId: event._id, type: 'event_created', title: 'Evento creado', description: `Se creó el evento ${event.eventName}.`, createdBy: request.user!.id });
+  await writeAuditLog(request, 'EVENT_CREATE', 'Event', event._id.toString(), { customerId: customer._id.toString(), salonId });
+
+  let contract: any;
+  let contractCreated = false;
+  let contractError: string | undefined;
+  if (request.body.createContract) {
+    try {
+      const contractResult = await createContractFromEvent({ eventId: event._id.toString(), userId: request.user!.id });
+      contract = contractResult.contract;
+      contractCreated = contractResult.created;
+    } catch (error) {
+      contractError = error instanceof ApiError ? error.message : getApiMessage('INTERNAL_ERROR');
+    }
+  }
+  const freshEvent = await Event.findOne({ _id: event._id, deletedAt: null }).populate('customerId', 'fullName phone email').populate('salonId', 'name').lean();
+  return sendSuccess(response, { event: freshEvent, customer, contract, contractCreated, contractError, createdFromQuote: false }, 201, getApiMessage('EVENT_CREATED'));
 }));
 
 router.get('/customers/:id', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
@@ -198,7 +463,7 @@ router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(id
   return sendSuccess(response, { event, contract });
 }));
 
-router.post('/:id/create-contract', requirePermission(Permission.EVENTS_CREATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.post('/:id/create-contract', requirePermission(Permission.CONTRACTS_CREATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const result = await createContractFromEvent({ eventId: request.params.id, userId: request.user!.id });
   await writeAuditLog(request, result.created ? 'EVENT_CREATE_CONTRACT' : 'EVENT_GET_EXISTING_CONTRACT', 'Contract', result.contract._id.toString(), { eventId: request.params.id });
   return sendSuccess(response, { contract: result.contract, created: result.created }, result.created ? 201 : 200, result.created ? getApiMessage('CONTRACT_CREATED') : getApiMessage('CONTRACT_ALREADY_EXISTS'));

@@ -20,6 +20,9 @@ const customerFields = z.object({
   fullName: z.string().trim().min(2).optional(),
   phone: z.string().trim().min(6).optional(),
   email: z.string().trim().email().optional().or(z.literal('')),
+  documentNumber: z.string().trim().optional(),
+  address: z.string().trim().optional(),
+  occupation: z.string().trim().optional(),
   notes: z.string().trim().optional(),
   sourceLeadId: objectId.optional(),
   salonIds: z.array(objectId).optional()
@@ -55,7 +58,7 @@ function buildQuery(request: Request): Record<string, unknown> {
 
 router.use(requireAuth);
 
-router.get('/', requirePermission(Permission.LEADS_READ), asyncHandler(async (request, response) => {
+router.get('/', requirePermission(Permission.CUSTOMERS_READ), asyncHandler(async (request, response) => {
   const page = Math.max(1, Number(queryValue(request.query.page)) || 1);
   const limit = Math.min(100, Math.max(1, Number(queryValue(request.query.limit)) || 20));
   const query = buildQuery(request);
@@ -74,7 +77,7 @@ router.get('/', requirePermission(Permission.LEADS_READ), asyncHandler(async (re
   return sendSuccess(response, { items, meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 } });
 }));
 
-router.post('/', requirePermission(Permission.LEADS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
+router.post('/', requirePermission(Permission.CUSTOMERS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
   const name = splitName(request.body);
   const customer = await Customer.create({ ...request.body, ...name, email: normalizeEmail(request.body.email), normalizedEmail: normalizeEmail(request.body.email), normalizedPhone: normalizePhone(request.body.phone), sourceLeadIds: request.body.sourceLeadId ? [request.body.sourceLeadId] : [], createdFromLeadId: request.body.sourceLeadId, createdBy: request.user!.id, updatedBy: request.user!.id });
   await LeadActivity.create({ customerId: customer._id, type: 'customer_created', title: 'Cliente creado', createdBy: request.user!.id });
@@ -82,7 +85,7 @@ router.post('/', requirePermission(Permission.LEADS_CREATE), validateRequest(cre
   return sendSuccess(response, { customer }, 201, getApiMessage('CUSTOMER_CREATED'));
 }));
 
-router.get('/:id', requirePermission(Permission.LEADS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.get('/:id', requirePermission(Permission.CUSTOMERS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const customer = await Customer.findOne({ _id: request.params.id, deletedAt: null }).populate('sourceLeadId', 'fullName phone email').lean();
   await ensureCustomerAccess(request, customer);
   const [quotes, events, quoteRequests, contracts, payments, summary, activities] = await Promise.all([
@@ -97,7 +100,7 @@ router.get('/:id', requirePermission(Permission.LEADS_READ), validateRequest(idS
   return sendSuccess(response, { customer, quotes, events, quoteRequests, contracts, payments, paymentSummary: summary, activities });
 }));
 
-router.patch('/:id', requirePermission(Permission.LEADS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
+router.patch('/:id', requirePermission(Permission.CUSTOMERS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const customer: any = await Customer.findOne({ _id: request.params.id, deletedAt: null });
   await ensureCustomerAccess(request, customer);
   Object.assign(customer, request.body, splitName({ ...customer.toObject(), ...request.body }), { email: normalizeEmail(request.body.email ?? customer.email), normalizedEmail: normalizeEmail(request.body.email ?? customer.email), normalizedPhone: normalizePhone(request.body.phone ?? customer.phone), updatedBy: request.user!.id });
@@ -106,7 +109,7 @@ router.patch('/:id', requirePermission(Permission.LEADS_UPDATE), validateRequest
   return sendSuccess(response, { customer }, 200, getApiMessage('CUSTOMER_UPDATED'));
 }));
 
-router.delete('/:id', requirePermission(Permission.LEADS_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.delete('/:id', requirePermission(Permission.CUSTOMERS_DELETE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const customer: any = await Customer.findOne({ _id: request.params.id, deletedAt: null });
   await ensureCustomerAccess(request, customer);
   customer.deletedAt = new Date();
@@ -145,7 +148,7 @@ router.get('/:id/payment-summary', requirePermission(Permission.PAYMENTS_READ), 
   return sendSuccess(response, { summary: await paymentSummary({ customerId: request.params.id }) });
 }));
 
-router.get('/:id/activity', requirePermission(Permission.LEADS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.get('/:id/activity', requirePermission(Permission.CUSTOMERS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const customer = await Customer.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureCustomerAccess(request, customer);
   const activities = await LeadActivity.find({ customerId: request.params.id }).sort({ createdAt: -1 }).lean();

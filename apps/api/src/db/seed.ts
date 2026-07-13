@@ -94,24 +94,24 @@ const packageTemplates = [
     includedServices: ['Vajilla completa', 'Manteles blancos o negros, caminos y servilletas acorde a la temática', 'Staff: maître, mozos, jefe de cocina, ayudante de cocina y bartender', 'DJ: sonido e iluminación', 'Mesas y sillas', 'Cocina completa', 'Sector de mesa principal: mesa de estilo, candelabros, sillón trono y 2 sillas Tiffany', 'Sector de fotos: shimmer wall y diván', 'Sector de torta: aro redondo con luces LED, medio semicírculo de globos y 3 mesitas']
   },
   {
-    name: 'Promo Salón Full', salonNames: ['San Carlos'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 25000, discountPercentage: 0, finalPricePerPerson: 25000, depositAmount: 600000,
+    name: 'Promo Salón Full', salonNames: ['San Carlos'], durationHours: 8, startTime: '21:00', endTime: '05:00', pricingMode: 'fixed', fixedPrice: 2500000, finalFixedPrice: 2500000, pricePerPerson: 0, discountPercentage: 0, finalPricePerPerson: 0, depositAmount: 600000,
     giftText: '20% de descuento abonando el total del servicio.', promotionText: 'Valor fijo para eventos 2027: $2.500.000 hasta 100 personas.', paymentTerms: 'Seña de $600.000 para congelar el valor.',
-    notes: 'La plataforma calcula por persona; este paquete representa el valor fijo de $2.500.000 dividido por 100 personas. Usar presupuesto manual si la cantidad cambia y se desea mantener precio fijo.',
+    notes: 'Precio total fijo hasta 100 personas.',
     menuSections: [{ title: 'Servicio de salón', items: ['Paquete de salón sin catering incluido'] }],
     includedServices: ['Salón con capacidad para 100 personas', 'Mesas redondas y sillas', 'DJ con sonido e iluminación para la pista', 'Iluminación perimetral del salón acorde al color temático', 'Proyector para pasar videos', 'Cocina completa: cocina con horno, freezer, heladera y anafe', 'Mantelería básica: manteles blancos o negros, caminos y servilletas a elección del cliente', 'Vajilla completa', 'Sector de torta: mesitas, fondo con globos y luces', 'Sector mesa principal: mesa de estilo, sillón trono y 2 sillas Tiffany', 'Sector living: sillón diván y shimmer', 'Staff de servicio: maître, encargado de cocina y mozos']
   },
   {
-    name: 'Promo Infantil Sonrisitas', salonNames: ['San Carlos'], durationHours: 3, startTime: '13:00', endTime: '16:00', pricePerPerson: 6500, discountPercentage: 0, finalPricePerPerson: 6500, depositAmount: 0,
+    name: 'Promo Infantil Sonrisitas', salonNames: ['San Carlos'], durationHours: 3, startTime: '13:00', endTime: '16:00', pricingMode: 'fixed', fixedPrice: 650000, finalFixedPrice: 650000, pricePerPerson: 0, discountPercentage: 0, finalPricePerPerson: 0, depositAmount: 0,
     promotionText: 'Valor fijo: $650.000 hasta 100 personas.', paymentTerms: 'Consultar condiciones de reserva vigentes.',
     giftText: 'Piñata de regalo.',
-    notes: 'Turnos disponibles: 13:00 a 16:00 o 17:00 a 20:00. La plataforma calcula por persona; este paquete representa $650.000 dividido por 100 personas.',
+    notes: 'Turnos disponibles: 13:00 a 16:00 o 17:00 a 20:00. Precio total fijo hasta 100 personas.',
     menuSections: [{ title: 'Menú para niños', items: ['Empanadas de jamón y queso', 'Pizzetas de muzzarella', 'Chips de jamón y queso', 'Snacks'] }],
     includedServices: ['Servicio por 3 horas', 'Cocina completa: anafe, horno, freezer y heladera', 'Vajilla completa', 'Manteles blancos o negros', 'Servilletas de tela haciendo juego con la temática', 'Staff de servicio: mozos, ayudante de cocina y coordinador de evento', 'Inflable', 'Sonido', 'Tarjeta digital', 'Regalo exclusivo: piñata', 'Hasta 100 personas']
   },
   {
-    name: 'Promo Infantil Risitas', salonNames: ['San Carlos'], durationHours: 3, startTime: '13:00', endTime: '16:00', pricePerPerson: 4000, discountPercentage: 0, finalPricePerPerson: 4000, depositAmount: 100000,
+    name: 'Promo Infantil Risitas', salonNames: ['San Carlos'], durationHours: 3, startTime: '13:00', endTime: '16:00', pricingMode: 'fixed', fixedPrice: 400000, finalFixedPrice: 400000, pricePerPerson: 0, discountPercentage: 0, finalPricePerPerson: 0, depositAmount: 100000,
     promotionText: 'Valor fijo: $400.000 hasta 100 personas.', paymentTerms: 'Seña de $100.000 para congelar el valor.',
-    notes: 'Turnos disponibles: 13:00 a 16:00 o 17:00 a 20:00. La plataforma calcula por persona; este paquete representa $400.000 dividido por 100 personas.',
+    notes: 'Turnos disponibles: 13:00 a 16:00 o 17:00 a 20:00. Precio total fijo hasta 100 personas.',
     menuSections: [{ title: 'Servicio infantil', items: ['Paquete infantil sin menú incluido'] }],
     includedServices: ['Servicio por 3 horas', 'Cocina completa: horno, anafe, freezer y heladera', 'Vajilla completa', 'Manteles negros', 'Staff de servicio: coordinador de evento, mozos y ayudante de cocina', 'Inflable', 'Sonido', 'Tarjeta digital', 'Hasta 100 personas']
   }

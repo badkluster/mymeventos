@@ -101,9 +101,12 @@ export type PackageRule = {
   packageName: string;
   ruleConfigured?: boolean;
   active?: boolean;
+  pricingMode?: 'per_person' | 'fixed';
   pricePerPerson?: number;
+  fixedPrice?: number;
   discountPercentage?: number;
   finalPricePerPerson?: number;
+  finalFixedPrice?: number;
   depositAmount?: number;
   paymentTerms?: string;
   promotionText?: string;

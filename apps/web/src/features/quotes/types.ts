@@ -16,13 +16,22 @@ export type Quote = {
   /** Alias de compatibilidad para pantallas previas; la API usa eventDate. */
   estimatedEventDate?: string;
   guestCount: number;
+  honoreeName?: string;
+  vegetarianCount?: number;
+  veganCount?: number;
+  celiacCount?: number;
+  lactoseIntolerantCount?: number;
+  tableLinenColor?: string;
   packageName?: string;
   durationHours?: number;
   startTime?: string;
   endTime?: string;
+  pricingMode?: 'per_person' | 'fixed';
   pricePerPerson: number;
+  fixedPrice?: number;
   discountPercentage?: number;
   finalPricePerPerson: number;
+  finalFixedPrice?: number;
   totalAmount: number;
   depositAmount: number;
   balanceAmount: number;
@@ -48,7 +57,24 @@ export type Quote = {
 
 export type Salon = { _id: string; name: string };
 export type LeadOption = { _id: string; fullName?: string; firstName?: string; lastName?: string; phone?: string; email?: string; eventType?: string; eventDate?: string; guestCount?: number; salonId?: string; salonIds?: string[] };
-export type Customer = { _id: string; fullName?: string; firstName?: string; lastName?: string; phone?: string; email?: string; sourceLeadId?: string | LeadOption; quoteCount?: number; eventCount?: number; lastEvent?: { eventDate?: string; eventName?: string }; createdAt?: string; notes?: string };
+export type Customer = { _id: string; fullName?: string; firstName?: string; lastName?: string; phone?: string; email?: string; documentNumber?: string; address?: string; occupation?: string; sourceLeadId?: string | LeadOption; quoteCount?: number; eventCount?: number; lastEvent?: { eventDate?: string; eventName?: string }; createdAt?: string; notes?: string };
+export type EventTimelineItem = { id?: string; time?: string; title: string; area?: string; owner?: string; status?: 'pending' | 'ready' | 'done' | 'cancelled' | string; notes?: string };
+export type EventProductItem = { id?: string; name: string; category?: string; quantity?: number; unit?: string; supplierName?: string; unitCost?: number; totalCost?: number; status?: 'planned' | 'reserved' | 'purchased' | 'used' | 'returned' | string; notes?: string };
+export type EventInventoryItem = { id?: string; name: string; category?: string; quantityRequired?: number; quantityReserved?: number; quantityReturned?: number; unit?: string; status?: 'planned' | 'reserved' | 'delivered' | 'returned' | 'missing' | 'damaged' | string; notes?: string };
+export type EventSupplierAssignment = { id?: string; supplierName: string; serviceType?: string; contactName?: string; phone?: string; agreedAmount?: number; status?: 'pending' | 'confirmed' | 'paid' | 'cancelled' | string; arrivalTime?: string; notes?: string };
+export type EventTaskItem = { id?: string; title: string; owner?: string; dueDate?: string; priority?: 'low' | 'normal' | 'high' | 'critical' | string; status?: 'pending' | 'in_progress' | 'done' | 'blocked' | string; notes?: string };
+export type EventAlertItem = { id?: string; title: string; remindAt?: string; channel?: string; status?: 'pending' | 'scheduled' | 'sent' | 'done' | string; notes?: string };
+export type EventResourcePlan = {
+  timelineItems?: EventTimelineItem[];
+  productItems?: EventProductItem[];
+  inventoryItems?: EventInventoryItem[];
+  supplierAssignments?: EventSupplierAssignment[];
+  tasks?: EventTaskItem[];
+  alerts?: EventAlertItem[];
+  logistics?: { eventSetupNotes?: string; kitchenNotes?: string; barNotes?: string; decorationNotes?: string; accessNotes?: string; riskNotes?: string };
+  source?: string;
+  sourceQuoteId?: string;
+};
 export type Event = {
   _id: string;
   customerId: string | Customer;
@@ -61,6 +87,12 @@ export type Event = {
   eventName?: string;
   eventDate?: string;
   guestCount?: number;
+  honoreeName?: string;
+  vegetarianCount?: number;
+  veganCount?: number;
+  celiacCount?: number;
+  lactoseIntolerantCount?: number;
+  tableLinenColor?: string;
   status: string;
   estimatedAmount?: number;
   finalAmount?: number;
@@ -70,6 +102,7 @@ export type Event = {
   menuSnapshot?: { title?: string; items?: string[] }[];
   servicesSnapshot?: string[];
   paymentSnapshot?: Record<string, unknown>;
+  resourcePlanSnapshot?: EventResourcePlan;
   contractReadyChecklist?: Record<string, boolean>;
   notes?: string;
   createdAt?: string;
@@ -166,6 +199,8 @@ export type QuoteRequest = {
   estimatedEventDate?: string;
   guestCount?: number;
   interestedSalonIds?: Array<string | Salon>;
+  interestedPackageTemplateId?: string | { _id: string; name?: string };
+  interestedPackageName?: string;
   message?: string;
   assignedToUserId?: string | { _id: string; firstName?: string; lastName?: string; email?: string };
   takenByUserId?: string | { _id: string; firstName?: string; lastName?: string; email?: string };
@@ -181,9 +216,12 @@ export type PackageTemplate = {
   durationHours?: number;
   startTime?: string;
   endTime?: string;
+  pricingMode?: 'per_person' | 'fixed';
   pricePerPerson?: number;
+  fixedPrice?: number;
   discountPercentage?: number;
   finalPricePerPerson?: number;
+  finalFixedPrice?: number;
   depositAmount?: number;
   paymentTerms?: string;
   promotionText?: string;

@@ -122,9 +122,12 @@ const extrasSchema = z.object({ body: z.object({ extras: z.array(extraSchema) })
 const ruleSchema = z.object({
   body: z.object({
     active: z.boolean().optional(),
+    pricingMode: z.enum(['per_person', 'fixed']).optional(),
     pricePerPerson: z.coerce.number().min(0).optional(),
+    fixedPrice: z.coerce.number().min(0).optional(),
     discountPercentage: z.coerce.number().min(0).max(100).optional(),
     finalPricePerPerson: z.coerce.number().min(0).optional(),
+    finalFixedPrice: z.coerce.number().min(0).optional(),
     depositAmount: z.coerce.number().min(0).optional(),
     paymentTerms: optionalText,
     promotionText: optionalText,

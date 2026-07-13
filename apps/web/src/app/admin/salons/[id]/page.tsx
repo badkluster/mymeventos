@@ -10,19 +10,22 @@ import { api } from '@/lib/api';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { CloudinaryUpload, type UploadedAsset } from '@/components/cloudinary-upload';
 import { useToast } from '@/components/ui/toast-provider';
-import { eventTypeOptions, menuToText, money, textToMenu, type PackageRule, type Salon, type SalonExtra, type SalonMedia, type UserOption } from '@/features/salons/types';
+import { cleanMenuSections, cleanStringList, MenuSectionsEditor, StringListEditor, type MenuSectionValue } from '@/components/admin/structured-list-editors';
+import { eventTypeOptions, money, type PackageRule, type Salon, type SalonExtra, type SalonMedia, type UserOption } from '@/features/salons/types';
 
 type Tab = 'general' | 'commercial' | 'packages' | 'extras' | 'landing';
 type RuleForm = {
   active: boolean;
+  pricingMode: 'per_person' | 'fixed';
   pricePerPerson: number;
+  fixedPrice: number;
   discountPercentage: number;
   depositAmount: number;
   paymentTerms: string;
   promotionText: string;
   giftText: string;
-  includedServices: string;
-  menuSections: string;
+  includedServices: string[];
+  menuSections: MenuSectionValue[];
   notes: string;
 };
 type TemplateForm = {
@@ -30,14 +33,16 @@ type TemplateForm = {
   durationHours: number;
   startTime: string;
   endTime: string;
+  pricingMode: 'per_person' | 'fixed';
   pricePerPerson: number;
+  fixedPrice: number;
   discountPercentage: number;
   depositAmount: number;
   paymentTerms: string;
   promotionText: string;
   giftText: string;
-  includedServices: string;
-  menuSections: string;
+  includedServices: string[];
+  menuSections: MenuSectionValue[];
   notes: string;
 };
 
@@ -51,7 +56,7 @@ const tabs: { id: Tab; label: string }[] = [
 const tabIds = tabs.map((item) => item.id);
 
 const emptyExtra: SalonExtra = { name: '', description: '', basePrice: 0, active: true, includedByDefault: false, publicVisible: false };
-const emptyTemplate: TemplateForm = { name: '', durationHours: 8, startTime: '21:00', endTime: '05:00', pricePerPerson: 0, discountPercentage: 0, depositAmount: 0, paymentTerms: '', promotionText: '', giftText: '', includedServices: '', menuSections: '', notes: '' };
+const emptyTemplate: TemplateForm = { name: '', durationHours: 8, startTime: '21:00', endTime: '05:00', pricingMode: 'per_person', pricePerPerson: 0, fixedPrice: 0, discountPercentage: 0, depositAmount: 0, paymentTerms: '', promotionText: '', giftText: '', includedServices: [], menuSections: [], notes: '' };
 const toNumber = (value: FormDataEntryValue | null) => Number(value || 0);
 const toText = (value: FormDataEntryValue | null) => String(value ?? '');
 const assetUrl = (asset: UploadedAsset) => asset.secureUrl || asset.url;
@@ -76,14 +81,16 @@ const errorMessage = (error: unknown, fallback: string) => {
 function ruleToForm(rule: PackageRule): RuleForm {
   return {
     active: rule.active ?? true,
+    pricingMode: rule.pricingMode === 'fixed' ? 'fixed' : 'per_person',
     pricePerPerson: rule.pricePerPerson ?? 0,
+    fixedPrice: rule.fixedPrice ?? 0,
     discountPercentage: rule.discountPercentage ?? 0,
     depositAmount: rule.depositAmount ?? 0,
     paymentTerms: rule.paymentTerms ?? '',
     promotionText: rule.promotionText ?? '',
     giftText: rule.giftText ?? '',
-    includedServices: rule.includedServices?.join('\n') ?? '',
-    menuSections: menuToText(rule.menuSections),
+    includedServices: rule.includedServices ?? [],
+    menuSections: (rule.menuSections ?? []).map((section) => ({ title: section.title ?? section.name ?? 'Menú', items: section.items ?? [] })),
     notes: rule.notes ?? ''
   };
 }
@@ -352,19 +359,22 @@ export default function SalonDetailPage() {
     setSaving(true);
     setNotice('');
     try {
-      const price = Number(ruleForm.pricePerPerson || 0);
+      const price = Number(ruleForm.pricingMode === 'fixed' ? ruleForm.fixedPrice : ruleForm.pricePerPerson || 0);
       const discount = Number(ruleForm.discountPercentage || 0);
       await api.patch(`/salons/${salonId}/package-rules/${editingRule.packageTemplateId}`, {
         active: ruleForm.active,
-        pricePerPerson: price,
+        pricingMode: ruleForm.pricingMode,
+        pricePerPerson: ruleForm.pricingMode === 'per_person' ? price : 0,
+        fixedPrice: ruleForm.pricingMode === 'fixed' ? price : 0,
         discountPercentage: discount,
-        finalPricePerPerson: Math.round(price * (1 - discount / 100)),
+        finalPricePerPerson: ruleForm.pricingMode === 'per_person' ? Math.round(price * (1 - discount / 100)) : 0,
+        finalFixedPrice: ruleForm.pricingMode === 'fixed' ? Math.round(price * (1 - discount / 100)) : 0,
         depositAmount: Number(ruleForm.depositAmount || 0),
         paymentTerms: ruleForm.paymentTerms,
         promotionText: ruleForm.promotionText,
         giftText: ruleForm.giftText,
-        includedServices: ruleForm.includedServices.split('\n').map((item) => item.trim()).filter(Boolean),
-        menuSections: textToMenu(ruleForm.menuSections),
+        includedServices: cleanStringList(ruleForm.includedServices),
+        menuSections: cleanMenuSections(ruleForm.menuSections),
         notes: ruleForm.notes
       });
       setEditingRule(undefined);
@@ -384,7 +394,7 @@ export default function SalonDetailPage() {
     setSaving(true);
     setNotice('');
     try {
-      const price = Number(templateForm.pricePerPerson || 0);
+      const price = Number(templateForm.pricingMode === 'fixed' ? templateForm.fixedPrice : templateForm.pricePerPerson || 0);
       const discount = Number(templateForm.discountPercentage || 0);
       await api.post('/quotes/packages', {
         name: templateForm.name.trim(),
@@ -393,15 +403,18 @@ export default function SalonDetailPage() {
         durationHours: Number(templateForm.durationHours || 8),
         startTime: templateForm.startTime,
         endTime: templateForm.endTime,
-        pricePerPerson: price,
+        pricingMode: templateForm.pricingMode,
+        pricePerPerson: templateForm.pricingMode === 'per_person' ? price : 0,
+        fixedPrice: templateForm.pricingMode === 'fixed' ? price : 0,
         discountPercentage: discount,
-        finalPricePerPerson: Math.round(price * (1 - discount / 100)),
+        finalPricePerPerson: templateForm.pricingMode === 'per_person' ? Math.round(price * (1 - discount / 100)) : 0,
+        finalFixedPrice: templateForm.pricingMode === 'fixed' ? Math.round(price * (1 - discount / 100)) : 0,
         depositAmount: Number(templateForm.depositAmount || 0),
         paymentTerms: templateForm.paymentTerms,
         promotionText: templateForm.promotionText,
         giftText: templateForm.giftText,
-        includedServices: templateForm.includedServices.split('\n').map((item) => item.trim()).filter(Boolean),
-        menuSections: textToMenu(templateForm.menuSections),
+        includedServices: cleanStringList(templateForm.includedServices),
+        menuSections: cleanMenuSections(templateForm.menuSections),
         notes: templateForm.notes
       });
       setTemplateOpen(false);
@@ -477,8 +490,10 @@ export default function SalonDetailPage() {
       <footer className="lg:col-span-3 flex justify-end"><Button disabled={saving}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar comercial'}</Button></footer>
     </form>}
     {tab === 'packages' && <div className="grid gap-4"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div><h2 className="font-semibold text-zinc-950">Paquetes globales y reglas del salón</h2><p className="mt-1 text-sm text-zinc-500">Creá plantillas globales y configurá los valores específicos para {salon.name}.</p></div><Button onClick={() => setTemplateOpen(true)}><Plus className="mr-2 h-4 w-4" />Nuevo paquete global</Button></div>{packageRules.map((rule) => {
-      const final = Math.round((rule.pricePerPerson ?? 0) * (1 - (rule.discountPercentage ?? 0) / 100));
-      return <article key={rule.packageTemplateId} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><PackageCheck className="h-4 w-4" />{rule.packageName}</h2><p className="mt-1 text-sm text-zinc-500">{rule.ruleConfigured ? 'Regla específica del salón' : 'Sin regla configurada para este salón'}</p></div><Button variant="secondary" onClick={() => openRule(rule)}><Pencil className="mr-2 h-4 w-4" />Editar regla</Button></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5"><Metric label="Estado" value={rule.active === false ? 'Inactivo' : 'Activo'} /><Metric label="Valor/persona" value={money(rule.pricePerPerson)} /><Metric label="Descuento" value={`${rule.discountPercentage ?? 0}%`} /><Metric label="Final/persona" value={money(rule.finalPricePerPerson ?? final)} /><Metric label="Seña" value={money(rule.depositAmount)} /></dl><div className="mt-4 grid gap-3 text-sm lg:grid-cols-3"><Metric label="Promoción" value={rule.promotionText || 'Sin promoción'} /><Metric label="Regalo" value={rule.giftText || 'Sin regalo'} /><Metric label="Condiciones" value={rule.paymentTerms || 'Sin condiciones'} /></div></article>;
+      const fixed = rule.pricingMode === 'fixed';
+      const basePrice = fixed ? rule.fixedPrice ?? 0 : rule.pricePerPerson ?? 0;
+      const final = Math.round(basePrice * (1 - (rule.discountPercentage ?? 0) / 100));
+      return <article key={rule.packageTemplateId} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><PackageCheck className="h-4 w-4" />{rule.packageName}</h2><p className="mt-1 text-sm text-zinc-500">{rule.ruleConfigured ? 'Regla específica del salón' : 'Sin regla configurada para este salón'}</p></div><Button variant="secondary" onClick={() => openRule(rule)}><Pencil className="mr-2 h-4 w-4" />Editar regla</Button></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5"><Metric label="Estado" value={rule.active === false ? 'Inactivo' : 'Activo'} /><Metric label="Modalidad" value={fixed ? 'Precio total' : 'Por persona'} /><Metric label="Valor base" value={money(basePrice)} /><Metric label="Valor final" value={money(fixed ? rule.finalFixedPrice ?? final : rule.finalPricePerPerson ?? final)} /><Metric label="Seña" value={money(rule.depositAmount)} /></dl><div className="mt-4 grid gap-3 text-sm lg:grid-cols-3"><Metric label="Promoción" value={rule.promotionText || 'Sin promoción'} /><Metric label="Regalo" value={rule.giftText || 'Sin regalo'} /><Metric label="Condiciones" value={rule.paymentTerms || 'Sin condiciones'} /></div></article>;
     })}</div>}
     {tab === 'extras' && <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-3">{extras.map((extra, index) => <article key={extra._id ?? `${extra.name}-${index}`} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">{extra.name}</h2><p className="mt-1 text-sm text-zinc-500">{extra.description || 'Sin descripción'}</p></div><div className="flex gap-2"><Button variant="secondary" onClick={() => { setExtraForm(extra); setEditingExtraIndex(index); }}><Pencil className="mr-2 h-4 w-4" />Editar</Button><Button variant="secondary" onClick={() => void saveExtras(extras.map((item, itemIndex) => itemIndex === index ? { ...item, active: !item.active } : item))}>{extra.active ? 'Desactivar' : 'Activar'}</Button><Button variant="danger" onClick={() => void saveExtras(extras.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button></div></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4"><Metric label="Precio sugerido" value={money(extra.basePrice)} /><Metric label="Estado" value={extra.active ? 'Activo' : 'Inactivo'} /><Metric label="Tipo" value={extra.includedByDefault ? 'Incluido' : 'Adicional'} /><Metric label="Web" value={extra.publicVisible ? 'Visible' : 'Oculto'} /></dl></article>)}
@@ -500,11 +515,12 @@ export default function SalonDetailPage() {
     <Modal open={Boolean(editingRule && ruleForm)} onClose={() => { setEditingRule(undefined); setRuleForm(undefined); }} title={`Editar regla · ${editingRule?.packageName ?? ''}`} description="Estos cambios afectan sólo la regla del salón, no la plantilla global del paquete.">
       {ruleForm && <form onSubmit={saveRule} className="grid gap-4 p-6 sm:grid-cols-2">
         <label className="flex items-center gap-2 text-sm text-zinc-700 sm:col-span-2"><input type="checkbox" checked={ruleForm.active} onChange={(event) => setRuleForm((current) => current && { ...current, active: event.target.checked })} />Paquete activo para este salón</label>
-        <Field label="Valor por persona"><Input type="number" min={0} value={ruleForm.pricePerPerson} onChange={(event) => setRuleForm((current) => current && { ...current, pricePerPerson: Number(event.target.value) })} /></Field><Field label="Descuento (%)"><Input type="number" min={0} max={100} value={ruleForm.discountPercentage} onChange={(event) => setRuleForm((current) => current && { ...current, discountPercentage: Number(event.target.value) })} /></Field>
-        <Field label="Final por persona"><Input disabled value={Math.round(ruleForm.pricePerPerson * (1 - ruleForm.discountPercentage / 100))} /></Field><Field label="Seña"><Input type="number" min={0} value={ruleForm.depositAmount} onChange={(event) => setRuleForm((current) => current && { ...current, depositAmount: Number(event.target.value) })} /></Field>
+        <Field label="Modalidad de cobro" className="sm:col-span-2"><Select value={ruleForm.pricingMode} onChange={(event) => setRuleForm((current) => current && { ...current, pricingMode: event.target.value as RuleForm['pricingMode'] })}><option value="per_person">Precio por persona</option><option value="fixed">Precio total del evento</option></Select></Field>
+        <Field label={ruleForm.pricingMode === 'fixed' ? 'Precio total' : 'Valor por persona'}><Input type="number" min={0} value={ruleForm.pricingMode === 'fixed' ? ruleForm.fixedPrice : ruleForm.pricePerPerson} onChange={(event) => setRuleForm((current) => current && (current.pricingMode === 'fixed' ? { ...current, fixedPrice: Number(event.target.value) } : { ...current, pricePerPerson: Number(event.target.value) }))} /></Field><Field label="Descuento (%)"><Input type="number" min={0} max={100} value={ruleForm.discountPercentage} onChange={(event) => setRuleForm((current) => current && { ...current, discountPercentage: Number(event.target.value) })} /></Field>
+        <Field label={ruleForm.pricingMode === 'fixed' ? 'Precio total final' : 'Final por persona'}><Input disabled value={Math.round((ruleForm.pricingMode === 'fixed' ? ruleForm.fixedPrice : ruleForm.pricePerPerson) * (1 - ruleForm.discountPercentage / 100))} /></Field><Field label="Seña"><Input type="number" min={0} value={ruleForm.depositAmount} onChange={(event) => setRuleForm((current) => current && { ...current, depositAmount: Number(event.target.value) })} /></Field>
         <Field label="Promoción" className="sm:col-span-2"><Textarea value={ruleForm.promotionText} onChange={(event) => setRuleForm((current) => current && { ...current, promotionText: event.target.value })} /></Field><Field label="Regalo" className="sm:col-span-2"><Textarea value={ruleForm.giftText} onChange={(event) => setRuleForm((current) => current && { ...current, giftText: event.target.value })} /></Field>
-        <Field label="Condiciones de pago" className="sm:col-span-2"><Textarea value={ruleForm.paymentTerms} onChange={(event) => setRuleForm((current) => current && { ...current, paymentTerms: event.target.value })} /></Field><Field label="Menú" className="sm:col-span-2"><Textarea value={ruleForm.menuSections} onChange={(event) => setRuleForm((current) => current && { ...current, menuSections: event.target.value })} placeholder="Recepción: ítem | ítem" /></Field>
-        <Field label="Servicios incluidos" className="sm:col-span-2"><Textarea value={ruleForm.includedServices} onChange={(event) => setRuleForm((current) => current && { ...current, includedServices: event.target.value })} placeholder="Un servicio por línea" /></Field><Field label="Notas" className="sm:col-span-2"><Textarea value={ruleForm.notes} onChange={(event) => setRuleForm((current) => current && { ...current, notes: event.target.value })} /></Field>
+        <Field label="Condiciones de pago" className="sm:col-span-2"><Textarea value={ruleForm.paymentTerms} onChange={(event) => setRuleForm((current) => current && { ...current, paymentTerms: event.target.value })} /></Field><div className="sm:col-span-2"><MenuSectionsEditor value={ruleForm.menuSections} onChange={(menuSections) => setRuleForm((current) => current && { ...current, menuSections })} /></div>
+        <div className="sm:col-span-2"><StringListEditor label="Servicios incluidos" values={ruleForm.includedServices} onChange={(includedServices) => setRuleForm((current) => current && { ...current, includedServices })} /></div><Field label="Notas" className="sm:col-span-2"><Textarea value={ruleForm.notes} onChange={(event) => setRuleForm((current) => current && { ...current, notes: event.target.value })} /></Field>
         <footer className="flex justify-end gap-3 sm:col-span-2"><Button type="button" variant="secondary" onClick={() => { setEditingRule(undefined); setRuleForm(undefined); }}>Cancelar</Button><Button disabled={saving}><Check className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar regla'}</Button></footer>
       </form>}
     </Modal>
@@ -513,15 +529,16 @@ export default function SalonDetailPage() {
         <Field label="Nombre del paquete" className="sm:col-span-2"><Input value={templateForm.name} onChange={(event) => setTemplateForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ej: Golden Night" required /></Field>
         <Field label="Duración"><Input type="number" min={1} value={templateForm.durationHours} onChange={(event) => setTemplateForm((current) => ({ ...current, durationHours: Number(event.target.value) }))} /></Field>
         <div className="grid grid-cols-2 gap-3"><Field label="Inicio"><Input value={templateForm.startTime} onChange={(event) => setTemplateForm((current) => ({ ...current, startTime: event.target.value }))} /></Field><Field label="Fin"><Input value={templateForm.endTime} onChange={(event) => setTemplateForm((current) => ({ ...current, endTime: event.target.value }))} /></Field></div>
-        <Field label="Valor por persona"><Input type="number" min={0} value={templateForm.pricePerPerson} onChange={(event) => setTemplateForm((current) => ({ ...current, pricePerPerson: Number(event.target.value) }))} /></Field>
+        <Field label="Modalidad de cobro" className="sm:col-span-2"><Select value={templateForm.pricingMode} onChange={(event) => setTemplateForm((current) => ({ ...current, pricingMode: event.target.value as TemplateForm['pricingMode'] }))}><option value="per_person">Precio por persona</option><option value="fixed">Precio total del evento</option></Select></Field>
+        <Field label={templateForm.pricingMode === 'fixed' ? 'Precio total' : 'Valor por persona'}><Input type="number" min={0} value={templateForm.pricingMode === 'fixed' ? templateForm.fixedPrice : templateForm.pricePerPerson} onChange={(event) => setTemplateForm((current) => current.pricingMode === 'fixed' ? { ...current, fixedPrice: Number(event.target.value) } : { ...current, pricePerPerson: Number(event.target.value) })} /></Field>
         <Field label="Descuento (%)"><Input type="number" min={0} max={100} value={templateForm.discountPercentage} onChange={(event) => setTemplateForm((current) => ({ ...current, discountPercentage: Number(event.target.value) }))} /></Field>
-        <Field label="Final por persona"><Input disabled value={Math.round(templateForm.pricePerPerson * (1 - templateForm.discountPercentage / 100))} /></Field>
+        <Field label={templateForm.pricingMode === 'fixed' ? 'Precio total final' : 'Final por persona'}><Input disabled value={Math.round((templateForm.pricingMode === 'fixed' ? templateForm.fixedPrice : templateForm.pricePerPerson) * (1 - templateForm.discountPercentage / 100))} /></Field>
         <Field label="Seña"><Input type="number" min={0} value={templateForm.depositAmount} onChange={(event) => setTemplateForm((current) => ({ ...current, depositAmount: Number(event.target.value) }))} /></Field>
         <Field label="Promoción" className="sm:col-span-2"><Textarea value={templateForm.promotionText} onChange={(event) => setTemplateForm((current) => ({ ...current, promotionText: event.target.value }))} /></Field>
         <Field label="Regalo" className="sm:col-span-2"><Textarea value={templateForm.giftText} onChange={(event) => setTemplateForm((current) => ({ ...current, giftText: event.target.value }))} /></Field>
         <Field label="Condiciones de pago" className="sm:col-span-2"><Textarea value={templateForm.paymentTerms} onChange={(event) => setTemplateForm((current) => ({ ...current, paymentTerms: event.target.value }))} /></Field>
-        <Field label="Menú" className="sm:col-span-2"><Textarea value={templateForm.menuSections} onChange={(event) => setTemplateForm((current) => ({ ...current, menuSections: event.target.value }))} placeholder="Recepción: ítem | ítem" /></Field>
-        <Field label="Servicios incluidos" className="sm:col-span-2"><Textarea value={templateForm.includedServices} onChange={(event) => setTemplateForm((current) => ({ ...current, includedServices: event.target.value }))} placeholder="Un servicio por línea" /></Field>
+        <div className="sm:col-span-2"><MenuSectionsEditor value={templateForm.menuSections} onChange={(menuSections) => setTemplateForm((current) => ({ ...current, menuSections }))} /></div>
+        <div className="sm:col-span-2"><StringListEditor label="Servicios incluidos" values={templateForm.includedServices} onChange={(includedServices) => setTemplateForm((current) => ({ ...current, includedServices }))} /></div>
         <Field label="Notas internas" className="sm:col-span-2"><Textarea value={templateForm.notes} onChange={(event) => setTemplateForm((current) => ({ ...current, notes: event.target.value }))} /></Field>
         <footer className="flex justify-end gap-3 sm:col-span-2"><Button type="button" variant="secondary" onClick={() => setTemplateOpen(false)}>Cancelar</Button><Button disabled={saving}>{saving ? 'Creando…' : 'Crear paquete global'}</Button></footer>
       </form>

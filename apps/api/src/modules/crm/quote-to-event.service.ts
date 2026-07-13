@@ -1,5 +1,6 @@
 import { Event, Lead, LeadActivity, Quote, QuoteRevision } from './crm.models';
 import { findOrCreateCustomer } from './contact-dedupe.service';
+import { buildInitialResourcePlan } from './event-resource-plan';
 import { ApiError } from '../../middlewares/errorHandler';
 
 type ConvertQuoteInput = {
@@ -23,8 +24,8 @@ async function createRevision(quote: any, userId: string): Promise<void> {
 function checklist(quote: any, customer: any): Record<string, boolean> {
   return {
     customerComplete: Boolean(customer?.fullName && (customer?.phone || customer?.email)),
-    document: false,
-    address: false,
+    document: Boolean(customer?.documentNumber || customer?.dni),
+    address: Boolean(customer?.address),
     salonDefined: Boolean(quote.salonId),
     dateDefined: Boolean(quote.eventDate),
     timeDefined: Boolean(quote.startTime && quote.endTime),
@@ -72,12 +73,15 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
   const commercialSnapshot = {
     packageTemplateId: quote.packageTemplateId,
     packageName: quote.packageName,
+    pricingMode: quote.pricingMode ?? 'per_person',
     durationHours: quote.durationHours,
     startTime: quote.startTime,
     endTime: quote.endTime,
     pricePerPerson: quote.pricePerPerson,
     discountPercentage: quote.discountPercentage,
     finalPricePerPerson: quote.finalPricePerPerson,
+    fixedPrice: quote.fixedPrice,
+    finalFixedPrice: quote.finalFixedPrice,
     totalAmount: quote.totalAmount,
     depositAmount: quote.depositAmount,
     balanceAmount: quote.balanceAmount,
@@ -100,6 +104,12 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     startTime: quote.startTime,
     endTime: quote.endTime,
     guestCount: quote.guestCount,
+    honoreeName: quote.honoreeName,
+    vegetarianCount: quote.vegetarianCount,
+    veganCount: quote.veganCount,
+    celiacCount: quote.celiacCount,
+    lactoseIntolerantCount: quote.lactoseIntolerantCount,
+    tableLinenColor: quote.tableLinenColor,
     quoteMode: quote.quoteMode ?? 'PACKAGE',
     guestBreakdown: {
       totalGuests: quote.totalGuests ?? quote.guestCount,
@@ -119,6 +129,7 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     commercialSnapshot,
     menuSnapshot: quote.menuSections ?? [],
     servicesSnapshot: quote.includedServices ?? [],
+    resourcePlanSnapshot: buildInitialResourcePlan({ source: 'quote_conversion', sourceQuoteId: quote._id }),
     paymentSnapshot: { depositAmount: quote.depositAmount, balanceAmount: quote.balanceAmount, paymentTerms: quote.paymentTerms, realPaymentsImplemented: false },
     contractReadyChecklist: checklist(quote, customer),
     createdBy: input.userId,

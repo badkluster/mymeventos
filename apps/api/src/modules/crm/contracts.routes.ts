@@ -86,7 +86,7 @@ function buildQuery(request: Request): Record<string, unknown> {
 
 router.use(requireAuth);
 
-router.get('/', requirePermission(Permission.EVENTS_READ), asyncHandler(async (request, response) => {
+router.get('/', requirePermission(Permission.CONTRACTS_READ), asyncHandler(async (request, response) => {
   const page = Math.max(1, Number(queryValue(request.query.page)) || 1);
   const limit = Math.min(100, Math.max(1, Number(queryValue(request.query.limit)) || 20));
   const query = buildQuery(request);
@@ -102,7 +102,7 @@ router.get('/', requirePermission(Permission.EVENTS_READ), asyncHandler(async (r
   return sendSuccess(response, { items, meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 } });
 }));
 
-router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.get('/:id', requirePermission(Permission.CONTRACTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const contract = await Contract.findOne({ _id: request.params.id, deletedAt: null })
     .populate('eventId', 'eventName eventType eventDate status')
     .populate('customerId', 'fullName phone email')
@@ -113,7 +113,7 @@ router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(id
   return sendSuccess(response, { contract });
 }));
 
-router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
+router.patch('/:id', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const contract: any = await Contract.findOne({ _id: request.params.id, deletedAt: null });
   await ensureContractAccess(request, contract);
   Object.assign(contract, request.body, { updatedBy: request.user!.id });
@@ -123,7 +123,7 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
 }));
 
-router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validateRequest(statusSchema), asyncHandler(async (request, response) => {
+router.patch('/:id/status', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(statusSchema), asyncHandler(async (request, response) => {
   const contract: any = await Contract.findOne({ _id: request.params.id, deletedAt: null });
   await ensureContractAccess(request, contract);
   contract.status = request.body.status;
@@ -134,21 +134,21 @@ router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validat
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
 }));
 
-router.post('/:id/approve', requirePermission(Permission.EVENTS_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.post('/:id/approve', requirePermission(Permission.CONTRACTS_APPROVE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const contract = await approveContract(request.params.id, request.user!.id);
   await writeAuditLog(request, 'CONTRACT_APPROVE', 'Contract', contract._id.toString());
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
 }));
 
-router.post('/:id/request-changes', requirePermission(Permission.EVENTS_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.post('/:id/request-changes', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const contract = await requestContractChanges(request.params.id, request.user!.id);
   await writeAuditLog(request, 'CONTRACT_REQUEST_CHANGES', 'Contract', contract._id.toString());
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
 }));
 
-router.post('/:id/cancel', requirePermission(Permission.EVENTS_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.post('/:id/cancel', requirePermission(Permission.CONTRACTS_CANCEL), validateRequest(idSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const contract = await cancelContract(request.params.id, request.user!.id);
   await writeAuditLog(request, 'CONTRACT_CANCEL', 'Contract', contract._id.toString());
@@ -174,41 +174,41 @@ router.get('/:id/payment-summary', requirePermission(Permission.PAYMENTS_READ), 
   return sendSuccess(response, { summary: await paymentSummary({ contractId: request.params.id }) });
 }));
 
-router.get('/:id/addendums', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.get('/:id/addendums', requirePermission(Permission.CONTRACTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const items = await ContractAddendum.find({ contractId: request.params.id, deletedAt: null }).sort({ createdAt: -1 }).lean();
   return sendSuccess(response, { items });
 }));
 
-router.post('/:id/addendums', requirePermission(Permission.EVENTS_UPDATE), validateRequest(addendumSchema), asyncHandler(async (request, response) => {
+router.post('/:id/addendums', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(addendumSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const addendum = await createAddendum(request.params.id, request.body, request.user!.id);
   await writeAuditLog(request, 'CONTRACT_ADDENDUM_CREATE', 'ContractAddendum', addendum._id.toString(), { contractId: request.params.id });
   return sendSuccess(response, { addendum }, 201, getApiMessage('CONTRACT_ADDENDUM_CREATED'));
 }));
 
-router.get('/:id/addendums/:addendumId', requirePermission(Permission.EVENTS_READ), validateRequest(addendumIdSchema), asyncHandler(async (request, response) => {
+router.get('/:id/addendums/:addendumId', requirePermission(Permission.CONTRACTS_READ), validateRequest(addendumIdSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const addendum = await ContractAddendum.findOne({ _id: request.params.addendumId, contractId: request.params.id, deletedAt: null }).lean();
   if (!addendum) throw new ApiError(404, 'CONTRACT_ADDENDUM_NOT_FOUND');
   return sendSuccess(response, { addendum });
 }));
 
-router.patch('/:id/addendums/:addendumId', requirePermission(Permission.EVENTS_UPDATE), validateRequest(addendumPatchSchema), asyncHandler(async (request, response) => {
+router.patch('/:id/addendums/:addendumId', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(addendumPatchSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const addendum = await updateAddendum(request.params.addendumId, request.body, request.user!.id);
   await writeAuditLog(request, 'CONTRACT_ADDENDUM_UPDATE', 'ContractAddendum', addendum._id.toString(), { contractId: request.params.id });
   return sendSuccess(response, { addendum }, 200, getApiMessage('CONTRACT_ADDENDUM_UPDATED'));
 }));
 
-router.post('/:id/addendums/:addendumId/approve', requirePermission(Permission.EVENTS_UPDATE), validateRequest(addendumIdSchema), asyncHandler(async (request, response) => {
+router.post('/:id/addendums/:addendumId/approve', requirePermission(Permission.CONTRACTS_APPROVE), validateRequest(addendumIdSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const addendum = await approveAddendum(request.params.addendumId, request.user!.id);
   await writeAuditLog(request, 'CONTRACT_ADDENDUM_APPROVE', 'ContractAddendum', addendum._id.toString(), { contractId: request.params.id });
   return sendSuccess(response, { addendum }, 200, getApiMessage('CONTRACT_ADDENDUM_UPDATED'));
 }));
 
-for (const [path, status] of [['reject', 'rejected'], ['cancel', 'cancelled']] as const) router.post(`/:id/addendums/:addendumId/${path}`, requirePermission(Permission.EVENTS_UPDATE), validateRequest(addendumIdSchema), asyncHandler(async (request, response) => {
+for (const [path, status] of [['reject', 'rejected'], ['cancel', 'cancelled']] as const) router.post(`/:id/addendums/:addendumId/${path}`, requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(addendumIdSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const addendum: any = await ContractAddendum.findOne({ _id: request.params.addendumId, contractId: request.params.id, deletedAt: null });
   if (!addendum) throw new ApiError(404, 'CONTRACT_ADDENDUM_NOT_FOUND');
@@ -222,7 +222,7 @@ for (const [path, status] of [['reject', 'rejected'], ['cancel', 'cancelled']] a
   return sendSuccess(response, { addendum }, 200, getApiMessage('CONTRACT_ADDENDUM_UPDATED'));
 }));
 
-router.delete('/:id/addendums/:addendumId', requirePermission(Permission.EVENTS_UPDATE), validateRequest(addendumIdSchema), asyncHandler(async (request, response) => {
+router.delete('/:id/addendums/:addendumId', requirePermission(Permission.CONTRACTS_DELETE), validateRequest(addendumIdSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const addendum: any = await ContractAddendum.findOne({ _id: request.params.addendumId, contractId: request.params.id, deletedAt: null });
   if (!addendum) throw new ApiError(404, 'CONTRACT_ADDENDUM_NOT_FOUND');
@@ -235,7 +235,7 @@ router.delete('/:id/addendums/:addendumId', requirePermission(Permission.EVENTS_
   return sendSuccess(response, { deleted: true }, 200, getApiMessage('CONTRACT_ADDENDUM_DELETED'));
 }));
 
-router.delete('/:id', requirePermission(Permission.EVENTS_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.delete('/:id', requirePermission(Permission.CONTRACTS_DELETE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const contract: any = await Contract.findOne({ _id: request.params.id, deletedAt: null });
   await ensureContractAccess(request, contract);
   contract.deletedAt = new Date();
