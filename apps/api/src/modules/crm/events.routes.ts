@@ -70,6 +70,18 @@ function buildQuery(request: Request): Record<string, unknown> {
   if (status && eventStatuses.includes(status as any)) terms.push({ status });
   const salonId = getQueryString(request.query.salonId);
   if (salonId && objectId.safeParse(salonId).success) terms.push({ salonId });
+  const dateFrom = getQueryString(request.query.dateFrom);
+  const dateTo = getQueryString(request.query.dateTo);
+  const dateRange: Record<string, Date> = {};
+  if (dateFrom) {
+    const parsed = new Date(dateFrom);
+    if (!Number.isNaN(parsed.getTime())) dateRange.$gte = parsed;
+  }
+  if (dateTo) {
+    const parsed = new Date(dateTo);
+    if (!Number.isNaN(parsed.getTime())) dateRange.$lte = parsed;
+  }
+  if (Object.keys(dateRange).length) terms.push({ eventDate: dateRange });
   const customerId = getQueryString(request.query.customerId);
   if (customerId && objectId.safeParse(customerId).success) terms.push({ customerId });
   const sourceQuoteId = getQueryString(request.query.sourceQuoteId);

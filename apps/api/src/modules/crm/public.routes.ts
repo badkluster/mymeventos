@@ -119,7 +119,7 @@ router.get('/landing', asyncHandler(async (_request, response) => {
     LandingPromotion.find({ ...activeNowQuery(), visibleOnHome: true }).sort({ displayOrder: 1, createdAt: -1 }).limit(8).lean(),
     LandingGalleryItem.find({ active: true, deletedAt: null }).sort({ featured: -1, displayOrder: 1, createdAt: -1 }).limit(12).lean(),
     LandingTestimonial.find({ active: true, deletedAt: null }).sort({ featured: -1, displayOrder: 1, createdAt: -1 }).limit(6).lean(),
-    LandingFaq.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
+    LandingFaq.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).lean(),
     LandingServiceBlock.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
     LandingEventType.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
   ]);

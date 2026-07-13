@@ -535,37 +535,41 @@ async function seed(): Promise<void> {
       if (!existingRule) createdRules++;
     }
   }
-  await LandingSettings.findOneAndUpdate(
-    { key: 'default' },
-    {
-      $set: {
-        key: 'default',
-        heroTitle: 'Tu evento, en el lugar que siempre soñaste',
-        heroSubtitle: 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.',
-        heroImageUrl: landingImages[0],
-        heroPrimaryCtaLabel: 'Solicitá presupuesto',
-        heroSecondaryCtaLabel: 'Ver salones',
-        whatsappNumber: '+54 9 2213 63-5466',
-        whatsappDefaultMessage: 'Hola M&M Eventos, quiero solicitar un presupuesto para mi evento.',
-        contactEmail: 'info@mm-eventos.com.ar',
-        contactPhone: '+54 9 2213 63-5466',
-        footerText: 'Creamos momentos únicos que permanecen para siempre.',
-        seoTitle: 'M&M Eventos | Salones y eventos premium',
-        seoDescription: 'Salones, catering, ambientación, DJ y organización integral para eventos inolvidables.',
-        openGraphImageUrl: landingImages[0],
-        active: true,
-        deletedAt: null
-      }
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-  await Promise.all(landingPromotions.map((item) => LandingPromotion.findOneAndUpdate({ title: item.title }, { $set: { ...item, active: true, visibleOnHome: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
-  await Promise.all(landingGallery.map((item) => LandingGalleryItem.findOneAndUpdate({ title: item.title }, { $set: { ...item, altText: item.title, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
-  await Promise.all(landingTestimonials.map((item) => LandingTestimonial.findOneAndUpdate({ customerName: item.customerName, eventType: item.eventType }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
-  await Promise.all(landingFaqs.map((item) => LandingFaq.findOneAndUpdate({ question: item.question }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
-  await Promise.all(landingServices.map((item) => LandingServiceBlock.findOneAndUpdate({ title: item.title }, { $set: { ...item, section: 'services', active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
-  await Promise.all(landingEventTypes.map((item) => LandingEventType.findOneAndUpdate({ title: item.title }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
-  console.info(`Initial data seeded: ${createdPackages} packages created, ${updatedPackages} packages updated, ${createdRules} venue rules created, ${createdManagers} salon managers created, ${updatedManagers} salon managers updated, ${createdBackofficeUsers} backoffice users created, ${updatedBackofficeUsers} backoffice users updated. Landing content prepared.`);
+  if (process.env.SEED_LANDING_CONTENT === 'true') {
+    await LandingSettings.findOneAndUpdate(
+      { key: 'default' },
+      {
+        $set: {
+          key: 'default',
+          heroTitle: 'Tu evento, en el lugar que siempre soñaste',
+          heroSubtitle: 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.',
+          heroImageUrl: landingImages[0],
+          heroPrimaryCtaLabel: 'Solicitá presupuesto',
+          heroSecondaryCtaLabel: 'Ver salones',
+          whatsappNumber: '+54 9 2213 63-5466',
+          whatsappDefaultMessage: 'Hola M&M Eventos, quiero solicitar un presupuesto para mi evento.',
+          contactEmail: 'mymsalondeeventoslaplata@gmail.com',
+          contactPhone: '+54 9 2213 63-5466',
+          footerText: 'Creamos momentos únicos que permanecen para siempre.',
+          seoTitle: 'M&M Eventos | Salones y eventos premium',
+          seoDescription: 'Salones, catering, ambientación, DJ y organización integral para eventos inolvidables.',
+          openGraphImageUrl: landingImages[0],
+          active: true,
+          deletedAt: null
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    await Promise.all(landingPromotions.map((item) => LandingPromotion.findOneAndUpdate({ title: item.title }, { $set: { ...item, active: true, visibleOnHome: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+    await Promise.all(landingGallery.map((item) => LandingGalleryItem.findOneAndUpdate({ title: item.title }, { $set: { ...item, altText: item.title, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+    await Promise.all(landingTestimonials.map((item) => LandingTestimonial.findOneAndUpdate({ customerName: item.customerName, eventType: item.eventType }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+    await Promise.all(landingFaqs.map((item) => LandingFaq.findOneAndUpdate({ question: item.question }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+    await Promise.all(landingServices.map((item) => LandingServiceBlock.findOneAndUpdate({ title: item.title }, { $set: { ...item, section: 'services', active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+    await Promise.all(landingEventTypes.map((item) => LandingEventType.findOneAndUpdate({ title: item.title }, { $set: { ...item, active: true, deletedAt: null } }, { upsert: true, new: true, setDefaultsOnInsert: true })));
+    console.info(`Initial data seeded: ${createdPackages} packages created, ${updatedPackages} packages updated, ${createdRules} venue rules created, ${createdManagers} salon managers created, ${updatedManagers} salon managers updated, ${createdBackofficeUsers} backoffice users created, ${updatedBackofficeUsers} backoffice users updated. Landing content prepared.`);
+  } else {
+    console.info(`Initial data seeded: ${createdPackages} packages created, ${updatedPackages} packages updated, ${createdRules} venue rules created, ${createdManagers} salon managers created, ${updatedManagers} salon managers updated, ${createdBackofficeUsers} backoffice users created, ${updatedBackofficeUsers} backoffice users updated. Landing content skipped.`);
+  }
 }
 
 seed().then(disconnectDatabase).catch(async (error) => { console.error('Seed failed:', error); await disconnectDatabase(); process.exitCode = 1; });

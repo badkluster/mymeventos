@@ -66,11 +66,11 @@ export default function QuotesPage() {
   const [searchInput, setSearchInput] = useState('');
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, totalItems: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false });
 
-  const setNotice = (message: string) => {
+  const setNotice = useCallback((message: string) => {
     if (!message) return;
     const isSuccess = /correctamente|creado|creada|actualizado|actualizada|duplicado|duplicada|eliminado|eliminada|tomada|descartada/i.test(message);
     showToast({ message, variant: isSuccess ? 'success' : 'error' });
-  };
+  }, [showToast]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,7 +98,7 @@ export default function QuotesPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, filters]);
+  }, [activeTab, filters, setNotice]);
 
   // La pantalla necesita sincronizar el listado con filtros, pestaña y paginación.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -153,7 +153,7 @@ export default function QuotesPage() {
   };
 
   return <section className="space-y-6">
-    <PageHeader title="Presupuestos" description="Solicitudes comerciales y presupuestos emitidos por salón." action={<div className="flex flex-wrap gap-2"><Link href="/admin/quotes/custom"><Button variant="secondary">Cotizador personalizado</Button></Link><Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo presupuesto</Button></div>} />
+    <PageHeader title="Presupuestos" description="Solicitudes comerciales y presupuestos emitidos por salón." action={<Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo presupuesto</Button>} />
     <div className="flex flex-wrap gap-2 border-b border-zinc-200">
       <button type="button" onClick={() => { setActiveTab('requests'); updateFilters({ page: 1, status: '' }); }} className={`px-4 py-3 text-sm font-medium ${activeTab === 'requests' ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>Solicitudes</button>
       <button type="button" onClick={() => { setActiveTab('quotes'); updateFilters({ page: 1, status: '' }); }} className={`px-4 py-3 text-sm font-medium ${activeTab === 'quotes' ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>Presupuestos</button>

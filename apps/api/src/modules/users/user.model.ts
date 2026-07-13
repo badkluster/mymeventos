@@ -114,7 +114,7 @@ const preferencesSchema = new Schema({
 
 const userSchema = new Schema({
   username: { type: String, required: true, trim: true, lowercase: true, unique: true, index: true },
-  email: { type: String, trim: true, lowercase: true, unique: true, sparse: true, index: true },
+  email: { type: String, trim: true, lowercase: true, index: true },
   normalizedEmail: { type: String, trim: true, lowercase: true, index: true },
   passwordHash: { type: String, select: false },
   firstName: { type: String, required: true, trim: true },
@@ -192,3 +192,19 @@ userSchema.pre('validate', function normalizeUser(next) {
 
 export type UserDocument = InferSchemaType<typeof userSchema>;
 export const User = models.User || model('User', userSchema);
+
+export async function dropLegacyUniqueEmailIndex(): Promise<void> {
+  const db = User.db.db;
+  if (!db) return;
+  const collections = await db.listCollections({ name: User.collection.name }, { nameOnly: true }).toArray();
+  if (!collections.length) return;
+  const indexes = await User.collection.indexes();
+  const emailIndex = indexes.find((index: any) => index.name === 'email_1' && index.key?.email === 1);
+  if (emailIndex?.unique === true && emailIndex.name) {
+    await User.collection.dropIndex(emailIndex.name);
+    await User.collection.createIndex({ email: 1 }, { name: 'email_1' });
+    console.info(`Recreated user email index without unique constraint: ${emailIndex.name}`);
+  } else if (!emailIndex) {
+    await User.collection.createIndex({ email: 1 }, { name: 'email_1' });
+  }
+}

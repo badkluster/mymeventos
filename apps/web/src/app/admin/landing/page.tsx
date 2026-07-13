@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Edit3, Eye, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { Edit3, Eye, GripVertical, Plus, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import { Button, Input, Modal, PageHeader, Textarea } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
@@ -14,6 +14,7 @@ type LandingSettings = Record<string, string | boolean | undefined>;
 type LandingItem = Record<string, string | number | boolean | string[] | undefined> & { _id?: string; title?: string; active?: boolean; displayOrder?: number };
 type LandingData = { settings?: LandingSettings; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; services: LandingItem[]; eventTypes: LandingItem[] };
 type ResourceKey = 'promotions' | 'gallery' | 'testimonials' | 'faqs' | 'services' | 'event-types';
+type LandingDataCollectionKey = Exclude<ResourceKey, 'event-types'> | 'eventTypes';
 
 const tabs: Array<{ key: ResourceKey | 'settings'; label: string }> = [
   { key: 'settings', label: 'Hero' },
@@ -85,6 +86,14 @@ function itemTitle(item: LandingItem, tab: ResourceKey) {
   return String(item.title ?? '');
 }
 
+function itemImage(item: LandingItem) {
+  return typeof item.imageUrl === 'string' && item.imageUrl.trim() ? item.imageUrl.trim() : '';
+}
+
+function dataKeyFor(tab: ResourceKey): LandingDataCollectionKey {
+  return tab === 'event-types' ? 'eventTypes' : tab;
+}
+
 const clearableItemFields = new Set(['imageUrl']);
 
 function normalizePayload(form: LandingItem) {
@@ -129,8 +138,7 @@ export default function LandingAdminPage() {
 
   const currentItems = useMemo(() => {
     if (activeTab === 'settings') return [];
-    if (activeTab === 'event-types') return data.eventTypes;
-    return data[activeTab] ?? [];
+    return data[dataKeyFor(activeTab)] ?? [];
   }, [activeTab, data]);
 
   const load = useCallback(async () => {
@@ -181,6 +189,24 @@ export default function LandingAdminPage() {
       showToast({ message: 'Elemento eliminado.', variant: 'success' });
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudo eliminar.', variant: 'error' });
+    }
+  }
+
+  async function toggleItemActive(item: LandingItem) {
+    if (activeTab === 'settings' || !item._id) return;
+    const nextActive = item.active === false;
+    const key = dataKeyFor(activeTab);
+    const previousItems = [...(data[key] ?? [])];
+    setData((current) => ({
+      ...current,
+      [key]: (current[key] ?? []).map((currentItem) => currentItem._id === item._id ? { ...currentItem, active: nextActive } : currentItem)
+    }));
+    try {
+      await api.patch(`/landing/${activeTab}/${item._id}`, { active: nextActive });
+      showToast({ message: nextActive ? 'Elemento activado.' : 'Elemento desactivado.', variant: 'success' });
+    } catch (error) {
+      setData((current) => ({ ...current, [key]: previousItems }));
+      showToast({ message: error instanceof Error ? error.message : 'No se pudo actualizar el estado.', variant: 'error' });
     }
   }
 
@@ -290,16 +316,28 @@ export default function LandingAdminPage() {
         <Button onClick={() => setEditing({ ...emptyForms[activeTab] })}><Plus className="mr-2 h-4 w-4" />Nuevo</Button>
       </div>
       {activeTab === 'gallery' ? <p className="mb-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-600">Arrastrá las filas desde el ícono para cambiar el orden de la galería pública.</p> : null}
-      <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead className="text-left text-xs uppercase text-zinc-400"><tr>{activeTab === 'gallery' ? <th className="w-12 py-2">Mover</th> : null}<th className="py-2">Título</th><th>Estado</th><th>Orden</th><th>Detalle</th><th></th></tr></thead><tbody className="divide-y divide-zinc-100">{currentItems.map((item) => {
+      <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="text-left text-xs uppercase text-zinc-400"><tr>{activeTab === 'gallery' ? <th className="w-12 py-2">Mover</th> : null}<th className="py-2">Título</th><th>Estado</th><th>Orden</th><th>Detalle</th><th></th></tr></thead><tbody className="divide-y divide-zinc-100">{currentItems.map((item) => {
         const isDragging = draggingId === item._id;
+        const imageUrl = itemImage(item);
+        const title = itemTitle(item, activeTab);
+        const isActive = item.active !== false;
         return <tr
           key={item._id}
           onDragOver={activeTab === 'gallery' ? (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } : undefined}
           onDrop={activeTab === 'gallery' ? (event) => { event.preventDefault(); void reorderGallery(item); } : undefined}
           className={isDragging ? 'bg-amber-50 opacity-60' : activeTab === 'gallery' ? 'transition hover:bg-zinc-50' : undefined}
         >
-          {activeTab === 'gallery' ? <td className="py-3"><button type="button" draggable={Boolean(item._id)} onDragStart={(event) => startGalleryDrag(event, item)} onDragEnd={() => setDraggingId(null)} aria-label={`Mover ${itemTitle(item, activeTab)}`} className="grid h-9 w-9 cursor-grab place-items-center rounded-lg border border-zinc-200 text-zinc-400 transition hover:border-zinc-400 hover:text-zinc-900 active:cursor-grabbing"><GripVertical className="h-4 w-4" /></button></td> : null}
-          <td className="py-3 font-medium text-zinc-950">{itemTitle(item, activeTab)}</td><td>{item.active === false ? 'Inactivo' : 'Activo'}</td><td>{item.displayOrder ?? 0}</td><td className="max-w-md truncate text-zinc-500">{String(item.description ?? item.answer ?? item.quote ?? '')}</td><td className="flex justify-end gap-1 py-2"><TableActionButton icon={Edit3} label="Editar" onClick={() => setEditing(item)} /><TableActionButton icon={Trash2} label="Eliminar" onClick={() => void removeItem(item)} /></td>
+          {activeTab === 'gallery' ? <td className="py-3"><button type="button" draggable={Boolean(item._id)} onDragStart={(event) => startGalleryDrag(event, item)} onDragEnd={() => setDraggingId(null)} aria-label={`Mover ${title}`} className="grid h-9 w-9 cursor-grab place-items-center rounded-lg border border-zinc-200 text-zinc-400 transition hover:border-zinc-400 hover:text-zinc-900 active:cursor-grabbing"><GripVertical className="h-4 w-4" /></button></td> : null}
+          <td className="py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {imageUrl ? <div className="h-12 w-16 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 shadow-sm"><div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${imageUrl})` }} /></div> : <div className="grid h-12 w-16 shrink-0 place-items-center rounded-lg border border-dashed border-zinc-200 bg-zinc-50 text-[10px] font-semibold uppercase text-zinc-400">Sin img</div>}
+              <div className="min-w-0">
+                <p className="truncate font-medium text-zinc-950">{title || 'Sin título'}</p>
+                {imageUrl ? <p className="mt-1 max-w-[260px] truncate text-xs text-zinc-400">{imageUrl}</p> : null}
+              </div>
+            </div>
+          </td>
+          <td><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>{isActive ? 'Activo' : 'Inactivo'}</span></td><td>{item.displayOrder ?? 0}</td><td className="max-w-md truncate text-zinc-500">{String(item.description ?? item.answer ?? item.quote ?? '')}</td><td className="flex justify-end gap-1 py-2"><TableActionButton icon={isActive ? ToggleLeft : ToggleRight} label={isActive ? 'Desactivar' : 'Activar'} onClick={() => void toggleItemActive(item)} /><TableActionButton icon={Edit3} label="Editar" onClick={() => setEditing(item)} /><TableActionButton icon={Trash2} label="Eliminar" onClick={() => void removeItem(item)} /></td>
         </tr>;
       })}</tbody></table></div>
     </div>}

@@ -123,10 +123,7 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE, Permission.EVENTS_CANCEL,
     Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE, Permission.CONTRACTS_APPROVE, Permission.CONTRACTS_CANCEL,
     Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_UPDATE,
-    Permission.CATALOG_READ, Permission.CATALOG_CREATE, Permission.CATALOG_UPDATE, Permission.CATALOG_DELETE,
     Permission.SUPPLIERS_READ, Permission.SUPPLIERS_CREATE, Permission.SUPPLIERS_UPDATE, Permission.SUPPLIERS_DELETE,
-    Permission.CONSUMPTION_RULES_READ, Permission.CONSUMPTION_RULES_CREATE, Permission.CONSUMPTION_RULES_UPDATE, Permission.CONSUMPTION_RULES_DELETE,
-    Permission.INVENTORY_READ, Permission.INVENTORY_UPDATE, Permission.INVENTORY_RESERVE, Permission.INVENTORY_RETURN,
     Permission.LANDING_READ, Permission.LANDING_UPDATE,
     Permission.PROMOTIONS_READ, Permission.PROMOTIONS_CREATE, Permission.PROMOTIONS_UPDATE,
     Permission.CAMPAIGNS_READ, Permission.CAMPAIGNS_CREATE, Permission.CAMPAIGNS_SEND,
@@ -141,15 +138,11 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE,
     Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE,
     Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE,
-    Permission.CATALOG_READ,
     Permission.SUPPLIERS_READ,
-    Permission.CONSUMPTION_RULES_READ,
-    Permission.INVENTORY_READ, Permission.INVENTORY_RESERVE, Permission.INVENTORY_RETURN,
     Permission.LANDING_READ, Permission.LANDING_UPDATE,
     Permission.REPORTS_READ
   ],
   [Role.STAFF]: [
-    Permission.EVENTS_READ,
-    Permission.INVENTORY_READ
+    Permission.EVENTS_READ
   ]
 };

@@ -20,6 +20,7 @@ export const ApiMessages = {
   USER_UPDATED: 'Usuario actualizado correctamente.',
   USER_DELETED: 'Usuario eliminado correctamente.',
   USER_PASSWORD_RESET: 'Contraseña reiniciada correctamente.',
+  USERNAME_ALREADY_EXISTS: 'Ya existe un usuario con ese nombre de usuario.',
   USER_PRIMARY_SALON_INVALID: 'El salón principal debe estar dentro de los salones asignados.',
   USER_PRIMARY_MANAGED_SALON_INVALID: 'El salón principal a cargo debe estar dentro de los salones a cargo.',
   SALON_CREATED: 'Salón creado correctamente.',

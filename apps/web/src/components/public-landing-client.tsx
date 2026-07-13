@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion, type Variants } from 'framer-motion';
 import { ArrowRight, Baby, BriefcaseBusiness, CakeSlice, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, ChevronUp, Clock3, Crown, ExternalLink, Gift, GlassWater, GraduationCap, Heart, LogIn, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { brandAssets } from '@/lib/brand-assets';
@@ -213,12 +213,46 @@ function normalizeMapQuery(value: string, salon: Salon) {
   return withCity.replace(/\s+/g, ' ').trim();
 }
 
+// Reveal content slightly before it enters the viewport so scrolling always feels immediate.
+const viewport = { once: true, amount: 0.01, margin: '0px 0px 140px 0px' } as const;
+const smoothEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
+const softSpring = { type: 'spring', stiffness: 320, damping: 34, mass: 0.8 } as const;
+const sectionVariants: Variants = {
+  hidden: { opacity: 0.88, y: 8 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: smoothEase, when: 'beforeChildren', staggerChildren: 0.012 } },
+};
+const listVariants: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.012 } },
+};
+const cardVariants: Variants = {
+  hidden: { opacity: 0.82, y: 7 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: smoothEase } },
+};
+const titleVariants: Variants = {
+  hidden: { opacity: 0.86, y: 6 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: smoothEase } },
+};
+const imageRevealVariants: Variants = {
+  hidden: { opacity: 0.9, scale: 1.006 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.24, ease: smoothEase } },
+};
+
+function AnimatedSection({ children, className, variants = sectionVariants, style, ...props }: React.ComponentProps<typeof motion.section>) {
+  const shouldReduceMotion = useReducedMotion();
+  return <motion.section {...props} className={className} style={style} initial={shouldReduceMotion ? false : 'hidden'} whileInView={shouldReduceMotion ? undefined : 'visible'} viewport={viewport} variants={variants}>{children}</motion.section>;
+}
+
+function AnimatedGrid({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <motion.div className={className} variants={listVariants}>{children}</motion.div>;
+}
+
 function SectionTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
-  return <div className="mx-auto mb-10 max-w-3xl text-center md:mb-12">
+  return <motion.div className="mx-auto mb-10 max-w-3xl text-center md:mb-12" variants={titleVariants}>
     <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#dbe1e8]">{eyebrow}</p>
     <h2 className="mt-4 text-3xl font-semibold text-white md:text-5xl">{title}</h2>
     {subtitle ? <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-zinc-300 md:text-lg">{subtitle}</p> : null}
-  </div>;
+  </motion.div>;
 }
 
 function IconBadge({ name, tone = 'border-[#c8cdd3]/30 bg-[#c8cdd3]/10 text-[#f1f5f9]' }: { name?: string; tone?: string }) {
@@ -303,27 +337,6 @@ function eventTypeIconName(item: LandingItem, index: number): keyof typeof iconM
 function Portal({ children }: { children: React.ReactNode }) {
   if (typeof document === 'undefined') return null;
   return createPortal(children, document.body);
-}
-
-function LandingLoader() {
-  return <main className="grid min-h-screen place-items-center overflow-hidden bg-[#050505] px-5 text-white">
-    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(200,205,211,.11),transparent_32%,rgba(255,255,255,.045)_56%,transparent_78%)]" />
-    <section className="relative w-full max-w-xl text-center">
-      <div className="mx-auto grid h-28 w-28 place-items-center rounded-3xl border border-[#c8cdd3]/30 bg-white/[0.035] shadow-[0_0_48px_rgba(200,205,211,.16)]">
-        <motion.div className="absolute h-28 w-28 rounded-3xl border border-[#c8cdd3]/20" animate={{ rotate: 360 }} transition={{ duration: 5, repeat: Infinity, ease: 'linear' }} />
-        <motion.div className="absolute h-20 w-20 rounded-2xl border border-[#f1f5f9]/30" animate={{ rotate: -360 }} transition={{ duration: 3.5, repeat: Infinity, ease: 'linear' }} />
-        <Image src={brandAssets.icon512} alt="M&M Eventos" width={54} height={54} className="relative h-14 w-14 rounded-2xl object-contain" priority />
-      </div>
-      <motion.p className="mt-8 text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>Preparando tu experiencia</motion.p>
-      <motion.h1 className="mt-4 text-3xl font-semibold md:text-5xl" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.08 }}>M&M Eventos</motion.h1>
-      <div className="mx-auto mt-8 grid max-w-sm gap-3">
-        {['Salones', 'Paquetes', 'Galería'].map((label, index) => <motion.div key={label} className="h-3 overflow-hidden rounded-full border border-white/10 bg-white/[0.045]" initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35, delay: 0.16 + index * 0.08 }}>
-          <motion.span className="block h-full rounded-full bg-[#c8cdd3]" initial={{ x: '-100%' }} animate={{ x: '100%' }} transition={{ duration: 1.25, repeat: Infinity, ease: 'easeInOut', delay: index * 0.16 }} />
-        </motion.div>)}
-      </div>
-      <p className="mt-6 text-sm text-zinc-500">Cargando salones, combos y disponibilidad comercial.</p>
-    </section>
-  </main>;
 }
 
 function galleryImageSource(item: LandingItem, index: number) {
@@ -518,11 +531,10 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
   const [mobileOpen, setMobileOpen] = useState(false);
   const [formMessage, setFormMessage] = useState('');
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [landingLoading, setLandingLoading] = useState(false);
+  const [landingLoading, setLandingLoading] = useState(!initialLanding);
 
   useEffect(() => {
     let mounted = true;
-    if (!initialLanding) setLandingLoading(true);
     void api.get<LandingPayload>('/public/landing')
       .then((response) => { if (mounted) setLanding(response); })
       .catch(() => undefined)
@@ -655,6 +667,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     { key: 'tiktok' as const, label: 'TikTok', icon: TikTokIcon, field: 'tiktokUrl' as const },
   ];
   const activeSocial = socialOptions.find((item) => item.key === socialNetwork);
+  const shouldReduceMotion = useReducedMotion();
 
   return <main className="min-h-screen overflow-x-hidden bg-[#050505] text-white">
     <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/75 backdrop-blur-xl">
@@ -681,44 +694,47 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     </header>
 
     <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
-      <img src={heroImage} alt="Salón M&M preparado para evento" className="absolute inset-0 h-full w-full object-cover" />
+      <motion.img src={heroImage} alt="Salón M&M preparado para evento" className="absolute inset-0 h-full w-full object-cover will-change-transform" initial={shouldReduceMotion ? false : { opacity: 0.94, scale: 1.012 }} animate={shouldReduceMotion ? undefined : { opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: smoothEase }} />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(5,5,5,1),rgba(5,5,5,.08)_38%,rgba(5,5,5,.64))]" />
       <div className="relative mx-auto grid min-h-[calc(92vh-5rem)] max-w-7xl content-center px-4 py-12 md:min-h-[calc(92vh-6rem)] md:px-8 md:py-16">
-        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="min-w-0 max-w-3xl">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f1f5f9] sm:text-xs sm:tracking-[0.42em]">M&M Eventos</p>
-          <h1 className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</h1>
-          <p className="mt-6 max-w-xl text-sm leading-7 text-zinc-200 sm:text-base md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</p>
-          <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><button type="button" onClick={() => scrollTo('contacto')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] sm:px-6">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></button><button type="button" onClick={() => scrollTo('salones')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9] sm:px-6">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></button></div>
-          <div className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#c8cdd3]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f1f5f9]" /><span className="truncate">{heroLocationForSalon(salon)}</span></button>)}</div>
+        <motion.div initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : 'visible'} variants={listVariants} className="min-w-0 max-w-3xl">
+          <motion.p variants={cardVariants} className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f1f5f9] sm:text-xs sm:tracking-[0.42em]">M&M Eventos</motion.p>
+          <motion.h1 variants={cardVariants} className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</motion.h1>
+          <motion.p variants={cardVariants} className="mt-6 max-w-xl text-sm leading-7 text-zinc-200 sm:text-base md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</motion.p>
+          <motion.div variants={cardVariants} className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><motion.button type="button" onClick={() => scrollTo('contacto')} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] sm:px-6">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></motion.button><motion.button type="button" onClick={() => scrollTo('salones')} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9] sm:px-6">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></motion.button></motion.div>
+          <motion.div variants={listVariants} className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => setSelectedSalon(salon)} whileHover={shouldReduceMotion ? undefined : { y: -2, borderColor: 'rgba(200,205,211,.8)' }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#c8cdd3]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f1f5f9]" /><span className="truncate">{heroLocationForSalon(salon)}</span></motion.button>)}</motion.div>
         </motion.div>
       </div>
     </section>
 
-    <section id="salones" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection id="salones" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones totalmente equipados, listos para llevar adelante tu evento" />
-      <div className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <article key={salon._id} className="group flex h-full min-h-[470px] flex-col overflow-hidden rounded-2xl border border-[#c8cdd3]/25 bg-[#10100f] shadow-2xl shadow-black/30">
-        <div className="relative h-56 shrink-0 overflow-hidden"><img src={imageForSalon(salon)} alt={titleForSalon(salon)} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></div>
+      <AnimatedGrid className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.01 }} transition={softSpring} className="group flex h-full min-h-[470px] flex-col overflow-hidden rounded-2xl border border-[#c8cdd3]/25 bg-[#10100f] shadow-2xl shadow-black/30">
+        <motion.div variants={imageRevealVariants} className="relative h-56 shrink-0 overflow-hidden"><img src={imageForSalon(salon)} alt={titleForSalon(salon)} className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025]" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></motion.div>
         <div className="flex flex-1 flex-col p-5"><h3 className="truncate text-xl font-semibold" title={titleForSalon(salon)}>{titleForSalon(salon)}</h3><div className="mt-3 grid min-h-9 grid-cols-2 gap-3 text-sm text-zinc-200"><span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={locationForSalon(salon)}>{heroLocationForSalon(salon)}</span></span><span className="inline-flex min-w-0 items-center gap-1"><Users className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={capacityForSalon(salon)}>{capacityForSalon(salon)}</span></span></div><p className="mt-4 line-clamp-2 min-h-12 text-base leading-7 text-zinc-300">{descriptionForSalon(salon)}</p><div className="mt-auto grid grid-cols-2 gap-2 pt-6"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#c8cdd3]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#c8cdd3] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto</button></div></div>
-      </article>)}</div>
-    </section>
+      </motion.article>)}</AnimatedGrid>
+    </AnimatedSection>
 
-    <section className="border-y border-[#c8cdd3]/15 bg-[#0b0b0c] px-5 py-12 md:px-8">
-      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <div key={step} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.04] p-5"><span className="text-3xl font-semibold text-[#dbe1e8]">{index + 1}</span><div><h3 className="text-base font-semibold">{step}</h3><p className="mt-1 text-sm leading-6 text-zinc-300">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div></div>)}</div>
-    </section>
+    <AnimatedSection className="border-y border-[#c8cdd3]/15 bg-[#0b0b0c] px-5 py-12 md:px-8">
+      <AnimatedGrid className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <motion.div key={step} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className="relative flex items-center gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] p-5"><motion.span className="text-3xl font-semibold text-[#dbe1e8]" variants={{ hidden: { scale: 0.9 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.03 } } }}>{index + 1}</motion.span><div><h3 className="text-base font-semibold">{step}</h3><p className="mt-1 text-sm leading-6 text-zinc-300">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div><motion.span aria-hidden className="absolute inset-x-0 bottom-0 h-px origin-left bg-gradient-to-r from-transparent via-[#c8cdd3]/60 to-transparent" variants={{ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.42, delay: 0.08 + index * 0.04, ease: smoothEase } } }} /></motion.div>)}</AnimatedGrid>
+    </AnimatedSection>
 
-    <section id="paquetes" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection id="paquetes" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, descubrilos." />
-      <div className="mb-6 flex flex-wrap justify-center gap-2">{displaySalons.map((salon) => {
+      <AnimatedGrid className="mb-6 flex flex-wrap justify-center gap-2">{displaySalons.map((salon) => {
         const active = selectedPackageSalon?._id === salon._id;
-        return <button key={salon._id} type="button" onClick={() => setSelectedPackageSalonId(salon._id)} className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${active ? 'border-[#c8cdd3] bg-[#c8cdd3] text-black' : 'border-white/15 bg-white/[0.03] text-zinc-300 hover:border-[#c8cdd3]/70 hover:text-white'}`}>{titleForSalon(salon)}</button>;
-      })}</div>
-      {selectedPackageSalon ? <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#c8cdd3]/20 bg-white/[0.03] p-5 md:flex-row md:items-center md:justify-between">
+        return <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => setSelectedPackageSalonId(salon._id)} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }} transition={softSpring} className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${active ? 'border-[#c8cdd3] bg-[#c8cdd3] text-black' : 'border-white/15 bg-white/[0.03] text-zinc-300 hover:border-[#c8cdd3]/70 hover:text-white'}`}>{titleForSalon(salon)}</motion.button>;
+      })}</AnimatedGrid>
+      <AnimatePresence mode="wait">
+      {selectedPackageSalon ? <motion.div key={selectedPackageSalon._id} initial={shouldReduceMotion ? false : { opacity: 0.82, y: 6 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0.82 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#c8cdd3]/20 bg-white/[0.03] p-5 md:flex-row md:items-center md:justify-between">
         <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#c8cdd3]">Salón seleccionado</p><h3 className="mt-2 text-2xl font-semibold">{titleForSalon(selectedPackageSalon)}</h3><p className="mt-1 text-sm text-zinc-400">{heroLocationForSalon(selectedPackageSalon)} · {capacityForSalon(selectedPackageSalon)}</p></div>
         <button type="button" onClick={() => setSelectedSalon(selectedPackageSalon)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">Ver salón <ArrowRight className="h-4 w-4" /></button>
-      </div> : null}
-      {selectedPackageCards.length ? <div className="grid items-stretch gap-5 lg:grid-cols-3">{selectedPackageCards.map((item, index) => {
+      </motion.div> : null}
+      </AnimatePresence>
+      <AnimatePresence mode="wait">
+      {selectedPackageCards.length ? <motion.div key={`${selectedPackageSalon?._id || 'todos'}-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate="visible" exit={shouldReduceMotion ? undefined : 'hidden'} variants={listVariants} className="grid items-stretch gap-5 lg:grid-cols-3">{selectedPackageCards.map((item, index) => {
         const accent = accentFor(index + 2);
-        return <article key={`${selectedPackageSalon?._id || 'paquete'}-${item._id}-${index}`} className={`min-w-0 max-w-full overflow-hidden flex min-h-[430px] flex-col rounded-2xl border p-4 transition hover:-translate-y-1 sm:p-6 ${accent.card}`}>
+        return <motion.article key={`${selectedPackageSalon?._id || 'paquete'}-${item._id}-${index}`} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.006 }} transition={softSpring} className={`min-w-0 max-w-full overflow-hidden flex min-h-[430px] flex-col rounded-2xl border p-4 transition-colors sm:p-6 ${accent.card}`}>
         <span className={`mb-5 block h-1.5 w-14 rounded-full ${accent.line}`} />
         <div className="grid min-w-0 gap-3 sm:flex sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -736,83 +752,84 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
           {selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), packageWaMessage(selectedPackageSalon, item))} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Me interesa <ExternalLink className="h-4 w-4" /></a> : null}
           <button type="button" onClick={() => selectedPackageSalon ? setSelectedSalon(selectedPackageSalon) : scrollTo('contacto')} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
         </div>
-      </article>;
-      })}</div> : <div className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</div>}
-    </section>
+      </motion.article>;
+      })}</motion.div> : <motion.div key={`${selectedPackageSalon?._id || 'todos'}-sin-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate="visible" exit={shouldReduceMotion ? undefined : 'hidden'} variants={cardVariants} className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</motion.div>}
+      </AnimatePresence>
+    </AnimatedSection>
 
-    <section className="mx-auto max-w-7xl px-5 pb-20 md:px-8 md:pb-24">
+    <AnimatedSection className="mx-auto max-w-7xl px-5 pb-20 md:px-8 md:pb-24">
       <SectionTitle eyebrow="Tipos de eventos" title="Celebraciones que sabemos resolver" />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">{eventTypes.slice(0, 6).map((item, index) => {
+      <AnimatedGrid className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">{eventTypes.slice(0, 6).map((item, index) => {
         const accent = accentFor(index);
-        return <div key={item.title} className={`group rounded-xl border p-4 text-center transition hover:-translate-y-1 ${accent.card}`}><IconBadge name={eventTypeIconName(item, index)} tone={accent.icon} /><h3 className={`mt-3 text-sm font-semibold uppercase tracking-[0.08em] ${accent.text}`}>{item.title}</h3></div>;
-      })}</div>
-    </section>
+        return <motion.div key={item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -6, rotate: index % 2 ? 0.4 : -0.4 }} transition={softSpring} className={`group rounded-xl border p-4 text-center transition-colors ${accent.card}`}><motion.span className="inline-block" variants={{ hidden: { scale: 0.9, rotate: -4 }, visible: { scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.025 } } }}><IconBadge name={eventTypeIconName(item, index)} tone={accent.icon} /></motion.span><h3 className={`mt-3 text-sm font-semibold uppercase tracking-[0.08em] ${accent.text}`}>{item.title}</h3></motion.div>;
+      })}</AnimatedGrid>
+    </AnimatedSection>
 
-    <section className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
-      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><div><p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]">Servicios incluidos</p><h2 className="mt-3 text-3xl font-semibold md:text-4xl">Todo lo que necesitás, nosotros lo hacemos.</h2></div><div className="grid gap-4 sm:grid-cols-2">{serviceBlocks.slice(0, 8).map((item, index) => {
+    <AnimatedSection className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
+      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><motion.div variants={cardVariants}><p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]">Servicios incluidos</p><h2 className="mt-3 text-3xl font-semibold md:text-4xl">Todo lo que necesitás, nosotros lo hacemos.</h2></motion.div><AnimatedGrid className="grid gap-4 sm:grid-cols-2">{serviceBlocks.slice(0, 8).map((item, index) => {
         const accent = accentFor(index + 1);
-        return <div key={item.title} className={`flex gap-4 rounded-xl border p-4 transition hover:-translate-y-0.5 ${accent.card}`}><IconBadge name={item.icon} tone={accent.icon} /><div><h3 className={`font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-2 text-sm leading-6 text-zinc-300">{item.description}</p></div></div>;
-      })}</div></div>
-    </section>
+        return <motion.div key={item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { x: 4, y: -3 }} transition={softSpring} className={`flex gap-4 rounded-xl border p-4 transition-colors ${accent.card}`}><motion.div variants={{ hidden: { scale: 0.92 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.02 } } }}><IconBadge name={item.icon} tone={accent.icon} /></motion.div><div><h3 className={`font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-2 text-sm leading-6 text-zinc-300">{item.description}</p></div></motion.div>;
+      })}</AnimatedGrid></div>
+    </AnimatedSection>
 
-    <section className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Promociones y beneficios" title="Motivos para reservar hoy" />
-      <div className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item, index) => {
+      <AnimatedGrid className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item, index) => {
         const accent = accentFor(index + 2);
-        return <article key={item._id || item.title} className={`group overflow-hidden rounded-xl border p-5 transition hover:-translate-y-1 ${accent.card}`}><span className={`mb-4 block h-1.5 w-12 rounded-full ${accent.line}`} />{item.imageUrl ? <img src={item.imageUrl} alt={item.title || 'Promoción M&M'} className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" /> : <IconBadge name={item.icon || 'Gift'} tone={accent.icon} />}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}</article>;
-      })}</div>
-    </section>
+        return <motion.article key={item._id || item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -7, scale: 1.006 }} transition={softSpring} className={`group overflow-hidden rounded-xl border p-5 transition-colors ${accent.card}`}><motion.span className={`mb-4 block h-1.5 w-12 origin-left rounded-full ${accent.line}`} variants={{ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.38, delay: index * 0.04, ease: smoothEase } } }} />{item.imageUrl ? <motion.img src={item.imageUrl} alt={item.title || 'Promoción M&M'} className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" variants={imageRevealVariants} /> : <motion.span className="inline-block" variants={{ hidden: { scale: 0.92, rotate: -4 }, visible: { scale: 1, rotate: 0, transition: softSpring } }}><IconBadge name={item.icon || 'Gift'} tone={accent.icon} /></motion.span>}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}</motion.article>;
+      })}</AnimatedGrid>
+    </AnimatedSection>
 
-    <section id="galeria" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
-      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería" subtitle="Momentos únicos que perduran para toda la vida" /><div className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <button key={item._id || item.imageUrl || index} type="button" onClick={() => setGalleryLightboxIndex(index)} aria-label={`Abrir ${item.altText || item.title || 'momento M&M'}`} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition duration-700 group-hover:scale-105" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${galleryImageSource(item, index)})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition group-hover:opacity-100">{item.title}</span><span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-black/45 text-white opacity-0 backdrop-blur transition group-hover:opacity-100"><Camera className="h-4 w-4" /></span></button>)}</div></div>
-    </section>
+    <AnimatedSection id="galeria" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
+      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería" subtitle="Momentos únicos que perduran para toda la vida" /><AnimatedGrid className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <motion.button key={item._id || item.imageUrl || index} variants={imageRevealVariants} whileHover={shouldReduceMotion ? undefined : { y: -4, scale: 1.006 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }} transition={softSpring} type="button" onClick={() => setGalleryLightboxIndex(index)} aria-label={`Abrir ${item.altText || item.title || 'momento M&M'}`} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-[1.025]" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${galleryImageSource(item, index)})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition-opacity duration-300 group-hover:opacity-100">{item.title}</span><span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-black/45 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100"><Camera className="h-4 w-4" /></span></motion.button>)}</AnimatedGrid></div>
+    </AnimatedSection>
 
-    <section className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Testimonios" title="Lo que dicen quienes ya celebraron" />
-      <div className="grid gap-4 md:grid-cols-3">{(landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }]).slice(0, 3).map((item, index) => {
+      <AnimatedGrid className="grid gap-4 md:grid-cols-3">{(landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }]).slice(0, 3).map((item, index) => {
         const accent = accentFor(index);
-        return <blockquote key={item._id || item.customerName} className={`rounded-xl border p-6 ${accent.card}`}><span className={`mb-5 block h-1 w-10 rounded-full ${accent.line}`} /><p className="text-base leading-7 text-zinc-200">“{item.quote}”</p><footer className="mt-6 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-sm text-zinc-300">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, index) => <Star key={index} className="h-3.5 w-3.5 fill-current" />)}</span></footer></blockquote>;
-      })}</div>
-    </section>
+        return <motion.blockquote key={item._id || item.customerName} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`rounded-xl border p-6 ${accent.card}`}><motion.span className={`mb-5 block h-1 w-10 origin-left rounded-full ${accent.line}`} variants={{ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.36, delay: index * 0.045, ease: smoothEase } } }} /><p className="text-base leading-7 text-zinc-200">“{item.quote}”</p><footer className="mt-6 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-sm text-zinc-300">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, starIndex) => <motion.span key={starIndex} variants={{ hidden: { opacity: 0, scale: 0.75, rotate: -8 }, visible: { opacity: 1, scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.04 + starIndex * 0.025 } } }}><Star className="h-3.5 w-3.5 fill-current" /></motion.span>)}</span></footer></motion.blockquote>;
+      })}</AnimatedGrid>
+    </AnimatedSection>
 
-    <section id="faq" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
-      <div className="mx-auto max-w-5xl"><SectionTitle eyebrow="Preguntas frecuentes" title="Respuestas rápidas antes de consultar" /><div className="grid gap-3 md:grid-cols-2">{faqs.slice(0, 8).map((item, index) => {
-        return <details key={item._id || item.question || index} className="group rounded-xl border border-white/10 bg-white/[0.025] p-4 transition hover:border-[#c8cdd3]/45">
+    <AnimatedSection id="faq" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
+      <div className="mx-auto max-w-5xl"><SectionTitle eyebrow="Preguntas frecuentes" title="Respuestas rápidas antes de consultar" /><AnimatedGrid className="grid gap-3 md:grid-cols-2">{faqs.map((item, index) => {
+        return <motion.details key={item._id || item.question || index} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -3 }} transition={softSpring} className="group rounded-xl border border-white/10 bg-white/[0.025] p-4 transition hover:border-[#c8cdd3]/45">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-white">
             <span>{item.question}</span>
             <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400 transition group-open:rotate-90 group-open:text-[#c8cdd3]" />
           </summary>
           <p className="mt-3 text-sm leading-6 text-zinc-300">{item.answer}</p>
-        </details>;
-      })}</div></div>
-    </section>
+        </motion.details>;
+      })}</AnimatedGrid></div>
+    </AnimatedSection>
 
-    <section id="contacto" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
-      <div className="overflow-hidden rounded-3xl border border-[#c8cdd3]/35 bg-[#0f0f10] shadow-[0_0_50px_rgba(229,231,235,.10)] lg:grid lg:grid-cols-[0.75fr_1.25fr]">
-        <div className="relative min-h-80 p-8"><img src={gallery[0]?.imageUrl || heroImage} alt="Detalle de evento M&M" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><span><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Respuesta rápida</span><span><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Propuesta a medida</span><span><Check className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Sin compromiso</span></div></div></div>
-        <form onSubmit={submit} className="grid gap-4 p-5 md:grid-cols-2 md:p-8">
-          {formMessage ? <p className={`rounded-xl border p-3 text-sm md:col-span-2 ${formState === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-red-400/30 bg-red-400/10 text-red-100'}`}>{formMessage}</p> : null}
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Nombre<input required name="name" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu nombre" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Teléfono<input required name="phone" type="tel" minLength={6} maxLength={24} pattern="[+()0-9\s-]{6,24}" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu teléfono" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Email<input name="email" type="email" maxLength={120} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="tu@email.com" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Tipo de evento<input required name="eventType" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="15 años, casamiento..." /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Fecha tentativa<input name="eventDate" type="date" min={todayIsoDate()} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Cantidad de personas<input required name="guestCount" type="number" min={contactGuestMin} max={contactGuestMax} step={1} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Nº de personas" /></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => setSelectedSalonId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></label>
-          <label className="text-xs uppercase tracking-[0.14em] text-zinc-400 md:col-span-2">Mensaje<textarea name="message" maxLength={700} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Contanos más detalles de tu evento..." /></label>
-          <button disabled={formState === 'loading'} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] disabled:opacity-60 md:col-span-2">{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></button>
-        </form>
-      </div>
-    </section>
+    <AnimatedSection id="contacto" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+      <motion.div variants={cardVariants} className="overflow-hidden rounded-3xl border border-[#c8cdd3]/35 bg-[#0f0f10] shadow-[0_0_50px_rgba(229,231,235,.10)] lg:grid lg:grid-cols-[0.75fr_1.25fr]">
+        <motion.div variants={imageRevealVariants} className="relative min-h-80 overflow-hidden p-8"><img src={gallery[0]?.imageUrl || heroImage} alt="Detalle de evento M&M" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><motion.span variants={cardVariants}><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Respuesta rápida</motion.span><motion.span variants={cardVariants}><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Propuesta a medida</motion.span><motion.span variants={cardVariants}><Check className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Sin compromiso</motion.span></div></div></motion.div>
+        <motion.form onSubmit={submit} variants={listVariants} className="grid gap-4 p-5 md:grid-cols-2 md:p-8">
+          {formMessage ? <motion.p variants={cardVariants} className={`rounded-xl border p-3 text-sm md:col-span-2 ${formState === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-red-400/30 bg-red-400/10 text-red-100'}`}>{formMessage}</motion.p> : null}
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Nombre<input required name="name" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu nombre" /></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Teléfono<input required name="phone" type="tel" minLength={6} maxLength={24} pattern="[+()0-9\s-]{6,24}" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu teléfono" /></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Email<input name="email" type="email" maxLength={120} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="tu@email.com" /></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Tipo de evento<input required name="eventType" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="15 años, casamiento..." /></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Fecha tentativa<input name="eventDate" type="date" min={todayIsoDate()} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" /></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Cantidad de personas<input required name="guestCount" type="number" min={contactGuestMin} max={contactGuestMax} step={1} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Nº de personas" /></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => setSelectedSalonId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400 md:col-span-2">Mensaje<textarea name="message" maxLength={700} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Contanos más detalles de tu evento..." /></motion.label>
+          <motion.button variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} disabled={formState === 'loading'} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] disabled:opacity-60 md:col-span-2">{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></motion.button>
+        </motion.form>
+      </motion.div>
+    </AnimatedSection>
 
-    <section id="ubicaciones" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection id="ubicaciones" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
       <div className="mx-auto max-w-7xl">
         <SectionTitle eyebrow="Ubicaciones" title="Encontrá el salón más cómodo para tu evento" subtitle="Cada espacio tiene su mapa para que puedas calcular tiempos, accesos y coordinar una visita." />
-        <div className="grid gap-6 lg:grid-cols-3">
+        <AnimatedGrid className="grid gap-6 lg:grid-cols-3">
           {displaySalons.slice(0, 3).map((salon, index) => {
             const accent = accentFor(index + 3);
-            return <article key={salon._id} className={`overflow-hidden rounded-2xl border ${accent.card}`}>
-              <div className="relative h-72 bg-[#111113]">
+            return <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -7, scale: 1.01 }} transition={softSpring} className={`overflow-hidden rounded-2xl border ${accent.card}`}>
+              <motion.div variants={imageRevealVariants} className="relative h-72 bg-[#111113]">
                 <iframe
                   title={`Mapa de ${titleForSalon(salon)}`}
                   src={mapUrlForSalon(salon)}
@@ -822,7 +839,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
                   style={{ border: 0 }}
                   allowFullScreen
                 />
-              </div>
+              </motion.div>
               <div className="p-5">
                 <span className={`mb-4 block h-1.5 w-12 rounded-full ${accent.line}`} />
                 <h3 className={`text-xl font-semibold ${accent.text}`}>{titleForSalon(salon)}</h3>
@@ -833,11 +850,11 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
                   <button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
                 </div>
               </div>
-            </article>;
+            </motion.article>;
           })}
-        </div>
+        </AnimatedGrid>
       </div>
-    </section>
+    </AnimatedSection>
 
     <footer className="border-t border-white/10 bg-[#080808] px-5 py-10 md:px-8">
       <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-5">
@@ -845,7 +862,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Búsquedas locales</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{footerSeoLinks.map((item) => <Link key={item.href} href={item.href} className="text-left hover:text-white">{item.label}</Link>)}</div></div>
-        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || ''}</span><span>{settings.contactEmail || 'info@mm-eventos.com.ar'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div>
+        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || ''}</span><span>{settings.contactEmail || 'mymsalondeeventoslaplata@gmail.com'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div>
       </div>
     </footer>
 
@@ -863,7 +880,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     <GalleryLightbox items={gallery} index={galleryLightboxIndex} onClose={() => setGalleryLightboxIndex(null)} onSelect={setGalleryLightboxIndex} />
 
     <button type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>
-    <button type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 right-4 z-30 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:right-24">Solicitá tu presupuesto</button>
+    <button type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 left-4 right-4 z-30 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:left-auto md:right-24">Solicitá tu presupuesto</button>
     <button type="button" onClick={() => scrollTo('inicio')} aria-label="Volver arriba" className="fixed bottom-4 left-4 z-30 hidden rounded-lg border border-white/20 bg-black/60 p-3 backdrop-blur md:grid"><ChevronUp className="h-4 w-4" /></button>
   </main>;
 }

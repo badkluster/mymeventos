@@ -178,6 +178,44 @@ const eventStaffAssignmentSchema = new Schema({
 }, { timestamps: true });
 eventStaffAssignmentSchema.index({ eventId: 1, staffUserId: 1, shiftStart: 1, shiftEnd: 1, deletedAt: 1 });
 
+const calendarNotificationSchema = new Schema({
+  enabled: { type: Boolean, default: false },
+  channels: { type: [String], enum: ['system', 'email', 'whatsapp'], default: ['system'] },
+  offsetValue: { type: Number, default: 1 },
+  offsetUnit: { type: String, enum: ['minutes', 'hours', 'days', 'weeks'], default: 'days' },
+  sendAt: Date,
+  lastSentAt: Date,
+  status: { type: String, enum: ['pending', 'scheduled', 'sent', 'failed', 'cancelled'], default: 'pending' }
+}, { _id: false });
+
+const calendarItemSchema = new Schema({
+  type: { type: String, enum: ['event', 'alert', 'reminder', 'note', 'task', 'payment_window'], required: true, index: true },
+  title: { type: String, required: true, trim: true, index: true },
+  description: String,
+  startAt: { type: Date, required: true, index: true },
+  endAt: { type: Date, index: true },
+  allDay: { type: Boolean, default: false },
+  status: { type: String, enum: ['pending', 'scheduled', 'done', 'cancelled'], default: 'scheduled', index: true },
+  priority: { type: String, enum: ['low', 'normal', 'high', 'critical'], default: 'normal', index: true },
+  visibility: { type: String, enum: ['private', 'shared'], default: 'private', index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true },
+  assignedToUserId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+  leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
+  eventId: { type: Schema.Types.ObjectId, ref: 'Event', index: true },
+  quoteId: { type: Schema.Types.ObjectId, ref: 'Quote', index: true },
+  contractId: { type: Schema.Types.ObjectId, ref: 'Contract', index: true },
+  paymentId: { type: Schema.Types.ObjectId, ref: 'Payment', index: true },
+  supplierId: { type: Schema.Types.ObjectId, ref: 'Supplier', index: true },
+  source: { type: String, enum: ['manual', 'event', 'payment', 'contract', 'system'], default: 'manual', index: true },
+  notification: { type: calendarNotificationSchema, default: () => ({}) },
+  metadata: Schema.Types.Mixed,
+  ...base
+}, { timestamps: true });
+calendarItemSchema.index({ startAt: 1, endAt: 1, deletedAt: 1 });
+calendarItemSchema.index({ salonId: 1, startAt: 1, deletedAt: 1 });
+calendarItemSchema.index({ visibility: 1, createdBy: 1, startAt: 1, deletedAt: 1 });
+
 const securityDepositSchema = new Schema({
   amount: { type: Number, default: 0 },
   requiredAt: Date,
@@ -286,6 +324,7 @@ export const Quote = models.Quote || model('Quote', quoteSchema);
 export const QuoteRevision = models.QuoteRevision || model('QuoteRevision', revisionSchema);
 export const Event = models.Event || model('Event', eventSchema);
 export const EventStaffAssignment = models.EventStaffAssignment || model('EventStaffAssignment', eventStaffAssignmentSchema);
+export const CalendarItem = models.CalendarItem || model('CalendarItem', calendarItemSchema);
 export const Contract = models.Contract || model('Contract', contractSchema);
 export const ContractAddendum = models.ContractAddendum || model('ContractAddendum', contractAddendumSchema);
 export const Payment = models.Payment || model('Payment', paymentSchema);

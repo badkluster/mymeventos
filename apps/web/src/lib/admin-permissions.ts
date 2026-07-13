@@ -1,22 +1,20 @@
 import { hasAnyPermission, Permission, type Role } from '@mym/shared';
 import type { ComponentType } from 'react';
-import { Bell, Boxes, Building2, CalendarDays, ClipboardList, CreditCard, FileText, Globe2, LayoutDashboard, PackageSearch, ReceiptText, Ruler, Settings, Truck, UserRound, Users, UserRoundCog } from 'lucide-react';
+import { Bell, Building2, CalendarClock, CalendarDays, ClipboardList, CreditCard, FileText, Globe2, LayoutDashboard, ReceiptText, Settings, Truck, UserRound, Users, UserRoundCog } from 'lucide-react';
 import type { SessionUser } from './auth';
 
 export type AdminModule = { href: string; label: string; title: string; description: string; icon: ComponentType<{ className?: string }>; permissions: Permission[] };
 
 export const adminModules: AdminModule[] = [
   { href: '/admin', label: 'Panel', title: 'Panel', description: 'Accesos directos a los módulos implementados del backoffice.', icon: LayoutDashboard, permissions: [] },
+  { href: '/admin/calendar', label: 'Calendario', title: 'Calendario', description: 'Agenda centralizada por día, semana, mes y año.', icon: CalendarClock, permissions: [Permission.EVENTS_READ] },
   { href: '/admin/leads', label: 'Leads', title: 'Leads', description: 'Seguimiento comercial y oportunidades abiertas.', icon: ClipboardList, permissions: [Permission.LEADS_READ] },
   { href: '/admin/customers', label: 'Clientes', title: 'Clientes', description: 'Clientes consolidados con historial comercial.', icon: UserRound, permissions: [Permission.CUSTOMERS_READ] },
   { href: '/admin/quotes', label: 'Presupuestos', title: 'Solicitudes / Presupuestos', description: 'Solicitudes web y presupuesto comercial.', icon: ReceiptText, permissions: [Permission.QUOTES_READ] },
   { href: '/admin/events', label: 'Eventos', title: 'Eventos', description: 'Eventos creados desde presupuestos convertidos.', icon: CalendarDays, permissions: [Permission.EVENTS_READ] },
   { href: '/admin/contracts', label: 'Contratos', title: 'Contratos', description: 'Contratos formales generados desde eventos.', icon: FileText, permissions: [Permission.CONTRACTS_READ] },
   { href: '/admin/payments', label: 'Pagos', title: 'Pagos', description: 'Señas, cuotas, saldos y depósitos asociados a contratos.', icon: CreditCard, permissions: [Permission.PAYMENTS_READ] },
-  { href: '/admin/catalog', label: 'Catálogo', title: 'Catálogo', description: 'Productos, servicios extra y componentes cotizables.', icon: PackageSearch, permissions: [Permission.CATALOG_READ] },
   { href: '/admin/suppliers', label: 'Proveedores', title: 'Proveedores', description: 'Proveedores para productos, servicios y compras futuras.', icon: Truck, permissions: [Permission.SUPPLIERS_READ] },
-  { href: '/admin/inventory', label: 'Stock', title: 'Stock', description: 'Inventario base, consumibles, materiales y movimientos.', icon: Boxes, permissions: [Permission.INVENTORY_READ] },
-  { href: '/admin/consumption-rules', label: 'Reglas consumo', title: 'Reglas de consumo', description: 'Reglas para calcular cantidades sugeridas por evento.', icon: Ruler, permissions: [Permission.CONSUMPTION_RULES_READ] },
   { href: '/admin/landing', label: 'Landing', title: 'Landing pública', description: 'Hero, promociones, galería, testimonios, preguntas frecuentes y bloques comerciales.', icon: Globe2, permissions: [Permission.LANDING_READ] },
   { href: '/admin/notifications', label: 'Notificaciones', title: 'Notificaciones', description: 'Avisos operativos, pendientes y accesos rápidos del backoffice.', icon: Bell, permissions: [] },
   { href: '/admin/salons', label: 'Salones', title: 'Salones', description: 'Salones, paquetes y reglas comerciales.', icon: Building2, permissions: [Permission.SALONS_READ] },

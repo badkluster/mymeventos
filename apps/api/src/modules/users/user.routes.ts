@@ -162,6 +162,8 @@ function userQuery(query: Record<string, unknown>) {
     .populate('primarySalonId', 'name slug active')
     .populate('primaryManagedSalonId', 'name slug active');
 }
+const hiddenPermissionPrefixes = ['catalog.', 'consumption-rules.', 'inventory.'];
+const availablePermissions = Object.values(Permission).filter((permission) => !hiddenPermissionPrefixes.some((prefix) => permission.startsWith(prefix)));
 async function getUserOrFail(id: string): Promise<any> {
   const user = await User.findOne({ _id: id, deletedAt: null }).select('-passwordHash -passwordResetTokenHash').populate('salonIds', 'name slug active').populate('managedSalonIds', 'name slug active').populate('primarySalonId', 'name slug active').populate('primaryManagedSalonId', 'name slug active').lean();
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND');
@@ -180,7 +182,7 @@ router.get('/', requirePermission(Permission.USERS_READ), asyncHandler(async (re
     userQuery(query).sort({ [sortBy]: sortBy === 'fullName' || sortBy === 'email' || sortBy === 'username' ? 1 : -1 }).skip((page - 1) * limit).limit(limit).lean()
   ]);
   const meta = { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 };
-  return sendSuccess(response, { users, items: users, meta, roles: Object.values(Role), permissions: Object.values(Permission) });
+  return sendSuccess(response, { users, items: users, meta, roles: Object.values(Role), permissions: availablePermissions });
 }));
 
 router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
@@ -189,13 +191,14 @@ router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(cre
   const temporaryPassword = canAccessBackoffice ? request.body.password ?? generateTemporaryPassword() : request.body.password;
   const input = normalizeUserInput({ ...request.body, roles, canAccessBackoffice, mustChangePassword: canAccessBackoffice ? request.body.mustChangePassword ?? true : false });
   validatePrimarySalonFields({ ...input, salonIds: input.salonIds ?? [], managedSalonIds: input.managedSalonIds ?? [] });
+  if (await User.exists({ username: input.username })) throw new ApiError(409, 'USERNAME_ALREADY_EXISTS');
   const user = await User.create({ ...input, passwordHash: temporaryPassword ? await hashPassword(temporaryPassword) : undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
   if (input.managedSalonIds?.length) await syncUserManagedSalons(user._id.toString(), input.managedSalonIds, request.user!.id);
   await writeAuditLog(request, 'USER_CREATE', 'User', user._id.toString());
   return sendSuccess(response, { user: sanitizeUser(user), temporaryPassword: canAccessBackoffice && !request.body.password ? temporaryPassword : undefined }, 201, getApiMessage('USER_CREATED'));
 }));
 
-router.get('/:id', requirePermission(Permission.USERS_READ), validateRequest(idParams), asyncHandler(async (request, response) => sendSuccess(response, { user: await getUserOrFail(request.params.id), roles: Object.values(Role), permissions: Object.values(Permission) })));
+router.get('/:id', requirePermission(Permission.USERS_READ), validateRequest(idParams), asyncHandler(async (request, response) => sendSuccess(response, { user: await getUserOrFail(request.params.id), roles: Object.values(Role), permissions: availablePermissions })));
 
 router.patch('/:id', requirePermission(Permission.USERS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const current: any = await User.findOne({ _id: request.params.id, deletedAt: null }).lean();

@@ -34,10 +34,7 @@ export const permissionLabels: Record<string,string>={
   'events.read':'Eventos: ver','events.create':'Eventos: crear','events.update':'Eventos: editar','events.cancel':'Eventos: cancelar','events.delete':'Eventos: eliminar',
   'contracts.read':'Contratos: ver','contracts.create':'Contratos: crear','contracts.update':'Contratos: editar','contracts.approve':'Contratos: aprobar','contracts.cancel':'Contratos: cancelar','contracts.delete':'Contratos: eliminar',
   'payments.read':'Pagos: ver','payments.create':'Pagos: crear','payments.update':'Pagos: editar','payments.approve':'Pagos: aprobar','payments.reject':'Pagos: rechazar','payments.cancel':'Pagos: cancelar',
-  'catalog.read':'Catálogo: ver','catalog.create':'Catálogo: crear','catalog.update':'Catálogo: editar','catalog.delete':'Catálogo: eliminar',
   'suppliers.read':'Proveedores: ver','suppliers.create':'Proveedores: crear','suppliers.update':'Proveedores: editar','suppliers.delete':'Proveedores: eliminar',
-  'consumption-rules.read':'Reglas consumo: ver','consumption-rules.create':'Reglas consumo: crear','consumption-rules.update':'Reglas consumo: editar','consumption-rules.delete':'Reglas consumo: eliminar',
-  'inventory.read':'Stock: ver','inventory.update':'Stock: editar','inventory.reserve':'Stock: reservar','inventory.return':'Stock: devolver',
   'landing.read':'Landing: ver','landing.update':'Landing: editar',
   'reports.read':'Reportes: ver','reports.export':'Reportes: exportar','settings.read':'Configuración: ver','settings.update':'Configuración: editar'
 };
