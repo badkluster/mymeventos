@@ -17,11 +17,17 @@ export function StringListEditor({ label, values, onChange, itemPlaceholder = 'N
 export function MenuSectionsEditor({ value, onChange }: { value: MenuSectionValue[]; onChange: (value: MenuSectionValue[]) => void }) {
   const updateSection = (index: number, section: MenuSectionValue) => onChange(value.map((item, itemIndex) => itemIndex === index ? section : item));
   return <fieldset className="space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
-    <div className="flex items-center justify-between gap-3"><legend className="text-sm font-semibold text-zinc-900">Menú</legend><Button type="button" variant="secondary" onClick={() => onChange([...value, { title: '', items: [] }])}><Plus className="mr-2 h-4 w-4" />Agregar sección</Button></div>
-    {value.map((section, index) => <section key={index} className="space-y-3 rounded-xl border border-zinc-200 bg-white p-3">
-      <div className="flex gap-2"><Input value={section.title} onChange={(event) => updateSection(index, { ...section, title: event.target.value })} placeholder="Nombre de sección: Recepción, Plato principal…" /><Button type="button" variant="secondary" aria-label={`Eliminar sección ${index + 1}`} onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button></div>
-      <StringListEditor label="Platos o ítems" values={section.items} itemPlaceholder="Ej.: Empanadas variadas" onChange={(items) => updateSection(index, { ...section, items })} />
-    </section>)}
+    <div className="flex items-center justify-between gap-3"><legend className="text-sm font-semibold text-zinc-900">Menú</legend><Button type="button" variant="secondary" onClick={() => onChange([...value, { title: '', items: [''] }])}><Plus className="mr-2 h-4 w-4" />Agregar sección</Button></div>
+    {value.map((section, index) => {
+      const hasTitle = Boolean(section.title.trim());
+      const hasItems = section.items.some((item) => item.trim());
+      const incomplete = !hasTitle || !hasItems;
+      return <section key={index} className={`space-y-3 rounded-xl border p-3 ${incomplete ? 'border-amber-300 bg-amber-50' : 'border-zinc-200 bg-white'}`}>
+        <div className="flex items-center justify-between gap-3"><p className={`text-xs font-semibold ${incomplete ? 'text-amber-800' : 'text-zinc-500'}`}>{incomplete ? 'Pendiente: agregá un nombre y al menos un ítem. Esta sección no se guardará.' : `Sección ${index + 1} lista para guardar`}</p></div>
+        <div className="flex gap-2"><Input value={section.title} onChange={(event) => updateSection(index, { ...section, title: event.target.value })} placeholder="Nombre de sección: Recepción, Plato principal…" /><Button type="button" variant="secondary" aria-label={`Eliminar sección ${index + 1}`} onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-4 w-4" /></Button></div>
+        <StringListEditor label="Platos o ítems" values={section.items} itemPlaceholder="Ej.: Empanadas variadas" onChange={(items) => updateSection(index, { ...section, items })} />
+      </section>;
+    })}
     {!value.length && <p className="text-sm text-zinc-500">Todavía no hay secciones de menú.</p>}
   </fieldset>;
 }

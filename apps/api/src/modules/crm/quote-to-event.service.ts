@@ -67,6 +67,14 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     quote.acceptedAt = quote.acceptedAt ?? new Date();
     quote.updatedBy = input.userId;
     await quote.save();
+    if (lead && lead.status !== 'converted') {
+      lead.status = 'converted';
+      lead.convertedCustomerId = customer._id;
+      lead.convertedEventId = existingEvent._id;
+      lead.convertedAt = new Date();
+      lead.updatedBy = input.userId;
+      await lead.save();
+    }
     return { quote, lead, customer, event: existingEvent, createdEvent: false };
   }
 

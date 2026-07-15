@@ -19,6 +19,7 @@ type PaymentPayload = {
   receiptNumber?: string;
   reference?: string;
   notes?: string;
+  planInstallmentId?: string;
   affectsContractBalance?: boolean;
 };
 
@@ -92,6 +93,7 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
     receiptNumber: payload.receiptNumber,
     reference: payload.reference,
     notes: payload.notes,
+    planInstallmentId: payload.planInstallmentId,
     affectsContractBalance: payload.affectsContractBalance ?? defaultAffectsContractBalance(type),
     createdBy: userId,
     updatedBy: userId

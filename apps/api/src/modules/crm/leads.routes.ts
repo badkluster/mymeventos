@@ -4,7 +4,7 @@ import { Permission, Role } from '@mym/shared';
 import { Event, Lead, LeadActivity, Quote, QuoteRequest } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
-import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -109,10 +109,11 @@ function buildLeadQuery(request: Request): Record<string, unknown> {
   const user = request.user!;
 
   if (!user.roles.includes(Role.ADMIN)) {
+    const scopedSalonIds = accessibleSalonIds(user);
     conditions.push({
       $or: [
-        { salonId: { $in: user.salonIds } },
-        { salonIds: { $in: user.salonIds } }
+        { salonId: { $in: scopedSalonIds } },
+        { salonIds: { $in: scopedSalonIds } }
       ]
     });
   }
@@ -140,6 +141,14 @@ function buildLeadQuery(request: Request): Record<string, unknown> {
   }
 
   return conditions.length === 1 ? conditions[0] : { $and: conditions };
+}
+
+function scopedSalonQuery(request: Request, field = 'salonId'): Record<string, unknown>[] {
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ [field]: { $in: accessibleSalonIds(request.user!) } }];
+}
+
+function scopedQuoteRequestQuery(request: Request): Record<string, unknown>[] {
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ interestedSalonIds: { $in: accessibleSalonIds(request.user!) } }, { $or: [{ assignedToUserId: { $exists: false } }, { assignedToUserId: null }, { assignedToUserId: request.user!.id }] }];
 }
 
 function getPagination(request: Request): { page: number; limit: number } {
@@ -351,7 +360,7 @@ router.get(
   asyncHandler(async (request, response) => {
     const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
     await ensureLeadAccess(request, lead);
-    const quotes = await Quote.find({ leadId: request.params.id, deletedAt: null }).populate('salonId', 'name').sort({ createdAt: -1 }).lean();
+    const quotes = await Quote.find({ $and: [{ leadId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').sort({ createdAt: -1 }).lean();
     return sendSuccess(response, { quotes });
   })
 );
@@ -363,7 +372,7 @@ router.get(
   asyncHandler(async (request, response) => {
     const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
     await ensureLeadAccess(request, lead);
-    const events = await Event.find({ $or: [{ leadId: request.params.id }, { sourceLeadId: request.params.id }], deletedAt: null }).populate('salonId', 'name').populate('customerId', 'fullName phone email').sort({ eventDate: -1, createdAt: -1 }).lean();
+    const events = await Event.find({ $and: [{ $or: [{ leadId: request.params.id }, { sourceLeadId: request.params.id }], deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').populate('customerId', 'fullName phone email').sort({ eventDate: -1, createdAt: -1 }).lean();
     return sendSuccess(response, { events });
   })
 );
@@ -377,9 +386,9 @@ router.get(
     const leadForAccess = lead as LeadLike | null;
     await ensureLeadAccess(request, leadForAccess);
     const [quoteRequests, quotes, events, activities] = await Promise.all([
-      QuoteRequest.find({ leadId: request.params.id, deletedAt: null }).sort({ createdAt: -1 }).lean(),
-      Quote.find({ leadId: request.params.id, deletedAt: null }).populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
-      Event.find({ $or: [{ leadId: request.params.id }, { sourceLeadId: request.params.id }], deletedAt: null }).populate('salonId', 'name').populate('customerId', 'fullName phone email').sort({ eventDate: -1, createdAt: -1 }).lean(),
+      QuoteRequest.find({ $and: [{ leadId: request.params.id, deletedAt: null }, ...scopedQuoteRequestQuery(request)] }).sort({ createdAt: -1 }).lean(),
+      Quote.find({ $and: [{ leadId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
+      Event.find({ $and: [{ $or: [{ leadId: request.params.id }, { sourceLeadId: request.params.id }], deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').populate('customerId', 'fullName phone email').sort({ eventDate: -1, createdAt: -1 }).lean(),
       LeadActivity.find({ leadId: request.params.id }).sort({ createdAt: -1 }).limit(50).lean()
     ]);
     return sendSuccess(response, { lead, quoteRequests, quotes, events, activities, convertedCustomer: (lead as any)?.convertedCustomerId });

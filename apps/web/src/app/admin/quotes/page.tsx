@@ -132,6 +132,10 @@ export default function QuotesPage() {
       else await api.post('/quotes', payload);
       setNotice(formRequest ? 'Solicitud presupuestada correctamente.' : formQuote ? 'Presupuesto actualizado correctamente.' : 'Presupuesto creado correctamente.');
       setIsFormOpen(false);
+      if (formRequest) {
+        setActiveTab('quotes');
+        updateFilters({ page: 1, status: '' });
+      }
       await load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'No se pudo guardar el presupuesto.');
@@ -161,7 +165,7 @@ export default function QuotesPage() {
     <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,auto)]">
         <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-11 pl-10" placeholder="Buscar por contacto, teléfono o evento..." /></div>
-        <Select aria-label="Filtrar por estado" value={filters.status} onChange={(event) => updateFilters({ page: 1, status: event.target.value })} className="h-11 min-w-44"><option value="">Todos los estados</option>{Object.entries(activeTab === 'requests' ? quoteRequestStatusLabels : quoteStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+        <Select aria-label="Filtrar por estado" value={filters.status} onChange={(event) => updateFilters({ page: 1, status: event.target.value })} className="h-11 min-w-44"><option value="">{activeTab === 'requests' ? 'Solicitudes activas' : 'Todos los estados'}</option>{Object.entries(activeTab === 'requests' ? quoteRequestStatusLabels : quoteStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
         <Select aria-label="Filtrar por salón" value={filters.salonId} onChange={(event) => updateFilters({ page: 1, salonId: event.target.value })} className="h-11 min-w-40"><option value="">Todos los salones</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select>
         <Select aria-label="Cantidad de filas por página" value={filters.limit} onChange={(event) => updateFilters({ page: 1, limit: Number(event.target.value) })} className="h-11 min-w-32">{[10, 20, 50].map((item) => <option key={item} value={item}>{item} por página</option>)}</Select>
       </div>

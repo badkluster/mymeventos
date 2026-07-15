@@ -57,7 +57,7 @@ async function publicSalons() {
   const managerIds = [...new Set(salons.map((salon: any) => salon.managerUserId?.toString()).filter(Boolean))];
   const [templates, rules, managers] = await Promise.all([
     readLeanList(PackageTemplate.find({ active: true, deletedAt: null, $and: [{ $or: [{ visibleOnWebsite: true }, { visibleOnWebsite: { $exists: false } }] }, { $or: [{ isGlobal: true }, { salonIds: { $in: salonIds } }] }] }), { displayOrder: 1, name: 1 }),
-    readLeanList(VenuePackageRule.find({ active: true, deletedAt: null, salonId: { $in: salonIds } })),
+    readLeanList(VenuePackageRule.find({ deletedAt: null, salonId: { $in: salonIds } })),
     managerIds.length ? readLeanList(User.find({ _id: { $in: managerIds }, active: true, deletedAt: null }).select('_id firstName lastName fullName phone email')) : Promise.resolve([])
   ]);
   const rulesBySalonAndPackage = new Map(rules.map((rule: any) => [`${rule.salonId.toString()}:${rule.packageTemplateId.toString()}`, rule]));
@@ -76,7 +76,7 @@ async function publicSalons() {
         const finalPricePerPerson = Number(source.finalPricePerPerson ?? Math.round(pricePerPerson * (1 - discountPercentage / 100)));
         return {
           _id: template._id,
-          name: template.publicTitle ?? template.name,
+          name: rule?.name ?? template.publicTitle ?? template.name,
           description: template.publicDescription ?? source.notes,
           publicHighlights: template.publicHighlights ?? [],
           badgeLabel: template.badgeLabel,

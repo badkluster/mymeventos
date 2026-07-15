@@ -47,4 +47,15 @@ describe('quote package templates', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.package).toMatchObject({ name: 'Magic Night', ruleConfigured: false });
   });
+
+  it('uses the salon-specific package name when resolving a global template', async () => {
+    mocks.salonCount.mockResolvedValue(1);
+    mocks.packageFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: packageId, name: 'Magic Night', active: true, isGlobal: true }) });
+    mocks.ruleFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ packageTemplateId: packageId, salonId, name: 'Noche Mágica San Carlos', active: true }) });
+
+    const response = await request(app).get(`/api/quotes/packages/${packageId}/salons/${salonId}`).set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.package).toMatchObject({ name: 'Noche Mágica San Carlos', ruleConfigured: true });
+  });
 });

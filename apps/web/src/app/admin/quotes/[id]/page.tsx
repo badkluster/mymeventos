@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { CalendarCheck, Check, ChevronLeft, Clock3, Copy, Mail, MessageCircle, Pencil, Trash2 } from 'lucide-react';
+import { CalendarCheck, Check, ChevronLeft, Clock3, Copy, Download, Eye, FileText, Mail, MessageCircle, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { displayLabel, quoteStatusLabels } from '@/lib/display-labels';
 import { Button, Modal, Select } from '@/components/ui/primitives';
@@ -27,6 +27,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const [saving, setSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const setNotice = (value: string) => {
     setNoticeState(value);
@@ -118,8 +119,41 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     const salon = getSalonName(quote.salonId, salons);
     const extras = [quote.promotionText && `Promo: ${quote.promotionText}`, quote.giftText && `Regalo: ${quote.giftText}`, quote.paymentTerms && `Condiciones: ${quote.paymentTerms}`].filter(Boolean).join('\n');
     const priceDetail = quote.pricingMode === 'fixed' ? `Precio total del evento: ${money(quote.finalFixedPrice ?? quote.totalAmount)}` : `Valor final por persona: ${money(quote.finalPricePerPerson)}`;
-    const message = `Hola ${quote.contactName}, te compartimos el presupuesto ${quote.quoteNumber}.\n\nPaquete: ${quote.packageName || 'Personalizado'}\nSalón: ${salon}\nPersonas: ${quote.guestCount}\n${priceDetail}\nTotal: ${money(quote.totalAmount)}\nSeña: ${money(quote.depositAmount)}${extras ? `\n${extras}` : ''}`;
+    const pdfUrl = quote.pdfSecureUrl || quote.pdfUrl;
+    const message = `Hola ${quote.contactName}, te compartimos el presupuesto ${quote.quoteNumber}.\n\nPaquete: ${quote.packageName || 'Personalizado'}\nSalón: ${salon}\nPersonas: ${quote.guestCount}\n${priceDetail}\nTotal: ${money(quote.totalAmount)}\nSeña: ${money(quote.depositAmount)}${extras ? `\n${extras}` : ''}${pdfUrl ? `\n\nPodés ver o descargar el PDF acá:\n${pdfUrl}` : ''}`;
     window.open(`https://wa.me/${quote.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const email = () => {
+    if (!quote?.email) return;
+    const pdfUrl = quote.pdfSecureUrl || quote.pdfUrl;
+    const body = `Hola ${quote.contactName},\n\nTe compartimos el presupuesto ${quote.quoteNumber} de M&M Eventos.\nTotal: ${money(quote.totalAmount)}.${pdfUrl ? `\n\nPodés visualizarlo o descargarlo desde este enlace:\n${pdfUrl}` : ''}\n\nQuedamos a disposición.`;
+    window.location.href = `mailto:${quote.email}?subject=${encodeURIComponent(`Presupuesto ${quote.quoteNumber} · M&M Eventos`)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const regeneratePdf = async () => {
+    if (!quote) return;
+    setSaving(true);
+    try {
+      const response = await api.post<{ quote: Quote }>(`/quotes/${quote._id}/pdf`);
+      setQuote(response.quote);
+      setNotice('PDF generado correctamente.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'No se pudo generar el PDF.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const downloadPdf = () => {
+    const pdfUrl = quote?.pdfSecureUrl || quote?.pdfUrl;
+    if (!pdfUrl || !quote) return;
+    const link = document.createElement('a');
+    link.href = pdfUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.download = `${quote.quoteNumber}.pdf`;
+    link.click();
   };
 
   const convertToEvent = async () => {
@@ -140,13 +174,14 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
 
   const relatedCustomerId = getEntityId(quote.convertedCustomerId ?? quote.customerId);
   const relatedEventId = getEntityId(quote.convertedEventId);
+  const pdfUrl = quote.pdfSecureUrl || quote.pdfUrl;
 
   return <section className="space-y-6 pb-8">
     <Link href="/admin/quotes" className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 transition hover:text-zinc-950"><ChevronLeft className="h-4 w-4" />Volver a Presupuestos</Link>
     <header className="rounded-3xl border border-zinc-200 bg-white px-6 py-6 shadow-sm md:px-8">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold tracking-tight text-zinc-950">{quote.quoteNumber}</h1><span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">{displayLabel(quoteStatusLabels, quote.status)}</span></div><p className="mt-2 text-sm text-zinc-500">{quote.contactName} · {quote.eventType}</p><label className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-700">Estado<Select value={quote.status} disabled={saving} onChange={(event) => void updateStatus(event.target.value)} className="w-48 py-2">{Object.entries(quoteStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label></div>
-        <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={whatsapp}><MessageCircle className="mr-2 h-4 w-4" />WhatsApp</Button>{quote.email && <Button variant="secondary" onClick={() => { window.location.href = `mailto:${quote.email}?subject=${encodeURIComponent(`Presupuesto ${quote.quoteNumber} · M&M Eventos`)}`; }}><Mail className="mr-2 h-4 w-4" />Email</Button>}<Button variant="secondary" onClick={() => void duplicate()}><Copy className="mr-2 h-4 w-4" />Duplicar</Button><Button onClick={() => setEditOpen(true)}><Pencil className="mr-2 h-4 w-4" />Editar</Button><Button variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={!pdfUrl} onClick={() => setPreviewOpen(true)}><Eye className="mr-2 h-4 w-4" />Ver PDF</Button><Button variant="secondary" disabled={!pdfUrl} onClick={downloadPdf}><Download className="mr-2 h-4 w-4" />Descargar</Button><Button variant="secondary" disabled={saving} onClick={() => void regeneratePdf()}><RefreshCw className="mr-2 h-4 w-4" />{saving ? 'Generando...' : 'Regenerar PDF'}</Button><Button variant="secondary" onClick={whatsapp}><MessageCircle className="mr-2 h-4 w-4" />WhatsApp</Button>{quote.email && <Button variant="secondary" onClick={email}><Mail className="mr-2 h-4 w-4" />Email</Button>}<Button variant="secondary" onClick={() => void duplicate()}><Copy className="mr-2 h-4 w-4" />Duplicar</Button><Button onClick={() => setEditOpen(true)}><Pencil className="mr-2 h-4 w-4" />Editar</Button><Button variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button></div>
       </div>
     </header>
 
@@ -163,6 +198,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"><h2 className="text-base font-semibold text-zinc-950">Servicios incluidos</h2>{quote.includedServices?.length ? <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-600">{quote.includedServices.map((item) => <li key={item} className="flex gap-2"><Check className="mt-1 h-4 w-4 shrink-0 text-emerald-600" />{item}</li>)}</ul> : <p className="mt-4 text-sm text-zinc-500">No hay servicios cargados.</p>}<div className="mt-6 border-t border-zinc-100 pt-5"><h2 className="text-base font-semibold text-zinc-950">Observaciones</h2><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-600">{quote.notes || 'Sin observaciones.'}</p></div></article>
     </div>
 
+    <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="flex items-center gap-2 text-base font-semibold text-zinc-950"><FileText className="h-5 w-5" />Documento comercial</h2><p className="mt-1 text-sm text-zinc-500">El PDF se guarda con este presupuesto y queda listo para compartir por WhatsApp, email o descargar.</p>{quote.pdfGeneratedAt && <p className="mt-2 text-xs text-zinc-400">Última generación: {date(quote.pdfGeneratedAt)}</p>}</div><div className="flex gap-2"><Button variant="secondary" disabled={!pdfUrl} onClick={() => setPreviewOpen(true)}><Eye className="mr-2 h-4 w-4" />Previsualizar</Button><Button variant="secondary" disabled={!pdfUrl} onClick={downloadPdf}><Download className="mr-2 h-4 w-4" />Descargar PDF</Button></div></div></article>
+
     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
       <h2 className="text-base font-semibold text-zinc-950">Relaciones comerciales</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -178,6 +215,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     </div>
 
     <QuoteFormModal open={editOpen} quote={quote} salons={salons} leads={leads} packages={packages} saving={saving} onClose={() => setEditOpen(false)} onSubmit={save} />
+    <Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={`PDF · ${quote.quoteNumber}`} description="Vista previa del documento comercial guardado."><div className="h-[72vh] min-h-[440px] bg-zinc-100">{pdfUrl ? <iframe title={`Presupuesto ${quote.quoteNumber}`} src={pdfUrl} className="h-full w-full border-0" /> : <div className="grid h-full place-items-center p-8 text-sm text-zinc-500">Todavía no hay un PDF generado para este presupuesto.</div>}</div></Modal>
     <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Eliminar presupuesto" description="Esta acción eliminará el presupuesto del listado, pero conservará el registro internamente."><div className="p-6"><footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setDeleteOpen(false)}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={() => void remove()}>{saving ? 'Eliminando...' : 'Eliminar'}</Button></footer></div></Modal>
   </section>;
 }

@@ -2,7 +2,7 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
 import { Contract, Payment } from './crm.models';
-import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -42,7 +42,7 @@ const router = Router();
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
 function scopedQuery(request: Request): Record<string, unknown>[] {
-  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonId: { $in: request.user!.salonIds } }];
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonId: { $in: accessibleSalonIds(request.user!) } }];
 }
 function buildQuery(request: Request): Record<string, unknown> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }, ...scopedQuery(request)];

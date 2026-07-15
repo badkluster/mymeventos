@@ -75,6 +75,7 @@ export type Salon = {
   operationalNotes?: string;
   defaultDepositAmount?: number;
   minimumDepositAmount?: number;
+  defaultSecurityDepositAmount?: number;
   defaultLateFeePercentage?: number;
   defaultPaymentTerms?: string;
   defaultQuoteValidityDays?: number;
@@ -99,6 +100,11 @@ export type PackageRule = {
   _id?: string;
   packageTemplateId: string;
   packageName: string;
+  name?: string;
+  isGlobal?: boolean;
+  durationHours?: number;
+  startTime?: string;
+  endTime?: string;
   ruleConfigured?: boolean;
   active?: boolean;
   pricingMode?: 'per_person' | 'fixed';

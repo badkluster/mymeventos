@@ -5,7 +5,7 @@ import { Salon } from './salon.model';
 import { PackageTemplate, VenuePackageRule } from '../crm/crm.models';
 import { User } from '../users/user.model';
 import { syncSalonManager } from '../users/user.service';
-import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
@@ -81,6 +81,7 @@ const salonBaseFields = z.object({
   operationalNotes: optionalText,
   defaultDepositAmount: z.coerce.number().min(0).optional(),
   minimumDepositAmount: z.coerce.number().min(0).optional(),
+  defaultSecurityDepositAmount: z.coerce.number().min(0).optional(),
   defaultLateFeePercentage: z.coerce.number().min(0).max(100).optional(),
   defaultPaymentTerms: optionalText,
   defaultQuoteValidityDays: z.coerce.number().int().positive().optional(),
@@ -112,7 +113,7 @@ const createSchema = z.object({ body: salonFields, params: z.object({}), query: 
 const updateSchema = z.object({ body: salonBaseFields.partial().superRefine(validateCapacityRange).refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'), params: idParams.shape.params, query: z.object({}) });
 const commercialSchema = z.object({
   body: salonBaseFields.pick({
-    defaultDepositAmount: true, minimumDepositAmount: true, defaultLateFeePercentage: true, defaultPaymentTerms: true,
+    defaultDepositAmount: true, minimumDepositAmount: true, defaultSecurityDepositAmount: true, defaultLateFeePercentage: true, defaultPaymentTerms: true,
     defaultQuoteValidityDays: true, defaultContractTerms: true, commercialNotes: true, activePromotionIds: true
   }).partial(),
   params: idParams.shape.params,
@@ -121,6 +122,10 @@ const commercialSchema = z.object({
 const extrasSchema = z.object({ body: z.object({ extras: z.array(extraSchema) }), params: idParams.shape.params, query: z.object({}) });
 const ruleSchema = z.object({
   body: z.object({
+    name: z.string().trim().min(2).optional(),
+    durationHours: z.coerce.number().positive().optional(),
+    startTime: optionalText,
+    endTime: optionalText,
     active: z.boolean().optional(),
     pricingMode: z.enum(['per_person', 'fixed']).optional(),
     pricePerPerson: z.coerce.number().min(0).optional(),
@@ -139,10 +144,11 @@ const ruleSchema = z.object({
   params: z.object({ id: objectId, packageTemplateId: objectId }),
   query: z.object({})
 });
+const ruleParamsSchema = z.object({ body: z.object({}).optional(), params: z.object({ id: objectId, packageTemplateId: objectId }), query: z.object({}) });
 
 function listScope(request: Request): Record<string, unknown> {
   if (request.user!.roles.includes(Role.ADMIN)) return {};
-  return { _id: { $in: request.user!.salonIds } };
+  return { _id: { $in: accessibleSalonIds(request.user!) } };
 }
 
 async function ensureSalonAccess(request: Request, salonId: string): Promise<void> {
@@ -270,6 +276,7 @@ router.get('/:id/commercial-config', requirePermission(Permission.SALONS_READ), 
   return sendSuccess(response, { commercialConfig: {
     defaultDepositAmount: salon.defaultDepositAmount ?? 0,
     minimumDepositAmount: salon.minimumDepositAmount ?? 0,
+    defaultSecurityDepositAmount: salon.defaultSecurityDepositAmount ?? 0,
     defaultLateFeePercentage: salon.defaultLateFeePercentage ?? 0,
     defaultPaymentTerms: salon.defaultPaymentTerms ?? '',
     defaultQuoteValidityDays: salon.defaultQuoteValidityDays ?? 7,
@@ -295,7 +302,7 @@ router.get('/:id/package-rules', requirePermission(Permission.SALONS_READ), vali
   return sendSuccess(response, {
     packageRules: templates.map((template: any) => {
       const rule = byTemplate.get(template._id.toString());
-      return { ...template, ...rule, packageTemplateId: template._id, packageName: template.name, ruleConfigured: Boolean(rule) };
+      return { ...template, ...rule, packageTemplateId: template._id, packageName: rule?.name ?? template.name, ruleConfigured: Boolean(rule) };
     })
   });
 }));
@@ -311,6 +318,20 @@ router.patch('/:id/package-rules/:packageTemplateId', requirePermission(Permissi
   );
   await writeAuditLog(request, 'VENUE_PACKAGE_RULE_UPDATE_FROM_SALON', 'VenuePackageRule', rule._id.toString());
   return sendSuccess(response, { rule }, 200, getApiMessage('PACKAGE_RULE_UPDATED'));
+}));
+
+router.delete('/:id/package-rules/:packageTemplateId', requirePermission(Permission.SALONS_UPDATE), validateRequest(ruleParamsSchema), asyncHandler(async (request, response) => {
+  await ensureSalonAccess(request, request.params.id);
+  const globalTemplate = await PackageTemplate.exists({ _id: request.params.packageTemplateId, isGlobal: true, deletedAt: null });
+  if (globalTemplate) throw new ApiError(422, 'GLOBAL_PACKAGE_RULE_CANNOT_BE_DELETED');
+  const rule = await VenuePackageRule.findOneAndUpdate(
+    { packageTemplateId: request.params.packageTemplateId, salonId: request.params.id, deletedAt: null },
+    { deletedAt: new Date(), deletedBy: request.user!.id, updatedBy: request.user!.id },
+    { new: true }
+  );
+  if (!rule) throw new ApiError(404, 'PACKAGE_RULE_NOT_FOUND');
+  await writeAuditLog(request, 'VENUE_PACKAGE_RULE_DELETE_FROM_SALON', 'VenuePackageRule', rule._id.toString());
+  return sendSuccess(response, { deleted: true });
 }));
 
 router.get('/:id/extras', requirePermission(Permission.SALONS_READ), validateRequest(idParams), asyncHandler(async (request, response) => {

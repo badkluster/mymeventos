@@ -4,7 +4,7 @@ import { Permission, Role } from '@mym/shared';
 import { Customer, Lead, LeadActivity, PackageTemplate, Quote, QuoteRequest, QuoteRevision, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
-import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -82,11 +82,35 @@ function quoteNumber(): string { return `P-${new Date().getFullYear()}-${Date.no
 function calculateQuote(values: Record<string, any>): Record<string, any> {
   return calculateCommercialQuote(values);
 }
+async function quoteValidUntil(salonId: string, requested?: Date): Promise<Date> {
+  if (requested) return requested;
+  const salon: any = await Salon.findById(salonId).select('defaultQuoteValidityDays').lean();
+  const days = Number(salon?.defaultQuoteValidityDays) > 0 ? Number(salon.defaultQuoteValidityDays) : 7;
+  const validUntil = new Date();
+  validUntil.setDate(validUntil.getDate() + days);
+  validUntil.setHours(23, 59, 59, 999);
+  return validUntil;
+}
 function pickDefined(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   return Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));
 }
+function quoteTemplateValues(template: Record<string, any>): Record<string, any> {
+  const { _id, __v, createdAt, updatedAt, createdBy, updatedBy, deletedAt, deletedBy, ...values } = template;
+  return values;
+}
+function assignedToCurrentUserOrUnassigned(request: Request): Record<string, unknown> {
+  return { $or: [{ assignedToUserId: { $exists: false } }, { assignedToUserId: null }, { assignedToUserId: request.user!.id }] };
+}
+function salonScopeForRequests(request: Request): Record<string, unknown>[] {
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ interestedSalonIds: { $in: accessibleSalonIds(request.user!) } }, assignedToCurrentUserOrUnassigned(request)];
+}
+function salonScopeForQuotes(request: Request): Record<string, unknown>[] {
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonId: { $in: accessibleSalonIds(request.user!) } }];
+}
 async function ensureRequestAccess(request: Request, item: any): Promise<void> {
   if (!item || item.deletedAt) throw new ApiError(404, 'QUOTE_REQUEST_NOT_FOUND');
+  const assignedToUserId = item.assignedToUserId?.toString?.() ?? item.assignedToUserId;
+  if (!request.user!.roles.includes(Role.ADMIN) && assignedToUserId && assignedToUserId !== request.user!.id) throw new ApiError(403, 'QUOTE_REQUEST_ASSIGNED_TO_OTHER_USER');
   const salonIds = (item.interestedSalonIds ?? []).map((id: { toString(): string }) => id.toString());
   if (salonIds.length && !salonIds.some((salonId: string) => canAccessSalon(request.user!, salonId))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
 }
@@ -95,13 +119,21 @@ async function ensureAccessibleSalons(request: Request, salonIds: string[]): Pro
   const count = await Salon.countDocuments({ _id: { $in: salonIds }, active: true, deletedAt: null });
   if (count !== salonIds.length) throw new ApiError(404, 'SALON_NOT_FOUND');
 }
+async function ensureAssigneeCanAccessRequestSalons(assignedToUserId: string | null | undefined, salonIds: string[]): Promise<void> {
+  if (!assignedToUserId) return;
+  const user: any = await User.findOne({ _id: assignedToUserId, active: true, deletedAt: null }).select('roles salonIds managedSalonIds').lean();
+  if (!user) throw new ApiError(404, 'USER_NOT_FOUND');
+  if ((user.roles ?? []).includes(Role.ADMIN)) return;
+  const assigneeSalonIds = new Set([...(user.salonIds ?? []), ...(user.managedSalonIds ?? [])].map((id: { toString(): string } | string) => id.toString()));
+  if (!salonIds.some((salonId) => assigneeSalonIds.has(salonId))) throw new ApiError(403, 'ASSIGNEE_SALON_SCOPE_FORBIDDEN');
+}
 async function getApplicableTemplate(templateId: string, salonId: string, requireCommercialRule = false): Promise<Record<string, any>> {
   const template: any = await PackageTemplate.findOne({ _id: templateId, active: true, deletedAt: null }).lean();
   if (!template || (!template.isGlobal && !(template.salonIds ?? []).some((id: { toString(): string }) => id.toString() === salonId))) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   const rule: any = await VenuePackageRule.findOne({ packageTemplateId: templateId, salonId, deletedAt: null }).lean();
   if (rule && !rule.active) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   if (requireCommercialRule && !rule) throw new ApiError(422, 'PACKAGE_RULE_NOT_CONFIGURED');
-  const overrideKeys = ['pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
+  const overrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
   return { ...template, ...(rule ? pickDefined(rule, overrideKeys) : {}) };
 }
 async function createRevision(quote: any, request: Request): Promise<void> {
@@ -110,8 +142,9 @@ async function createRevision(quote: any, request: Request): Promise<void> {
 }
 function buildQuery(request: Request): Record<string, unknown> {
   const conditions: Record<string, unknown>[] = [{ deletedAt: null }];
-  if (!request.user!.roles.includes(Role.ADMIN)) conditions.push({ interestedSalonIds: { $in: request.user!.salonIds } });
+  conditions.push(...salonScopeForRequests(request));
   const status = queryValue(request.query.status); if (status && statuses.includes(status as any)) conditions.push({ status });
+  else conditions.push({ status: { $in: ['new', 'in_review'] } });
   const source = queryValue(request.query.source); if (source && sources.includes(source as any)) conditions.push({ source });
   const salonId = queryValue(request.query.salonId); if (salonId && objectId.safeParse(salonId).success) conditions.push({ interestedSalonIds: salonId });
   const assignedToUserId = queryValue(request.query.assignedToUserId); if (assignedToUserId && objectId.safeParse(assignedToUserId).success) conditions.push({ assignedToUserId });
@@ -139,8 +172,7 @@ router.get('/', requirePermission(Permission.QUOTES_READ), asyncHandler(async (r
 router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
   await ensureAccessibleSalons(request, request.body.interestedSalonIds ?? []);
   if (request.body.assignedToUserId) {
-    const user = await User.exists({ _id: request.body.assignedToUserId, active: true, deletedAt: null });
-    if (!user) throw new ApiError(404, 'USER_NOT_FOUND');
+    await ensureAssigneeCanAccessRequestSalons(request.body.assignedToUserId, request.body.interestedSalonIds ?? []);
   }
   const result = await createQuoteRequest({ ...request.body, originalPayload: request.body, userId: request.user!.id });
   await writeAuditLog(request, 'QUOTE_REQUEST_CREATE', 'QuoteRequest', result.quoteRequest._id.toString());
@@ -154,8 +186,8 @@ router.get('/:id', requirePermission(Permission.QUOTES_READ), validateRequest(id
   const customerId = (quoteRequest as any).customerId?._id ?? (quoteRequest as any).customerId;
   const [activities, previousRequests, previousQuotes] = await Promise.all([
     LeadActivity.find({ $or: [leadId ? { leadId } : {}, customerId ? { customerId } : {}].filter((item) => Object.keys(item).length) }).sort({ createdAt: -1 }).limit(20).lean(),
-    QuoteRequest.find({ ...(leadId ? { leadId } : { customerId }), deletedAt: null, _id: { $ne: request.params.id } }).sort({ createdAt: -1 }).limit(20).lean(),
-    Quote.find({ ...(leadId ? { leadId } : { customerId }), deletedAt: null }).sort({ createdAt: -1 }).limit(20).lean()
+    QuoteRequest.find({ $and: [{ ...(leadId ? { leadId } : { customerId }), deletedAt: null, _id: { $ne: request.params.id } }, ...salonScopeForRequests(request)] }).sort({ createdAt: -1 }).limit(20).lean(),
+    Quote.find({ $and: [{ ...(leadId ? { leadId } : { customerId }), deletedAt: null }, ...salonScopeForQuotes(request)] }).sort({ createdAt: -1 }).limit(20).lean()
   ]);
   return sendSuccess(response, { quoteRequest, activities, previousRequests, previousQuotes });
 }));
@@ -163,6 +195,10 @@ router.get('/:id', requirePermission(Permission.QUOTES_READ), validateRequest(id
 router.patch('/:id', requirePermission(Permission.QUOTES_UPDATE), validateRequest(patchSchema), asyncHandler(async (request, response) => {
   const quoteRequest: any = await QuoteRequest.findOne({ _id: request.params.id, deletedAt: null });
   await ensureRequestAccess(request, quoteRequest);
+  if (request.body.assignedToUserId !== undefined) {
+    const salonIds = (quoteRequest.interestedSalonIds ?? []).map((id: { toString(): string }) => id.toString());
+    await ensureAssigneeCanAccessRequestSalons(request.body.assignedToUserId, salonIds);
+  }
   Object.assign(quoteRequest, request.body, { updatedBy: request.user!.id });
   await quoteRequest.save();
   await writeAuditLog(request, 'QUOTE_REQUEST_UPDATE', 'QuoteRequest', quoteRequest._id.toString());
@@ -215,6 +251,17 @@ router.patch('/:id/mark-duplicated', requirePermission(Permission.QUOTES_UPDATE)
 router.post('/:id/convert-to-quotes', requirePermission(Permission.QUOTES_CREATE), validateRequest(convertSchema), asyncHandler(async (request, response) => {
   const quoteRequest: any = await QuoteRequest.findOne({ _id: request.params.id, deletedAt: null });
   await ensureRequestAccess(request, quoteRequest);
+  const priorQuoteIds = quoteRequest.convertedQuoteIds ?? [];
+  if (priorQuoteIds.length) {
+    const activeQuotes = await Quote.find({ _id: { $in: priorQuoteIds }, deletedAt: null }).select('_id').lean();
+    const activeQuoteIds = activeQuotes.map((quote) => quote._id);
+    if (activeQuoteIds.length !== priorQuoteIds.length) {
+      quoteRequest.convertedQuoteIds = activeQuoteIds;
+      if (!activeQuoteIds.length && quoteRequest.status === 'converted') quoteRequest.status = 'in_review';
+      quoteRequest.updatedBy = request.user!.id;
+      await quoteRequest.save();
+    }
+  }
   if (['discarded', 'duplicated'].includes(quoteRequest.status)) throw new ApiError(422, 'QUOTE_REQUEST_NOT_CONVERTIBLE');
   const salonIds = uniqueIds([...(request.body.salonIds ?? []), ...(request.body.salonId ? [request.body.salonId] : [])]);
   await ensureAccessibleSalons(request, salonIds);
@@ -227,7 +274,7 @@ router.post('/:id/convert-to-quotes', requirePermission(Permission.QUOTES_CREATE
     const template = templates[index];
     const commercialKeys = ['durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
     const raw = {
-      ...template,
+      ...quoteTemplateValues(template),
       ...(request.body.applyCommercialOverrides || request.body.manualMode ? pickDefined(request.body, commercialKeys) : {}),
       salonId,
       leadId: lead?._id,
@@ -245,10 +292,10 @@ router.post('/:id/convert-to-quotes', requirePermission(Permission.QUOTES_CREATE
       celiacCount: request.body.celiacCount,
       lactoseIntolerantCount: request.body.lactoseIntolerantCount,
       tableLinenColor: request.body.tableLinenColor,
-      packageName: request.body.packageName ?? (template as { name?: string }).name,
+      packageName: request.body.manualMode ? request.body.packageName : (template as { name?: string }).name,
       packageTemplateId: request.body.packageTemplateId,
       notes: [request.body.notes, quoteRequest.message].filter(Boolean).join('\n\n'),
-      validUntil: request.body.validUntil,
+      validUntil: await quoteValidUntil(salonId, request.body.validUntil),
       quoteNumber: quoteNumber(),
       createdBy: request.user!.id,
       updatedBy: request.user!.id,

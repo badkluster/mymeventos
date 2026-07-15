@@ -74,7 +74,7 @@ const contactSchema = new Schema({ customerId: { type: Schema.Types.ObjectId, re
 const menuSectionSchema = new Schema({ title: { type: String, required: true }, items: { type: [String], default: [] } }, { _id: false });
 
 const packageTemplateSchema = new Schema({
-  name: { type: String, required: true, trim: true, unique: true, index: true },
+  name: { type: String, required: true, trim: true, index: true },
   active: { type: Boolean, default: true, index: true },
   isGlobal: { type: Boolean, default: true },
   salonIds: [{ type: Schema.Types.ObjectId, ref: 'Salon', index: true }],
@@ -97,6 +97,9 @@ const packageTemplateSchema = new Schema({
 const venuePackageRuleSchema = new Schema({
   packageTemplateId: { type: Schema.Types.ObjectId, ref: 'PackageTemplate', required: true, index: true },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  // A global template can be presented under a different commercial name at each salon.
+  name: { type: String, trim: true },
+  durationHours: Number, startTime: String, endTime: String,
   active: { type: Boolean, default: true },
   pricingMode: { type: String, enum: ['per_person', 'fixed'] },
   pricePerPerson: Number, discountPercentage: Number, finalPricePerPerson: Number, depositAmount: Number,
@@ -168,6 +171,7 @@ const eventSchema = new Schema({
   menuSnapshot: Schema.Types.Mixed,
   servicesSnapshot: Schema.Types.Mixed,
   paymentSnapshot: Schema.Types.Mixed,
+  paymentPlanSnapshot: Schema.Types.Mixed,
   contractReadyChecklist: Schema.Types.Mixed,
   ...base
 }, { timestamps: true });
@@ -253,6 +257,10 @@ const contractSchema = new Schema({
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
   status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'requires_changes', 'cancelled', 'superseded'], default: 'pending_approval', index: true },
   contractMode: { type: String, enum: ['PACKAGE', 'CUSTOM', 'HYBRID'], default: 'PACKAGE', index: true },
+  contractFamilyId: { type: Schema.Types.ObjectId, ref: 'Contract', index: true },
+  versionNumber: { type: Number, default: 1, index: true },
+  supersedesContractId: { type: Schema.Types.ObjectId, ref: 'Contract', index: true },
+  supersededByContractId: { type: Schema.Types.ObjectId, ref: 'Contract' },
   lineItemsSnapshot: { type: [Schema.Types.Mixed], default: [] },
   customerSnapshot: Schema.Types.Mixed,
   eventSnapshot: Schema.Types.Mixed,
@@ -260,6 +268,7 @@ const contractSchema = new Schema({
   menuSnapshot: Schema.Types.Mixed,
   servicesSnapshot: Schema.Types.Mixed,
   paymentAgreementSnapshot: Schema.Types.Mixed,
+  paymentPlanSnapshot: Schema.Types.Mixed,
   legalTermsSnapshot: Schema.Types.Mixed,
   securityDeposit: { type: securityDepositSchema, default: () => ({}) },
   securityDepositSnapshot: Schema.Types.Mixed,
@@ -274,6 +283,7 @@ const contractSchema = new Schema({
   approvedAt: Date,
   approvedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
   cancelledAt: Date,
+  pdfUrl: String, pdfSecureUrl: String, pdfPublicId: String, pdfGeneratedAt: Date,
   ...base
 }, { timestamps: true });
 contractSchema.index({ eventId: 1, deletedAt: 1 });
@@ -313,8 +323,14 @@ const paymentSchema = new Schema({
   dueDate: { type: Date, index: true },
   paidAt: Date,
   receiptNumber: String,
+  receiptPdfUrl: String,
+  receiptPdfSecureUrl: String,
+  receiptPdfPublicId: String,
+  receiptPdfGeneratedAt: Date,
+  receiptEmailSentAt: Date,
   reference: String,
   notes: String,
+  planInstallmentId: String,
   affectsContractBalance: { type: Boolean, default: true },
   refundedPaymentId: { type: Schema.Types.ObjectId, ref: 'Payment' },
   cancelledBy: { type: Schema.Types.ObjectId, ref: 'User' },

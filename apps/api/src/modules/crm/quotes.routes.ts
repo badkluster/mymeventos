@@ -1,9 +1,9 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, QuoteLineItemSourceType, QuoteMode, Role, hasPermission } from '@mym/shared';
-import { Customer, Lead, LeadActivity, PackageTemplate, Quote, QuoteRevision, VenuePackageRule } from './crm.models';
+import { Customer, Lead, LeadActivity, PackageTemplate, Quote, QuoteRequest, QuoteRevision, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
-import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -130,8 +130,21 @@ async function ensureQuoteAccess(request: Request, quote: any): Promise<void> {
 function pickDefined(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   return Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));
 }
+function quoteTemplateValues(template: Record<string, any>): Record<string, any> {
+  const { _id, __v, createdAt, updatedAt, createdBy, updatedBy, deletedAt, deletedBy, ...values } = template;
+  return values;
+}
 function calculateQuote(values: Record<string, any>): Record<string, any> {
   return calculateCommercialQuote(values);
+}
+async function quoteValidUntil(salonId: string, requested?: Date): Promise<Date> {
+  if (requested) return requested;
+  const salon: any = await Salon.findById(salonId).select('defaultQuoteValidityDays').lean();
+  const days = Number(salon?.defaultQuoteValidityDays) > 0 ? Number(salon.defaultQuoteValidityDays) : 7;
+  const validUntil = new Date();
+  validUntil.setDate(validUntil.getDate() + days);
+  validUntil.setHours(23, 59, 59, 999);
+  return validUntil;
 }
 function calculateLineItems(lineItems: Array<Record<string, any>>): { lineItems: Array<Record<string, any>>; subtotalCost: number; totalAmount: number } {
   const calculated = lineItems.map((item) => {
@@ -152,18 +165,24 @@ async function getApplicableTemplate(templateId: string, salonId: string, requir
   const rule: any = await VenuePackageRule.findOne({ packageTemplateId: templateId, salonId, deletedAt: null }).lean();
   if (rule && !rule.active) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   if (requireCommercialRule && !rule) throw new ApiError(422, 'PACKAGE_RULE_NOT_CONFIGURED');
-  const overrideKeys = ['pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
+  const overrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
   return { ...template, ...(rule ? pickDefined(rule, overrideKeys) : {}), ruleConfigured: Boolean(rule) };
 }
 async function createRevision(quote: any, request: Request, changeReason: string): Promise<void> {
   const latest: any = await QuoteRevision.findOne({ quoteId: quote._id }).sort({ version: -1 }).lean();
   await QuoteRevision.create({ quoteId: quote._id, version: (latest?.version ?? 0) + 1, snapshot: quote.toObject ? quote.toObject() : quote, changeReason, createdBy: request.user!.id });
 }
+async function refreshQuotePdf(quote: any): Promise<void> {
+  if (!quote.validUntil) quote.validUntil = await quoteValidUntil(quote.salonId.toString());
+  const pdf = await generateAndUploadQuotePdf(quote.toObject ? quote.toObject() : quote);
+  Object.assign(quote, pdf);
+  await quote.save();
+}
 function quoteNumber(): string { return `P-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`; }
-function serializeQuote(quote: any): Record<string, any> { return { ...quote, estimatedEventDate: quote.eventDate }; }
+function serializeQuote(quote: any): Record<string, any> { const source = quote?.toObject ? quote.toObject() : quote; return { ...source, estimatedEventDate: source?.eventDate }; }
 function buildListQuery(request: Request): Record<string, unknown> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }];
-  if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: request.user!.salonIds } });
+  if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: accessibleSalonIds(request.user!) } });
   const status = getQueryString(request.query.status); if (status && quoteStatuses.includes(status as any)) terms.push({ status });
   const salonId = getQueryString(request.query.salonId); if (salonId && objectId.safeParse(salonId).success) terms.push({ salonId });
   const leadId = getQueryString(request.query.leadId); if (leadId && objectId.safeParse(leadId).success) terms.push({ leadId });
@@ -176,7 +195,7 @@ function buildListQuery(request: Request): Record<string, unknown> {
 router.use(requireAuth);
 
 router.get('/packages', requirePermission(Permission.QUOTES_READ), asyncHandler(async (request, response) => {
-  const scope = request.user!.roles.includes(Role.ADMIN) ? {} : { $or: [{ isGlobal: true }, { salonIds: { $in: request.user!.salonIds } }] };
+  const scope = request.user!.roles.includes(Role.ADMIN) ? {} : { $or: [{ isGlobal: true }, { salonIds: { $in: accessibleSalonIds(request.user!) } }] };
   const packages = await PackageTemplate.find({ deletedAt: null, active: true, ...scope }).sort({ name: 1 }).lean();
   return sendSuccess(response, { packages });
 }));
@@ -305,9 +324,11 @@ router.post('/from-custom-calculation', requirePermission(Permission.QUOTES_CREA
       customCalculationSnapshot: { ...request.body, ...calculation },
       paymentTerms: request.body.paymentTerms,
       notes: request.body.notes,
+      validUntil: await quoteValidUntil(salonId),
       createdBy: request.user!.id,
       updatedBy: request.user!.id
     });
+    await refreshQuotePdf(quote);
     await createRevision(quote, request, 'Presupuesto personalizado creado');
     quotes.push(quote);
   }
@@ -357,13 +378,11 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
     const commercialFields = ['durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
     const nonCommercialBody = Object.fromEntries(Object.entries(body).filter(([key]) => !commercialFields.includes(key)));
     const contactName = request.body.contactName ?? lead?.fullName ?? customer?.fullName;
-    const raw = { ...template, ...nonCommercialBody, ...(applyCommercialOverrides ? pickDefined(body, commercialFields) : {}), salonId, leadId: lead?._id, customerId: customer?._id, source: customer ? 'customer' : lead ? (request.body.leadId ? 'lead' : 'new_person') : 'manual', contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email, eventType: request.body.eventType ?? lead?.eventType, eventDate: request.body.eventDate ?? lead?.eventDate, guestCount: request.body.guestCount ?? lead?.guestCount, packageName: request.body.packageName ?? template.name, packageTemplateId: request.body.packageTemplateId, quoteNumber: quoteNumber(), createdBy: request.user!.id, updatedBy: request.user!.id, templateSnapshot: request.body.packageTemplateId ? template : undefined, packageSnapshot: request.body.packageTemplateId ? template : undefined, contactSnapshot: { leadId: lead?._id, customerId: customer?._id, contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email } };
+    const raw = { ...quoteTemplateValues(template), ...nonCommercialBody, ...(applyCommercialOverrides ? pickDefined(body, commercialFields) : {}), salonId, leadId: lead?._id, customerId: customer?._id, source: customer ? 'customer' : lead ? (request.body.leadId ? 'lead' : 'new_person') : 'manual', contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email, eventType: request.body.eventType ?? lead?.eventType, eventDate: request.body.eventDate ?? lead?.eventDate, guestCount: request.body.guestCount ?? lead?.guestCount, packageName: manualMode ? request.body.packageName : template.name, packageTemplateId: request.body.packageTemplateId, validUntil: await quoteValidUntil(salonId, request.body.validUntil), quoteNumber: quoteNumber(), createdBy: request.user!.id, updatedBy: request.user!.id, templateSnapshot: request.body.packageTemplateId ? template : undefined, packageSnapshot: request.body.packageTemplateId ? template : undefined, contactSnapshot: { leadId: lead?._id, customerId: customer?._id, contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email } };
     const calculated = calculateQuote(raw);
     if (!calculated.guestCount || !calculated.totalAmount || (calculated.pricingMode === 'fixed' ? !calculated.finalFixedPrice : !calculated.finalPricePerPerson)) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
     const quote: any = await Quote.create(calculated);
-    const pdf = await generateAndUploadQuotePdf(quote.toObject ? quote.toObject() : quote);
-    Object.assign(quote, pdf);
-    await quote.save();
+    await refreshQuotePdf(quote);
     quotes.push(quote); await createRevision(quote, request, 'Presupuesto creado');
     await LeadActivity.create({ leadId: lead?._id, customerId: customer?._id, type: 'quote_created', title: 'Presupuesto creado', description: `Se creó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id, salonId }, createdBy: request.user!.id });
     await writeAuditLog(request, 'QUOTE_CREATE', 'Quote', quote._id.toString(), { leadId: lead?._id?.toString(), customerId: customer?._id?.toString(), salonId });
@@ -376,6 +395,14 @@ router.get('/:id', requirePermission(Permission.QUOTES_READ), validateRequest(id
   return sendSuccess(response, { quote: serializeQuote(quote) });
 }));
 
+router.post('/:id/pdf', requirePermission(Permission.QUOTES_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureQuoteAccess(request, quote);
+  await refreshQuotePdf(quote);
+  await createRevision(quote, request, 'PDF de presupuesto regenerado');
+  return sendSuccess(response, { quote: serializeQuote(quote) }, 200, 'PDF generado correctamente.');
+}));
+
 router.patch('/:id/line-items', requirePermission(Permission.QUOTES_UPDATE), validateRequest(lineItemsPatchSchema), asyncHandler(async (request, response) => {
   const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null });
   await ensureQuoteAccess(request, quote);
@@ -386,6 +413,7 @@ router.patch('/:id/line-items', requirePermission(Permission.QUOTES_UPDATE), val
   quote.balanceAmount = Math.max(0, calculation.totalAmount - Number(quote.depositAmount ?? 0));
   quote.updatedBy = request.user!.id;
   await quote.save();
+  await refreshQuotePdf(quote);
   await createRevision(quote, request, 'Line items actualizados');
   return sendSuccess(response, { quote });
 }));
@@ -399,6 +427,7 @@ router.post('/:id/recalculate', requirePermission(Permission.QUOTES_UPDATE), val
   quote.customCalculationSnapshot = { ...(quote.customCalculationSnapshot ?? {}), ...calculation };
   quote.updatedBy = request.user!.id;
   await quote.save();
+  await refreshQuotePdf(quote);
   await createRevision(quote, request, 'Presupuesto recalculado');
   return sendSuccess(response, { quote });
 }));
@@ -406,14 +435,15 @@ router.post('/:id/recalculate', requirePermission(Permission.QUOTES_UPDATE), val
 router.patch('/:id', requirePermission(Permission.QUOTES_UPDATE), validateRequest(updateQuoteSchema), asyncHandler(async (request, response) => {
   const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, quote);
   if (request.body.salonId) await ensureAccessibleSalons(request, [request.body.salonId]);
-  const updated = calculateQuote({ ...quote.toObject(), ...request.body, updatedBy: request.user!.id }); Object.assign(quote, updated); await quote.save(); await createRevision(quote, request, 'Presupuesto actualizado');
+  const updated = calculateQuote({ ...quote.toObject(), ...request.body, updatedBy: request.user!.id }); Object.assign(quote, updated); await quote.save(); await refreshQuotePdf(quote); await createRevision(quote, request, 'Presupuesto actualizado');
   await LeadActivity.create({ leadId: quote.leadId, customerId: quote.customerId, type: 'system', title: 'Presupuesto actualizado', description: `Se actualizó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id }, createdBy: request.user!.id });
   await writeAuditLog(request, 'QUOTE_UPDATE', 'Quote', quote._id.toString()); return sendSuccess(response, { quote }, 200, getApiMessage('QUOTE_UPDATED'));
 }));
 
 router.post('/:id/duplicate', requirePermission(Permission.QUOTES_CREATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const original: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, original);
-  const duplicate = await Quote.create({ ...original.toObject(), _id: undefined, quoteNumber: quoteNumber(), status: 'draft', sentAt: undefined, acceptedAt: undefined, rejectedAt: undefined, createdAt: undefined, updatedAt: undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
+  const duplicate = await Quote.create({ ...original.toObject(), _id: undefined, quoteNumber: quoteNumber(), status: 'draft', sentAt: undefined, acceptedAt: undefined, rejectedAt: undefined, pdfUrl: undefined, pdfSecureUrl: undefined, pdfPublicId: undefined, pdfGeneratedAt: undefined, createdAt: undefined, updatedAt: undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
+  await refreshQuotePdf(duplicate);
   await createRevision(duplicate, request, `Duplicado de ${original.quoteNumber}`); await LeadActivity.create({ leadId: duplicate.leadId, customerId: duplicate.customerId, type: 'quote_created', title: 'Presupuesto duplicado', description: `Se duplicó ${original.quoteNumber} como ${duplicate.quoteNumber}.`, metadata: { quoteId: duplicate._id }, createdBy: request.user!.id });
   await writeAuditLog(request, 'QUOTE_DUPLICATE', 'Quote', duplicate._id.toString(), { sourceQuoteId: original._id.toString() }); return sendSuccess(response, { quote: duplicate }, 201, getApiMessage('QUOTE_DUPLICATED'));
 }));
@@ -436,6 +466,15 @@ router.post('/:id/convert-to-event', requirePermission(Permission.EVENTS_CREATE)
 
 router.delete('/:id', requirePermission(Permission.QUOTES_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, quote); quote.deletedAt = new Date(); quote.deletedBy = request.user!.id; quote.updatedBy = request.user!.id; await quote.save();
+  const linkedRequests: any[] = await QuoteRequest.find({ convertedQuoteIds: quote._id, deletedAt: null });
+  await Promise.all(linkedRequests.map(async (quoteRequest) => {
+    const remainingQuoteIds = (quoteRequest.convertedQuoteIds ?? []).filter((quoteId: { toString(): string }) => quoteId.toString() !== quote._id.toString());
+    const activeQuotes = remainingQuoteIds.length ? await Quote.countDocuments({ _id: { $in: remainingQuoteIds }, deletedAt: null }) : 0;
+    quoteRequest.convertedQuoteIds = remainingQuoteIds;
+    if (!activeQuotes) quoteRequest.status = 'in_review';
+    quoteRequest.updatedBy = request.user!.id;
+    await quoteRequest.save();
+  }));
   await LeadActivity.create({ leadId: quote.leadId, customerId: quote.customerId, type: 'system', title: 'Presupuesto eliminado', description: `Se eliminó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id }, createdBy: request.user!.id }); await writeAuditLog(request, 'QUOTE_DELETE', 'Quote', quote._id.toString());
   return sendSuccess(response, { deleted: true }, 200, getApiMessage('QUOTE_DELETED'));
 }));

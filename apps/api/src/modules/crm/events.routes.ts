@@ -4,7 +4,7 @@ import { Permission, Role, StaffSubrole } from '@mym/shared';
 import { Contract, Customer, Event, EventStaffAssignment, LeadActivity, Payment, Quote } from './crm.models';
 import { User } from '../users/user.model';
 import { Salon } from '../salons/salon.model';
-import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -15,7 +15,9 @@ import { findOrCreateCustomer } from './contact-dedupe.service';
 import { buildInitialResourcePlan } from './event-resource-plan';
 import { createContractFromEvent } from './event-to-contract.service';
 import { convertQuoteToEvent } from './quote-to-event.service';
-import { paymentSummary } from './payments.service';
+import { createPayment, paymentSummary } from './payments.service';
+import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
+import { sendEmail } from '../email/email.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const optionalObjectId = objectId.optional().or(z.literal(''));
@@ -109,12 +111,27 @@ const updateSchema = z.object({
     menuSnapshot: z.unknown().optional(),
     servicesSnapshot: z.unknown().optional(),
     paymentSnapshot: z.unknown().optional(),
+    paymentPlanSnapshot: z.unknown().optional(),
     resourcePlanSnapshot: z.unknown().optional(),
     contractReadyChecklist: z.unknown().optional()
   }).refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'),
   params: z.object({ id: objectId }),
   query: z.object({})
 });
+const eventPaymentSchema = z.object({
+  body: z.object({
+    amount: z.coerce.number().positive(),
+    method: z.enum(['cash', 'bank_transfer', 'mercado_pago', 'card', 'other']),
+    type: z.enum(['deposit', 'installment', 'balance', 'extra', 'adjustment', 'other']).optional(),
+    paidAt: z.coerce.date().optional(),
+    reference: z.string().trim().optional(),
+    notes: z.string().trim().optional(),
+    planInstallmentId: z.string().trim().optional()
+  }),
+  params: z.object({ id: objectId }),
+  query: z.object({})
+});
+const paymentReceiptSchema = z.object({ body: z.object({ email: z.string().trim().email().optional() }).optional(), params: z.object({ id: objectId, paymentId: objectId }), query: z.object({}) });
 
 const router = Router();
 
@@ -238,7 +255,7 @@ function eventPatchFromCreateBody(body: any): Record<string, unknown> {
 
 function buildQuery(request: Request): Record<string, unknown> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }];
-  if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: request.user!.salonIds } });
+  if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: accessibleSalonIds(request.user!) } });
   const status = getQueryString(request.query.status);
   if (status && eventStatuses.includes(status as any)) terms.push({ status });
   const salonId = getQueryString(request.query.salonId);
@@ -391,6 +408,74 @@ router.get('/:id/payments', requirePermission(Permission.PAYMENTS_READ), validat
   return sendSuccess(response, { items, summary });
 }));
 
+router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(eventPaymentSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureEventAccess(request, event);
+  let contract: any = await Contract.findOne({ eventId: event._id, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).sort({ versionNumber: -1, createdAt: -1 });
+  if (!contract) throw new ApiError(422, 'Primero debe generar un contrato para registrar cobros del evento.');
+
+  const payment = await createPayment({
+    ...request.body,
+    type: request.body.type ?? 'installment',
+    status: 'paid',
+    eventId: event._id.toString(),
+    contractId: contract._id.toString(),
+    customerId: event.customerId?.toString(),
+    salonId: event.salonId?.toString(),
+    quoteId: event.quoteId?.toString()
+  }, request.user!.id);
+  contract = await Contract.findOne({ _id: contract._id, deletedAt: null });
+
+  const plan = Array.isArray(event.paymentPlanSnapshot) ? event.paymentPlanSnapshot.map((item: any) => ({ ...item })) : [];
+  if (plan.length) {
+    const selectedIndex = request.body.planInstallmentId ? plan.findIndex((item: any) => item.id === request.body.planInstallmentId) : -1;
+    const pendingIndexes = plan.map((item: any, index: number) => ({ item, index })).filter(({ item }: any) => !['paid', 'cancelled'].includes(item.status));
+    const targetIndex = selectedIndex >= 0 ? selectedIndex : pendingIndexes[0]?.index;
+    if (targetIndex !== undefined) {
+      const target = plan[targetIndex];
+      const remaining = Math.max(0, Number(target.amount || 0) - Number(target.paidAmount || 0));
+      const applied = Math.min(Number(request.body.amount), remaining);
+      target.paidAmount = Number(target.paidAmount || 0) + applied;
+      target.status = target.paidAmount >= Number(target.amount || 0) ? 'paid' : 'partial';
+      target.paymentId = payment._id.toString();
+      const excess = Math.max(0, Number(request.body.amount) - applied);
+      if (excess) {
+        const lastOpen = [...plan].reverse().find((item: any, reverseIndex: number) => !['paid', 'cancelled'].includes(item.status) && plan.length - 1 - reverseIndex !== targetIndex);
+        if (lastOpen) lastOpen.amount = Math.max(0, Number(lastOpen.amount || 0) - excess);
+      }
+    }
+    event.paymentPlanSnapshot = plan;
+    await event.save();
+    contract.paymentPlanSnapshot = plan;
+    await contract.save();
+  }
+  let receiptEmailSent = false;
+  try {
+    const customer: any = await Customer.findOne({ _id: event.customerId, deletedAt: null }).lean();
+    const receipt = await generateAndUploadPaymentReceiptPdf(payment, event, customer, contract);
+    Object.assign(payment, receipt);
+    delete (payment as any).pdfBuffer;
+    if (customer?.email) {
+      receiptEmailSent = await sendEmail({ to: customer.email, subject: `Comprobante de pago ${payment.paymentNumber} · M&M Eventos`, text: `Hola ${customer.fullName ?? ''}, adjuntamos el comprobante de tu pago por ${Number(payment.amount).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}. También podés verlo aquí: ${receipt.receiptPdfSecureUrl}`, attachments: [{ filename: `comprobante-${payment.paymentNumber}.pdf`, content: receipt.pdfBuffer, contentType: 'application/pdf' }] });
+      if (receiptEmailSent) payment.receiptEmailSentAt = new Date();
+    }
+    await payment.save();
+  } catch (error) { console.error('No se pudo generar o enviar el comprobante de pago:', error); }
+  await writeAuditLog(request, 'EVENT_PAYMENT_CREATE', 'Payment', payment._id.toString(), { eventId: request.params.id, planInstallmentId: request.body.planInstallmentId });
+  return sendSuccess(response, { payment, paymentPlanSnapshot: event.paymentPlanSnapshot, receiptEmailSent }, 201, getApiMessage('PAYMENT_CREATED'));
+}));
+
+router.post('/:id/payments/:paymentId/receipt-email', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(paymentReceiptSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean(); await ensureEventAccess(request, event);
+  const payment: any = await Payment.findOne({ _id: request.params.paymentId, eventId: event._id, deletedAt: null }); if (!payment) throw new ApiError(404, 'PAYMENT_NOT_FOUND');
+  const [customer, contract] = await Promise.all([Customer.findOne({ _id: event.customerId, deletedAt: null }).lean(), Contract.findOne({ _id: payment.contractId, deletedAt: null }).lean()]);
+  const email = request.body?.email ?? (customer as any)?.email; if (!email) throw new ApiError(422, 'El cliente no tiene un email registrado.');
+  const receipt = await generateAndUploadPaymentReceiptPdf(payment, event, customer, contract); Object.assign(payment, receipt); delete (payment as any).pdfBuffer;
+  const emailSent = await sendEmail({ to: email, subject: `Comprobante de pago ${payment.paymentNumber} · M&M Eventos`, text: `Adjuntamos tu comprobante de pago. También podés verlo aquí: ${receipt.receiptPdfSecureUrl}`, attachments: [{ filename: `comprobante-${payment.paymentNumber}.pdf`, content: receipt.pdfBuffer, contentType: 'application/pdf' }] });
+  if (emailSent) payment.receiptEmailSentAt = new Date(); await payment.save();
+  return sendSuccess(response, { payment, emailSent });
+}));
+
 router.get('/:id/staff', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
@@ -459,8 +544,8 @@ router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(id
     .populate('sourceQuoteId')
     .lean();
   await ensureEventAccess(request, event);
-  const contract = await Contract.findOne({ eventId: request.params.id, deletedAt: null }).select('contractNumber status eventId customerId salonId createdAt sentAt signedAt').lean();
-  return sendSuccess(response, { event, contract });
+  const contracts = await Contract.find({ eventId: request.params.id, deletedAt: null }).select('contractNumber status eventId customerId salonId versionNumber supersedesContractId supersededByContractId totalAmount pdfSecureUrl createdAt sentAt signedAt approvedAt').sort({ versionNumber: -1, createdAt: -1 }).lean();
+  return sendSuccess(response, { event, contract: contracts[0], contracts });
 }));
 
 router.post('/:id/create-contract', requirePermission(Permission.CONTRACTS_CREATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
@@ -472,9 +557,35 @@ router.post('/:id/create-contract', requirePermission(Permission.CONTRACTS_CREAT
 router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
+  const contractSensitiveFields = ['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'estimatedAmount', 'finalAmount', 'commercialSnapshot', 'menuSnapshot', 'servicesSnapshot', 'paymentSnapshot', 'paymentPlanSnapshot'];
+  const hasSensitiveChanges = contractSensitiveFields.some((field) => Object.prototype.hasOwnProperty.call(request.body, field) && JSON.stringify(event[field]) !== JSON.stringify(request.body[field]));
   Object.assign(event, request.body, { updatedBy: request.user!.id });
   await event.save();
-  await writeAuditLog(request, 'EVENT_UPDATE', 'Event', event._id.toString());
+  if (!hasSensitiveChanges) {
+    await writeAuditLog(request, 'EVENT_UPDATE', 'Event', event._id.toString(), { contractAffected: false });
+    return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
+  }
+  const contracts: any[] = await Contract.find({ eventId: event._id, deletedAt: null }).sort({ versionNumber: -1, createdAt: -1 });
+  const draft = contracts.find((item) => ['draft', 'pending_approval', 'requires_changes'].includes(item.status));
+  const sync = (contract: any) => {
+    contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
+    contract.commercialSnapshot = { ...(contract.commercialSnapshot ?? {}), ...(event.commercialSnapshot ?? {}), totalAmount: event.finalAmount ?? event.estimatedAmount ?? contract.commercialSnapshot?.totalAmount };
+    contract.menuSnapshot = event.menuSnapshot ?? contract.menuSnapshot;
+    contract.servicesSnapshot = event.servicesSnapshot ?? contract.servicesSnapshot;
+    contract.paymentPlanSnapshot = event.paymentPlanSnapshot ?? event.paymentSnapshot?.paymentPlan ?? contract.paymentPlanSnapshot;
+    contract.baseAmount = event.finalAmount ?? event.estimatedAmount ?? contract.baseAmount;
+    contract.updatedBy = request.user!.id;
+  };
+  if (draft) { sync(draft); await draft.save(); }
+  else {
+    const approved = contracts.find((item) => item.status === 'approved');
+    if (approved) {
+      const nextVersion = Math.max(...contracts.map((item) => Number(item.versionNumber ?? 1))) + 1;
+      const revision = new Contract({ ...approved.toObject(), _id: undefined, contractNumber: `${approved.contractNumber}-V${nextVersion}`, contractFamilyId: approved.contractFamilyId ?? approved._id, versionNumber: nextVersion, supersedesContractId: approved._id, supersededByContractId: undefined, status: 'draft', approvedAt: undefined, approvedByUserId: undefined, pdfUrl: undefined, pdfSecureUrl: undefined, pdfPublicId: undefined, pdfGeneratedAt: undefined, createdAt: undefined, updatedAt: undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
+      sync(revision); await revision.save(); approved.supersededByContractId = revision._id; await approved.save();
+    }
+  }
+  await writeAuditLog(request, 'EVENT_UPDATE', 'Event', event._id.toString(), { contractAffected: true });
   return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
 }));
 

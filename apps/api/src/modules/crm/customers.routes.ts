@@ -2,7 +2,7 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
 import { Contract, Customer, Event, LeadActivity, Payment, Quote, QuoteRequest } from './crm.models';
-import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -39,7 +39,13 @@ function splitName(body: Record<string, any>): { firstName: string; lastName: st
   return { firstName: body.firstName || parts[0] || 'Cliente', lastName: body.lastName || parts.slice(1).join(' ') || 'Sin apellido', fullName };
 }
 function scopedQuery(request: Request): Record<string, unknown>[] {
-  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonIds: { $in: request.user!.salonIds } }];
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonIds: { $in: accessibleSalonIds(request.user!) } }];
+}
+function scopedSalonQuery(request: Request, field = 'salonId'): Record<string, unknown>[] {
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ [field]: { $in: accessibleSalonIds(request.user!) } }];
+}
+function scopedQuoteRequestQuery(request: Request): Record<string, unknown>[] {
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ interestedSalonIds: { $in: accessibleSalonIds(request.user!) } }, { $or: [{ assignedToUserId: { $exists: false } }, { assignedToUserId: null }, { assignedToUserId: request.user!.id }] }];
 }
 async function ensureCustomerAccess(request: Request, customer: any): Promise<void> {
   if (!customer || customer.deletedAt) throw new ApiError(404, 'CUSTOMER_NOT_FOUND');
@@ -89,12 +95,12 @@ router.get('/:id', requirePermission(Permission.CUSTOMERS_READ), validateRequest
   const customer = await Customer.findOne({ _id: request.params.id, deletedAt: null }).populate('sourceLeadId', 'fullName phone email').lean();
   await ensureCustomerAccess(request, customer);
   const [quotes, events, quoteRequests, contracts, payments, summary, activities] = await Promise.all([
-    Quote.find({ customerId: request.params.id, deletedAt: null }).populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
-    Event.find({ customerId: request.params.id, deletedAt: null }).populate('salonId', 'name').sort({ eventDate: -1, createdAt: -1 }).lean(),
-    QuoteRequest.find({ customerId: request.params.id, deletedAt: null }).sort({ createdAt: -1 }).lean(),
-    Contract.find({ customerId: request.params.id, deletedAt: null }).populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
-    Payment.find({ customerId: request.params.id, deletedAt: null }).populate('contractId', 'contractNumber totalAmount balanceAmount status').populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name').sort({ paidAt: -1, dueDate: 1, createdAt: -1 }).limit(50).lean(),
-    paymentSummary({ customerId: request.params.id }),
+    Quote.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
+    Event.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').sort({ eventDate: -1, createdAt: -1 }).lean(),
+    QuoteRequest.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedQuoteRequestQuery(request)] }).sort({ createdAt: -1 }).lean(),
+    Contract.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
+    Payment.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('contractId', 'contractNumber totalAmount balanceAmount status').populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name').sort({ paidAt: -1, dueDate: 1, createdAt: -1 }).limit(50).lean(),
+    paymentSummary({ $and: [{ customerId: request.params.id }, ...scopedSalonQuery(request)] }),
     LeadActivity.find({ customerId: request.params.id }).sort({ createdAt: -1 }).limit(50).lean()
   ]);
   return sendSuccess(response, { customer, quotes, events, quoteRequests, contracts, payments, paymentSummary: summary, activities });
@@ -123,29 +129,29 @@ router.delete('/:id', requirePermission(Permission.CUSTOMERS_DELETE), validateRe
 router.get('/:id/quotes', requirePermission(Permission.QUOTES_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const customer = await Customer.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureCustomerAccess(request, customer);
-  const quotes = await Quote.find({ customerId: request.params.id, deletedAt: null }).populate('salonId', 'name').sort({ createdAt: -1 }).lean();
+  const quotes = await Quote.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').sort({ createdAt: -1 }).lean();
   return sendSuccess(response, { quotes });
 }));
 
 router.get('/:id/events', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const customer = await Customer.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureCustomerAccess(request, customer);
-  const events = await Event.find({ customerId: request.params.id, deletedAt: null }).populate('salonId', 'name').sort({ eventDate: -1, createdAt: -1 }).lean();
+  const events = await Event.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').sort({ eventDate: -1, createdAt: -1 }).lean();
   return sendSuccess(response, { events });
 }));
 
 router.get('/:id/payments', requirePermission(Permission.PAYMENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const customer = await Customer.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureCustomerAccess(request, customer);
-  const items = await Payment.find({ customerId: request.params.id, deletedAt: null }).populate('contractId', 'contractNumber totalAmount balanceAmount status').populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name').sort({ paidAt: -1, dueDate: 1, createdAt: -1 }).lean();
-  const summary = await paymentSummary({ customerId: request.params.id });
+  const items = await Payment.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('contractId', 'contractNumber totalAmount balanceAmount status').populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name').sort({ paidAt: -1, dueDate: 1, createdAt: -1 }).lean();
+  const summary = await paymentSummary({ $and: [{ customerId: request.params.id }, ...scopedSalonQuery(request)] });
   return sendSuccess(response, { items, summary });
 }));
 
 router.get('/:id/payment-summary', requirePermission(Permission.PAYMENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const customer = await Customer.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureCustomerAccess(request, customer);
-  return sendSuccess(response, { summary: await paymentSummary({ customerId: request.params.id }) });
+  return sendSuccess(response, { summary: await paymentSummary({ $and: [{ customerId: request.params.id }, ...scopedSalonQuery(request)] }) });
 }));
 
 router.get('/:id/activity', requirePermission(Permission.CUSTOMERS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {

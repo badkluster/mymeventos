@@ -54,6 +54,29 @@ function inputDateTime(value?: string) {
   return offsetDate.toISOString().slice(0, 16);
 }
 
+type Installment = {
+  id?: string;
+  label?: string;
+  amount?: number;
+  dueDate?: string;
+  paymentWindowStart?: string;
+  paymentWindowEnd?: string;
+  status?: string;
+  notes?: string;
+};
+
+function dateOnly(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function monthDay(date: Date, day: number) {
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  return new Date(date.getFullYear(), date.getMonth(), Math.min(Math.max(1, day), lastDay), 12);
+}
+
 export function normalizeResourcePlan(plan?: EventResourcePlan): EventResourcePlan {
   return {
     timelineItems: Array.isArray(plan?.timelineItems) ? plan.timelineItems : [],
@@ -181,6 +204,48 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
       <Field label="Notas internas" className="md:col-span-2 xl:col-span-4"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
     </div>
     <SaveBar saving={saving} onSave={save} text="Guardar ficha" />
+  </SectionCard>;
+}
+
+export function EventCommercialEditor({ event, saving, onSave }: { event: Event; saving: boolean; onSave: SaveEvent }) {
+  const initial = event.commercialSnapshot ?? {};
+  const [form, setForm] = useState({ total: String(event.finalAmount ?? event.estimatedAmount ?? initial.totalAmount ?? ''), deposit: String(initial.depositAmount ?? ''), paymentTerms: String(initial.paymentTerms ?? ''), installments: event.paymentPlanSnapshot ?? [] as Installment[] });
+  const [generator, setGenerator] = useState({ count: '1', firstDueDate: '', frequency: 'monthly', windowStartDay: '1', windowEndDay: '10' });
+  const updateInstallment = (index: number, changes: Record<string, unknown>) => setForm((current) => ({ ...current, installments: current.installments.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item) }));
+  const total = numeric(form.total) ?? 0;
+  const deposit = numeric(form.deposit) ?? 0;
+  const generateInstallments = () => {
+    const count = Math.max(1, Math.floor(Number(generator.count) || 1));
+    const balance = Math.max(0, total - deposit);
+    const base = Math.floor(balance / count);
+    // La fecha elegida representa el cierre del primer período: 10/08 con ventana 1-10 genera 1/08 a 10/08.
+    const start = generator.firstDueDate ? new Date(`${generator.firstDueDate}T12:00:00`) : new Date();
+    const startDay = Math.min(31, Math.max(1, Math.floor(Number(generator.windowStartDay) || 1)));
+    const endDay = Math.min(31, Math.max(startDay, Math.floor(Number(generator.windowEndDay) || startDay)));
+    const months = generator.frequency === 'monthly' ? 1 : generator.frequency === 'bimonthly' ? 2 : 3;
+    setForm((current) => ({ ...current, installments: Array.from({ length: count }, (_, index) => {
+      const period = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12);
+      if (generator.frequency === 'biweekly') period.setDate(start.getDate() + index * 15);
+      else period.setMonth(start.getMonth() + index * months);
+      const windowStart = generator.frequency === 'biweekly' ? new Date(period) : monthDay(period, startDay);
+      const windowEnd = generator.frequency === 'biweekly' ? new Date(period.getFullYear(), period.getMonth(), period.getDate() + 14, 12) : monthDay(period, endDay);
+      return {
+        id: makeId(),
+        label: `Cuota ${index + 1} de ${count}`,
+        amount: index === count - 1 ? balance - base * (count - 1) : base,
+        dueDate: dateOnly(windowEnd),
+        paymentWindowStart: dateOnly(windowStart),
+        paymentWindowEnd: dateOnly(windowEnd),
+        status: 'scheduled',
+        notes: ''
+      };
+    }) }));
+  };
+  return <SectionCard title="Valores y plan de pagos" icon={<ClipboardCheck className="h-4 w-4" />}>
+    <div className="grid gap-4 md:grid-cols-3"><Field label="Total acordado"><Input type="number" min={0} value={form.total} onChange={(event) => setForm((current) => ({ ...current, total: event.target.value }))} /></Field><Field label="Seña"><Input type="number" min={0} value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} /></Field><Field label="Saldo estimado"><div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-semibold">{Math.max(0, total - deposit).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div></Field><Field label="Condiciones de pago" className="md:col-span-3"><Textarea value={form.paymentTerms} onChange={(event) => setForm((current) => ({ ...current, paymentTerms: event.target.value }))} placeholder="Ej.: seña al reservar y saldo en cuotas mensuales." /></Field></div>
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4"><p className="font-medium text-amber-950">Generar cuotas automáticamente</p><p className="mt-1 text-sm text-amber-800">Cada cuota queda programada con su período de pago para usar en alertas y recordatorios.</p><div className="mt-3 grid gap-3 md:grid-cols-6"><Field label="Cantidad de cuotas"><Input type="number" min={1} max={60} value={generator.count} onChange={(event) => setGenerator((current) => ({ ...current, count: event.target.value }))} /></Field><Field label="Primer período"><Input type="date" value={generator.firstDueDate} onChange={(event) => setGenerator((current) => ({ ...current, firstDueDate: event.target.value }))} /></Field><Field label="Frecuencia"><Select value={generator.frequency} onChange={(event) => setGenerator((current) => ({ ...current, frequency: event.target.value }))}><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option><option value="bimonthly">Bimestral</option><option value="quarterly">Trimestral</option></Select></Field>{generator.frequency !== 'biweekly' && <><Field label="Paga desde el día"><Input type="number" min={1} max={31} value={generator.windowStartDay} onChange={(event) => setGenerator((current) => ({ ...current, windowStartDay: event.target.value }))} /></Field><Field label="Hasta el día"><Input type="number" min={1} max={31} value={generator.windowEndDay} onChange={(event) => setGenerator((current) => ({ ...current, windowEndDay: event.target.value }))} /></Field></>}<div className="flex items-end"><Button type="button" variant="secondary" onClick={generateInstallments}>Generar plan</Button></div></div><p className="mt-3 text-xs text-amber-800">{generator.frequency === 'biweekly' ? 'Las cuotas quincenales se generan cada 15 días y cada ventana abarca los 15 días del período.' : 'Ejemplo: del día 1 al 10 de cada período. El vencimiento será el último día de esa ventana.'}</p></div>
+    <div className="space-y-3">{form.installments.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 md:grid-cols-[minmax(150px,1fr)_140px_155px_155px_130px_44px]"><Input value={item.label ?? ''} onChange={(event) => updateInstallment(index, { label: event.target.value })} placeholder="Seña / Cuota" /><Input type="number" min={0} value={item.amount ?? 0} onChange={(event) => updateInstallment(index, { amount: Number(event.target.value) })} /><Field label="Paga desde"><Input type="date" value={item.paymentWindowStart?.slice(0, 10) ?? ''} onChange={(event) => updateInstallment(index, { paymentWindowStart: event.target.value || undefined })} /></Field><Field label="Hasta"><Input type="date" value={item.paymentWindowEnd?.slice(0, 10) ?? item.dueDate?.slice(0, 10) ?? ''} onChange={(event) => updateInstallment(index, { paymentWindowEnd: event.target.value || undefined, dueDate: event.target.value || undefined })} /></Field><Select value={item.status ?? 'pending'} onChange={(event) => updateInstallment(index, { status: event.target.value })}><option value="pending">Pendiente</option><option value="scheduled">Programada</option><option value="paid">Cobrada</option></Select><IconButton label="Quitar cuota" disabled={saving} onClick={() => setForm((current) => ({ ...current, installments: current.installments.filter((_, itemIndex) => itemIndex !== index) }))} /></div>)}</div>
+    <SaveBar saving={saving} text="Guardar valores y plan de pagos" onSave={() => onSave({ finalAmount: total, estimatedAmount: total, commercialSnapshot: { ...initial, totalAmount: total, depositAmount: deposit, balanceAmount: Math.max(0, total - deposit), paymentTerms: form.paymentTerms }, paymentPlanSnapshot: form.installments })} />
   </SectionCard>;
 }
 

@@ -14,7 +14,12 @@ import { cleanMenuSections, cleanStringList, MenuSectionsEditor, StringListEdito
 import { eventTypeOptions, money, type PackageRule, type Salon, type SalonExtra, type SalonMedia, type UserOption } from '@/features/salons/types';
 
 type Tab = 'general' | 'commercial' | 'packages' | 'extras' | 'landing';
+type TemplateScope = 'salon' | 'global';
 type RuleForm = {
+  name: string;
+  durationHours: number;
+  startTime: string;
+  endTime: string;
   active: boolean;
   pricingMode: 'per_person' | 'fixed';
   pricePerPerson: number;
@@ -80,6 +85,10 @@ const errorMessage = (error: unknown, fallback: string) => {
 
 function ruleToForm(rule: PackageRule): RuleForm {
   return {
+    name: rule.packageName,
+    durationHours: rule.durationHours ?? 0,
+    startTime: rule.startTime ?? '',
+    endTime: rule.endTime ?? '',
     active: rule.active ?? true,
     pricingMode: rule.pricingMode === 'fixed' ? 'fixed' : 'per_person',
     pricePerPerson: rule.pricePerPerson ?? 0,
@@ -109,6 +118,7 @@ export default function SalonDetailPage() {
   const [editingRule, setEditingRule] = useState<PackageRule>();
   const [ruleForm, setRuleForm] = useState<RuleForm>();
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateScope, setTemplateScope] = useState<TemplateScope>('salon');
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplate);
   const [extraForm, setExtraForm] = useState<SalonExtra>(emptyExtra);
   const [editingExtraIndex, setEditingExtraIndex] = useState<number | null>(null);
@@ -248,6 +258,7 @@ export default function SalonDetailPage() {
     await saveSalon({
       defaultDepositAmount: toNumber(form.get('defaultDepositAmount')),
       minimumDepositAmount: toNumber(form.get('minimumDepositAmount')),
+      defaultSecurityDepositAmount: toNumber(form.get('defaultSecurityDepositAmount')),
       defaultLateFeePercentage: toNumber(form.get('defaultLateFeePercentage')),
       defaultQuoteValidityDays: toNumber(form.get('defaultQuoteValidityDays')),
       defaultPaymentTerms: toText(form.get('defaultPaymentTerms')),
@@ -353,6 +364,41 @@ export default function SalonDetailPage() {
     setRuleForm(ruleToForm(rule));
   }
 
+  function openTemplate(scope: TemplateScope) {
+    setTemplateScope(scope);
+    setTemplateOpen(true);
+  }
+
+  async function toggleRule(rule: PackageRule) {
+    setSaving(true);
+    setNotice('');
+    try {
+      const active = rule.active === false;
+      await api.patch(`/salons/${salonId}/package-rules/${rule.packageTemplateId}`, { active });
+      setNotice(active ? 'Regla activada correctamente.' : 'Regla desactivada correctamente.');
+      await load();
+    } catch (error) {
+      setNotice(errorMessage(error, 'No se pudo cambiar el estado de la regla.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeRule(rule: PackageRule) {
+    if (!window.confirm(`¿Eliminar la regla de “${rule.packageName}” para ${salon?.name ?? 'este salón'}?`)) return;
+    setSaving(true);
+    setNotice('');
+    try {
+      await api.delete(`/salons/${salonId}/package-rules/${rule.packageTemplateId}`);
+      setNotice('Regla eliminada correctamente.');
+      await load();
+    } catch (error) {
+      setNotice(errorMessage(error, 'No se pudo eliminar la regla del paquete.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editingRule || !ruleForm) return;
@@ -362,6 +408,10 @@ export default function SalonDetailPage() {
       const price = Number(ruleForm.pricingMode === 'fixed' ? ruleForm.fixedPrice : ruleForm.pricePerPerson || 0);
       const discount = Number(ruleForm.discountPercentage || 0);
       await api.patch(`/salons/${salonId}/package-rules/${editingRule.packageTemplateId}`, {
+        name: ruleForm.name.trim(),
+        durationHours: Number(ruleForm.durationHours || 0) || undefined,
+        startTime: ruleForm.startTime.trim(),
+        endTime: ruleForm.endTime.trim(),
         active: ruleForm.active,
         pricingMode: ruleForm.pricingMode,
         pricePerPerson: ruleForm.pricingMode === 'per_person' ? price : 0,
@@ -399,7 +449,8 @@ export default function SalonDetailPage() {
       await api.post('/quotes/packages', {
         name: templateForm.name.trim(),
         active: true,
-        isGlobal: true,
+        isGlobal: templateScope === 'global',
+        salonIds: templateScope === 'salon' ? [salonId] : [],
         durationHours: Number(templateForm.durationHours || 8),
         startTime: templateForm.startTime,
         endTime: templateForm.endTime,
@@ -419,10 +470,10 @@ export default function SalonDetailPage() {
       });
       setTemplateOpen(false);
       setTemplateForm(emptyTemplate);
-      setNotice('Plantilla global de paquete creada correctamente. Ahora podés editar su regla para este salón.');
+      setNotice(templateScope === 'global' ? 'Paquete global creado correctamente. Ahora podés editar su regla para este salón.' : 'Paquete creado correctamente para este salón.');
       await load();
     } catch (error) {
-      setNotice(errorMessage(error, 'No se pudo crear la plantilla global del paquete.'));
+      setNotice(errorMessage(error, 'No se pudo crear el paquete.'));
     } finally {
       setSaving(false);
     }
@@ -484,16 +535,16 @@ export default function SalonDetailPage() {
       <footer className="lg:col-span-3 flex justify-end"><Button disabled={saving}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar general'}</Button></footer>
     </form>}
     {tab === 'commercial' && <form onSubmit={saveCommercial} className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-3">
-      <Field label="Seña sugerida"><Input name="defaultDepositAmount" type="number" min={0} defaultValue={salon.defaultDepositAmount ?? 0} /></Field><Field label="Seña mínima"><Input name="minimumDepositAmount" type="number" min={0} defaultValue={salon.minimumDepositAmount ?? 0} /></Field><Field label="Interés por mora (%)"><Input name="defaultLateFeePercentage" type="number" min={0} max={100} defaultValue={salon.defaultLateFeePercentage ?? 0} /></Field>
+      <Field label="Seña sugerida"><Input name="defaultDepositAmount" type="number" min={0} defaultValue={salon.defaultDepositAmount ?? 0} /></Field><Field label="Seña mínima"><Input name="minimumDepositAmount" type="number" min={0} defaultValue={salon.minimumDepositAmount ?? 0} /></Field><Field label="Fondo de garantía"><Input name="defaultSecurityDepositAmount" type="number" min={0} defaultValue={salon.defaultSecurityDepositAmount ?? 0} /></Field><Field label="Interés por mora (%)"><Input name="defaultLateFeePercentage" type="number" min={0} max={100} defaultValue={salon.defaultLateFeePercentage ?? 0} /></Field>
       <Field label="Días de validez del presupuesto"><Input name="defaultQuoteValidityDays" type="number" min={1} defaultValue={salon.defaultQuoteValidityDays ?? 7} /></Field><Field label="Condiciones de pago default" className="lg:col-span-2"><Textarea name="defaultPaymentTerms" defaultValue={salon.defaultPaymentTerms} /></Field>
       <Field label="Condiciones contractuales default" className="lg:col-span-3"><Textarea name="defaultContractTerms" defaultValue={salon.defaultContractTerms} /></Field><Field label="Notas comerciales" className="lg:col-span-3"><Textarea name="commercialNotes" defaultValue={salon.commercialNotes} /></Field>
       <footer className="lg:col-span-3 flex justify-end"><Button disabled={saving}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar comercial'}</Button></footer>
     </form>}
-    {tab === 'packages' && <div className="grid gap-4"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div><h2 className="font-semibold text-zinc-950">Paquetes globales y reglas del salón</h2><p className="mt-1 text-sm text-zinc-500">Creá plantillas globales y configurá los valores específicos para {salon.name}.</p></div><Button onClick={() => setTemplateOpen(true)}><Plus className="mr-2 h-4 w-4" />Nuevo paquete global</Button></div>{packageRules.map((rule) => {
+    {tab === 'packages' && <div className="grid gap-4"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div><h2 className="font-semibold text-zinc-950">Paquetes y reglas del salón</h2><p className="mt-1 text-sm text-zinc-500">Los paquetes nuevos se asignan sólo a {salon.name}. Creá uno global únicamente si debe estar disponible para todos los salones.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => openTemplate('salon')}><Plus className="mr-2 h-4 w-4" />Nuevo paquete para este salón</Button><Button variant="secondary" onClick={() => openTemplate('global')}><Plus className="mr-2 h-4 w-4" />Nuevo paquete global</Button></div></div>{packageRules.map((rule) => {
       const fixed = rule.pricingMode === 'fixed';
       const basePrice = fixed ? rule.fixedPrice ?? 0 : rule.pricePerPerson ?? 0;
       const final = Math.round(basePrice * (1 - (rule.discountPercentage ?? 0) / 100));
-      return <article key={rule.packageTemplateId} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><PackageCheck className="h-4 w-4" />{rule.packageName}</h2><p className="mt-1 text-sm text-zinc-500">{rule.ruleConfigured ? 'Regla específica del salón' : 'Sin regla configurada para este salón'}</p></div><Button variant="secondary" onClick={() => openRule(rule)}><Pencil className="mr-2 h-4 w-4" />Editar regla</Button></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5"><Metric label="Estado" value={rule.active === false ? 'Inactivo' : 'Activo'} /><Metric label="Modalidad" value={fixed ? 'Precio total' : 'Por persona'} /><Metric label="Valor base" value={money(basePrice)} /><Metric label="Valor final" value={money(fixed ? rule.finalFixedPrice ?? final : rule.finalPricePerPerson ?? final)} /><Metric label="Seña" value={money(rule.depositAmount)} /></dl><div className="mt-4 grid gap-3 text-sm lg:grid-cols-3"><Metric label="Promoción" value={rule.promotionText || 'Sin promoción'} /><Metric label="Regalo" value={rule.giftText || 'Sin regalo'} /><Metric label="Condiciones" value={rule.paymentTerms || 'Sin condiciones'} /></div></article>;
+      return <article key={rule.packageTemplateId} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><PackageCheck className="h-4 w-4" />{rule.packageName}</h2><p className="mt-1 text-sm text-zinc-500">{rule.isGlobal ? 'Plantilla global: se puede activar o desactivar sólo para este salón.' : 'Paquete propio del salón'} · {rule.ruleConfigured ? 'Regla específica del salón' : 'Sin regla configurada para este salón'}</p></div><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => openRule(rule)}><Pencil className="mr-2 h-4 w-4" />Editar regla</Button><Button variant="secondary" disabled={saving} onClick={() => void toggleRule(rule)}>{rule.active === false ? rule.isGlobal ? 'Activar en este salón' : 'Activar' : rule.isGlobal ? 'Desactivar en este salón' : 'Desactivar'}</Button>{!rule.isGlobal && rule.ruleConfigured ? <Button variant="danger" disabled={saving} onClick={() => void removeRule(rule)}><Trash2 className="mr-2 h-4 w-4" />Eliminar regla</Button> : null}</div></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5"><Metric label="Estado" value={rule.active === false ? 'Inactivo' : 'Activo'} /><Metric label="Horario" value={[rule.startTime, rule.endTime].filter(Boolean).join(' a ') || 'Sin definir'} /><Metric label="Duración" value={rule.durationHours ? `${rule.durationHours} h` : 'Sin definir'} /><Metric label="Modalidad" value={fixed ? 'Precio total' : 'Por persona'} /><Metric label="Valor final" value={money(fixed ? rule.finalFixedPrice ?? final : rule.finalPricePerPerson ?? final)} /></dl><div className="mt-4 grid gap-3 text-sm lg:grid-cols-3"><Metric label="Promoción" value={rule.promotionText || 'Sin promoción'} /><Metric label="Regalo" value={rule.giftText || 'Sin regalo'} /><Metric label="Condiciones" value={rule.paymentTerms || 'Sin condiciones'} /></div></article>;
     })}</div>}
     {tab === 'extras' && <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-3">{extras.map((extra, index) => <article key={extra._id ?? `${extra.name}-${index}`} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">{extra.name}</h2><p className="mt-1 text-sm text-zinc-500">{extra.description || 'Sin descripción'}</p></div><div className="flex gap-2"><Button variant="secondary" onClick={() => { setExtraForm(extra); setEditingExtraIndex(index); }}><Pencil className="mr-2 h-4 w-4" />Editar</Button><Button variant="secondary" onClick={() => void saveExtras(extras.map((item, itemIndex) => itemIndex === index ? { ...item, active: !item.active } : item))}>{extra.active ? 'Desactivar' : 'Activar'}</Button><Button variant="danger" onClick={() => void saveExtras(extras.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button></div></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4"><Metric label="Precio sugerido" value={money(extra.basePrice)} /><Metric label="Estado" value={extra.active ? 'Activo' : 'Inactivo'} /><Metric label="Tipo" value={extra.includedByDefault ? 'Incluido' : 'Adicional'} /><Metric label="Web" value={extra.publicVisible ? 'Visible' : 'Oculto'} /></dl></article>)}
@@ -514,6 +565,8 @@ export default function SalonDetailPage() {
     </form>}
     <Modal open={Boolean(editingRule && ruleForm)} onClose={() => { setEditingRule(undefined); setRuleForm(undefined); }} title={`Editar regla · ${editingRule?.packageName ?? ''}`} description="Estos cambios afectan sólo la regla del salón, no la plantilla global del paquete.">
       {ruleForm && <form onSubmit={saveRule} className="grid gap-4 p-6 sm:grid-cols-2">
+        <Field label="Nombre para este salón" className="sm:col-span-2"><Input value={ruleForm.name} onChange={(event) => setRuleForm((current) => current && { ...current, name: event.target.value })} required /></Field>
+        <Field label="Duración (horas)"><Input type="number" min={1} value={ruleForm.durationHours || ''} onChange={(event) => setRuleForm((current) => current && { ...current, durationHours: Number(event.target.value) })} /></Field><div className="grid grid-cols-2 gap-3"><Field label="Inicio"><Input type="time" value={ruleForm.startTime} onChange={(event) => setRuleForm((current) => current && { ...current, startTime: event.target.value })} /></Field><Field label="Fin"><Input type="time" value={ruleForm.endTime} onChange={(event) => setRuleForm((current) => current && { ...current, endTime: event.target.value })} /></Field></div>
         <label className="flex items-center gap-2 text-sm text-zinc-700 sm:col-span-2"><input type="checkbox" checked={ruleForm.active} onChange={(event) => setRuleForm((current) => current && { ...current, active: event.target.checked })} />Paquete activo para este salón</label>
         <Field label="Modalidad de cobro" className="sm:col-span-2"><Select value={ruleForm.pricingMode} onChange={(event) => setRuleForm((current) => current && { ...current, pricingMode: event.target.value as RuleForm['pricingMode'] })}><option value="per_person">Precio por persona</option><option value="fixed">Precio total del evento</option></Select></Field>
         <Field label={ruleForm.pricingMode === 'fixed' ? 'Precio total' : 'Valor por persona'}><Input type="number" min={0} value={ruleForm.pricingMode === 'fixed' ? ruleForm.fixedPrice : ruleForm.pricePerPerson} onChange={(event) => setRuleForm((current) => current && (current.pricingMode === 'fixed' ? { ...current, fixedPrice: Number(event.target.value) } : { ...current, pricePerPerson: Number(event.target.value) }))} /></Field><Field label="Descuento (%)"><Input type="number" min={0} max={100} value={ruleForm.discountPercentage} onChange={(event) => setRuleForm((current) => current && { ...current, discountPercentage: Number(event.target.value) })} /></Field>
@@ -524,7 +577,7 @@ export default function SalonDetailPage() {
         <footer className="flex justify-end gap-3 sm:col-span-2"><Button type="button" variant="secondary" onClick={() => { setEditingRule(undefined); setRuleForm(undefined); }}>Cancelar</Button><Button disabled={saving}><Check className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar regla'}</Button></footer>
       </form>}
     </Modal>
-    <Modal open={templateOpen} onClose={() => setTemplateOpen(false)} title="Nuevo paquete global" description="Crea una plantilla global disponible para todos los salones. Luego se configura la regla específica de cada salón.">
+    <Modal open={templateOpen} onClose={() => setTemplateOpen(false)} title={templateScope === 'global' ? 'Nuevo paquete global' : `Nuevo paquete para ${salon.name}`} description={templateScope === 'global' ? 'Este paquete estará disponible para todos los salones.' : 'Este paquete quedará disponible únicamente para este salón.'}>
       <form onSubmit={saveTemplate} className="grid gap-4 p-6 sm:grid-cols-2">
         <Field label="Nombre del paquete" className="sm:col-span-2"><Input value={templateForm.name} onChange={(event) => setTemplateForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ej: Golden Night" required /></Field>
         <Field label="Duración"><Input type="number" min={1} value={templateForm.durationHours} onChange={(event) => setTemplateForm((current) => ({ ...current, durationHours: Number(event.target.value) }))} /></Field>
@@ -540,7 +593,7 @@ export default function SalonDetailPage() {
         <div className="sm:col-span-2"><MenuSectionsEditor value={templateForm.menuSections} onChange={(menuSections) => setTemplateForm((current) => ({ ...current, menuSections }))} /></div>
         <div className="sm:col-span-2"><StringListEditor label="Servicios incluidos" values={templateForm.includedServices} onChange={(includedServices) => setTemplateForm((current) => ({ ...current, includedServices }))} /></div>
         <Field label="Notas internas" className="sm:col-span-2"><Textarea value={templateForm.notes} onChange={(event) => setTemplateForm((current) => ({ ...current, notes: event.target.value }))} /></Field>
-        <footer className="flex justify-end gap-3 sm:col-span-2"><Button type="button" variant="secondary" onClick={() => setTemplateOpen(false)}>Cancelar</Button><Button disabled={saving}>{saving ? 'Creando…' : 'Crear paquete global'}</Button></footer>
+        <footer className="flex justify-end gap-3 sm:col-span-2"><Button type="button" variant="secondary" onClick={() => setTemplateOpen(false)}>Cancelar</Button><Button disabled={saving}>{saving ? 'Creando…' : templateScope === 'global' ? 'Crear paquete global' : 'Crear paquete para este salón'}</Button></footer>
       </form>
     </Modal>
     <Modal open={removeOpen} onClose={() => setRemoveOpen(false)} title="Eliminar salón" description="El salón se eliminará con borrado lógico.">

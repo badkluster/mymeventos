@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ChevronLeft, MessageCircle, ReceiptText, UserCheck } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -17,6 +18,7 @@ const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat('es-A
 
 export default function QuoteRequestDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [id, setId] = useState('');
   const [quoteRequest, setQuoteRequest] = useState<QuoteRequest>();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -65,10 +67,11 @@ export default function QuoteRequestDetailPage({ params }: { params: Promise<{ i
     if (!quoteRequest) return;
     setSaving(true);
     try {
-      await api.post(`/quote-requests/${quoteRequest._id}/convert-to-quotes`, payload);
+      const result = await api.post<{ quotes?: Quote[] }>(`/quote-requests/${quoteRequest._id}/convert-to-quotes`, payload);
       setFormOpen(false);
       notice('Solicitud presupuestada correctamente.');
-      await load(id);
+      const firstQuoteId = result.quotes?.[0]?._id;
+      router.push(firstQuoteId ? `/admin/quotes/${firstQuoteId}` : '/admin/quotes');
     } catch (error) {
       notice(error instanceof Error ? error.message : 'No se pudo generar el presupuesto.', 'error');
       throw error;

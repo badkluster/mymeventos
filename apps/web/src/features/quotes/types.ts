@@ -102,6 +102,18 @@ export type Event = {
   menuSnapshot?: { title?: string; items?: string[] }[];
   servicesSnapshot?: string[];
   paymentSnapshot?: Record<string, unknown>;
+  paymentPlanSnapshot?: Array<{
+    id?: string;
+    label?: string;
+    amount?: number;
+    paidAmount?: number;
+    paymentId?: string;
+    dueDate?: string;
+    paymentWindowStart?: string;
+    paymentWindowEnd?: string;
+    status?: string;
+    notes?: string;
+  }>;
   resourcePlanSnapshot?: EventResourcePlan;
   contractReadyChecklist?: Record<string, boolean>;
   notes?: string;
@@ -117,6 +129,9 @@ export type Contract = {
   leadId?: string | LeadOption;
   salonId: string | Salon;
   status: string;
+  versionNumber?: number;
+  supersedesContractId?: string;
+  supersededByContractId?: string;
   customerSnapshot?: Record<string, unknown>;
   eventSnapshot?: Record<string, unknown>;
   commercialSnapshot?: Record<string, unknown>;
@@ -137,6 +152,10 @@ export type Contract = {
   approvedAt?: string;
   approvedByUserId?: string;
   cancelledAt?: string;
+  pdfUrl?: string;
+  pdfSecureUrl?: string;
+  pdfPublicId?: string;
+  pdfGeneratedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -175,6 +194,11 @@ export type Payment = {
   dueDate?: string;
   paidAt?: string;
   receiptNumber?: string;
+  receiptPdfUrl?: string;
+  receiptPdfSecureUrl?: string;
+  receiptPdfPublicId?: string;
+  receiptPdfGeneratedAt?: string;
+  receiptEmailSentAt?: string;
   reference?: string;
   notes?: string;
   affectsContractBalance?: boolean;

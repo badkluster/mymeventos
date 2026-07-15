@@ -138,12 +138,12 @@ describe('salons management', () => {
     const response = await request(app)
       .patch(`/api/salons/${salonId}/package-rules/${packageTemplateId}`)
       .set('Cookie', adminCookie)
-      .send({ active: true, pricePerPerson: 123000, discountPercentage: 10, depositAmount: 500000 });
+      .send({ name: 'Noche Mágica San Carlos', durationHours: 6, startTime: '20:00', endTime: '02:00', active: true, pricePerPerson: 123000, discountPercentage: 10, depositAmount: 500000 });
 
     expect(response.status).toBe(200);
     expect(mocks.ruleFindOneAndUpdate).toHaveBeenCalledWith(
       { packageTemplateId, salonId },
-      expect.objectContaining({ pricePerPerson: 123000, packageTemplateId, salonId }),
+      expect.objectContaining({ name: 'Noche Mágica San Carlos', durationHours: 6, startTime: '20:00', endTime: '02:00', pricePerPerson: 123000, packageTemplateId, salonId }),
       expect.objectContaining({ upsert: true, new: true })
     );
     expect(mocks.packageFind).not.toHaveBeenCalled();
@@ -152,12 +152,35 @@ describe('salons management', () => {
   it('returns package rules for a salon detail tab', async () => {
     mocks.salonFindOne.mockReturnValue(chainLean({ _id: salonId, name: 'San Carlos' }));
     mocks.packageFind.mockReturnValue({ sort: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue([{ _id: packageTemplateId, name: 'Magic Night', active: true, isGlobal: true }]) }) });
-    mocks.ruleFind.mockReturnValue(chainLean([{ packageTemplateId, salonId, active: true, pricePerPerson: 100000 }]));
+    mocks.ruleFind.mockReturnValue(chainLean([{ packageTemplateId, salonId, name: 'Noche Mágica San Carlos', active: true, pricePerPerson: 100000 }]));
 
     const response = await request(app).get(`/api/salons/${salonId}/package-rules`).set('Cookie', adminCookie);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.packageRules[0]).toMatchObject({ packageTemplateId, packageName: 'Magic Night', ruleConfigured: true, pricePerPerson: 100000 });
+    expect(response.body.data.packageRules[0]).toMatchObject({ packageTemplateId, packageName: 'Noche Mágica San Carlos', ruleConfigured: true, pricePerPerson: 100000 });
+  });
+
+  it('soft deletes a package rule for a salon', async () => {
+    mocks.ruleFindOneAndUpdate.mockResolvedValue({ _id: '507f1f77bcf86cd799439015', packageTemplateId, salonId });
+
+    const response = await request(app).delete(`/api/salons/${salonId}/package-rules/${packageTemplateId}`).set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ deleted: true });
+    expect(mocks.ruleFindOneAndUpdate).toHaveBeenCalledWith(
+      { packageTemplateId, salonId, deletedAt: null },
+      expect.objectContaining({ deletedAt: expect.any(Date), deletedBy: adminId, updatedBy: adminId }),
+      { new: true }
+    );
+  });
+
+  it('does not allow deleting a rule for a global package', async () => {
+    mocks.packageExists.mockResolvedValue({ _id: packageTemplateId });
+
+    const response = await request(app).delete(`/api/salons/${salonId}/package-rules/${packageTemplateId}`).set('Cookie', adminCookie);
+
+    expect(response.status).toBe(422);
+    expect(mocks.ruleFindOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('returns extras for a salon detail tab', async () => {

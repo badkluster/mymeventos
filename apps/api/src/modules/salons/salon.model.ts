@@ -61,6 +61,7 @@ const salonSchema = new Schema({
   operationalNotes: String,
   defaultDepositAmount: { type: Number, default: 0 },
   minimumDepositAmount: { type: Number, default: 0 },
+  defaultSecurityDepositAmount: { type: Number, default: 0 },
   defaultLateFeePercentage: { type: Number, default: 0 },
   defaultPaymentTerms: String,
   defaultQuoteValidityDays: { type: Number, default: 7 },

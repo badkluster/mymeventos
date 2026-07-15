@@ -48,7 +48,7 @@ async function nextContractNumber(): Promise<string> {
 export async function createContractFromEvent(input: { eventId: string; userId: string }): Promise<{ contract: any; created: boolean }> {
   const event: any = await Event.findOne({ _id: input.eventId, deletedAt: null })
     .populate('customerId')
-    .populate('salonId', 'name address locality city province defaultContractTerms defaultPaymentTerms minimumDepositAmount defaultDepositAmount defaultLateFeePercentage')
+    .populate('salonId', 'name address locality city province defaultContractTerms defaultPaymentTerms defaultSecurityDepositAmount defaultLateFeePercentage')
     .populate('quoteId')
     .populate('sourceQuoteId')
     .populate('leadId')
@@ -77,6 +77,7 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
     leadId: event.leadId?._id ?? event.sourceLeadId?._id,
     salonId: salon?._id,
     status: 'pending_approval',
+    versionNumber: 1,
     contractMode: event.quoteMode ?? quote?.quoteMode ?? 'PACKAGE',
     lineItemsSnapshot: event.lineItemsSnapshot ?? quote?.lineItems ?? [],
     customerSnapshot: {
@@ -128,6 +129,7 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
     },
     menuSnapshot: event.menuSnapshot ?? quote?.menuSections ?? [],
     servicesSnapshot: event.servicesSnapshot ?? quote?.includedServices ?? [],
+    paymentPlanSnapshot: event.paymentPlanSnapshot ?? event.paymentSnapshot?.paymentPlan ?? [],
     paymentAgreementSnapshot: {
       paymentTerms: commercial.paymentTerms ?? event.paymentSnapshot?.paymentTerms ?? quote?.paymentTerms ?? salon?.defaultPaymentTerms,
       depositAmount,
@@ -137,12 +139,12 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
     },
     legalTermsSnapshot: { clauses: baseLegalTerms, providerText: salon?.defaultContractTerms },
     securityDeposit: {
-      amount: salon?.minimumDepositAmount ?? salon?.defaultDepositAmount ?? 0,
+      amount: salon?.defaultSecurityDepositAmount ?? 0,
       requiredAt: event.eventDate,
       status: 'pending'
     },
     securityDepositSnapshot: {
-      amount: salon?.minimumDepositAmount ?? salon?.defaultDepositAmount ?? 0,
+      amount: salon?.defaultSecurityDepositAmount ?? 0,
       requiredAt: event.eventDate,
       status: 'pending'
     },

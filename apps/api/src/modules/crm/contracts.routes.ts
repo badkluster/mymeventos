@@ -1,8 +1,9 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
-import { Contract, ContractAddendum, Payment } from './crm.models';
-import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { Contract, ContractAddendum, Customer, Event, Payment } from './crm.models';
+import { Salon } from '../salons/salon.model';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -11,6 +12,7 @@ import { writeAuditLog } from '../audit/audit.service';
 import { getApiMessage } from '../../utils/messages';
 import { approveAddendum, approveContract, cancelContract, createAddendum, recalculateContractTotals, requestContractChanges, updateAddendum } from './event-to-contract.service';
 import { createPayment, paymentSummary } from './payments.service';
+import { generateAndUploadContractPdf } from './contract-pdf.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const statuses = ['draft', 'pending_approval', 'approved', 'requires_changes', 'cancelled', 'superseded'] as const;
@@ -63,7 +65,7 @@ const router = Router();
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
 function scopedQuery(request: Request): Record<string, unknown>[] {
-  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonId: { $in: request.user!.salonIds } }];
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonId: { $in: accessibleSalonIds(request.user!) } }];
 }
 async function ensureContractAccess(request: Request, contract: any): Promise<void> {
   if (!contract || contract.deletedAt) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
@@ -123,6 +125,26 @@ router.patch('/:id', requirePermission(Permission.CONTRACTS_UPDATE), validateReq
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
 }));
 
+router.post('/:id/refresh-snapshots', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const contract: any = await Contract.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureContractAccess(request, contract);
+  const [customerRecord, eventRecord, salonRecord] = await Promise.all([
+    Customer.findOne({ _id: contract.customerId, deletedAt: null }).lean(),
+    Event.findOne({ _id: contract.eventId, deletedAt: null }).lean(),
+    Salon.findOne({ _id: contract.salonId, deletedAt: null }).lean()
+  ]);
+  const customer: any = customerRecord;
+  const event: any = eventRecord;
+  const salon: any = salonRecord;
+  if (customer) contract.customerSnapshot = { ...(contract.customerSnapshot ?? {}), firstName: customer.firstName, lastName: customer.lastName, fullName: customer.fullName, dni: customer.dni, documentNumber: customer.documentNumber, address: customer.address, occupation: customer.occupation, phone: customer.phone, email: customer.email };
+  if (event) contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
+  if (salon) contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), salonName: salon.name, salonAddress: [salon.address, salon.locality || salon.city, salon.province].filter(Boolean).join(', ') };
+  contract.updatedBy = request.user!.id;
+  await contract.save();
+  await writeAuditLog(request, 'CONTRACT_REFRESH_SNAPSHOTS', 'Contract', contract._id.toString());
+  return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
+}));
+
 router.patch('/:id/status', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(statusSchema), asyncHandler(async (request, response) => {
   const contract: any = await Contract.findOne({ _id: request.params.id, deletedAt: null });
   await ensureContractAccess(request, contract);
@@ -137,8 +159,20 @@ router.patch('/:id/status', requirePermission(Permission.CONTRACTS_UPDATE), vali
 router.post('/:id/approve', requirePermission(Permission.CONTRACTS_APPROVE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
   const contract = await approveContract(request.params.id, request.user!.id);
+  Object.assign(contract, await generateAndUploadContractPdf(contract));
+  await contract.save();
   await writeAuditLog(request, 'CONTRACT_APPROVE', 'Contract', contract._id.toString());
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
+}));
+
+router.post('/:id/pdf', requirePermission(Permission.CONTRACTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const contract: any = await Contract.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureContractAccess(request, contract);
+  if (contract.status !== 'approved') throw new ApiError(422, 'El PDF definitivo se genera al aprobar el contrato.');
+  Object.assign(contract, await generateAndUploadContractPdf(contract));
+  await contract.save();
+  await writeAuditLog(request, 'CONTRACT_PDF_GENERATE', 'Contract', contract._id.toString());
+  return sendSuccess(response, { contract });
 }));
 
 router.post('/:id/request-changes', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
