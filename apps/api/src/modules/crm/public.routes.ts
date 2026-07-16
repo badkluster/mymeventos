@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { PackageTemplate, VenuePackageRule } from './crm.models';
+import { Event, PackageTemplate, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { LandingEventType, LandingFaq, LandingGalleryItem, LandingPromotion, LandingServiceBlock, LandingSettings, LandingTestimonial } from '../landing/landing.models';
@@ -39,6 +39,12 @@ const schema = z.object({
   params: z.object({}),
   query: z.object({})
 });
+const guestListToken = z.string().regex(/^[A-Za-z0-9_-]{32,}$/);
+const publicGuestTableSchema = z.object({ id: z.string().trim().max(120).optional(), name: z.string().trim().min(1).max(120), capacity: z.coerce.number().int().positive().max(100).optional(), audience: z.enum(['children', 'family', 'open']).optional(), notes: z.string().trim().max(500).optional() });
+const publicGuestSchema = z.object({ id: z.string().trim().max(120).optional(), fullName: z.string().trim().min(1).max(160), tableId: z.string().trim().max(120).optional(), meal: z.string().trim().max(100).optional(), ageGroup: z.enum(['adult', 'child_1_4', 'child_5_9', 'minor_10_17']).optional(), dietaryPreference: z.enum(['vegetarian', 'vegan', 'celiac', 'lactose_free', 'none']).optional(), notes: z.string().trim().max(600).optional(), confirmed: z.boolean().optional() });
+const publicGuestListSchema = z.object({ tables: z.array(publicGuestTableSchema).max(80).default([]), guests: z.array(publicGuestSchema).max(1000).default([]), notes: z.string().trim().max(2500).optional() });
+const publicGuestListGetSchema = z.object({ body: z.unknown().optional(), params: z.object({ token: guestListToken }), query: z.object({}) });
+const publicGuestListUpdateSchema = z.object({ body: z.object({ guestList: publicGuestListSchema }), params: z.object({ token: guestListToken }), query: z.object({}) });
 
 async function readLeanList(query: any, sort?: Record<string, 1 | -1>): Promise<any[]> {
   if (!query) return [];
@@ -133,6 +139,22 @@ router.get('/landing', asyncHandler(async (_request, response) => {
 
 router.get('/salons', asyncHandler(async (_request, response) => {
   return sendSuccess(response, { salons: await publicSalons() });
+}));
+
+router.get('/guest-list/:token', validateRequest(publicGuestListGetSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ guestListAccessToken: request.params.token, deletedAt: null }).select('eventName eventType eventDate guestCount resourcePlanSnapshot').lean();
+  if (!event) throw new ApiError(404, 'El enlace de lista de invitados no es válido o ya no está disponible.');
+  const guestList = event.resourcePlanSnapshot?.guestList ?? { tables: [], guests: [], notes: '' };
+  return sendSuccess(response, { event: { eventName: event.eventName, eventType: event.eventType, eventDate: event.eventDate, guestCount: event.guestCount }, guestList });
+}));
+
+router.patch('/guest-list/:token', validateRequest(publicGuestListUpdateSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ guestListAccessToken: request.params.token, deletedAt: null });
+  if (!event) throw new ApiError(404, 'El enlace de lista de invitados no es válido o ya no está disponible.');
+  event.resourcePlanSnapshot = { ...(event.resourcePlanSnapshot ?? {}), guestList: { ...request.body.guestList, submittedAt: new Date().toISOString() } };
+  event.markModified('resourcePlanSnapshot');
+  await event.save();
+  return sendSuccess(response, { guestList: event.resourcePlanSnapshot.guestList, savedAt: new Date().toISOString() });
 }));
 
 router.post('/quick-quote', validateRequest(schema), asyncHandler(async (request, response) => {

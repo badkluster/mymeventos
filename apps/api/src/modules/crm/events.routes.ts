@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { Permission, Role, StaffSubrole } from '@mym/shared';
 import { Contract, Customer, Event, EventStaffAssignment, LeadActivity, Payment, Quote } from './crm.models';
@@ -18,6 +19,8 @@ import { convertQuoteToEvent } from './quote-to-event.service';
 import { createPayment, paymentSummary } from './payments.service';
 import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
 import { sendEmail } from '../email/email.service';
+import { uploadBuffer } from '../uploads/cloudinary.service';
+import { generateOperationalPdf, generateOperationalWord, type OperationalDocumentType } from './event-operational-document.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const optionalObjectId = objectId.optional().or(z.literal(''));
@@ -132,6 +135,10 @@ const eventPaymentSchema = z.object({
   query: z.object({})
 });
 const paymentReceiptSchema = z.object({ body: z.object({ email: z.string().trim().email().optional() }).optional(), params: z.object({ id: objectId, paymentId: objectId }), query: z.object({}) });
+const operationalDocumentType = z.enum(['timeline', 'logistics', 'guest_list']);
+const operationalDocumentSchema = z.object({ body: z.object({ format: z.enum(['pdf', 'word']) }), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
+const operationalDocumentEmailSchema = z.object({ body: z.object({ format: z.enum(['pdf', 'word']).default('pdf'), email: z.string().trim().email().optional() }), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
+const guestListLinkSchema = z.object({ body: z.object({}).optional(), params: z.object({ id: objectId }), query: z.object({}) });
 
 const router = Router();
 
@@ -154,6 +161,24 @@ function uniqueIds(ids: Array<string | undefined>): string[] {
 async function ensureEventAccess(request: Request, event: any): Promise<void> {
   if (!event || event.deletedAt) throw new ApiError(404, 'EVENT_NOT_FOUND');
   if (event.salonId && !canAccessSalon(request.user!, event.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+}
+
+async function getEventForOperationalDocument(request: Request, eventId: string): Promise<any> {
+  const event = await Event.findOne({ _id: eventId, deletedAt: null }).populate('customerId', 'fullName phone email').populate('salonId', 'name address locality city');
+  await ensureEventAccess(request, event);
+  return event;
+}
+
+async function createOperationalDocument(event: any, type: OperationalDocumentType, format: 'pdf' | 'word') {
+  const generated = format === 'pdf' ? await generateOperationalPdf(event, type) : generateOperationalWord(event, type);
+  const uploaded = await uploadBuffer(generated.buffer, {
+    folder: `mym-eventos/events/${event._id}/operational-documents`,
+    resource_type: 'raw',
+    public_id: `${type}-${format}`,
+    overwrite: true,
+    format: format === 'pdf' ? 'pdf' : 'doc'
+  });
+  return { ...generated, url: uploaded.url, secureUrl: uploaded.secureUrl, publicId: uploaded.publicId };
 }
 
 async function ensureSalonAccess(request: Request, salonId: string): Promise<void> {
@@ -532,6 +557,46 @@ router.get('/:id/payment-summary', requirePermission(Permission.PAYMENTS_READ), 
   const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
   return sendSuccess(response, { summary: await paymentSummary({ eventId: request.params.id }) });
+}));
+
+router.post('/:id/operational-documents/:documentType/export', requirePermission(Permission.EVENTS_READ), validateRequest(operationalDocumentSchema), asyncHandler(async (request, response) => {
+  const event = await getEventForOperationalDocument(request, request.params.id);
+  const type = request.params.documentType as OperationalDocumentType;
+  const document = await createOperationalDocument(event, type, request.body.format);
+  await writeAuditLog(request, 'EVENT_OPERATIONAL_DOCUMENT_EXPORT', 'Event', event._id.toString(), { documentType: type, format: request.body.format });
+  return sendSuccess(response, { document: { fileName: document.fileName, format: request.body.format, url: document.url, secureUrl: document.secureUrl } });
+}));
+
+router.post('/:id/operational-documents/:documentType/email', requirePermission(Permission.EVENTS_UPDATE), validateRequest(operationalDocumentEmailSchema), asyncHandler(async (request, response) => {
+  const event = await getEventForOperationalDocument(request, request.params.id);
+  const type = request.params.documentType as OperationalDocumentType;
+  const email = request.body.email ?? event.customerId?.email;
+  if (!email) throw new ApiError(422, 'El cliente no tiene un email registrado.');
+  const document = await createOperationalDocument(event, type, request.body.format);
+  const title = type === 'timeline' ? 'Cronograma operativo' : type === 'guest_list' ? 'Control de invitados por mesa' : 'Logística y coordinación interna';
+  const eventName = event.eventName || event.eventType || 'evento';
+  const emailSent = await sendEmail({
+    to: email,
+    subject: `${title} · ${eventName} · M&M Eventos`,
+    text: `Hola, adjuntamos el documento “${title}” del evento ${eventName}. También podés verlo o descargarlo aquí: ${document.secureUrl}`,
+    attachments: [{ filename: document.fileName, content: document.buffer, contentType: request.body.format === 'pdf' ? 'application/pdf' : 'application/msword' }]
+  });
+  await writeAuditLog(request, 'EVENT_OPERATIONAL_DOCUMENT_EMAIL', 'Event', event._id.toString(), { documentType: type, format: request.body.format, email, emailSent });
+  return sendSuccess(response, { emailSent, email, document: { fileName: document.fileName, format: request.body.format, url: document.url, secureUrl: document.secureUrl } });
+}));
+
+router.post('/:id/guest-list-link', requirePermission(Permission.EVENTS_UPDATE), validateRequest(guestListLinkSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureEventAccess(request, event);
+  const created = !event.guestListAccessToken;
+  if (created) {
+    event.guestListAccessToken = randomBytes(32).toString('base64url');
+    event.guestListAccessTokenCreatedAt = new Date();
+    event.updatedBy = request.user!.id;
+    await event.save();
+    await writeAuditLog(request, 'EVENT_GUEST_LIST_LINK_CREATE', 'Event', event._id.toString());
+  }
+  return sendSuccess(response, { token: event.guestListAccessToken, created });
 }));
 
 router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {

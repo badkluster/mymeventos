@@ -59,13 +59,19 @@ export type Salon = { _id: string; name: string };
 export type LeadOption = { _id: string; fullName?: string; firstName?: string; lastName?: string; phone?: string; email?: string; eventType?: string; eventDate?: string; guestCount?: number; salonId?: string; salonIds?: string[] };
 export type Customer = { _id: string; fullName?: string; firstName?: string; lastName?: string; phone?: string; email?: string; documentNumber?: string; address?: string; occupation?: string; sourceLeadId?: string | LeadOption; quoteCount?: number; eventCount?: number; lastEvent?: { eventDate?: string; eventName?: string }; createdAt?: string; notes?: string };
 export type EventTimelineItem = { id?: string; time?: string; title: string; area?: string; owner?: string; status?: 'pending' | 'ready' | 'done' | 'cancelled' | string; notes?: string };
-export type EventProductItem = { id?: string; name: string; category?: string; quantity?: number; unit?: string; supplierName?: string; unitCost?: number; totalCost?: number; status?: 'planned' | 'reserved' | 'purchased' | 'used' | 'returned' | string; notes?: string };
+export type EventProductItem = { id?: string; name: string; category?: string; productionCategory?: 'savory' | 'sweet' | 'beverages' | 'other' | string; quantity?: number; unit?: string; supplierName?: string; unitCost?: number; totalCost?: number; status?: 'planned' | 'reserved' | 'purchased' | 'used' | 'returned' | string; notes?: string };
 export type EventInventoryItem = { id?: string; name: string; category?: string; quantityRequired?: number; quantityReserved?: number; quantityReturned?: number; unit?: string; status?: 'planned' | 'reserved' | 'delivered' | 'returned' | 'missing' | 'damaged' | string; notes?: string };
 export type EventSupplierAssignment = { id?: string; supplierName: string; serviceType?: string; contactName?: string; phone?: string; agreedAmount?: number; status?: 'pending' | 'confirmed' | 'paid' | 'cancelled' | string; arrivalTime?: string; notes?: string };
 export type EventTaskItem = { id?: string; title: string; owner?: string; dueDate?: string; priority?: 'low' | 'normal' | 'high' | 'critical' | string; status?: 'pending' | 'in_progress' | 'done' | 'blocked' | string; notes?: string };
 export type EventAlertItem = { id?: string; title: string; remindAt?: string; channel?: string; status?: 'pending' | 'scheduled' | 'sent' | 'done' | string; notes?: string };
+export type EventStaffNote = { id?: string; title?: string; notes: string };
+export type EventGuest = { id?: string; fullName: string; tableId?: string; meal?: string; ageGroup?: 'adult' | 'child_1_4' | 'child_5_9' | 'minor_10_17' | string; dietaryPreference?: 'vegetarian' | 'vegan' | 'celiac' | 'lactose_free' | 'none' | string; notes?: string; confirmed?: boolean };
+export type EventGuestTable = { id?: string; name: string; capacity?: number; audience?: 'children' | 'family' | 'open' | string; notes?: string };
+export type EventGuestList = { tables?: EventGuestTable[]; guests?: EventGuest[]; notes?: string; submittedAt?: string };
 export type EventResourcePlan = {
   timelineItems?: EventTimelineItem[];
+  staffNotes?: EventStaffNote[];
+  guestList?: EventGuestList;
   productItems?: EventProductItem[];
   inventoryItems?: EventInventoryItem[];
   supplierAssignments?: EventSupplierAssignment[];
@@ -115,6 +121,7 @@ export type Event = {
     notes?: string;
   }>;
   resourcePlanSnapshot?: EventResourcePlan;
+  guestListAccessToken?: string;
   contractReadyChecklist?: Record<string, boolean>;
   notes?: string;
   createdAt?: string;

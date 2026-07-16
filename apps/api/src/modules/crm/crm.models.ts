@@ -165,6 +165,7 @@ const eventSchema = new Schema({
   guestBreakdown: Schema.Types.Mixed,
   lineItemsSnapshot: { type: [Schema.Types.Mixed], default: [] },
   resourcePlanSnapshot: Schema.Types.Mixed,
+  guestListAccessToken: { type: String, unique: true, sparse: true, index: true }, guestListAccessTokenCreatedAt: Date,
   customCalculationSnapshot: Schema.Types.Mixed,
   estimatedAmount: Number, finalAmount: Number, notes: String,
   commercialSnapshot: Schema.Types.Mixed,

@@ -86,13 +86,16 @@ El evento guarda:
 - `servicesSnapshot`
 - `paymentSnapshot`
 - `resourcePlanSnapshot`
+- `guestListAccessToken` para el formulario público de invitados
 - `contractReadyChecklist`
 - `notes`
 
 `resourcePlanSnapshot` contiene la parte operativa del evento:
 
 - `timelineItems`: cronograma operativo con horario, área, responsable, estado y notas.
-- `productItems`: productos e insumos utilizados, cantidad, unidad, proveedor, costo y estado.
+- `staffNotes`: indicaciones generales visibles para todo el equipo operativo.
+- `guestList`: mesas, invitados, menú individual, restricciones alimentarias y observaciones; se visualiza como plano de mesas y permite reasignar invitados mediante arrastre.
+- `productItems`: productos e insumos utilizados, cantidad, unidad, proveedor, costo, estado y rubro de producción (`salados`, `dulces`, `bebidas` u `otros`).
 - `inventoryItems`: vajilla, mantelería, mobiliario y equipos requeridos/reservados/devueltos.
 - `supplierAssignments`: servicios externos y proveedores vinculados al evento, con contacto, llegada, monto acordado y estado.
 - `tasks`: tareas internas, responsables, prioridad, vencimiento y estado.
@@ -113,6 +116,16 @@ El evento guarda:
 - `GET /api/events/:id/payments`
 - `GET /api/events/:id/payment-summary`
 - `POST /api/events/:id/create-contract`
+- `POST /api/events/:id/guest-list-link`
+- `POST /api/events/:id/operational-documents/:documentType/export`
+- `POST /api/events/:id/operational-documents/:documentType/email`
+
+`documentType` admite `timeline`, `logistics` y `guest_list`. El último genera un control de ingreso por mesa, con casilla de verificación para cada invitado y sus observaciones operativas.
+
+Endpoints públicos de invitados:
+
+- `GET /api/public/guest-list/:token`
+- `PATCH /api/public/guest-list/:token`
 
 Filtros de listado:
 
@@ -130,6 +143,7 @@ Filtros de listado:
 
 - `/admin/events`: listado de eventos.
 - `/admin/events/:id`: centro operativo del evento.
+- `/invitados/:token`: formulario público, por enlace seguro, para que el cliente complete mesas e invitados sin ingresar al panel administrativo. Incluye carga rápida y plano visual de mesas con reasignación por arrastre.
 - `/admin/quotes/:id`: botón “Crear evento” desde el presupuesto.
 
 Desde `/admin/events` se puede crear un evento con:
@@ -148,15 +162,17 @@ El detalle de evento se organiza por pestañas:
 - Comercial.
 - Menú.
 - Servicios.
-- Cronograma.
-- Logística.
-- Stock y vajilla.
+- Cronograma, con vistas internas para: Momentos, Invitados y mesas, Logística, Mantelería y vajilla, y Stock de productos.
 - Proveedores.
 - Staff.
 - Tareas.
 - Contrato.
 - Pagos.
 - Actividad.
+
+Desde la pestaña **Invitados y mesas** se puede crear un enlace seguro para el cliente, cargar o revisar la distribución, y sincronizar la cantidad final de invitados y restricciones alimentarias con la ficha del evento. El cronograma exportado incorpora el detalle de mesas e invitados para que cocina, salón y coordinación usen la misma fuente de información.
+
+La clasificación del stock y los costos por producto/proveedor queda guardada por evento para la siguiente fase de reportes: producción mensual por evento y rubro, y control mensual de gastos por proveedor, categoría operativa, staff, mantelería, logística y servicios externos.
 
 ## Estados
 
