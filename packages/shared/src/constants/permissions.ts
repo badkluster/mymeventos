@@ -95,6 +95,7 @@ export enum Permission {
   // Tickets
   TICKETS_READ = 'tickets.read',
   TICKETS_CREATE = 'tickets.create',
+  TICKETS_UPDATE = 'tickets.update',
   TICKETS_VALIDATE = 'tickets.validate',
 
   // Payroll
@@ -123,6 +124,8 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE, Permission.EVENTS_CANCEL,
     Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE, Permission.CONTRACTS_APPROVE, Permission.CONTRACTS_CANCEL,
     Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_UPDATE,
+    Permission.INVITATIONS_READ, Permission.INVITATIONS_CREATE, Permission.INVITATIONS_UPDATE,
+    Permission.TICKETS_READ, Permission.TICKETS_CREATE, Permission.TICKETS_UPDATE, Permission.TICKETS_VALIDATE,
     Permission.SUPPLIERS_READ, Permission.SUPPLIERS_CREATE, Permission.SUPPLIERS_UPDATE, Permission.SUPPLIERS_DELETE,
     Permission.LANDING_READ, Permission.LANDING_UPDATE,
     Permission.PROMOTIONS_READ, Permission.PROMOTIONS_CREATE, Permission.PROMOTIONS_UPDATE,
@@ -138,6 +141,8 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE,
     Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE,
     Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE,
+    Permission.INVITATIONS_READ,
+    Permission.TICKETS_READ, Permission.TICKETS_VALIDATE,
     Permission.SUPPLIERS_READ,
     Permission.LANDING_READ, Permission.LANDING_UPDATE,
     Permission.REPORTS_READ
