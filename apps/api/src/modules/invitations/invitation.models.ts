@@ -11,9 +11,7 @@ const baseFields = {
 };
 
 const digitalInvitationSchema = new Schema({
-  eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, unique: true, index: true },
-  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
-  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
+  ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   title: { type: String, required: true, trim: true },
   honoreeName: { type: String, trim: true },
   eventDate: Date,
@@ -27,6 +25,7 @@ const digitalInvitationSchema = new Schema({
   rsvpDeadline: Date,
   expiresAt: Date,
   status: { type: String, enum: invitationStatuses, default: 'draft', index: true },
+  templateId: { type: Schema.Types.ObjectId, ref: 'InvitationTemplate', index: true },
   template: { type: String, trim: true, default: 'classic' },
   theme: { primaryColor: String, secondaryColor: String, backgroundColor: String },
   allowCompanions: { type: Boolean, default: true },
@@ -40,7 +39,19 @@ const digitalInvitationSchema = new Schema({
   unpublishedAt: Date,
   ...baseFields
 }, { timestamps: true });
-digitalInvitationSchema.index({ salonId: 1, status: 1, deletedAt: 1 });
+digitalInvitationSchema.index({ ownerId: 1, status: 1, deletedAt: 1 });
+
+const invitationTemplateSchema = new Schema({
+  ownerId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+  name: { type: String, required: true, trim: true, maxlength: 120 },
+  slug: { type: String, required: true, trim: true, lowercase: true, maxlength: 120 },
+  description: { type: String, trim: true, maxlength: 500 },
+  previewImageUrl: { type: String, trim: true },
+  theme: { primaryColor: String, secondaryColor: String, backgroundColor: String },
+  isSystem: { type: Boolean, default: false, index: true },
+  ...baseFields
+}, { timestamps: true });
+invitationTemplateSchema.index({ ownerId: 1, slug: 1 }, { unique: true, partialFilterExpression: { ownerId: { $type: 'objectId' } } });
 
 const invitationGuestSchema = new Schema({
   invitationId: { type: Schema.Types.ObjectId, ref: 'DigitalInvitation', required: true, index: true },
@@ -68,3 +79,4 @@ invitationGuestSchema.index({ invitationId: 1, deletedAt: 1, status: 1 });
 
 export const DigitalInvitation = models.DigitalInvitation || model('DigitalInvitation', digitalInvitationSchema);
 export const InvitationGuest = models.InvitationGuest || model('InvitationGuest', invitationGuestSchema);
+export const InvitationTemplate = models.InvitationTemplate || model('InvitationTemplate', invitationTemplateSchema);
