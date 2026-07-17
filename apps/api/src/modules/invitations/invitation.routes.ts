@@ -10,7 +10,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
 import { writeAuditLog } from '../audit/audit.service';
 import { DigitalInvitation, InvitationGuest } from './invitation.models';
-import { createPublicToken, getPublicInvitation, upsertRsvp } from './invitation.service';
+import { createPublicToken, resolvePublicInvitationAccess, upsertRsvp } from './invitation.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const token = z.string().min(32).max(128);
@@ -64,7 +64,24 @@ router.delete('/:id/guests/:guestId', requirePermission(Permission.INVITATIONS_U
 router.get('/:id/metrics', requirePermission(Permission.INVITATIONS_READ), validateRequest(wrap(z.unknown().optional(), z.object({ id: objectId }))), asyncHandler(async (req, res) => { await getInvitationForAdmin(req, req.params.id); const rows = await InvitationGuest.aggregate([{ $match: { invitationId: new Types.ObjectId(req.params.id), deletedAt: null } }, { $group: { _id: '$status', guests: { $sum: 1 }, assignedSeats: { $sum: '$assignedSeats' }, confirmedAdults: { $sum: '$adults' }, confirmedMinors: { $sum: '$minors' } } }]); const byStatus = Object.fromEntries(rows.map((row: any) => [row._id, row])); return sendSuccess(res, { totalGuests: rows.reduce((sum: number, row: any) => sum + row.guests, 0), assignedSeats: rows.reduce((sum: number, row: any) => sum + row.assignedSeats, 0), confirmedAttendees: rows.reduce((sum: number, row: any) => sum + row.confirmedAdults + row.confirmedMinors, 0), byStatus }); }));
 
 export const publicInvitationRoutes = Router();
-publicInvitationRoutes.get('/:token', validateRequest(wrap(z.unknown().optional(), z.object({ token }))), asyncHandler(async (req, res) => { const invitation = await getPublicInvitation(req.params.token); return sendSuccess(res, { invitation: { title: invitation.title, honoreeName: invitation.honoreeName, eventDate: invitation.eventDate, address: invitation.address, mapsUrl: invitation.mapsUrl, coverImageUrl: invitation.coverImageUrl, gallery: invitation.gallery, introduction: invitation.introduction, dressCode: invitation.dressCode, additionalInfo: invitation.additionalInfo, rsvpDeadline: invitation.rsvpDeadline, template: invitation.template, theme: invitation.theme, confirmationMessage: invitation.confirmationMessage, allowMinors: invitation.allowMinors } }); }));
-publicInvitationRoutes.post('/:token/rsvp', validateRequest(wrap(z.object({ guestToken: token, attendance: z.enum(['confirmed', 'declined']), adults: z.coerce.number().int().min(0).max(100).optional(), minors: z.coerce.number().int().min(0).max(100).optional(), companions: z.coerce.number().int().min(0).max(100).optional(), dietaryRestrictions: optionalText, guestMessage: optionalText }), z.object({ token }))), asyncHandler(async (req, res) => { const invitation = await getPublicInvitation(req.params.token); const guest = await upsertRsvp(invitation, req.body.guestToken, req.body); return sendSuccess(res, { guest: serializeGuest(guest), confirmationMessage: invitation.confirmationMessage }); }));
+publicInvitationRoutes.get('/:token', validateRequest(wrap(z.unknown().optional(), z.object({ token }))), asyncHandler(async (req, res) => {
+  const { invitation, guest } = await resolvePublicInvitationAccess(req.params.token);
+  if (guest && !guest.viewedAt) await InvitationGuest.findOneAndUpdate({ _id: guest._id, status: { $in: ['pending', 'sent'] } }, { status: 'viewed', viewedAt: new Date() });
+  return sendSuccess(res, {
+    invitation: { title: invitation.title, honoreeName: invitation.honoreeName, eventDate: invitation.eventDate, address: invitation.address, mapsUrl: invitation.mapsUrl, coverImageUrl: invitation.coverImageUrl, gallery: invitation.gallery, introduction: invitation.introduction, dressCode: invitation.dressCode, additionalInfo: invitation.additionalInfo, rsvpDeadline: invitation.rsvpDeadline, template: invitation.template, theme: invitation.theme, confirmationMessage: invitation.confirmationMessage, allowMinors: invitation.allowMinors },
+    ...(guest ? { guest: serializeGuest(guest) } : {})
+  });
+}));
+const publicRsvpSchema = z.object({
+  guestToken: token.optional(), attendance: z.enum(['confirmed', 'declined']).optional(), response: z.enum(['confirmed', 'declined']).optional(),
+  adults: z.coerce.number().int().min(0).max(100).optional(), minors: z.coerce.number().int().min(0).max(100).optional(), companions: z.coerce.number().int().min(0).max(100).optional(), dietaryRestrictions: optionalText, guestMessage: optionalText
+}).superRefine((body, ctx) => { if (!body.attendance && !body.response) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['attendance'], message: 'Debe indicar la respuesta de asistencia.' }); if (body.attendance && body.response && body.attendance !== body.response) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['response'], message: 'Las respuestas no coinciden.' }); });
+publicInvitationRoutes.post('/:token/rsvp', validateRequest(wrap(publicRsvpSchema, z.object({ token }))), asyncHandler(async (req, res) => {
+  const { invitation, guest: tokenGuest } = await resolvePublicInvitationAccess(req.params.token);
+  const guestToken = tokenGuest?.publicToken ?? req.body.guestToken;
+  if (!guestToken) throw new ApiError(422, 'INVITATION_GUEST_TOKEN_REQUIRED', 'Debe utilizar un enlace personalizado para confirmar asistencia.');
+  const guest = await upsertRsvp(invitation, guestToken, { ...req.body, attendance: req.body.attendance ?? req.body.response });
+  return sendSuccess(res, { guest: serializeGuest(guest), confirmationMessage: invitation.confirmationMessage });
+}));
 
 export default router;

@@ -6,7 +6,7 @@ vi.mock('../src/modules/invitations/invitation.models', () => ({
   InvitationGuest: { findOne: mocks.findGuest }
 }));
 
-import { createPublicToken, getPublicInvitation, upsertRsvp, validateRsvp } from '../src/modules/invitations/invitation.service';
+import { createPublicToken, getPublicInvitation, resolvePublicInvitationAccess, upsertRsvp, validateRsvp } from '../src/modules/invitations/invitation.service';
 
 const invitation = { _id: 'invitation', status: 'published', allowCompanions: true, maxCompanions: 2, allowMinors: true, allowResponseChanges: true };
 const guest = { assignedSeats: 3, status: 'pending' };
@@ -37,6 +37,14 @@ describe('digital invitation RSVP', () => {
     await expect(getPublicInvitation('x'.repeat(43))).rejects.toThrow('no está disponible');
     mocks.findInvitation.mockReturnValue({ lean: vi.fn().mockResolvedValue({ ...invitation, expiresAt: new Date(Date.now() - 1000) }) });
     await expect(getPublicInvitation('x'.repeat(43))).rejects.toThrow('no está disponible');
+  });
+
+  it('resolves a personalized guest token without exposing that token', async () => {
+    mocks.findGuest.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: 'guest', invitationId: 'invitation-id', publicToken: 'secret' }) });
+    mocks.findInvitation.mockReturnValue({ lean: vi.fn().mockResolvedValue(invitation) });
+    const result = await resolvePublicInvitationAccess('x'.repeat(43));
+    expect(result).toMatchObject({ invitation: { status: 'published' }, guest: { _id: 'guest' } });
+    expect(mocks.findInvitation).toHaveBeenCalledWith({ _id: 'invitation-id', deletedAt: null });
   });
 
   it('persists an RSVP once and prevents changes when disabled', async () => {

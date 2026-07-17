@@ -15,6 +15,17 @@ export async function getPublicInvitation(token: string) {
   return invitation;
 }
 
+/** Resolves either the general invitation token or a privacy-preserving guest token. */
+export async function resolvePublicInvitationAccess(token: string) {
+  const guest: any = await InvitationGuest.findOne({ publicToken: token, deletedAt: null }).lean();
+  if (guest) {
+    const parent: any = await DigitalInvitation.findOne({ _id: guest.invitationId, deletedAt: null }).lean();
+    if (!parent || !invitationIsPublic(parent)) throw new ApiError(404, 'INVITATION_UNAVAILABLE', 'La invitación no está disponible.');
+    return { invitation: parent, guest };
+  }
+  return { invitation: await getPublicInvitation(token), guest: null };
+}
+
 export function validateRsvp(invitation: any, guest: any, input: { attendance: 'confirmed' | 'declined'; adults?: number; minors?: number; companions?: number }) {
   if (invitation.rsvpDeadline && new Date(invitation.rsvpDeadline) < new Date()) throw new ApiError(422, 'RSVP_CLOSED', 'El plazo para confirmar asistencia ya finalizó.');
   if (input.attendance === 'declined') return { status: 'declined', adults: 0, minors: 0, companions: 0 };
