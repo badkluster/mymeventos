@@ -1,1 +1,0 @@
-'use client'; import { use } from 'react'; import { CheckIn } from '@/features/digital/check-in'; export default function Page({ params }: { params: Promise<{ id: string }> }) { return <CheckIn eventId={use(params).id} />; }

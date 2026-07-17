@@ -1,6 +1,6 @@
 import { hasAnyPermission, Permission, type Role } from '@mym/shared';
 import type { ComponentType } from 'react';
-import { Bell, Building2, CalendarClock, CalendarDays, ClipboardList, CreditCard, FileText, Globe2, LayoutDashboard, ReceiptText, Settings, Truck, UserRound, Users, UserRoundCog } from 'lucide-react';
+import { Bell, Building2, CalendarClock, CalendarDays, ClipboardList, CreditCard, FileText, Globe2, LayoutDashboard, Mail, ReceiptText, Settings, Ticket, Truck, UserRound, Users, UserRoundCog } from 'lucide-react';
 import type { SessionUser } from './auth';
 
 export type AdminModule = { href: string; label: string; title: string; description: string; icon: ComponentType<{ className?: string }>; permissions: Permission[] };
@@ -12,6 +12,8 @@ export const adminModules: AdminModule[] = [
   { href: '/admin/customers', label: 'Clientes', title: 'Clientes', description: 'Clientes consolidados con historial comercial.', icon: UserRound, permissions: [Permission.CUSTOMERS_READ] },
   { href: '/admin/quotes', label: 'Presupuestos', title: 'Solicitudes / Presupuestos', description: 'Solicitudes web y presupuesto comercial.', icon: ReceiptText, permissions: [Permission.QUOTES_READ] },
   { href: '/admin/events', label: 'Eventos', title: 'Eventos', description: 'Eventos creados desde presupuestos convertidos.', icon: CalendarDays, permissions: [Permission.EVENTS_READ] },
+  { href: '/admin/digital-invitations', label: 'Invitaciones Digitales', title: 'Invitaciones Digitales', description: 'Invitaciones, invitados y confirmaciones independientes.', icon: Mail, permissions: [Permission.INVITATIONS_READ] },
+  { href: '/admin/digital-tickets', label: 'Entradas Digitales', title: 'Entradas Digitales', description: 'Publicaciones, órdenes, entradas y control de ingreso independientes.', icon: Ticket, permissions: [Permission.TICKETS_READ] },
   { href: '/admin/contracts', label: 'Contratos', title: 'Contratos', description: 'Contratos formales generados desde eventos.', icon: FileText, permissions: [Permission.CONTRACTS_READ] },
   { href: '/admin/payments', label: 'Pagos', title: 'Pagos', description: 'Señas, cuotas, saldos y depósitos asociados a contratos.', icon: CreditCard, permissions: [Permission.PAYMENTS_READ] },
   { href: '/admin/suppliers', label: 'Proveedores', title: 'Proveedores', description: 'Proveedores para productos, servicios y compras futuras.', icon: Truck, permissions: [Permission.SUPPLIERS_READ] },

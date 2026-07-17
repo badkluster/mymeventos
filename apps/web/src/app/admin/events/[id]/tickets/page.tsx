@@ -1,1 +1,0 @@
-'use client'; import { use } from 'react'; import { TicketsAdmin } from '@/features/digital/admin'; export default function Page({ params }: { params: Promise<{ id: string }> }) { return <TicketsAdmin eventId={use(params).id} />; }

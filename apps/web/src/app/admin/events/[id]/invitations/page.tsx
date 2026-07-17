@@ -1,1 +1,0 @@
-'use client'; import { use } from 'react'; import { InvitationAdmin } from '@/features/digital/admin'; export default function Page({ params }: { params: Promise<{ id: string }> }) { return <InvitationAdmin eventId={use(params).id} />; }
