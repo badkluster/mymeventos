@@ -1,0 +1,70 @@
+import { Router, type Request } from 'express';
+import { z } from 'zod';
+import { Types } from 'mongoose';
+import { Permission } from '@mym/shared';
+import { Event } from '../crm/crm.models';
+import { canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { ApiError } from '../../middlewares/errorHandler';
+import { validateRequest } from '../../middlewares/validateRequest';
+import { asyncHandler } from '../../utils/asyncHandler';
+import { sendSuccess } from '../../utils/api';
+import { writeAuditLog } from '../audit/audit.service';
+import { DigitalInvitation, InvitationGuest } from './invitation.models';
+import { createPublicToken, getPublicInvitation, upsertRsvp } from './invitation.service';
+
+const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
+const token = z.string().min(32).max(128);
+const optionalText = z.string().trim().max(4000).optional();
+const invitationFields = z.object({
+  title: z.string().trim().min(1).max(180), honoreeName: optionalText, eventDate: z.coerce.date().optional(), address: optionalText,
+  mapsUrl: z.string().url().optional().or(z.literal('')), coverImageUrl: z.string().url().optional().or(z.literal('')), gallery: z.array(z.string().url()).max(30).optional(),
+  introduction: optionalText, dressCode: optionalText, additionalInfo: optionalText, rsvpDeadline: z.coerce.date().optional(), expiresAt: z.coerce.date().optional(),
+  template: z.string().trim().max(80).optional(), theme: z.object({ primaryColor: z.string().max(30).optional(), secondaryColor: z.string().max(30).optional(), backgroundColor: z.string().max(30).optional() }).optional(),
+  allowCompanions: z.boolean().optional(), maxCompanions: z.coerce.number().int().min(0).max(100).optional(), allowMinors: z.boolean().optional(), allowResponseChanges: z.boolean().optional(), confirmationMessage: optionalText
+});
+const invitationInput = invitationFields.superRefine((body, ctx) => { if (body.allowCompanions === false && (body.maxCompanions ?? 0) > 0) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['maxCompanions'], message: 'No puede permitir acompañantes.' }); });
+const guestInput = z.object({ firstName: z.string().trim().min(1).max(120), lastName: z.string().trim().max(120).optional(), phone: z.string().trim().max(50).optional(), email: z.string().trim().email().optional().or(z.literal('')), assignedSeats: z.coerce.number().int().min(1).max(100), notes: optionalText, dietaryRestrictions: optionalText, deliveryChannel: z.enum(['manual', 'email', 'whatsapp', 'other']).optional(), sentAt: z.coerce.date().optional() });
+const wrap = (body: z.ZodTypeAny, params: z.ZodTypeAny = z.object({})) => z.object({ body, params, query: z.object({}).passthrough() });
+
+async function getInvitationForAdmin(request: Request, id: string) {
+  const invitation: any = await DigitalInvitation.findOne({ _id: id, deletedAt: null });
+  if (!invitation) throw new ApiError(404, 'INVITATION_NOT_FOUND');
+  if (!canAccessSalon(request.user!, invitation.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  return invitation;
+}
+async function getEventForAdmin(request: Request, eventId: string) {
+  const event: any = await Event.findOne({ _id: eventId, deletedAt: null }).lean();
+  if (!event) throw new ApiError(404, 'EVENT_NOT_FOUND');
+  if (!event.salonId || !canAccessSalon(request.user!, event.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  return event;
+}
+function serializeGuest(guest: any) { const item = guest.toObject ? guest.toObject() : guest; const { publicToken, ...safe } = item; return safe; }
+
+const router = Router();
+router.use(requireAuth);
+router.post('/events/:eventId', requirePermission(Permission.INVITATIONS_CREATE), validateRequest(wrap(invitationInput, z.object({ eventId: objectId }))), asyncHandler(async (req, res) => {
+  const event = await getEventForAdmin(req, req.params.eventId);
+  const existing = await DigitalInvitation.findOne({ eventId: event._id, deletedAt: null }).lean();
+  if (existing) throw new ApiError(409, 'INVITATION_ALREADY_EXISTS');
+  const invitation = await DigitalInvitation.create({ ...req.body, eventId: event._id, salonId: event.salonId, customerId: event.customerId, eventDate: req.body.eventDate ?? event.eventDate, title: req.body.title || event.eventName || event.eventType, publicToken: createPublicToken(), createdBy: req.user!.id, updatedBy: req.user!.id });
+  await writeAuditLog(req, 'DIGITAL_INVITATION_CREATE', 'DigitalInvitation', invitation._id.toString(), { eventId: event._id.toString() });
+  return sendSuccess(res, { invitation: invitation.toObject() }, 201);
+}));
+router.get('/events/:eventId', requirePermission(Permission.INVITATIONS_READ), validateRequest(wrap(z.unknown().optional(), z.object({ eventId: objectId }))), asyncHandler(async (req, res) => { await getEventForAdmin(req, req.params.eventId); const invitation = await DigitalInvitation.findOne({ eventId: req.params.eventId, deletedAt: null }).lean(); return sendSuccess(res, { invitation }); }));
+router.get('/:id', requirePermission(Permission.INVITATIONS_READ), validateRequest(wrap(z.unknown().optional(), z.object({ id: objectId }))), asyncHandler(async (req, res) => { const invitation = await getInvitationForAdmin(req, req.params.id); return sendSuccess(res, { invitation: invitation.toObject() }); }));
+router.patch('/:id', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(invitationFields.partial().refine((v) => Object.keys(v).length > 0), z.object({ id: objectId }))), asyncHandler(async (req, res) => { const invitation = await getInvitationForAdmin(req, req.params.id); Object.assign(invitation, req.body, { updatedBy: req.user!.id }); await invitation.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_UPDATE', 'DigitalInvitation', invitation._id.toString()); return sendSuccess(res, { invitation: invitation.toObject() }); }));
+router.post('/:id/publish', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(z.object({}), z.object({ id: objectId }))), asyncHandler(async (req, res) => { const invitation = await getInvitationForAdmin(req, req.params.id); invitation.status = 'published'; invitation.publishedAt = new Date(); invitation.updatedBy = req.user!.id; await invitation.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_PUBLISH', 'DigitalInvitation', invitation._id.toString()); return sendSuccess(res, { invitation: invitation.toObject() }); }));
+router.post('/:id/unpublish', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(z.object({}), z.object({ id: objectId }))), asyncHandler(async (req, res) => { const invitation = await getInvitationForAdmin(req, req.params.id); invitation.status = 'unpublished'; invitation.unpublishedAt = new Date(); invitation.updatedBy = req.user!.id; await invitation.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_UNPUBLISH', 'DigitalInvitation', invitation._id.toString()); return sendSuccess(res, { invitation: invitation.toObject() }); }));
+router.post('/:id/regenerate-token', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(z.object({}), z.object({ id: objectId }))), asyncHandler(async (req, res) => { const invitation = await getInvitationForAdmin(req, req.params.id); invitation.publicToken = createPublicToken(); invitation.publicTokenCreatedAt = new Date(); invitation.updatedBy = req.user!.id; await invitation.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_REGENERATE_TOKEN', 'DigitalInvitation', invitation._id.toString()); return sendSuccess(res, { invitation: invitation.toObject() }); }));
+router.delete('/:id', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(z.unknown().optional(), z.object({ id: objectId }))), asyncHandler(async (req, res) => { const invitation = await getInvitationForAdmin(req, req.params.id); invitation.deletedAt = new Date(); invitation.deletedBy = req.user!.id; invitation.updatedBy = req.user!.id; await invitation.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_DELETE', 'DigitalInvitation', invitation._id.toString()); return sendSuccess(res, { deleted: true }); }));
+router.get('/:id/guests', requirePermission(Permission.INVITATIONS_READ), validateRequest(wrap(z.unknown().optional(), z.object({ id: objectId }))), asyncHandler(async (req, res) => { await getInvitationForAdmin(req, req.params.id); const guests = await InvitationGuest.find({ invitationId: req.params.id, deletedAt: null }).sort({ lastName: 1, firstName: 1 }).lean(); return sendSuccess(res, { guests: guests.map(serializeGuest) }); }));
+router.post('/:id/guests', requirePermission(Permission.INVITATIONS_CREATE), validateRequest(wrap(guestInput, z.object({ id: objectId }))), asyncHandler(async (req, res) => { await getInvitationForAdmin(req, req.params.id); const guest = await InvitationGuest.create({ ...req.body, invitationId: req.params.id, publicToken: createPublicToken(), status: req.body.sentAt ? 'sent' : 'pending', createdBy: req.user!.id, updatedBy: req.user!.id }); await writeAuditLog(req, 'DIGITAL_INVITATION_GUEST_CREATE', 'InvitationGuest', guest._id.toString(), { invitationId: req.params.id }); return sendSuccess(res, { guest: serializeGuest(guest) }, 201); }));
+router.patch('/:id/guests/:guestId', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(guestInput.partial().refine((v) => Object.keys(v).length > 0), z.object({ id: objectId, guestId: objectId }))), asyncHandler(async (req, res) => { await getInvitationForAdmin(req, req.params.id); const guest: any = await InvitationGuest.findOne({ _id: req.params.guestId, invitationId: req.params.id, deletedAt: null }); if (!guest) throw new ApiError(404, 'INVITATION_GUEST_NOT_FOUND'); Object.assign(guest, req.body, { updatedBy: req.user!.id }); await guest.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_GUEST_UPDATE', 'InvitationGuest', guest._id.toString()); return sendSuccess(res, { guest: serializeGuest(guest) }); }));
+router.delete('/:id/guests/:guestId', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(z.unknown().optional(), z.object({ id: objectId, guestId: objectId }))), asyncHandler(async (req, res) => { await getInvitationForAdmin(req, req.params.id); const guest: any = await InvitationGuest.findOne({ _id: req.params.guestId, invitationId: req.params.id, deletedAt: null }); if (!guest) throw new ApiError(404, 'INVITATION_GUEST_NOT_FOUND'); Object.assign(guest, { deletedAt: new Date(), deletedBy: req.user!.id, updatedBy: req.user!.id }); await guest.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_GUEST_DELETE', 'InvitationGuest', guest._id.toString()); return sendSuccess(res, { deleted: true }); }));
+router.get('/:id/metrics', requirePermission(Permission.INVITATIONS_READ), validateRequest(wrap(z.unknown().optional(), z.object({ id: objectId }))), asyncHandler(async (req, res) => { await getInvitationForAdmin(req, req.params.id); const rows = await InvitationGuest.aggregate([{ $match: { invitationId: new Types.ObjectId(req.params.id), deletedAt: null } }, { $group: { _id: '$status', guests: { $sum: 1 }, assignedSeats: { $sum: '$assignedSeats' }, confirmedAdults: { $sum: '$adults' }, confirmedMinors: { $sum: '$minors' } } }]); const byStatus = Object.fromEntries(rows.map((row: any) => [row._id, row])); return sendSuccess(res, { totalGuests: rows.reduce((sum: number, row: any) => sum + row.guests, 0), assignedSeats: rows.reduce((sum: number, row: any) => sum + row.assignedSeats, 0), confirmedAttendees: rows.reduce((sum: number, row: any) => sum + row.confirmedAdults + row.confirmedMinors, 0), byStatus }); }));
+
+export const publicInvitationRoutes = Router();
+publicInvitationRoutes.get('/:token', validateRequest(wrap(z.unknown().optional(), z.object({ token }))), asyncHandler(async (req, res) => { const invitation = await getPublicInvitation(req.params.token); return sendSuccess(res, { invitation: { title: invitation.title, honoreeName: invitation.honoreeName, eventDate: invitation.eventDate, address: invitation.address, mapsUrl: invitation.mapsUrl, coverImageUrl: invitation.coverImageUrl, gallery: invitation.gallery, introduction: invitation.introduction, dressCode: invitation.dressCode, additionalInfo: invitation.additionalInfo, rsvpDeadline: invitation.rsvpDeadline, template: invitation.template, theme: invitation.theme, confirmationMessage: invitation.confirmationMessage, allowMinors: invitation.allowMinors } }); }));
+publicInvitationRoutes.post('/:token/rsvp', validateRequest(wrap(z.object({ guestToken: token, attendance: z.enum(['confirmed', 'declined']), adults: z.coerce.number().int().min(0).max(100).optional(), minors: z.coerce.number().int().min(0).max(100).optional(), companions: z.coerce.number().int().min(0).max(100).optional(), dietaryRestrictions: optionalText, guestMessage: optionalText }), z.object({ token }))), asyncHandler(async (req, res) => { const invitation = await getPublicInvitation(req.params.token); const guest = await upsertRsvp(invitation, req.body.guestToken, req.body); return sendSuccess(res, { guest: serializeGuest(guest), confirmationMessage: invitation.confirmationMessage }); }));
+
+export default router;
