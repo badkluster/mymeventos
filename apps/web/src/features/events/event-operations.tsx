@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CalendarClock, ClipboardCheck, Download, FileText, Mail, MessageCircle, PackageCheck, Plus, Save, Trash2, Truck } from 'lucide-react';
-import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
+import { Button, Input, Modal, NumberField, Select, Textarea } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
 import type { Event, EventAlertItem, EventGuestList, EventInventoryItem, EventProductItem, EventResourcePlan, EventStaffNote, EventSupplierAssignment, EventTaskItem, EventTimelineItem } from '@/features/quotes/types';
 import { GuestListWorkspace } from '@/features/events/guest-list-workspace';
@@ -393,7 +393,7 @@ export function EventCommercialEditor({ event, saving, onSave }: { event: Event;
   return <SectionCard title="Valores y plan de pagos" icon={<ClipboardCheck className="h-4 w-4" />}>
     <div className="grid gap-4 md:grid-cols-3"><Field label="Total acordado"><Input type="number" min={0} value={form.total} onChange={(event) => setForm((current) => ({ ...current, total: event.target.value }))} /></Field><Field label="Seña"><Input type="number" min={0} value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} /></Field><Field label="Saldo estimado"><div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-semibold">{Math.max(0, total - deposit).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div></Field><Field label="Condiciones de pago" className="md:col-span-3"><Textarea value={form.paymentTerms} onChange={(event) => setForm((current) => ({ ...current, paymentTerms: event.target.value }))} placeholder="Ej.: seña al reservar y saldo en cuotas mensuales." /></Field></div>
     <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4"><p className="font-medium text-amber-950">Generar cuotas automáticamente</p><p className="mt-1 text-sm text-amber-800">Cada cuota queda programada con su período de pago para usar en alertas y recordatorios.</p><div className="mt-3 grid gap-3 md:grid-cols-6"><Field label="Cantidad de cuotas"><Input type="number" min={1} max={60} value={generator.count} onChange={(event) => setGenerator((current) => ({ ...current, count: event.target.value }))} /></Field><Field label="Primer período"><Input type="date" value={generator.firstDueDate} onChange={(event) => setGenerator((current) => ({ ...current, firstDueDate: event.target.value }))} /></Field><Field label="Frecuencia"><Select value={generator.frequency} onChange={(event) => setGenerator((current) => ({ ...current, frequency: event.target.value }))}><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option><option value="bimonthly">Bimestral</option><option value="quarterly">Trimestral</option></Select></Field>{generator.frequency !== 'biweekly' && <><Field label="Paga desde el día"><Input type="number" min={1} max={31} value={generator.windowStartDay} onChange={(event) => setGenerator((current) => ({ ...current, windowStartDay: event.target.value }))} /></Field><Field label="Hasta el día"><Input type="number" min={1} max={31} value={generator.windowEndDay} onChange={(event) => setGenerator((current) => ({ ...current, windowEndDay: event.target.value }))} /></Field></>}<div className="flex items-end"><Button type="button" variant="secondary" onClick={generateInstallments}>Generar plan</Button></div></div><p className="mt-3 text-xs text-amber-800">{generator.frequency === 'biweekly' ? 'Las cuotas quincenales se generan cada 15 días y cada ventana abarca los 15 días del período.' : 'Ejemplo: del día 1 al 10 de cada período. El vencimiento será el último día de esa ventana.'}</p></div>
-    <div className="space-y-3">{form.installments.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 md:grid-cols-[minmax(150px,1fr)_140px_155px_155px_130px_44px]"><Input value={item.label ?? ''} onChange={(event) => updateInstallment(index, { label: event.target.value })} placeholder="Seña / Cuota" /><Input type="number" min={0} value={item.amount ?? 0} onChange={(event) => updateInstallment(index, { amount: Number(event.target.value) })} /><Field label="Paga desde"><Input type="date" value={item.paymentWindowStart?.slice(0, 10) ?? ''} onChange={(event) => updateInstallment(index, { paymentWindowStart: event.target.value || undefined })} /></Field><Field label="Hasta"><Input type="date" value={item.paymentWindowEnd?.slice(0, 10) ?? item.dueDate?.slice(0, 10) ?? ''} onChange={(event) => updateInstallment(index, { paymentWindowEnd: event.target.value || undefined, dueDate: event.target.value || undefined })} /></Field><Select value={item.status ?? 'pending'} onChange={(event) => updateInstallment(index, { status: event.target.value })}><option value="pending">Pendiente</option><option value="scheduled">Programada</option><option value="paid">Cobrada</option></Select><IconButton label="Quitar cuota" disabled={saving} onClick={() => setForm((current) => ({ ...current, installments: current.installments.filter((_, itemIndex) => itemIndex !== index) }))} /></div>)}</div>
+    <div className="space-y-3">{form.installments.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 md:grid-cols-[minmax(150px,1fr)_140px_155px_155px_130px_44px]"><Input value={item.label ?? ''} onChange={(event) => updateInstallment(index, { label: event.target.value })} placeholder="Seña / Cuota" /><NumberField label="Importe de la cuota" min={0} value={item.amount ?? 0} onChange={(event) => updateInstallment(index, { amount: Number(event.target.value) })} /><Field label="Paga desde"><Input type="date" value={item.paymentWindowStart?.slice(0, 10) ?? ''} onChange={(event) => updateInstallment(index, { paymentWindowStart: event.target.value || undefined })} /></Field><Field label="Hasta"><Input type="date" value={item.paymentWindowEnd?.slice(0, 10) ?? item.dueDate?.slice(0, 10) ?? ''} onChange={(event) => updateInstallment(index, { paymentWindowEnd: event.target.value || undefined, dueDate: event.target.value || undefined })} /></Field><Select value={item.status ?? 'pending'} onChange={(event) => updateInstallment(index, { status: event.target.value })}><option value="pending">Pendiente</option><option value="scheduled">Programada</option><option value="paid">Cobrada</option></Select><IconButton label="Quitar cuota" disabled={saving} onClick={() => setForm((current) => ({ ...current, installments: current.installments.filter((_, itemIndex) => itemIndex !== index) }))} /></div>)}</div>
     <SaveBar saving={saving} text="Guardar valores y plan de pagos" onSave={() => onSave({ finalAmount: total, estimatedAmount: total, commercialSnapshot: { ...initial, totalAmount: total, depositAmount: deposit, balanceAmount: Math.max(0, total - deposit), paymentTerms: form.paymentTerms }, paymentPlanSnapshot: form.installments })} />
   </SectionCard>;
 }
@@ -443,13 +443,83 @@ export function EventOperationsWorkspace({ event, plan, saving, onSave, onSyncSu
     {view === 'moments' && <EventTimelineEditor plan={plan} saving={saving} onSave={onSave} />}
     {view === 'guests' && <EventGuestListEditor event={event} plan={plan} saving={saving} onSave={onSave} onSyncSummary={onSyncSummary} onNotice={onNotice} />}
     {view === 'logistics' && <EventLogisticsEditor plan={plan} saving={saving} onSave={onSave} />}
-    {view === 'linen' && <EventResourcesEditor plan={plan} saving={saving} onSave={onSave} section="inventory" />}
+    {view === 'linen' && <EventTablewareEditor event={event} saving={saving} onNotice={onNotice} />}
     {view === 'products' && <EventResourcesEditor plan={plan} saving={saving} onSave={onSave} section="products" />}
   </div>;
 }
 
 export function EventGuestListEditor({ event, plan, saving, onSave, onSyncSummary, onNotice }: { event: Event; plan?: EventResourcePlan; saving: boolean; onSave: SavePlan; onSyncSummary: (payload: Record<string, unknown>) => void; onNotice?: (message: string, variant?: 'success' | 'error') => void }) {
   return <GuestListWorkspace event={event} plan={plan} saving={saving} onSave={onSave} onSyncSummary={onSyncSummary} onNotice={onNotice} />;
+}
+
+type SalonTablewareItem = { _id: string; name: string; category: string; currentQuantity: number; unitOfMeasure: string; reservedQuantity: number; availableQuantity: number; maxAssignableQuantity: number };
+type TablewareAllocation = { _id?: string; salonStockItemId?: string; source: 'salon_stock' | 'external'; itemName: string; category?: string; unit?: string; quantity: number; notes?: string };
+type ExternalTablewareItem = { id: string; name: string; category: string; unit: string; quantity?: number; notes?: string };
+
+export function EventTablewareEditor({ event, saving, onNotice }: { event: Event; saving: boolean; onNotice?: (message: string, variant?: 'success' | 'error') => void }) {
+  const [items, setItems] = useState<SalonTablewareItem[]>([]);
+  const [quantities, setQuantities] = useState<Record<string, number | undefined>>({});
+  const [external, setExternal] = useState<ExternalTablewareItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string>();
+  const guestCount = Number(event.guestCount ?? 0);
+
+  const load = async () => {
+    setLoading(true); setMessage(undefined);
+    try {
+      const result = await api.get<{ items: SalonTablewareItem[]; allocations: TablewareAllocation[] }>(`/events/${event._id}/tableware`);
+      setItems(result.items ?? []);
+      const internal: Record<string, number> = {};
+      const externalItems: ExternalTablewareItem[] = [];
+      for (const allocation of result.allocations ?? []) {
+        if (allocation.source === 'salon_stock' && allocation.salonStockItemId) internal[allocation.salonStockItemId] = allocation.quantity;
+        if (allocation.source === 'external') externalItems.push({ id: allocation._id ?? makeId(), name: allocation.itemName, category: allocation.category || 'Vajilla adicional', unit: allocation.unit || 'unidad', quantity: allocation.quantity, notes: allocation.notes });
+      }
+      setQuantities(internal); setExternal(externalItems);
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo cargar la vajilla del salón.'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }); return () => window.clearTimeout(timer); }, [event._id]);
+
+  const assignSuggested = () => {
+    if (!guestCount) { setMessage('Indicá la cantidad de invitados en el evento para armar la sugerencia.'); return; }
+    const suggested: Record<string, number> = {};
+    for (const item of items) {
+      if (['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY'].includes(item.category)) suggested[item._id] = Math.min(guestCount, item.maxAssignableQuantity);
+    }
+    setQuantities(suggested);
+    setMessage(`Se prearmó una unidad por invitado para platos, copas, vasos y cubiertos. Revisá y ajustá antes de guardar.`);
+  };
+  const addExternalShortages = () => {
+    if (!guestCount) { setMessage('Indicá la cantidad de invitados antes de calcular faltantes.'); return; }
+    const shortages = items.filter((item) => ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY'].includes(item.category)).map((item) => ({ item, missing: Math.max(0, guestCount - Math.min(guestCount, item.maxAssignableQuantity)) })).filter(({ missing }) => missing > 0);
+    if (!shortages.length) { setMessage('El stock propio alcanza para la sugerencia actual.'); return; }
+    setExternal((current) => [...current, ...shortages.map(({ item, missing }) => ({ id: makeId(), name: `${item.name} adicional`, category: 'Vajilla adicional', unit: item.unitOfMeasure || 'unidad', quantity: missing, notes: 'Refuerzo por faltante de stock del salón.' }))]);
+  };
+  const save = async () => {
+    setSubmitting(true); setMessage(undefined);
+    try {
+      const salonItems = Object.entries(quantities).filter(([, quantity]) => Number(quantity) > 0).map(([stockItemId, quantity]) => ({ stockItemId, quantity: Number(quantity) }));
+      const externalItems = external.filter((item) => item.name.trim() && Number(item.quantity) > 0).map((item) => ({ id: item.id, name: item.name.trim(), category: item.category.trim() || 'Vajilla adicional', unit: item.unit.trim() || 'unidad', quantity: Number(item.quantity), notes: item.notes?.trim() || undefined }));
+      const result = await api.put<{ items: SalonTablewareItem[]; allocations: TablewareAllocation[] }>(`/events/${event._id}/tableware`, { salonItems, externalItems });
+      setItems(result.items ?? items);
+      setMessage('Vajilla asignada. El disponible para la fecha ya fue actualizado.');
+      onNotice?.('Vajilla asignada y reservada para la fecha del evento.', 'success');
+    } catch (error) { const text = error instanceof Error ? error.message : 'No se pudo guardar la asignación de vajilla.'; setMessage(text); onNotice?.(text, 'error'); }
+    finally { setSubmitting(false); }
+  };
+  const updateExternal = (id: string, patch: Partial<ExternalTablewareItem>) => setExternal((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+
+  return <SectionCard title="Vajilla del salón" icon={<PackageCheck className="h-4 w-4" />} action={<div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={assignSuggested} disabled={loading || submitting || saving}>Prearmar por invitados</Button><Button type="button" variant="secondary" onClick={addExternalShortages} disabled={loading || submitting || saving}>Completar faltantes</Button></div>}>
+    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">La vajilla propia se reserva sólo para la fecha de este evento. La sugerencia usa {guestCount ? `${guestCount} invitados` : 'la cantidad de invitados del evento'}; podés corregir cada cantidad antes de guardar.</p>
+    {message ? <p className="mt-4 rounded-xl bg-zinc-100 px-4 py-3 text-sm text-zinc-700">{message}</p> : null}
+    {loading ? <p className="mt-5 text-sm text-zinc-500">Cargando disponibilidad del salón…</p> : <div className="mt-5 overflow-hidden rounded-xl border border-zinc-200"><div className="overflow-x-auto"><table className="min-w-[760px] w-full text-sm"><thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500"><tr><th className="px-4 py-3">Artículo</th><th className="px-4 py-3">Stock</th><th className="px-4 py-3">Reservado fecha</th><th className="px-4 py-3">Disponible</th><th className="px-4 py-3">Asignar al evento</th></tr></thead><tbody className="divide-y divide-zinc-100">{items.map((item) => <tr key={item._id}><td className="px-4 py-3"><p className="font-medium text-zinc-900">{item.name}</p><p className="text-xs text-zinc-500">{item.category} · {item.unitOfMeasure}</p></td><td className="px-4 py-3">{item.currentQuantity}</td><td className="px-4 py-3">{item.reservedQuantity}</td><td className={`px-4 py-3 font-semibold ${item.availableQuantity ? 'text-emerald-700' : 'text-rose-700'}`}>{item.availableQuantity}</td><td className="px-4 py-3"><Input aria-label={`Asignar ${item.name}`} className="w-32" type="number" min={0} value={quantities[item._id] ?? ''} onChange={(input) => setQuantities((current) => ({ ...current, [item._id]: numeric(input.target.value) }))} /></td></tr>)}</tbody></table></div>{!items.length ? <p className="px-4 py-8 text-sm text-zinc-500">Este salón no tiene artículos de vajilla activos.</p> : null}</div>}
+    <div className="mt-5 rounded-xl border border-zinc-200 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-zinc-950">Vajilla adicional</h3><p className="mt-1 text-sm text-zinc-500">Usala para préstamo, alquiler o compra externa; no descuenta el stock del salón.</p></div><Button type="button" variant="secondary" onClick={() => setExternal((current) => [...current, { id: makeId(), name: '', category: 'Vajilla adicional', unit: 'unidad', quantity: undefined, notes: '' }])}><Plus className="mr-2 h-4 w-4" />Agregar adicional</Button></div>
+      {external.length ? <div className="mt-4 space-y-3">{external.map((item) => <div key={item.id} className="grid gap-3 rounded-xl bg-zinc-50 p-3 md:grid-cols-[minmax(180px,1fr)_150px_100px_100px_44px]"><Input aria-label="Vajilla adicional" placeholder="Ej.: Copas alquiladas" value={item.name} onChange={(input) => updateExternal(item.id, { name: input.target.value })} /><Input aria-label="Categoría adicional" value={item.category} onChange={(input) => updateExternal(item.id, { category: input.target.value })} /><NumberField label="Cantidad adicional" min={1} value={item.quantity ?? ''} onChange={(input) => updateExternal(item.id, { quantity: numeric(input.target.value) })} /><Input aria-label="Unidad adicional" value={item.unit} onChange={(input) => updateExternal(item.id, { unit: input.target.value })} /><IconButton label="Quitar vajilla adicional" onClick={() => setExternal((current) => current.filter((other) => other.id !== item.id))} /></div>)}</div> : null}
+    </div>
+    <SaveBar saving={saving || submitting} onSave={() => void save()} />
+  </SectionCard>;
 }
 
 /*
@@ -532,11 +602,11 @@ export function EventResourcesEditor({ plan, saving, onSave, section = 'all' }: 
         <Input aria-label="Producto" placeholder="Gaseosa, hielo, descartables..." value={item.name} onChange={(event) => updateProduct(index, { name: event.target.value })} />
         <Input aria-label="Categoría" placeholder="Categoría" value={item.category ?? ''} onChange={(event) => updateProduct(index, { category: event.target.value })} />
         <Select aria-label="Rubro de producción" value={item.productionCategory ?? 'other'} onChange={(event) => updateProduct(index, { productionCategory: event.target.value })}>{Object.entries(productionCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-        <Input aria-label="Cantidad" type="number" min={0} value={item.quantity ?? ''} onChange={(event) => updateProduct(index, { quantity: numeric(event.target.value) })} />
+        <NumberField label="Cantidad a comprar" min={0} value={item.quantity ?? ''} onChange={(event) => updateProduct(index, { quantity: numeric(event.target.value) })} />
         <Input aria-label="Unidad" placeholder="Unidad" value={item.unit ?? ''} onChange={(event) => updateProduct(index, { unit: event.target.value })} />
         <Input aria-label="Proveedor" placeholder="Proveedor" value={item.supplierName ?? ''} onChange={(event) => updateProduct(index, { supplierName: event.target.value })} />
-        <Input aria-label="Costo unitario" type="number" min={0} value={item.unitCost ?? ''} onChange={(event) => updateProduct(index, { unitCost: numeric(event.target.value) })} />
-        <Input aria-label="Costo total" type="number" min={0} value={item.totalCost ?? ''} onChange={(event) => updateProduct(index, { totalCost: numeric(event.target.value) })} />
+        <NumberField label="Costo por unidad" min={0} value={item.unitCost ?? ''} onChange={(event) => updateProduct(index, { unitCost: numeric(event.target.value) })} />
+        <NumberField label="Costo total" min={0} value={item.totalCost ?? ''} onChange={(event) => updateProduct(index, { totalCost: numeric(event.target.value) })} />
         <Select aria-label="Estado" value={item.status ?? 'planned'} onChange={(event) => updateProduct(index, { status: event.target.value })}>{Object.entries(resourceStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
         <IconButton label="Quitar insumo" disabled={saving} onClick={() => setProducts((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
         <Textarea aria-label="Notas" className="lg:col-span-10" placeholder="Marca, compra pendiente, reposición..." value={item.notes ?? ''} onChange={(event) => updateProduct(index, { notes: event.target.value })} />
@@ -546,9 +616,9 @@ export function EventResourcesEditor({ plan, saving, onSave, section = 'all' }: 
       {inventory.length ? <div className="space-y-3">{inventory.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 lg:grid-cols-[minmax(180px,1fr)_130px_100px_100px_100px_100px_130px_44px]">
         <Input aria-label="Recurso" placeholder="Copas, manteles, mesas..." value={item.name} onChange={(event) => updateInventory(index, { name: event.target.value })} />
         <Input aria-label="Categoría" placeholder="Vajilla" value={item.category ?? ''} onChange={(event) => updateInventory(index, { category: event.target.value })} />
-        <Input aria-label="Necesario" type="number" min={0} value={item.quantityRequired ?? ''} onChange={(event) => updateInventory(index, { quantityRequired: numeric(event.target.value) })} />
-        <Input aria-label="Reservado" type="number" min={0} value={item.quantityReserved ?? ''} onChange={(event) => updateInventory(index, { quantityReserved: numeric(event.target.value) })} />
-        <Input aria-label="Devuelto" type="number" min={0} value={item.quantityReturned ?? ''} onChange={(event) => updateInventory(index, { quantityReturned: numeric(event.target.value) })} />
+        <NumberField label="Cantidad necesaria" min={0} value={item.quantityRequired ?? ''} onChange={(event) => updateInventory(index, { quantityRequired: numeric(event.target.value) })} />
+        <NumberField label="Cantidad reservada" min={0} value={item.quantityReserved ?? ''} onChange={(event) => updateInventory(index, { quantityReserved: numeric(event.target.value) })} />
+        <NumberField label="Cantidad devuelta" min={0} value={item.quantityReturned ?? ''} onChange={(event) => updateInventory(index, { quantityReturned: numeric(event.target.value) })} />
         <Input aria-label="Unidad" placeholder="Unidad" value={item.unit ?? ''} onChange={(event) => updateInventory(index, { unit: event.target.value })} />
         <Select aria-label="Estado" value={item.status ?? 'planned'} onChange={(event) => updateInventory(index, { status: event.target.value })}>{Object.entries(resourceStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
         <IconButton label="Quitar recurso" disabled={saving} onClick={() => setInventory((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
@@ -571,7 +641,7 @@ export function EventSuppliersEditor({ plan, saving, onSave }: { plan?: EventRes
       <Input aria-label="Contacto" placeholder="Contacto" value={item.contactName ?? ''} onChange={(event) => update(index, { contactName: event.target.value })} />
       <Input aria-label="Teléfono" placeholder="Teléfono" value={item.phone ?? ''} onChange={(event) => update(index, { phone: event.target.value })} />
       <Input aria-label="Llegada" placeholder="Llegada" value={item.arrivalTime ?? ''} onChange={(event) => update(index, { arrivalTime: event.target.value })} />
-      <Input aria-label="Monto acordado" type="number" min={0} value={item.agreedAmount ?? ''} onChange={(event) => update(index, { agreedAmount: numeric(event.target.value) })} />
+      <NumberField label="Monto acordado" min={0} value={item.agreedAmount ?? ''} onChange={(event) => update(index, { agreedAmount: numeric(event.target.value) })} />
       <Select aria-label="Estado" value={item.status ?? 'pending'} onChange={(event) => update(index, { status: event.target.value })}>{Object.entries(supplierStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
       <IconButton label="Quitar proveedor" disabled={saving} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
       <Textarea aria-label="Notas" className="lg:col-span-8" placeholder="Horarios, condiciones, pago..." value={item.notes ?? ''} onChange={(event) => update(index, { notes: event.target.value })} />

@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   salonFindOne: vi.fn(),
   salonFindOneAndUpdate: vi.fn(),
   salonExists: vi.fn(),
+  stockFind: vi.fn(),
+  stockCreate: vi.fn(),
+  stockFindOneAndUpdate: vi.fn(),
   packageFind: vi.fn(),
   packageExists: vi.fn(),
   ruleFind: vi.fn(),
@@ -21,6 +24,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../src/modules/users/user.model', () => ({ User: { find: mocks.userFind, findOne: mocks.userFindOne, findOneAndUpdate: mocks.userFindOneAndUpdate } }));
 vi.mock('../src/modules/salons/salon.model', () => ({
   Salon: { find: mocks.salonFind, findOne: mocks.salonFindOne, findOneAndUpdate: mocks.salonFindOneAndUpdate, exists: mocks.salonExists, create: vi.fn() }
+}));
+vi.mock('../src/modules/salons/salonStockItem.model', () => ({
+  salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'],
+  SalonStockItem: { find: mocks.stockFind, create: mocks.stockCreate, findOneAndUpdate: mocks.stockFindOneAndUpdate }
 }));
 vi.mock('../src/modules/crm/crm.models', () => ({
   Lead: {}, LeadActivity: {},
@@ -205,6 +212,59 @@ describe('salons management', () => {
       expect.objectContaining({ extraServices: extras, updatedBy: adminId }),
       { new: true }
     );
+  });
+
+  it('returns the stock items associated with a salon', async () => {
+    const stockItems = [{ _id: '507f1f77bcf86cd799439016', salonId, name: 'Plato playo', category: 'PLATES', currentQuantity: 96 }];
+    mocks.salonFindOne.mockReturnValue(chainLean({ _id: salonId, name: 'San Carlos' }));
+    mocks.stockFind.mockReturnValue({ sort: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(stockItems) }) });
+
+    const response = await request(app).get(`/api/salons/${salonId}/stock-items`).set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.items).toEqual(stockItems);
+    expect(mocks.stockFind).toHaveBeenCalledWith({ salonId, deletedAt: null });
+  });
+
+  it('updates only a stock item from its salon detail', async () => {
+    const itemId = '507f1f77bcf86cd799439016';
+    mocks.salonFindOne.mockReturnValue(chainLean({ _id: salonId, name: 'San Carlos' }));
+    mocks.stockFindOneAndUpdate.mockResolvedValue({ _id: itemId, salonId, name: 'Plato playo', currentQuantity: 97 });
+
+    const response = await request(app)
+      .patch(`/api/salons/${salonId}/stock-items/${itemId}`)
+      .set('Cookie', adminCookie)
+      .send({ currentQuantity: 97 });
+
+    expect(response.status).toBe(200);
+    expect(mocks.stockFindOneAndUpdate).toHaveBeenCalledWith(
+      { _id: itemId, salonId, deletedAt: null },
+      expect.objectContaining({ currentQuantity: 97, stockAsOf: expect.any(Date), updatedBy: adminId }),
+      { new: true, runValidators: true }
+    );
+    expect(mocks.salonFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('creates a stock item associated only with the selected salon', async () => {
+    const itemId = '507f1f77bcf86cd799439016';
+    mocks.salonFindOne.mockReturnValue(chainLean({ _id: salonId, name: 'San Carlos' }));
+    mocks.stockCreate.mockResolvedValue({ _id: itemId, salonId, name: 'Plato playo', category: 'PLATES', currentQuantity: 96 });
+
+    const response = await request(app)
+      .post(`/api/salons/${salonId}/stock-items`)
+      .set('Cookie', adminCookie)
+      .send({ name: 'Plato playo', category: 'PLATES', currentQuantity: 96, unitOfMeasure: 'unidad', active: true });
+
+    expect(response.status).toBe(201);
+    expect(mocks.stockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      salonId,
+      name: 'Plato playo',
+      currentQuantity: 96,
+      itemKey: expect.stringMatching(/^manual-/),
+      createdBy: adminId,
+      updatedBy: adminId
+    }));
+    expect(mocks.salonFindOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('soft deletes salons', async () => {

@@ -1,4 +1,4 @@
-/// <reference path="../../../../api/src/types/express.d.ts" />
+import type {} from '../../../../api/src/types/express';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 

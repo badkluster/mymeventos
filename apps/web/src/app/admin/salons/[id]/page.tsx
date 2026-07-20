@@ -5,15 +5,16 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Check, Globe2, PackageCheck, Pencil, Plus, Power, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Globe2, PackageCheck, Pencil, Plus, Power, Save, Trash2, Utensils } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { CloudinaryUpload, type UploadedAsset } from '@/components/cloudinary-upload';
 import { useToast } from '@/components/ui/toast-provider';
 import { cleanMenuSections, cleanStringList, MenuSectionsEditor, StringListEditor, type MenuSectionValue } from '@/components/admin/structured-list-editors';
-import { eventTypeOptions, money, type PackageRule, type Salon, type SalonExtra, type SalonMedia, type UserOption } from '@/features/salons/types';
+import { TableActionButton } from '@/components/admin/table-action-button';
+import { eventTypeOptions, money, salonStockCategoryLabels, salonStockCategoryOptions, type PackageRule, type Salon, type SalonExtra, type SalonMedia, type SalonStockCategory, type SalonStockItem, type UserOption } from '@/features/salons/types';
 
-type Tab = 'general' | 'commercial' | 'packages' | 'extras' | 'landing';
+type Tab = 'general' | 'commercial' | 'packages' | 'extras' | 'stock' | 'landing';
 type TemplateScope = 'salon' | 'global';
 type RuleForm = {
   name: string;
@@ -50,23 +51,34 @@ type TemplateForm = {
   menuSections: MenuSectionValue[];
   notes: string;
 };
+type StockItemForm = {
+  name: string;
+  category: SalonStockCategory;
+  currentQuantity: number;
+  unitOfMeasure: string;
+  active: boolean;
+  notes: string;
+};
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'commercial', label: 'Comercial' },
   { id: 'packages', label: 'Paquetes' },
   { id: 'extras', label: 'Extras' },
+  { id: 'stock', label: 'Vajilla' },
   { id: 'landing', label: 'Landing' }
 ];
 const tabIds = tabs.map((item) => item.id);
 
 const emptyExtra: SalonExtra = { name: '', description: '', basePrice: 0, active: true, includedByDefault: false, publicVisible: false };
 const emptyTemplate: TemplateForm = { name: '', durationHours: 8, startTime: '21:00', endTime: '05:00', pricingMode: 'per_person', pricePerPerson: 0, fixedPrice: 0, discountPercentage: 0, depositAmount: 0, paymentTerms: '', promotionText: '', giftText: '', includedServices: [], menuSections: [], notes: '' };
+const emptyStockItem: StockItemForm = { name: '', category: 'MISCELLANEOUS', currentQuantity: 0, unitOfMeasure: 'unidad', active: true, notes: '' };
 const toNumber = (value: FormDataEntryValue | null) => Number(value || 0);
 const toText = (value: FormDataEntryValue | null) => String(value ?? '');
 const assetUrl = (asset: UploadedAsset) => asset.secureUrl || asset.url;
 const galleryTextToUrls = (value: string) => value.split('\n').map((item) => item.trim()).filter(Boolean);
 const uniqueUrls = (urls: string[]) => urls.filter(Boolean).filter((url, index, allUrls) => allUrls.indexOf(url) === index);
+const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC' }).format(new Date(value)) : 'Sin informar';
 function cloudinaryImageUrl(url: string): string {
   if (!url || !url.includes('/upload/') || url.includes('/upload/f_auto,q_auto/')) return url;
   return url.replace('/upload/', '/upload/f_auto,q_auto/');
@@ -115,6 +127,11 @@ export default function SalonDetailPage() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [packageRules, setPackageRules] = useState<PackageRule[]>([]);
   const [extras, setExtras] = useState<SalonExtra[]>([]);
+  const [stockItems, setStockItems] = useState<SalonStockItem[]>([]);
+  const [stockFormOpen, setStockFormOpen] = useState(false);
+  const [stockForm, setStockForm] = useState<StockItemForm>(emptyStockItem);
+  const [editingStockItem, setEditingStockItem] = useState<SalonStockItem>();
+  const [stockItemToDelete, setStockItemToDelete] = useState<SalonStockItem>();
   const [editingRule, setEditingRule] = useState<PackageRule>();
   const [ruleForm, setRuleForm] = useState<RuleForm>();
   const [templateOpen, setTemplateOpen] = useState(false);
@@ -140,14 +157,17 @@ export default function SalonDetailPage() {
     setLoading(true);
     setNotice('');
     try {
-      const [salonResponse, packageResponse, extrasResponse] = await Promise.all([
-        api.get<{ salon: Salon }>(`/salons/${salonId}`),
-        api.get<{ packageRules: PackageRule[] }>(`/salons/${salonId}/package-rules`),
-        api.get<{ extras: SalonExtra[] }>(`/salons/${salonId}/extras`)
-      ]);
+      const salonResponse = await api.get<{ salon: Salon }>(`/salons/${salonId}`);
       setSalon(salonResponse.salon);
-      setPackageRules(packageResponse.packageRules ?? []);
-      setExtras(extrasResponse.extras ?? []);
+      const [packageResult, extrasResult, stockResult] = await Promise.allSettled([
+        api.get<{ packageRules: PackageRule[] }>(`/salons/${salonId}/package-rules`),
+        api.get<{ extras: SalonExtra[] }>(`/salons/${salonId}/extras`),
+        api.get<{ items: SalonStockItem[] }>(`/salons/${salonId}/stock-items`)
+      ]);
+      setPackageRules(packageResult.status === 'fulfilled' ? packageResult.value.packageRules ?? [] : []);
+      setExtras(extrasResult.status === 'fulfilled' ? extrasResult.value.extras ?? [] : []);
+      setStockItems(stockResult.status === 'fulfilled' ? stockResult.value.items ?? [] : []);
+      if (stockResult.status === 'rejected') setNotice('El salón cargó, pero el inventario de vajilla todavía no está disponible en el backend activo.');
       try {
         const usersResponse = await api.get<{ users: UserOption[] }>('/users');
         setUsers((usersResponse.users ?? []).filter((user) => user.active !== false));
@@ -504,6 +524,67 @@ export default function SalonDetailPage() {
     await saveExtras(next);
   }
 
+  function openNewStockItem() {
+    setEditingStockItem(undefined);
+    setStockForm(emptyStockItem);
+    setStockFormOpen(true);
+  }
+
+  function openEditStockItem(item: SalonStockItem) {
+    setEditingStockItem(item);
+    setStockForm({
+      name: item.name,
+      category: item.category,
+      currentQuantity: item.currentQuantity,
+      unitOfMeasure: item.unitOfMeasure,
+      active: item.active,
+      notes: item.notes ?? ''
+    });
+    setStockFormOpen(true);
+  }
+
+  async function reloadStockItems() {
+    const response = await api.get<{ items: SalonStockItem[] }>(`/salons/${salonId}/stock-items`);
+    setStockItems(response.items ?? []);
+  }
+
+  async function saveStockItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!stockForm.name.trim()) return setNotice('El nombre del artículo es obligatorio.');
+    setSaving(true);
+    setNotice('');
+    try {
+      const payload = { ...stockForm, name: stockForm.name.trim(), unitOfMeasure: stockForm.unitOfMeasure.trim() };
+      if (editingStockItem) await api.patch(`/salons/${salonId}/stock-items/${editingStockItem._id}`, payload);
+      else await api.post(`/salons/${salonId}/stock-items`, payload);
+      setStockFormOpen(false);
+      setEditingStockItem(undefined);
+      setStockForm(emptyStockItem);
+      await reloadStockItems();
+      setNotice(editingStockItem ? 'Artículo de stock actualizado correctamente.' : 'Artículo de stock creado correctamente.');
+    } catch (error) {
+      setNotice(errorMessage(error, 'No se pudo guardar el artículo de stock.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeStockItem() {
+    if (!stockItemToDelete) return;
+    setSaving(true);
+    setNotice('');
+    try {
+      await api.delete(`/salons/${salonId}/stock-items/${stockItemToDelete._id}`);
+      setStockItemToDelete(undefined);
+      await reloadStockItems();
+      setNotice('Artículo de stock eliminado correctamente.');
+    } catch (error) {
+      setNotice(errorMessage(error, 'No se pudo eliminar el artículo de stock.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <section className="rounded-2xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500">Cargando salón…</section>;
   if (!salon) return <section className="space-y-4"><Link href="/admin/salons" className="inline-flex items-center gap-2 text-sm text-zinc-600"><ArrowLeft className="h-4 w-4" />Volver a Salones</Link><p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{notice || 'No se encontró el salón.'}</p></section>;
 
@@ -551,6 +632,10 @@ export default function SalonDetailPage() {
       {!extras.length && <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-sm text-zinc-500">Todavía no hay extras configurados para este salón.</p>}</div>
       <form onSubmit={saveExtra} className="h-fit rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><Plus className="h-4 w-4" />{editingExtraIndex === null ? 'Nuevo extra' : 'Editar extra'}</h2><div className="mt-4 grid gap-3"><Field label="Nombre"><Input value={extraForm.name} onChange={(event) => setExtraForm((current) => ({ ...current, name: event.target.value }))} required /></Field><Field label="Descripción"><Textarea value={extraForm.description} onChange={(event) => setExtraForm((current) => ({ ...current, description: event.target.value }))} /></Field><Field label="Precio sugerido"><Input type="number" min={0} value={extraForm.basePrice} onChange={(event) => setExtraForm((current) => ({ ...current, basePrice: Number(event.target.value) }))} /></Field><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extraForm.active} onChange={(event) => setExtraForm((current) => ({ ...current, active: event.target.checked }))} />Activo</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extraForm.includedByDefault} onChange={(event) => setExtraForm((current) => ({ ...current, includedByDefault: event.target.checked }))} />Incluido por defecto</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extraForm.publicVisible} onChange={(event) => setExtraForm((current) => ({ ...current, publicVisible: event.target.checked }))} />Visible en web</label><Button disabled={saving}>{saving ? 'Guardando…' : 'Guardar extra'}</Button></div></form>
     </div>}
+    {tab === 'stock' && <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><Utensils className="h-4 w-4" />Stock de vajilla</h2><p className="mt-1 text-sm text-zinc-500">{stockItems.length} artículos · {stockItems.reduce((total, item) => total + item.currentQuantity, 0)} unidades registradas para {salon.name}.</p></div><Button onClick={openNewStockItem}><Plus className="mr-2 h-4 w-4" />Nuevo artículo</Button></div>
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="min-w-[850px] w-full text-sm"><thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500"><tr>{['Categoría', 'Artículo', 'Stock actual', 'Unidad', 'Inventario al', 'Estado'].map((label) => <th key={label} className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide">{label}</th>)}<th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide">Acciones</th></tr></thead><tbody className="divide-y divide-zinc-100">{stockItems.map((item) => <tr key={item._id} className="hover:bg-amber-50/35"><td className="px-5 py-4 text-zinc-600">{salonStockCategoryLabels[item.category]}</td><td className="px-5 py-4"><p className="font-medium text-zinc-900">{item.name}</p>{item.notes && <p className="mt-0.5 text-xs text-zinc-500">{item.notes}</p>}</td><td className="px-5 py-4 text-lg font-semibold text-zinc-950">{item.currentQuantity}</td><td className="px-5 py-4 text-zinc-600">{item.unitOfMeasure}</td><td className="px-5 py-4 text-zinc-600">{formatDate(item.stockAsOf)}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.active ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-0.5"><TableActionButton icon={Pencil} label="Editar artículo" onClick={() => openEditStockItem(item)} /><TableActionButton icon={Trash2} label="Eliminar artículo" onClick={() => setStockItemToDelete(item)} disabled={saving} /></div></td></tr>)}</tbody></table></div>{!stockItems.length && <div className="grid place-items-center px-6 py-14 text-center"><Utensils className="h-9 w-9 text-zinc-400" /><p className="mt-3 text-sm text-zinc-500">Todavía no hay artículos de vajilla cargados para este salón.</p></div>}</div>
+    </div>}
     {tab === 'landing' && <form onSubmit={saveLanding} className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-2">
       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Imagen principal</h2><p className="mt-1 text-sm text-zinc-500">Se sube a Cloudinary y queda disponible para la futura landing.</p></div><div className="flex flex-wrap gap-2"><CloudinaryUpload context="salons" salonId={salonId} accept="image/*,.heic,.heif" label={salon.heroImageUrl ? 'Cambiar imagen principal' : 'Subir imagen principal'} onUploaded={(asset) => void setHeroFromUpload(asset)} />{salon.heroImageUrl ? <Button type="button" variant="danger" onClick={() => void removeHeroImage()}><Trash2 className="mr-2 h-4 w-4" />Quitar imagen</Button> : null}</div></div>{salon.heroImageUrl && <div className="mt-4 h-56 rounded-xl border border-zinc-200 bg-cover bg-center" style={{ backgroundImage: `url(${cloudinaryImageUrl(salon.heroImageUrl)})` }} />}</div>
       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Galería de imágenes y videos</h2><p className="mt-1 text-sm text-zinc-500">Acepta imágenes y videos. Los archivos se guardan en Cloudinary.</p></div><CloudinaryUpload context="salons" salonId={salonId} accept="image/*,.heic,.heif,video/*" label="Subir a galería" multiple onUploaded={(asset) => void addGalleryAsset(asset)} onUploadedBatch={(assets) => void addGalleryAssets(assets)} /></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(salon.mediaGallery ?? []).map((item, index) => <article key={item.publicId ?? item.url} className="overflow-hidden rounded-xl border border-zinc-200 bg-white"><div className="grid h-36 place-items-center bg-zinc-100">{item.resourceType === 'video' ? <video src={item.secureUrl || item.url} className="h-full w-full object-cover" controls /> : <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${mediaUrl(item.secureUrl || item.url, item.resourceType)})` }} />}</div><div className="p-3"><p className="truncate text-sm font-medium text-zinc-800">{item.title || item.publicId || 'Archivo de galería'}</p><p className="mt-1 text-xs text-zinc-500">{item.resourceType === 'video' ? 'Video' : 'Imagen'} · {item.publicVisible ? 'Visible' : 'Oculto'}</p><Button type="button" variant="danger" className="mt-3 w-full" onClick={() => void removeGalleryAsset(index)}>Eliminar</Button></div></article>)}{!(salon.mediaGallery ?? []).length && <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">Todavía no hay archivos en la galería.</p>}</div></div>
@@ -563,6 +648,12 @@ export default function SalonDetailPage() {
       <Field label="URL de mapa" className="lg:col-span-2"><Input name="mapUrl" defaultValue={salon.mapUrl} /></Field>
       <footer className="lg:col-span-2 flex justify-end"><Button disabled={saving}><Globe2 className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar landing'}</Button></footer>
     </form>}
+    <Modal open={stockFormOpen} onClose={() => { setStockFormOpen(false); setEditingStockItem(undefined); }} title={editingStockItem ? 'Editar artículo de stock' : 'Nuevo artículo de stock'} description={`La cantidad corresponde únicamente a ${salon.name}.`}>
+      <form onSubmit={saveStockItem} className="grid gap-4 p-6 sm:grid-cols-2"><Field label="Artículo" className="sm:col-span-2"><Input value={stockForm.name} onChange={(event) => setStockForm((current) => ({ ...current, name: event.target.value }))} required /></Field><Field label="Categoría"><Select value={stockForm.category} onChange={(event) => setStockForm((current) => ({ ...current, category: event.target.value as SalonStockCategory }))}>{salonStockCategoryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Stock actual"><Input type="number" min={0} step={1} value={stockForm.currentQuantity} onChange={(event) => setStockForm((current) => ({ ...current, currentQuantity: Number(event.target.value) }))} required /></Field><Field label="Unidad de medida"><Input value={stockForm.unitOfMeasure} onChange={(event) => setStockForm((current) => ({ ...current, unitOfMeasure: event.target.value }))} required /></Field><label className="flex items-center gap-2 self-end pb-3 text-sm text-zinc-700"><input type="checkbox" checked={stockForm.active} onChange={(event) => setStockForm((current) => ({ ...current, active: event.target.checked }))} />Artículo activo</label><Field label="Notas" className="sm:col-span-2"><Textarea value={stockForm.notes} onChange={(event) => setStockForm((current) => ({ ...current, notes: event.target.value }))} /></Field><footer className="flex justify-end gap-3 sm:col-span-2"><Button type="button" variant="secondary" onClick={() => { setStockFormOpen(false); setEditingStockItem(undefined); }}>Cancelar</Button><Button disabled={saving}>{saving ? 'Guardando…' : 'Guardar artículo'}</Button></footer></form>
+    </Modal>
+    <Modal open={Boolean(stockItemToDelete)} onClose={() => setStockItemToDelete(undefined)} title="Eliminar artículo de stock" description="El artículo se eliminará con borrado lógico.">
+      <div className="p-6"><p className="text-sm text-zinc-600">¿Querés eliminar “{stockItemToDelete?.name}” del stock de {salon.name}?</p><footer className="mt-6 flex justify-end gap-3"><Button variant="secondary" onClick={() => setStockItemToDelete(undefined)}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={() => void removeStockItem()}>{saving ? 'Eliminando…' : 'Eliminar artículo'}</Button></footer></div>
+    </Modal>
     <Modal open={Boolean(editingRule && ruleForm)} onClose={() => { setEditingRule(undefined); setRuleForm(undefined); }} title={`Editar regla · ${editingRule?.packageName ?? ''}`} description="Estos cambios afectan sólo la regla del salón, no la plantilla global del paquete.">
       {ruleForm && <form onSubmit={saveRule} className="grid gap-4 p-6 sm:grid-cols-2">
         <Field label="Nombre para este salón" className="sm:col-span-2"><Input value={ruleForm.name} onChange={(event) => setRuleForm((current) => current && { ...current, name: event.target.value })} required /></Field>

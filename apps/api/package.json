@@ -11,9 +11,13 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "seed": "ts-node src/db/seed.ts",
+    "seed:digital-tickets": "ts-node src/scripts/seedDigitalTickets.ts",
+    "clean:digital-tickets-demo": "ts-node src/scripts/cleanDigitalTicketsDemo.ts",
+    "seed:salon-stock": "ts-node src/scripts/updateSalonStock.ts",
     "reset:admin-password": "ts-node src/scripts/resetAdminPassword.ts",
     "update:la-plata-packages": "ts-node src/scripts/updateLaPlataPackages.ts",
     "migrate:package-template-names": "ts-node src/scripts/removePackageTemplateNameUniqueIndex.ts",
+    "migrate:invitation-event-index": "ts-node src/scripts/removeLegacyInvitationEventIdIndex.ts",
     "import:promo-infantil-packages": "ts-node src/scripts/importPromoInfantilPackages.ts",
     "import:san-carlos-packages": "ts-node src/scripts/importSanCarlosPackages.ts",
     "import:la-plata-premium-packages": "ts-node src/scripts/importLaPlataPremiumPackages.ts"

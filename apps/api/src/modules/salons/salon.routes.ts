@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
 import { Salon } from './salon.model';
@@ -13,6 +14,7 @@ import { writeAuditLog } from '../audit/audit.service';
 import { ApiError } from '../../middlewares/errorHandler';
 import { idParams } from '../common.schemas';
 import { getApiMessage } from '../../utils/messages';
+import { SalonStockItem, salonStockCategories } from './salonStockItem.model';
 
 const router = Router();
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
@@ -120,6 +122,23 @@ const commercialSchema = z.object({
   query: z.object({})
 });
 const extrasSchema = z.object({ body: z.object({ extras: z.array(extraSchema) }), params: idParams.shape.params, query: z.object({}) });
+const stockItemFields = z.object({
+  name: z.string().trim().min(2),
+  category: z.enum(salonStockCategories),
+  currentQuantity: z.coerce.number().int().min(0),
+  unitOfMeasure: z.string().trim().min(1).default('unidad'),
+  displayOrder: z.coerce.number().int().min(0).optional(),
+  active: z.boolean().optional(),
+  notes: optionalText
+});
+const createStockItemSchema = z.object({ body: stockItemFields, params: idParams.shape.params, query: z.object({}) });
+const stockItemParams = z.object({ id: objectId, itemId: objectId });
+const updateStockItemSchema = z.object({
+  body: stockItemFields.partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'),
+  params: stockItemParams,
+  query: z.object({})
+});
+const stockItemIdSchema = z.object({ body: z.object({}).optional(), params: stockItemParams, query: z.object({}) });
 const ruleSchema = z.object({
   body: z.object({
     name: z.string().trim().min(2).optional(),
@@ -345,6 +364,52 @@ router.patch('/:id/extras', requirePermission(Permission.SALONS_UPDATE), validat
   if (!salon) throw new ApiError(404, 'SALON_NOT_FOUND');
   await writeAuditLog(request, 'SALON_EXTRAS_UPDATE', 'Salon', request.params.id);
   return sendSuccess(response, { extras: salon.extraServices ?? [] }, 200, getApiMessage('SALON_UPDATED'));
+}));
+
+router.get('/:id/stock-items', requirePermission(Permission.SALONS_READ), validateRequest(idParams), asyncHandler(async (request, response) => {
+  await getSalonOrFail(request, request.params.id);
+  const items = await SalonStockItem.find({ salonId: request.params.id, deletedAt: null }).sort({ displayOrder: 1, name: 1 }).lean();
+  return sendSuccess(response, { items });
+}));
+
+router.post('/:id/stock-items', requirePermission(Permission.SALONS_UPDATE), validateRequest(createStockItemSchema), asyncHandler(async (request, response) => {
+  await getSalonOrFail(request, request.params.id);
+  const item = await SalonStockItem.create({
+    ...request.body,
+    salonId: request.params.id,
+    itemKey: `manual-${randomUUID()}`,
+    stockAsOf: new Date(),
+    createdBy: request.user!.id,
+    updatedBy: request.user!.id
+  });
+  await writeAuditLog(request, 'SALON_STOCK_ITEM_CREATE', 'SalonStockItem', item._id.toString());
+  return sendSuccess(response, { item }, 201, getApiMessage('SALON_STOCK_ITEM_CREATED'));
+}));
+
+router.patch('/:id/stock-items/:itemId', requirePermission(Permission.SALONS_UPDATE), validateRequest(updateStockItemSchema), asyncHandler(async (request, response) => {
+  await getSalonOrFail(request, request.params.id);
+  const update: Record<string, unknown> = { ...request.body, updatedBy: request.user!.id };
+  if (request.body.currentQuantity !== undefined) update.stockAsOf = new Date();
+  const item = await SalonStockItem.findOneAndUpdate(
+    { _id: request.params.itemId, salonId: request.params.id, deletedAt: null },
+    update,
+    { new: true, runValidators: true }
+  );
+  if (!item) throw new ApiError(404, 'SALON_STOCK_ITEM_NOT_FOUND');
+  await writeAuditLog(request, 'SALON_STOCK_ITEM_UPDATE', 'SalonStockItem', item._id.toString());
+  return sendSuccess(response, { item }, 200, getApiMessage('SALON_STOCK_ITEM_UPDATED'));
+}));
+
+router.delete('/:id/stock-items/:itemId', requirePermission(Permission.SALONS_UPDATE), validateRequest(stockItemIdSchema), asyncHandler(async (request, response) => {
+  await ensureSalonAccess(request, request.params.id);
+  const item = await SalonStockItem.findOneAndUpdate(
+    { _id: request.params.itemId, salonId: request.params.id, deletedAt: null },
+    { active: false, deletedAt: new Date(), deletedBy: request.user!.id, updatedBy: request.user!.id },
+    { new: true }
+  );
+  if (!item) throw new ApiError(404, 'SALON_STOCK_ITEM_NOT_FOUND');
+  await writeAuditLog(request, 'SALON_STOCK_ITEM_DELETE', 'SalonStockItem', item._id.toString());
+  return sendSuccess(response, { deleted: true }, 200, getApiMessage('SALON_STOCK_ITEM_DELETED'));
 }));
 
 router.delete('/:id', requirePermission(Permission.SALONS_UPDATE), validateRequest(idParams), asyncHandler(async (request, response) => {

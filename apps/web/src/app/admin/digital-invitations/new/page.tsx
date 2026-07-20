@@ -1,3 +1,3 @@
 import { InvitationEditor } from '@/features/digital/invitations-admin';
 
-export default function NewDigitalInvitationPage() { return <InvitationEditor />; }
+export default async function NewDigitalInvitationPage({ searchParams }: { searchParams: Promise<{ templateId?: string }> }) { const { templateId } = await searchParams; return <InvitationEditor initialTemplateId={templateId} />; }

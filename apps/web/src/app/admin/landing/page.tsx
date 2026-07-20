@@ -4,7 +4,7 @@
 
 import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Edit3, Eye, GripVertical, Plus, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
-import { Button, Input, Modal, PageHeader, Textarea } from '@/components/ui/primitives';
+import { Button, Input, Modal, NumberField, PageHeader, Textarea } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
 import { CloudinaryUpload } from '@/components/cloudinary-upload';
@@ -246,13 +246,13 @@ export default function LandingAdminPage() {
       <Input required placeholder="Pregunta" value={String(form.question ?? '')} onChange={(event) => set('question', event.target.value)} />
       <Textarea required placeholder="Respuesta" value={String(form.answer ?? '')} onChange={(event) => set('answer', event.target.value)} />
       <Input placeholder="Categoría" value={String(form.category ?? '')} onChange={(event) => set('category', event.target.value)} />
-      <Input type="number" placeholder="Orden" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
+      <NumberField label="Orden de aparición" placeholder="Ej.: 1" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
     </>;
     if (tab === 'testimonials') return <>
       <Textarea required placeholder="Testimonio" value={String(form.quote ?? '')} onChange={(event) => set('quote', event.target.value)} />
       <Input required placeholder="Cliente" value={String(form.customerName ?? '')} onChange={(event) => set('customerName', event.target.value)} />
       <Input placeholder="Tipo de evento" value={String(form.eventType ?? '')} onChange={(event) => set('eventType', event.target.value)} />
-      <Input type="number" min={1} max={5} placeholder="Rating" value={Number(form.rating ?? 5)} onChange={(event) => set('rating', event.target.value)} />
+      <NumberField label="Calificación (1 a 5)" min={1} max={5} placeholder="Ej.: 5" value={Number(form.rating ?? 5)} onChange={(event) => set('rating', event.target.value)} />
       <div className="md:col-span-2"><ImageUploadField label="Imagen del testimonio" value={String(form.imageUrl ?? '')} onChange={(value) => set('imageUrl', value)} /></div>
     </>;
     if (tab === 'gallery') return <>
@@ -260,7 +260,7 @@ export default function LandingAdminPage() {
       <div className="md:col-span-2"><ImageUploadField label="Imagen de galería" required value={String(form.imageUrl ?? '')} onChange={(value) => set('imageUrl', value)} /></div>
       <Input placeholder="Alt text" value={String(form.altText ?? '')} onChange={(event) => set('altText', event.target.value)} />
       <Input placeholder="Categoría" value={String(form.category ?? '')} onChange={(event) => set('category', event.target.value)} />
-      <Input type="number" placeholder="Orden" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
+      <NumberField label="Orden de aparición" placeholder="Ej.: 1" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
       <Textarea placeholder="Descripción" value={String(form.description ?? '')} onChange={(event) => set('description', event.target.value)} />
     </>;
     return <>
@@ -278,7 +278,7 @@ export default function LandingAdminPage() {
         <Input placeholder="Icono lucide" value={String(form.icon ?? '')} onChange={(event) => set('icon', event.target.value)} />
         {'imageUrl' in form ? <div className="md:col-span-2"><ImageUploadField label="Imagen" value={String(form.imageUrl ?? '')} onChange={(value) => set('imageUrl', value)} /></div> : null}
       </>}
-      <Input type="number" placeholder="Orden" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
+      <NumberField label="Orden de aparición" placeholder="Ej.: 1" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
     </>;
   }
 

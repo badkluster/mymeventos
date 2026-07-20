@@ -6,7 +6,7 @@ describe('ticket models', () => {
     const publication = new TicketPublication({ title: 'Fiesta independiente', startsAt: new Date(), slug: 'fiesta-2026', capacity: 100 });
     const ticket = new DigitalTicket({ publicationId: publication._id, orderId: '507f1f77bcf86cd799439013', ticketTypeId: '507f1f77bcf86cd799439014', publicToken: 'random-public-token-value-1234', qrPayload: 'random-public-token-value-1234' });
     expect(publication.status).toBe('draft');
-    expect(ticket.status).toBe('reserved');
+    expect(ticket.status).toBe('issued');
     expect(ticket.publicToken).not.toBe(String(ticket._id));
   });
 

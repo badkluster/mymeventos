@@ -27,7 +27,13 @@ const digitalInvitationSchema = new Schema({
   status: { type: String, enum: invitationStatuses, default: 'draft', index: true },
   templateId: { type: Schema.Types.ObjectId, ref: 'InvitationTemplate', index: true },
   template: { type: String, trim: true, default: 'classic' },
-  theme: { primaryColor: String, secondaryColor: String, backgroundColor: String },
+  templateTier: { type: String, enum: ['basic', 'premium'], default: 'basic', index: true },
+  templateFeatures: { type: Schema.Types.Mixed },
+  celebrationType: { type: String, enum: ['wedding', 'fifteen', 'birthday', 'kids', 'baby_shower', 'baptism', 'communion', 'anniversary', 'corporate', 'general', 'other'], default: 'general', index: true },
+  theme: { primaryColor: String, secondaryColor: String, backgroundColor: String, surfaceColor: String, textColor: String, mutedTextColor: String, accentColor: String, headingFont: String, bodyFont: String, headingWeight: Number, bodyWeight: Number, borderRadius: Number, buttonStyle: String, cardStyle: String, contentMaxWidth: Number },
+  generalBackground: { type: Schema.Types.Mixed },
+  content: { type: Schema.Types.Mixed, default: () => ({ sections: [] }) },
+  media: { type: [Schema.Types.Mixed], default: [] },
   allowCompanions: { type: Boolean, default: true },
   maxCompanions: { type: Number, min: 0, default: 0 },
   allowMinors: { type: Boolean, default: true },
@@ -46,12 +52,21 @@ const invitationTemplateSchema = new Schema({
   name: { type: String, required: true, trim: true, maxlength: 120 },
   slug: { type: String, required: true, trim: true, lowercase: true, maxlength: 120 },
   description: { type: String, trim: true, maxlength: 500 },
+  category: { type: String, enum: ['wedding', 'fifteen', 'birthday', 'kids', 'baby_shower', 'baptism', 'communion', 'anniversary', 'corporate', 'general'], default: 'general', index: true },
+  tier: { type: String, enum: ['basic', 'premium'], default: 'basic', index: true },
+  status: { type: String, enum: ['draft', 'active', 'inactive'], default: 'active', index: true },
+  tags: { type: [String], default: [] },
+  allowedFeatures: { type: Schema.Types.Mixed },
+  defaultContent: { type: Schema.Types.Mixed },
   previewImageUrl: { type: String, trim: true },
-  theme: { primaryColor: String, secondaryColor: String, backgroundColor: String },
+  theme: { primaryColor: String, secondaryColor: String, backgroundColor: String, surfaceColor: String, textColor: String, mutedTextColor: String, accentColor: String, headingFont: String, bodyFont: String, headingWeight: Number, bodyWeight: Number, borderRadius: Number, buttonStyle: String, cardStyle: String, contentMaxWidth: Number },
   isSystem: { type: Boolean, default: false, index: true },
+  isGlobal: { type: Boolean, default: false, index: true },
+  salonIds: { type: [Schema.Types.ObjectId], ref: 'Salon', default: [] },
   ...baseFields
 }, { timestamps: true });
 invitationTemplateSchema.index({ ownerId: 1, slug: 1 }, { unique: true, partialFilterExpression: { ownerId: { $type: 'objectId' } } });
+invitationTemplateSchema.index({ isSystem: 1, slug: 1 }, { unique: true, partialFilterExpression: { isSystem: true } });
 
 const invitationGuestSchema = new Schema({
   invitationId: { type: Schema.Types.ObjectId, ref: 'DigitalInvitation', required: true, index: true },
@@ -67,6 +82,7 @@ const invitationGuestSchema = new Schema({
   respondedAt: Date,
   notes: { type: String, trim: true },
   dietaryRestrictions: { type: String, trim: true },
+  musicRequest: { type: String, trim: true },
   guestMessage: { type: String, trim: true },
   deliveryChannel: { type: String, enum: ['manual', 'email', 'whatsapp', 'other'], default: 'manual' },
   sentAt: Date,
@@ -80,3 +96,17 @@ invitationGuestSchema.index({ invitationId: 1, deletedAt: 1, status: 1 });
 export const DigitalInvitation = models.DigitalInvitation || model('DigitalInvitation', digitalInvitationSchema);
 export const InvitationGuest = models.InvitationGuest || model('InvitationGuest', invitationGuestSchema);
 export const InvitationTemplate = models.InvitationTemplate || model('InvitationTemplate', invitationTemplateSchema);
+
+/** Removes the obsolete one-invitation-per-event index from the previous module version. */
+export async function dropLegacyInvitationEventIdIndex(): Promise<void> {
+  const db = DigitalInvitation.db.db;
+  if (!db) return;
+  const collections = await db.listCollections({ name: DigitalInvitation.collection.name }, { nameOnly: true }).toArray();
+  if (!collections.length) return;
+  const indexes = await DigitalInvitation.collection.indexes();
+  const legacyIndex = indexes.find((index: any) => index.name === 'eventId_1' && index.key?.eventId === 1);
+  if (legacyIndex?.name) {
+    await DigitalInvitation.collection.dropIndex(legacyIndex.name);
+    console.info('Removed obsolete DigitalInvitation eventId_1 index.');
+  }
+}

@@ -40,13 +40,14 @@ export function validateRsvp(invitation: any, guest: any, input: { attendance: '
   return { status: total < guest.assignedSeats ? 'partially_confirmed' : 'confirmed', adults, minors, companions };
 }
 
-export async function upsertRsvp(invitation: any, guestToken: string, input: { attendance: 'confirmed' | 'declined'; adults?: number; minors?: number; companions?: number; dietaryRestrictions?: string; guestMessage?: string }) {
+export async function upsertRsvp(invitation: any, guestToken: string, input: { attendance: 'confirmed' | 'declined'; adults?: number; minors?: number; companions?: number; dietaryRestrictions?: string; musicRequest?: string; guestMessage?: string }) {
   const guest: any = await InvitationGuest.findOne({ invitationId: invitation._id, publicToken: guestToken, deletedAt: null });
   if (!guest) throw new ApiError(404, 'INVITATION_GUEST_NOT_FOUND', 'El invitado no existe.');
   if (guest.status !== 'pending' && guest.status !== 'sent' && guest.status !== 'viewed' && !invitation.allowResponseChanges) throw new ApiError(409, 'RSVP_ALREADY_RECORDED', 'La respuesta ya fue registrada y no puede modificarse.');
   const response = validateRsvp(invitation, guest, input);
   Object.assign(guest, response, {
     dietaryRestrictions: input.dietaryRestrictions,
+    musicRequest: input.musicRequest,
     guestMessage: input.guestMessage,
     respondedAt: new Date()
   });

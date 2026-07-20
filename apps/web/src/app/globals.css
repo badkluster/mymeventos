@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* The invitation editor renders a phone-sized frame inside a desktop page. Tailwind's
+   viewport breakpoints would otherwise use the desktop width instead of that frame. */
+.invitation-mobile-preview [class~="sm:grid-cols-2"] { grid-template-columns: minmax(0, 1fr) !important; }
+.invitation-mobile-preview [class~="sm:grid-cols-3"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.invitation-mobile-preview [class~="sm:col-span-2"] { grid-column: span 1 / span 1 !important; }
+.invitation-mobile-preview [class~="sm:row-span-2"] { grid-row: span 1 / span 1 !important; }
+.invitation-mobile-preview [class~="sm:px-8"] { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
+.invitation-mobile-preview [class~="sm:gap-4"] { gap: .5rem !important; }
+.invitation-mobile-preview [class~="sm:p-5"] { padding: .75rem !important; }
+.invitation-mobile-preview [class~="sm:h-60"] { height: 12rem !important; }
+.invitation-mobile-preview [class~="sm:text-4xl"] { font-size: 1.5rem !important; line-height: 2rem !important; }
+.invitation-mobile-preview [class~="sm:text-5xl"] { font-size: 1.875rem !important; line-height: 2.25rem !important; }
+.invitation-mobile-preview [class~="sm:text-6xl"] { font-size: 2.25rem !important; line-height: 2.5rem !important; }
+.invitation-mobile-preview [class~="sm:text-7xl"] { font-size: 3rem !important; line-height: 1 !important; }
+
 :root { --background: #fafafa; --foreground: #171717; --card: #fff; --muted: #f1f1f1; --muted-foreground: #5f6472; --border: #e4e4e7; --primary: #171717; --primary-foreground: #fff; }
 .dark { --background: #0b0b0c; --foreground: #f7f7f7; --card: #151517; --muted: #262629; --muted-foreground: #a1a1aa; --border: #2f3037; --primary: #f7f7f7; --primary-foreground: #171717; }
 

@@ -13,6 +13,33 @@ export type SalonExtra = {
   publicVisible: boolean;
 };
 
+export type SalonStockCategory = 'PLATES' | 'GLASSWARE' | 'DRINKWARE' | 'CUTLERY' | 'MISCELLANEOUS';
+
+export type SalonStockItem = {
+  _id: string;
+  salonId: string;
+  name: string;
+  category: SalonStockCategory;
+  currentQuantity: number;
+  unitOfMeasure: string;
+  displayOrder?: number;
+  stockAsOf?: string;
+  active: boolean;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export const salonStockCategoryLabels: Record<SalonStockCategory, string> = {
+  PLATES: 'Platos',
+  GLASSWARE: 'Copas',
+  DRINKWARE: 'Vasos',
+  CUTLERY: 'Cubiertos',
+  MISCELLANEOUS: 'Varios'
+};
+
+export const salonStockCategoryOptions = Object.entries(salonStockCategoryLabels) as [SalonStockCategory, string][];
+
 export type SalonMedia = {
   _id?: string;
   url: string;

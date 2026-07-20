@@ -5,6 +5,8 @@ import { Permission, Role, StaffSubrole } from '@mym/shared';
 import { Contract, Customer, Event, EventStaffAssignment, LeadActivity, Payment, Quote } from './crm.models';
 import { User } from '../users/user.model';
 import { Salon } from '../salons/salon.model';
+import { SalonStockItem } from '../salons/salonStockItem.model';
+import { EventTablewareAllocation } from './eventTablewareAllocation.model';
 import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -139,6 +141,9 @@ const operationalDocumentType = z.enum(['timeline', 'logistics', 'guest_list']);
 const operationalDocumentSchema = z.object({ body: z.object({ format: z.enum(['pdf', 'word']) }), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
 const operationalDocumentEmailSchema = z.object({ body: z.object({ format: z.enum(['pdf', 'word']).default('pdf'), email: z.string().trim().email().optional() }), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
 const guestListLinkSchema = z.object({ body: z.object({}).optional(), params: z.object({ id: objectId }), query: z.object({}) });
+const tablewareItemSchema = z.object({ stockItemId: objectId, quantity: z.coerce.number().int().positive(), notes: z.string().trim().optional() });
+const externalTablewareItemSchema = z.object({ id: z.string().trim().optional(), name: z.string().trim().min(1), category: z.string().trim().optional(), quantity: z.coerce.number().int().positive(), unit: z.string().trim().min(1).optional(), notes: z.string().trim().optional() });
+const tablewareSchema = z.object({ body: z.object({ salonItems: z.array(tablewareItemSchema).default([]), externalItems: z.array(externalTablewareItemSchema).default([]) }), params: z.object({ id: objectId }), query: z.object({}) });
 
 const router = Router();
 
@@ -156,6 +161,50 @@ function pickDefined(source: Record<string, any>, keys: string[]): Record<string
 
 function uniqueIds(ids: Array<string | undefined>): string[] {
   return [...new Set(ids.filter((id): id is string => Boolean(id)))];
+}
+
+function eventDay(value: Date | string | undefined): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString().slice(0, 10);
+}
+
+function resourcePlanWithTableware(plan: any, allocations: any[]): Record<string, unknown> {
+  const existingItems = Array.isArray(plan?.inventoryItems) ? plan.inventoryItems : [];
+  const nonTableware = existingItems.filter((item: any) => !String(item?.category ?? '').toLocaleLowerCase().includes('vajilla'));
+  const tableware = allocations.map((item) => ({
+    id: item._id?.toString?.() ?? item.id,
+    name: item.itemName,
+    category: item.category ?? 'Vajilla',
+    quantityRequired: item.quantity,
+    quantityReserved: item.source === 'salon_stock' ? item.quantity : undefined,
+    unit: item.unit ?? 'unidad',
+    status: item.source === 'salon_stock' ? 'reserved' : 'planned',
+    notes: item.notes ?? (item.source === 'external' ? 'Vajilla adicional / externa.' : '')
+  }));
+  return { ...(plan ?? {}), inventoryItems: [...nonTableware, ...tableware] };
+}
+
+async function tablewareAvailability(salonId: string, day: string, eventId?: string) {
+  const [items, allocations] = await Promise.all([
+    SalonStockItem.find({ salonId, deletedAt: null, active: true }).sort({ category: 1, displayOrder: 1, name: 1 }).lean(),
+    EventTablewareAllocation.find({ salonId, eventDay: day, source: 'salon_stock' }).lean()
+  ]);
+  const reservedByItem = new Map<string, number>();
+  const reservedByOtherEvents = new Map<string, number>();
+  for (const allocation of allocations) {
+    if (!allocation.salonStockItemId) continue;
+    const itemId = allocation.salonStockItemId.toString();
+    reservedByItem.set(itemId, (reservedByItem.get(itemId) ?? 0) + allocation.quantity);
+    if (allocation.eventId.toString() !== eventId) reservedByOtherEvents.set(itemId, (reservedByOtherEvents.get(itemId) ?? 0) + allocation.quantity);
+  }
+  return items.map((item: any) => {
+    const id = item._id.toString();
+    const reserved = reservedByItem.get(id) ?? 0;
+    const reservedByOthers = reservedByOtherEvents.get(id) ?? 0;
+    return { ...item, reservedQuantity: reserved, availableQuantity: Math.max(0, item.currentQuantity - reserved), maxAssignableQuantity: Math.max(0, item.currentQuantity - reservedByOthers) };
+  });
 }
 
 async function ensureEventAccess(request: Request, event: any): Promise<void> {
@@ -599,6 +648,58 @@ router.post('/:id/guest-list-link', requirePermission(Permission.EVENTS_UPDATE),
   return sendSuccess(response, { token: event.guestListAccessToken, created });
 }));
 
+router.get('/:id/tableware', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  if (!event.salonId) throw new ApiError(422, 'El evento debe tener un salón asignado para reservar vajilla.');
+  const day = eventDay(event.eventDate);
+  if (!day) throw new ApiError(422, 'El evento debe tener una fecha asignada para reservar vajilla.');
+  const [items, allocations] = await Promise.all([
+    tablewareAvailability(event.salonId.toString(), day, event._id.toString()),
+    EventTablewareAllocation.find({ eventId: event._id }).sort({ source: 1, itemName: 1 }).lean()
+  ]);
+  return sendSuccess(response, { eventDay: day, items, allocations });
+}));
+
+router.put('/:id/tableware', requirePermission(Permission.EVENTS_UPDATE), validateRequest(tablewareSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureEventAccess(request, event);
+  if (!event.salonId) throw new ApiError(422, 'El evento debe tener un salón asignado para reservar vajilla.');
+  const day = eventDay(event.eventDate);
+  if (!day) throw new ApiError(422, 'El evento debe tener una fecha asignada para reservar vajilla.');
+
+  const requested = new Map<string, { quantity: number; notes?: string }>();
+  for (const item of request.body.salonItems) {
+    const current = requested.get(item.stockItemId) ?? { quantity: 0 };
+    requested.set(item.stockItemId, { quantity: current.quantity + item.quantity, notes: item.notes ?? current.notes });
+  }
+  const availability = await tablewareAvailability(event.salonId.toString(), day, event._id.toString());
+  const byId = new Map(availability.map((item: any) => [item._id.toString(), item]));
+  for (const [stockItemId, requestedItem] of requested) {
+    const item: any = byId.get(stockItemId);
+    if (!item) throw new ApiError(404, 'El artículo de vajilla seleccionado no pertenece al salón o no está activo.');
+    if (requestedItem.quantity > item.maxAssignableQuantity) {
+      throw new ApiError(422, `No hay stock suficiente de ${item.name} para el ${day}. Disponible: ${item.maxAssignableQuantity}.`);
+    }
+  }
+
+  const internalAllocations = [...requested.entries()].map(([stockItemId, item]) => {
+    const stock: any = byId.get(stockItemId);
+    return { eventId: event._id, salonId: event.salonId, salonStockItemId: stock._id, source: 'salon_stock', itemName: stock.name, category: 'Vajilla', unit: stock.unitOfMeasure, quantity: item.quantity, eventDay: day, notes: item.notes, createdBy: request.user!.id, updatedBy: request.user!.id };
+  });
+  const externalAllocations = request.body.externalItems.map((item: any) => ({ eventId: event._id, salonId: event.salonId, source: 'external', itemName: item.name, category: item.category || 'Vajilla adicional', unit: item.unit || 'unidad', quantity: item.quantity, eventDay: day, notes: item.notes, createdBy: request.user!.id, updatedBy: request.user!.id }));
+
+  await EventTablewareAllocation.deleteMany({ eventId: event._id });
+  if (internalAllocations.length || externalAllocations.length) await EventTablewareAllocation.insertMany([...internalAllocations, ...externalAllocations]);
+  const allocations = await EventTablewareAllocation.find({ eventId: event._id }).sort({ source: 1, itemName: 1 });
+  event.resourcePlanSnapshot = resourcePlanWithTableware(event.resourcePlanSnapshot, allocations);
+  event.updatedBy = request.user!.id;
+  await event.save();
+  await writeAuditLog(request, 'EVENT_TABLEWARE_ALLOCATE', 'Event', event._id.toString(), { eventDay: day, salonItemCount: internalAllocations.length, externalItemCount: externalAllocations.length });
+  const items = await tablewareAvailability(event.salonId.toString(), day, event._id.toString());
+  return sendSuccess(response, { eventDay: day, items, allocations });
+}));
+
 router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const event = await Event.findOne({ _id: request.params.id, deletedAt: null })
     .populate('customerId')
@@ -622,10 +723,22 @@ router.post('/:id/create-contract', requirePermission(Permission.CONTRACTS_CREAT
 router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
+  const currentReservationDay = eventDay(event.eventDate);
+  const nextReservationDay = request.body.eventDate ? eventDay(request.body.eventDate) : undefined;
+  if (nextReservationDay && nextReservationDay !== currentReservationDay && event.salonId) {
+    const allocations = await EventTablewareAllocation.find({ eventId: event._id, source: 'salon_stock' }).lean();
+    const availableItems = await tablewareAvailability(event.salonId.toString(), nextReservationDay, event._id.toString());
+    const availabilityById = new Map(availableItems.map((item: any) => [item._id.toString(), item]));
+    for (const allocation of allocations) {
+      const item: any = allocation.salonStockItemId ? availabilityById.get(allocation.salonStockItemId.toString()) : undefined;
+      if (!item || allocation.quantity > item.maxAssignableQuantity) throw new ApiError(422, `No se puede cambiar la fecha: no hay disponibilidad de ${allocation.itemName} para el ${nextReservationDay}.`);
+    }
+  }
   const contractSensitiveFields = ['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'estimatedAmount', 'finalAmount', 'commercialSnapshot', 'menuSnapshot', 'servicesSnapshot', 'paymentSnapshot', 'paymentPlanSnapshot'];
   const hasSensitiveChanges = contractSensitiveFields.some((field) => Object.prototype.hasOwnProperty.call(request.body, field) && JSON.stringify(event[field]) !== JSON.stringify(request.body[field]));
   Object.assign(event, request.body, { updatedBy: request.user!.id });
   await event.save();
+  if (nextReservationDay && nextReservationDay !== currentReservationDay) await EventTablewareAllocation.updateMany({ eventId: event._id }, { $set: { eventDay: nextReservationDay, updatedBy: request.user!.id } });
   if (!hasSensitiveChanges) {
     await writeAuditLog(request, 'EVENT_UPDATE', 'Event', event._id.toString(), { contractAffected: false });
     return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
@@ -660,6 +773,7 @@ router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validat
   event.status = request.body.status;
   event.updatedBy = request.user!.id;
   await event.save();
+  if (['cancelled', 'lost'].includes(event.status)) await EventTablewareAllocation.deleteMany({ eventId: event._id });
   await writeAuditLog(request, 'EVENT_STATUS_UPDATE', 'Event', event._id.toString(), { status: event.status });
   return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
 }));
