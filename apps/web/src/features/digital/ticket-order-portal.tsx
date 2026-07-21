@@ -40,12 +40,10 @@ export function TicketOrderPortal({ orderCode }: { orderCode: string }) {
       setError("El enlace de acceso es inválido o está incompleto.");
       return;
     }
-    void api
-      .get<Portal>(
-        `/public/ticket-orders/${orderCode}?token=${encodeURIComponent(token)}`,
-      )
-      .then(setData)
-      .catch((cause: Error) => setError(cause.message));
+    const load = () => api.get<Portal>(`/public/ticket-orders/${orderCode}?token=${encodeURIComponent(token)}`).then(setData).catch((cause: Error) => setError(cause.message));
+    void load();
+    const interval = window.setInterval(() => { void load(); }, 3500);
+    return () => window.clearInterval(interval);
   }, [orderCode]);
   if (!data)
     return (
@@ -69,7 +67,7 @@ export function TicketOrderPortal({ orderCode }: { orderCode: string }) {
           </p>
           <h1 className="mt-3 text-3xl font-semibold">Tus entradas</h1>
           <p className="mt-3 text-zinc-300">
-            Hola {data.order.buyer.name}. Tu compra fue confirmada.
+            {data.order.status === 'paid' ? `Hola ${data.order.buyer.name}. Tu pago fue aprobado; recibirás un email con tus entradas y el detalle de la compra.` : data.order.status === 'payment_pending' || data.order.status === 'pending' ? 'Estamos confirmando tu pago. Esta página se actualizará automáticamente.' : `El pago no pudo completarse (${ticketLabel(data.order.status)}). Podés volver a intentar la compra.`}
           </p>
         </header>
         <section className="rounded-3xl border bg-white p-6">

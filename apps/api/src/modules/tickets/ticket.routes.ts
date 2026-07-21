@@ -40,6 +40,8 @@ import {
 } from "./ticket.service";
 import { getTicketPaymentProvider } from "./ticket-payment.provider";
 import { env } from "../../config/env";
+import { getSignedDownloadUrl } from "../uploads/cloudinary.service";
+import { generateOrderTicketPdfs } from "./ticket-pdf.service";
 const id = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const slug = z
   .string()
@@ -597,6 +599,42 @@ admin.get(
   }),
 );
 admin.get(
+  "/buyers",
+  requirePermission(Permission.TICKETS_READ),
+  asyncHandler(async (req, res) => {
+    const escaped = req.query.search
+      ? String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      : undefined;
+    const match: any = { deletedAt: null };
+    if (escaped)
+      match.$or = [
+        { "buyer.name": new RegExp(escaped, "i") },
+        { "buyer.email": new RegExp(escaped, "i") },
+        { "buyer.documentNumber": new RegExp(escaped, "i") },
+      ];
+    const buyers = await TicketOrder.aggregate([
+      { $match: match },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: { $toLower: "$buyer.email" },
+          name: { $first: "$buyer.name" },
+          email: { $first: "$buyer.email" },
+          documentNumber: { $first: "$buyer.documentNumber" },
+          ordersCount: { $sum: 1 },
+          ticketsCount: { $sum: { $sum: "$lines.quantity" } },
+          totalSpent: {
+            $sum: { $cond: [{ $eq: ["$status", "paid"] }, "$totalAmount", 0] },
+          },
+          lastPurchaseAt: { $first: "$createdAt" },
+        },
+      },
+      { $sort: { lastPurchaseAt: -1 } },
+    ]);
+    return sendSuccess(res, { buyers });
+  }),
+);
+admin.get(
   "/orders/:orderId",
   requirePermission(Permission.TICKETS_READ),
   validateRequest(schema(z.unknown().optional(), { orderId: id })),
@@ -684,6 +722,36 @@ admin.post(
           ? "El simulador local está listo para usar."
           : "La configuración de Mercado Pago está lista para validar con credenciales reales.",
     });
+  }),
+);
+admin.post(
+  "/orders/:orderId/generate-documents",
+  requirePermission(Permission.TICKETS_UPDATE),
+  validateRequest(schema(z.object({}).optional(), { orderId: id })),
+  asyncHandler(async (req, res) => sendSuccess(res, await generateOrderTicketPdfs(req.params.orderId))),
+);
+admin.get(
+  "/orders/:orderId/pdf",
+  requirePermission(Permission.TICKETS_READ),
+  validateRequest(schema(z.unknown().optional(), { orderId: id })),
+  asyncHandler(async (req, res) => {
+    const order: any = await TicketOrder.findById(req.params.orderId).lean();
+    if (!order?.ticketsPdf?.storageKey) throw new ApiError(404, "TICKET_DOCUMENT_NOT_FOUND");
+    return sendSuccess(res, { url: getSignedDownloadUrl(order.ticketsPdf.storageKey), filename: order.ticketsPdf.filename, document: order.ticketsPdf });
+  }),
+);
+admin.get(
+  "/orders/:orderId/documents",
+  requirePermission(Permission.TICKETS_READ),
+  validateRequest(schema(z.unknown().optional(), { orderId: id })),
+  asyncHandler(async (req, res) => {
+    const [order, tickets, deliveries] = await Promise.all([
+      TicketOrder.findById(req.params.orderId).lean(),
+      DigitalTicket.find({ orderId: req.params.orderId, deletedAt: null }).select('ticketCode status pdf').lean(),
+      TicketDelivery.find({ orderId: req.params.orderId }).sort({ createdAt: -1 }).lean(),
+    ]);
+    if (!order) throw new ApiError(404, "TICKET_ORDER_NOT_FOUND");
+    return sendSuccess(res, { documentStatus: (order as any).documentStatus, combined: (order as any).ticketsPdf, tickets, deliveries });
   }),
 );
 admin.get(
@@ -1521,6 +1589,11 @@ publicRouter.get(
         totalAmount: order.totalAmount,
         currency: order.currency,
         createdAt: order.createdAt,
+        documentStatus: order.documentStatus,
+        combinedPdfAvailable: Boolean(order.ticketsPdf?.storageKey),
+        combinedPdfUrl: order.ticketsPdf?.storageKey
+          ? `/api/public/ticket-orders/${order.publicId}/pdf?token=${encodeURIComponent(String(req.query.token))}`
+          : undefined,
       },
       publication: publication
         ? {
@@ -1537,8 +1610,29 @@ publicRouter.get(
         ticketTypeName: ticket.ticketTypeSnapshot?.name,
         issuedAt: ticket.issuedAt,
         accessToken: ticketAccessToken(ticket),
+        pdfAvailable: Boolean(ticket.pdf?.storageKey),
+        pdfUrl: ticket.pdf?.storageKey
+          ? `/api/public/tickets/${ticketAccessToken(ticket)}/pdf`
+          : undefined,
       })),
     });
+  }),
+);
+publicRouter.get(
+  "/ticket-orders/:orderCode/pdf",
+  asyncHandler(async (req, res) => {
+    const order: any = await TicketOrder.findOne({ publicId: req.params.orderCode, deletedAt: null }).lean();
+    if (!order || String(req.query.token ?? '') !== orderAccessToken(order) || !order.ticketsPdf?.storageKey) throw new ApiError(404, "TICKET_DOCUMENT_NOT_FOUND");
+    return res.redirect(302, getSignedDownloadUrl(order.ticketsPdf.storageKey));
+  }),
+);
+publicRouter.get(
+  "/tickets/:token/pdf",
+  asyncHandler(async (req, res) => {
+    const token = req.params.token;
+    const ticket: any = await DigitalTicket.findOne({ deletedAt: null, $or: [{ qrTokenHash: ticketTokenHash(token) }, { publicToken: token }] }).lean();
+    if (!ticket?.pdf?.storageKey) throw new ApiError(404, "TICKET_DOCUMENT_NOT_FOUND");
+    return res.redirect(302, getSignedDownloadUrl(ticket.pdf.storageKey));
   }),
 );
 publicRouter.post(

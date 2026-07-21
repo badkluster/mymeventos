@@ -1,2 +1,2 @@
-import { TicketPaymentSettings } from '@/features/digital/ticket-operations';
-export default function TicketPaymentSettingsPage() { return <TicketPaymentSettings />; }
+import { redirect } from 'next/navigation';
+export default function TicketPaymentSettingsPage() { redirect('/admin/digital-tickets'); }

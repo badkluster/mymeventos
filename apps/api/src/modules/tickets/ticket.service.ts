@@ -1,5 +1,7 @@
 import { createHash, createHmac, randomBytes } from "crypto";
 import QRCode from "qrcode";
+import { generateOrderTicketPdfs } from './ticket-pdf.service';
+import { getSignedDownloadUrl } from '../uploads/cloudinary.service';
 import { ApiError } from "../../middlewares/errorHandler";
 import {
   DigitalTicket,
@@ -169,17 +171,23 @@ export async function sendOrderTicketsEmail(
   });
   try {
     const { order, tickets } = await issueTicketsForPaidOrder(orderId);
+    await generateOrderTicketPdfs(orderId);
+    const documentedOrder: any = await TicketOrder.findById(orderId).lean();
     const publication: any = await TicketPublication.findById(
       order.publicationId,
     ).lean();
     const portalUrl = `${publicAppUrl()}/entradas/compra/${order.publicId}?token=${orderAccessToken(order)}`;
     const text = `Hola ${order.buyer.name}. Tu compra para ${publication?.title ?? "M&M Eventos"} fue confirmada. Orden: ${order.publicId}. Ver tus entradas: ${portalUrl}`;
     const html = `<main style="font-family:Arial,sans-serif;color:#18181b"><h1>Tu compra fue confirmada</h1><p>Hola ${order.buyer.name}, ya emitimos ${tickets.length} entrada${tickets.length === 1 ? "" : "s"} para <b>${publication?.title ?? "M&M Eventos"}</b>.</p><p>Orden: <b>${order.publicId}</b></p><p><a href="${portalUrl}">Ver mis entradas y códigos QR</a></p><ul>${tickets.map((ticket: any) => `<li>${ticket.ticketTypeSnapshot?.name ?? "Entrada"} · ${ticket.ticketCode}</li>`).join("")}</ul></main>`;
+    const attachment = documentedOrder?.ticketsPdf?.storageKey && documentedOrder.ticketsPdf.sizeBytes <= 7_000_000
+      ? await fetch(getSignedDownloadUrl(documentedOrder.ticketsPdf.storageKey)).then(async (response) => response.ok ? Buffer.from(await response.arrayBuffer()) : undefined)
+      : undefined;
     const sent = await sendEmail({
       to: order.buyer.email,
       subject: `Tus entradas para ${publication?.title ?? "M&M Eventos"}`,
       text,
       html,
+      attachments: attachment ? [{ filename: documentedOrder.ticketsPdf.filename, content: attachment, contentType: 'application/pdf' }] : undefined,
     });
     await TicketDelivery.updateOne(
       { _id: delivery._id },
@@ -510,6 +518,7 @@ export async function createTicketCheckout(order: any, publication: any) {
     currency: order.currency ?? "ARS",
     buyer: order.buyer,
     notificationUrl: `${publicAppUrl()}/api/public/tickets/webhooks/${provider.name}`,
+    returnUrl: `${publicAppUrl()}/entradas/compra/${order.publicId}?token=${encodeURIComponent(orderAccessToken(order))}`,
   });
   await TicketPayment.findOneAndUpdate(
     { orderId: order._id },

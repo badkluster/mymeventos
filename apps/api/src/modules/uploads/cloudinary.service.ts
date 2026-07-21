@@ -57,3 +57,12 @@ export async function deleteAsset(publicId: string, resourceType: 'image' | 'vid
   const result = await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, invalidate: true });
   if (!['ok', 'not found'].includes(result.result)) throw new Error(`Cloudinary no pudo eliminar el archivo: ${result.result}`);
 }
+
+export function getSignedDownloadUrl(publicId: string, expiresInSeconds = 900): string {
+  configureCloudinary();
+  return cloudinary.utils.private_download_url(publicId, 'pdf', {
+    resource_type: 'raw',
+    type: 'upload',
+    expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
+  });
+}
