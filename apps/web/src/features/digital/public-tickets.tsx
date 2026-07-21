@@ -521,6 +521,11 @@ export function TicketCheckout({ slug }: { slug: string }) {
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [cartReady, setCartReady] = useState(false);
+  const [cartIdempotencyKey, setCartIdempotencyKey] = useState("");
+  const cartKey = `mym-ticket-cart:${slug}`;
+  useEffect(() => { try { const saved = window.localStorage.getItem(cartKey); if (saved) { const cart = JSON.parse(saved) as { quantities?: Record<string, number>; buyer?: typeof buyer; idempotencyKey?: string }; setQuantities(cart.quantities ?? {}); setBuyer((current) => ({ ...current, ...(cart.buyer ?? {}) })); setCartIdempotencyKey(cart.idempotencyKey ?? crypto.randomUUID()); } else setCartIdempotencyKey(crypto.randomUUID()); } finally { setCartReady(true); } }, [cartKey]);
+  useEffect(() => { if (cartReady) window.localStorage.setItem(cartKey, JSON.stringify({ quantities, buyer, idempotencyKey: cartIdempotencyKey, updatedAt: new Date().toISOString() })); }, [buyer, cartIdempotencyKey, cartKey, cartReady, quantities]);
   useEffect(() => {
     void api
       .get<{
@@ -557,8 +562,9 @@ export function TicketCheckout({ slug }: { slug: string }) {
         selections: Object.entries(quantities)
           .filter(([, quantity]) => quantity)
           .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: cartIdempotencyKey || crypto.randomUUID(),
       });
+      window.localStorage.setItem(`${cartKey}:pending-order`, result.order.publicId);
       window.location.assign(result.checkout.checkoutUrl);
     } catch (cause) {
       setError(

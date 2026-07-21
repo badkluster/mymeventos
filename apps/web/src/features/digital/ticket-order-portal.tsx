@@ -14,6 +14,8 @@ type Portal = {
     buyer: { name: string; email: string };
     status: string;
     totalAmount: number;
+    expiresAt?: string;
+    canResumePayment?: boolean;
   };
   publication?: {
     title: string;
@@ -34,6 +36,7 @@ type Portal = {
 export function TicketOrderPortal({ orderCode }: { orderCode: string }) {
   const [data, setData] = useState<Portal>();
   const [error, setError] = useState("");
+  const resumePayment = async () => { const token = new URLSearchParams(window.location.search).get('token'); if (!token) return; try { const result = await api.post<{ checkoutUrl: string }>(`/public/ticket-orders/${orderCode}/resume-payment?token=${encodeURIComponent(token)}`, {}); window.location.assign(result.checkoutUrl); } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo retomar el pago.'); } };
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token");
     if (!token) {
@@ -93,6 +96,7 @@ export function TicketOrderPortal({ orderCode }: { orderCode: string }) {
               {data.publication.venueName || data.publication.address}
             </p>
           ) : null}
+          {data.order.canResumePayment ? <div className="mt-5 border-t pt-5"><p className="text-sm text-zinc-600">Tu reserva se mantiene hasta {new Intl.DateTimeFormat('es-AR', { timeStyle: 'short' }).format(new Date(data.order.expiresAt!))}.</p><Button className="mt-3" onClick={() => void resumePayment()}>Retomar pago</Button></div> : null}
         </section>
         <section className="grid gap-4 sm:grid-cols-2">
           {data.tickets.map((ticket) => (

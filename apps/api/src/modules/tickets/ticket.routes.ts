@@ -639,6 +639,7 @@ admin.get(
   requirePermission(Permission.TICKETS_READ),
   validateRequest(schema(z.unknown().optional(), { orderId: id })),
   asyncHandler(async (req, res) => {
+    await expirePendingOrders();
     const order: any = await TicketOrder.findOne({
       _id: req.params.orderId,
       deletedAt: null,
@@ -1594,6 +1595,8 @@ publicRouter.get(
         combinedPdfUrl: order.ticketsPdf?.storageKey
           ? `/api/public/ticket-orders/${order.publicId}/pdf?token=${encodeURIComponent(String(req.query.token))}`
           : undefined,
+        expiresAt: order.expiresAt,
+        canResumePayment: order.status === "payment_pending" && Boolean(order.expiresAt && new Date(order.expiresAt) > new Date()),
       },
       publication: publication
         ? {
@@ -1616,6 +1619,18 @@ publicRouter.get(
           : undefined,
       })),
     });
+  }),
+);
+publicRouter.post(
+  "/ticket-orders/:orderCode/resume-payment",
+  asyncHandler(async (req, res) => {
+    await expirePendingOrders();
+    const order: any = await TicketOrder.findOne({ publicId: req.params.orderCode, deletedAt: null }).lean();
+    if (!order || String(req.query.token ?? "") !== orderAccessToken(order)) throw new ApiError(404, "TICKET_ORDER_NOT_FOUND");
+    if (order.status !== "payment_pending" || !order.expiresAt || new Date(order.expiresAt) <= new Date()) throw new ApiError(409, "TICKET_ORDER_EXPIRED", "La reserva venció; elegí nuevamente tus entradas.");
+    const payment: any = await TicketPayment.findOne({ orderId: order._id, status: { $in: ["created", "pending"] } }).lean();
+    if (!payment?.checkoutUrl) throw new ApiError(409, "TICKET_CHECKOUT_UNAVAILABLE", "No hay un pago pendiente para retomar.");
+    return sendSuccess(res, { checkoutUrl: payment.checkoutUrl, expiresAt: order.expiresAt });
   }),
 );
 publicRouter.get(

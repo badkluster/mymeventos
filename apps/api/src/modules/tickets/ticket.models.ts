@@ -69,7 +69,7 @@ const publicationSchema = new Schema(
       saleEndsAt: Date,
       minTicketsPerOrder: { type: Number, min: 1, default: 1 },
       maxTicketsPerOrder: { type: Number, min: 1, default: 10 },
-      reservationMinutes: { type: Number, min: 1, max: 120, default: 20 },
+      reservationMinutes: { type: Number, min: 1, max: 120, default: 5 },
       showRemainingStock: { type: Boolean, default: true },
       showSoldQuantity: { type: Boolean, default: false },
       allowDiscountCodes: { type: Boolean, default: true },
@@ -159,7 +159,7 @@ const publicationSchema = new Schema(
         enum: ["mercado_pago", "manual", "none"],
         default: "none",
       },
-      reservationMinutes: { type: Number, min: 1, max: 120, default: 20 },
+      reservationMinutes: { type: Number, min: 1, max: 120, default: 5 },
       feePayer: {
         type: String,
         enum: ["organizer", "buyer"],

@@ -373,7 +373,7 @@ export async function reservePublicOrder(input: {
           Date.now() +
             (input.expiresInMinutes ??
               publication.paymentConfig?.reservationMinutes ??
-              20) *
+              5) *
               60_000,
         )
       : undefined;

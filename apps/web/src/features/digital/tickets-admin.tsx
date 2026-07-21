@@ -32,6 +32,7 @@ import {
 } from "@/components/cloudinary-upload";
 import { TicketBuyersAdmin, TicketOrdersAdmin } from "./ticket-operations";
 import type { TicketPublication, TicketType } from "./types";
+import { ticketLabel } from "./ticket-labels";
 
 type Publication = TicketPublication & {
   internalName?: string;
@@ -1212,7 +1213,7 @@ export function TicketPublicationEditor({
                       </small>
                     </span>
                     <span>
-                      {tab === "buyers" ? order.status : order.paymentStatus}
+                      {ticketLabel(tab === "buyers" ? order.status : order.paymentStatus)}
                     </span>
                   </Link>
                 ))}
