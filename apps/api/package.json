@@ -18,6 +18,7 @@
     "update:la-plata-packages": "ts-node src/scripts/updateLaPlataPackages.ts",
     "migrate:package-template-names": "ts-node src/scripts/removePackageTemplateNameUniqueIndex.ts",
     "migrate:invitation-event-index": "ts-node src/scripts/removeLegacyInvitationEventIdIndex.ts",
+    "migrate:remove-ticket-payment-credentials": "ts-node src/scripts/removeTicketPaymentCredentials.ts",
     "import:promo-infantil-packages": "ts-node src/scripts/importPromoInfantilPackages.ts",
     "import:san-carlos-packages": "ts-node src/scripts/importSanCarlosPackages.ts",
     "import:la-plata-premium-packages": "ts-node src/scripts/importLaPlataPremiumPackages.ts"

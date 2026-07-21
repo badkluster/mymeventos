@@ -13,7 +13,7 @@ import {
   TicketOrder,
   TicketPayment,
   TicketDelivery,
-  TicketPaymentIntegration,
+  TicketPaymentWebhook,
   TicketPublication,
   TicketRefund,
   TicketType,
@@ -204,12 +204,6 @@ const refundBody = z.object({
   amount: z.coerce.number().positive().optional(),
   reason: z.string().trim().min(3).max(500),
 });
-const paymentSettingsBody = z.object({
-  publicKey: z.string().trim().optional(),
-  accessToken: z.string().trim().optional(),
-  webhookSecret: z.string().trim().optional(),
-  environment: z.enum(["test", "production"]).optional(),
-});
 const defaultTicketPolicies = {
   termsAndConditions:
     "La compra de entradas implica la aceptación de las condiciones de acceso informadas por la organización. La entrada es válida únicamente para la fecha, horario y publicación indicados. La organización podrá solicitar documentación para validar la titularidad de la compra.",
@@ -254,6 +248,166 @@ const schema = (body: z.ZodTypeAny, params: z.ZodRawShape) =>
   });
 const admin = Router();
 const publicRouter = Router();
+
+function webhookHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function webhookDataId(req: any): string | undefined {
+  const queryValue = req.query?.["data.id"];
+  const value = Array.isArray(queryValue)
+    ? queryValue[0]
+    : queryValue ?? req.body?.data?.id;
+  return value === undefined || value === null ? undefined : String(value);
+}
+
+publicRouter.post(
+  "/tickets/webhooks/mercado_pago",
+  asyncHandler(async (req, res) => {
+    const provider = getTicketPaymentProvider();
+    if (provider.name !== "mercado_pago")
+      throw new ApiError(404, "MERCADO_PAGO_NOT_CONFIGURED");
+
+    const dataId = webhookDataId(req);
+    const signature = webhookHeader(req.headers["x-signature"]);
+    const requestId = webhookHeader(req.headers["x-request-id"]);
+    const eventId = String(req.body?.id ?? requestId ?? dataId ?? "unknown");
+    const topic = String(req.body?.type ?? req.body?.action ?? "unknown");
+    const signatureValid = await provider.validateWebhook({
+      requestId,
+      signature,
+      dataId,
+    });
+    const webhook: any = await TicketPaymentWebhook.findOneAndUpdate(
+      { provider: "mercado_pago", providerEventId: eventId },
+      {
+        $setOnInsert: {
+          provider: "mercado_pago",
+          providerEventId: eventId,
+        },
+        $set: {
+          topic,
+          resourceId: dataId,
+          signatureValid,
+          payloadSummary: {
+            action: req.body?.action,
+            type: req.body?.type,
+            liveMode: req.body?.live_mode,
+          },
+          $inc: { attempts: 1 },
+        },
+      },
+      { upsert: true, new: true },
+    );
+
+    if (!signatureValid) {
+      await TicketPaymentWebhook.updateOne(
+        { _id: webhook._id },
+        {
+          $set: {
+            processingStatus: "failed",
+            errorCode: "INVALID_WEBHOOK_SIGNATURE",
+            errorMessage: "La firma del webhook no es válida.",
+          },
+        },
+      );
+      throw new ApiError(401, "INVALID_WEBHOOK_SIGNATURE", "Firma de webhook inválida.");
+    }
+    if (!dataId || !/^\d+$/.test(dataId)) {
+      await TicketPaymentWebhook.updateOne(
+        { _id: webhook._id },
+        {
+          $set: {
+            processingStatus: "ignored",
+            processedAt: new Date(),
+            errorCode: "PAYMENT_ID_MISSING",
+          },
+        },
+      );
+      return sendSuccess(res, { received: true, ignored: true });
+    }
+    if (topic !== "payment" && topic !== "payment.updated") {
+      await TicketPaymentWebhook.updateOne(
+        { _id: webhook._id },
+        { $set: { processingStatus: "ignored", processedAt: new Date() } },
+      );
+      return sendSuccess(res, { received: true, ignored: true });
+    }
+    // Mercado Pago's dashboard sends this signed fixture to validate the URL.
+    // It is not a real payment and therefore must never create or update an order.
+    if (req.body?.live_mode === false && dataId === "123456") {
+      await TicketPaymentWebhook.updateOne(
+        { _id: webhook._id },
+        {
+          $set: {
+            processingStatus: "ignored",
+            processedAt: new Date(),
+            errorCode: "MERCADO_PAGO_TEST_NOTIFICATION",
+          },
+        },
+      );
+      return sendSuccess(res, { received: true, test: true });
+    }
+
+    const payment = await provider.getPayment(dataId);
+    const orderId = payment.externalReference;
+    if (!orderId || !id.safeParse(orderId).success) {
+      await TicketPaymentWebhook.updateOne(
+        { _id: webhook._id },
+        {
+          $set: {
+            processingStatus: "ignored",
+            processedAt: new Date(),
+            errorCode: "TICKET_ORDER_REFERENCE_NOT_FOUND",
+          },
+        },
+      );
+      return sendSuccess(res, { received: true, ignored: true });
+    }
+    const order: any = await TicketOrder.findOne({ _id: orderId, deletedAt: null });
+    if (!order) {
+      await TicketPaymentWebhook.updateOne(
+        { _id: webhook._id },
+        {
+          $set: {
+            processingStatus: "ignored",
+            processedAt: new Date(),
+            errorCode: "TICKET_ORDER_NOT_FOUND",
+          },
+        },
+      );
+      return sendSuccess(res, { received: true, ignored: true });
+    }
+    if (
+      payment.amount === undefined ||
+      Number(payment.amount) !== Number(order.totalAmount) ||
+      (payment.currency && payment.currency !== (order.currency ?? "ARS"))
+    ) {
+      await TicketPaymentWebhook.updateOne(
+        { _id: webhook._id },
+        {
+          $set: {
+            processingStatus: "failed",
+            errorCode: "PAYMENT_AMOUNT_MISMATCH",
+            errorMessage: "El importe o moneda informados no coinciden con la orden.",
+          },
+        },
+      );
+      throw new ApiError(422, "PAYMENT_AMOUNT_MISMATCH", "El pago no coincide con la orden.");
+    }
+    await reconcileTicketPayment(order, {
+      status: payment.status,
+      providerPaymentId: payment.providerPaymentId,
+      paymentMethod: payment.paymentMethod ?? "mercado_pago",
+      raw: payment.raw,
+    });
+    await TicketPaymentWebhook.updateOne(
+      { _id: webhook._id },
+      { $set: { processingStatus: "processed", processedAt: new Date() } },
+    );
+    return sendSuccess(res, { received: true });
+  }),
+);
 async function publicationForUser(publicationId: string) {
   const publication: any = await TicketPublication.findOne({
     _id: publicationId,
@@ -502,78 +656,18 @@ admin.get(
   "/payment-settings",
   requirePermission(Permission.DIGITAL_TICKET_SETTINGS_READ),
   asyncHandler(async (_req, res) => {
-    const integration: any = await TicketPaymentIntegration.findOne({
-      provider: "mercado_pago",
-    }).lean();
     const configuredByEnvironment = Boolean(
-      env.MERCADO_PAGO_ACCESS_TOKEN && env.MERCADO_PAGO_PUBLIC_KEY,
+      env.MERCADO_PAGO_ACCESS_TOKEN &&
+        env.MERCADO_PAGO_WEBHOOK_SECRET &&
+        env.TICKET_PAYMENT_PROVIDER === "mercado_pago",
     );
     const provider = getTicketPaymentProvider();
     return sendSuccess(res, {
       provider: provider.name,
-      status: configuredByEnvironment
-        ? "connected"
-        : (integration?.status ?? "not_configured"),
+      status: configuredByEnvironment ? "connected" : "not_configured",
       environment: env.MERCADO_PAGO_ENVIRONMENT,
-      publicKey: env.MERCADO_PAGO_PUBLIC_KEY || integration?.publicKey || "",
-      accessTokenConfigured:
-        configuredByEnvironment || Boolean(integration?.encryptedAccessToken),
-      webhookSecretConfigured: Boolean(
-        env.MERCADO_PAGO_WEBHOOK_SECRET || integration?.encryptedWebhookSecret,
-      ),
+      credentialsConfigured: configuredByEnvironment,
       webhookUrl: `${env.CORS_ORIGIN}/api/public/tickets/webhooks/mercado_pago`,
-    });
-  }),
-);
-admin.put(
-  "/payment-settings",
-  requirePermission(Permission.DIGITAL_TICKET_SETTINGS_UPDATE),
-  validateRequest(schema(paymentSettingsBody, {})),
-  asyncHandler(async (req, res) => {
-    const current: any = await TicketPaymentIntegration.findOne({
-      provider: "mercado_pago",
-    });
-    const masked = (value?: string) =>
-      value ? `••••••${value.slice(-4)}` : undefined;
-    const integration = await TicketPaymentIntegration.findOneAndUpdate(
-      { provider: "mercado_pago" },
-      {
-        $set: {
-          provider: "mercado_pago",
-          credentialMode: "manual",
-          environment: req.body.environment ?? env.MERCADO_PAGO_ENVIRONMENT,
-          status:
-            req.body.accessToken || current?.encryptedAccessToken
-              ? "connected"
-              : "not_configured",
-          publicKey: req.body.publicKey || current?.publicKey,
-          accountEmailMasked:
-            masked(req.body.accessToken) ?? current?.accountEmailMasked,
-          encryptedAccessToken: req.body.accessToken
-            ? `configured:${masked(req.body.accessToken)}`
-            : current?.encryptedAccessToken,
-          encryptedWebhookSecret: req.body.webhookSecret
-            ? `configured:${masked(req.body.webhookSecret)}`
-            : current?.encryptedWebhookSecret,
-          webhookUrl: `${env.CORS_ORIGIN}/api/public/tickets/webhooks/mercado_pago`,
-          connectedBy: req.user!.id,
-          connectedAt: new Date(),
-          updatedBy: req.user!.id,
-        },
-      },
-      { upsert: true, new: true },
-    );
-    await writeAuditLog(
-      req,
-      "ticket_payment_settings_updated",
-      "TicketPaymentIntegration",
-      String(integration._id),
-    );
-    return sendSuccess(res, {
-      status: integration.status,
-      publicKey: integration.publicKey,
-      accessTokenConfigured: Boolean(integration.encryptedAccessToken),
-      webhookSecretConfigured: Boolean(integration.encryptedWebhookSecret),
     });
   }),
 );

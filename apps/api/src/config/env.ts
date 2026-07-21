@@ -25,7 +25,7 @@ const environmentSchema = z.object({
   SMTP_USER: z.string().optional(), SMTP_PASS: z.string().optional(), SMTP_FROM: z.string().optional(),
   EMAIL_NOTIFICATIONS_ENABLED: booleanSchema.default('false'),
   CLOUDINARY_CLOUD_NAME: z.string().optional(), CLOUDINARY_API_KEY: z.string().optional(), CLOUDINARY_API_SECRET: z.string().optional(), CLOUDINARY_URL: z.string().optional(),
-  MERCADO_PAGO_PUBLIC_KEY: z.string().optional(), MERCADO_PAGO_ACCESS_TOKEN: z.string().optional(), MERCADO_PAGO_WEBHOOK_SECRET: z.string().optional(),
+  MERCADO_PAGO_ACCESS_TOKEN: z.string().optional(), MERCADO_PAGO_WEBHOOK_SECRET: z.string().optional(),
   MERCADO_PAGO_ENVIRONMENT: z.enum(['test', 'production']).default('test'), TICKET_PAYMENT_PROVIDER: z.enum(['mock', 'mercado_pago']).default('mock'),
   SEED_ADMIN_USERNAME: z.string().optional(), SEED_ADMIN_EMAIL: z.string().optional(), SEED_ADMIN_PASSWORD: z.string().optional()
 });

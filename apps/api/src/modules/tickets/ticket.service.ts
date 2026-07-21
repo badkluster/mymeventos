@@ -569,6 +569,11 @@ export async function reconcileTicketPayment(
     },
     { upsert: true, new: true },
   );
+  if (input.providerPaymentId)
+    await TicketOrder.updateOne(
+      { _id: order._id },
+      { $set: { providerPaymentId: input.providerPaymentId } },
+    );
   if (input.status === "approved") {
     const current: any = await TicketOrder.findById(order._id);
     if (current?.status !== "paid")

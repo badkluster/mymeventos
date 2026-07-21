@@ -450,43 +450,6 @@ const deliverySchema = new Schema(
   { timestamps: true },
 );
 
-const paymentIntegrationSchema = new Schema(
-  {
-    provider: {
-      type: String,
-      enum: ["mercado_pago"],
-      unique: true,
-      required: true,
-    },
-    credentialMode: { type: String, enum: ["oauth", "manual"], required: true },
-    environment: {
-      type: String,
-      enum: ["test", "production"],
-      default: "test",
-    },
-    status: {
-      type: String,
-      enum: ["not_configured", "connected", "invalid", "disconnected", "error"],
-      default: "not_configured",
-    },
-    accountId: String,
-    accountEmailMasked: String,
-    publicKey: String,
-    encryptedAccessToken: { type: String, select: false },
-    encryptedRefreshToken: { type: String, select: false },
-    encryptedWebhookSecret: { type: String, select: false },
-    tokenExpiresAt: Date,
-    webhookUrl: String,
-    lastWebhookAt: Date,
-    lastValidatedAt: Date,
-    lastErrorCode: String,
-    lastErrorMessage: String,
-    connectedBy: { type: objectId, ref: "User" },
-    connectedAt: Date,
-    ...audit,
-  },
-  { timestamps: true },
-);
 const paymentSchema = new Schema(
   {
     orderId: {
@@ -667,9 +630,6 @@ export const TicketAccessAttempt =
   models.TicketAccessAttempt || model("TicketAccessAttempt", accessSchema);
 export const TicketDelivery =
   models.TicketDelivery || model("TicketDelivery", deliverySchema);
-export const TicketPaymentIntegration =
-  models.TicketPaymentIntegration ||
-  model("TicketPaymentIntegration", paymentIntegrationSchema);
 export const TicketPayment =
   models.TicketPayment || model("TicketPayment", paymentSchema);
 export const TicketStockReservation =
