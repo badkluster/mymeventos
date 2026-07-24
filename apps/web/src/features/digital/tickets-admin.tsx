@@ -17,9 +17,11 @@ import {
   Users,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { slugify } from "@/lib/slugify";
 import {
   Button,
   Input,
+  Modal,
   NumberField,
   PageHeader,
   Select,
@@ -31,6 +33,7 @@ import {
   type UploadedAsset,
 } from "@/components/cloudinary-upload";
 import { TicketBuyersAdmin, TicketOrdersAdmin } from "./ticket-operations";
+import { PublicTickets } from "./public-tickets";
 import type { TicketPublication, TicketType } from "./types";
 import { ticketLabel } from "./ticket-labels";
 
@@ -565,7 +568,15 @@ function EditableTicketType({
     status: type.status ?? "active",
   });
   const [saving, setSaving] = useState(false);
+  const capacityFloor = (type.soldCount ?? 0) + (type.reservedCount ?? 0);
   const save = async () => {
+    if (form.capacity < capacityFloor) {
+      showToast({
+        message: `El cupo no puede ser menor a ${capacityFloor} (vendidas + reservadas).`,
+        variant: "error",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const result = await api.patch<{ ticketType: TicketType }>(
@@ -668,7 +679,7 @@ function EditableTicketType({
         </p>
         <NumberField
           label="Cupo"
-          min={Math.max(type.soldCount ?? 0, type.reservedCount ?? 0)}
+          min={capacityFloor}
           value={form.capacity}
           onChange={(e) =>
             setForm({ ...form, capacity: Number(e.target.value) })
@@ -716,6 +727,13 @@ function EditableTicketType({
   );
 }
 
+const defaultTermsAndConditions =
+  "La entrada es personal e intransferible una vez emitida. El ingreso queda sujeto a la presentación del código QR y, en caso de ser requerido, de un documento de identidad. La organización se reserva el derecho de admisión.";
+const defaultCancellationPolicy =
+  "En caso de cancelación o reprogramación del evento por parte de la organización, se reembolsará el importe abonado o se ofrecerá una entrada equivalente para la nueva fecha.";
+const defaultRefundPolicy =
+  "No se realizan reembolsos por arrepentimiento una vez confirmada la compra. Ante inconvenientes puntuales, escribinos y evaluamos cada caso.";
+
 export function TicketPublicationEditor({
   publicationId,
   create = false,
@@ -729,6 +747,8 @@ export function TicketPublicationEditor({
   const [orders, setOrders] = useState<any[]>([]);
   const [tab, setTab] = useState("general");
   const [saving, setSaving] = useState(false);
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [form, setForm] = useState<any>({
     title: "",
     internalName: "",
@@ -743,9 +763,9 @@ export function TicketPublicationEditor({
     capacity: 1,
     coverImage: "",
     gallery: [],
-    termsAndConditions: "",
-    cancellationPolicy: "",
-    refundPolicy: "",
+    termsAndConditions: defaultTermsAndConditions,
+    cancellationPolicy: defaultCancellationPolicy,
+    refundPolicy: defaultRefundPolicy,
     appearance: {
       primaryColor: "#18181b",
       secondaryColor: "#d4a373",
@@ -764,6 +784,7 @@ export function TicketPublicationEditor({
       const item: any = data.publication;
       setPublication(item);
       setTypes(data.types);
+      if (item.slug) setSlugTouched(true);
       setForm((current: any) => ({
         ...current,
         ...item,
@@ -793,9 +814,45 @@ export function TicketPublicationEditor({
       .get<{
         orders: any[];
       }>(`/tickets/orders?publicationId=${publicationId}&limit=100`)
-      .then((data) => setOrders(data.orders));
+      .then((data) => setOrders(data.orders))
+      .catch((error) =>
+        showToast({
+          message:
+            error instanceof Error
+              ? error.message
+              : "No se pudieron cargar las órdenes.",
+          variant: "error",
+        }),
+      );
   }, [publicationId, tab]);
   const save = async (override?: any) => {
+    const nextCapacity = override?.capacity ?? form.capacity;
+    const capacityFloor =
+      (publication?.soldCount ?? 0) + (publication?.reservedCount ?? 0);
+    if (
+      publicationId &&
+      nextCapacity !== undefined &&
+      Number(nextCapacity) < capacityFloor
+    ) {
+      showToast({
+        message: `El cupo total no puede ser menor a ${capacityFloor} (entradas vendidas + reservadas).`,
+        variant: "error",
+      });
+      return;
+    }
+    const nextStartsAt = override?.startsAt ?? form.startsAt;
+    const nextEndsAt = override?.endsAt ?? form.endsAt;
+    if (
+      nextStartsAt &&
+      nextEndsAt &&
+      new Date(nextStartsAt) > new Date(nextEndsAt)
+    ) {
+      showToast({
+        message: "La fecha de inicio debe ser anterior a la de finalización.",
+        variant: "error",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -916,10 +973,13 @@ export function TicketPublicationEditor({
                 Volver
               </Button>
             </Link>
-            {publication?.slug ? (
-              <Link href={`/entradas/${publication.slug}`} target="_blank">
-                <Button variant="secondary">Vista previa</Button>
-              </Link>
+            {form.title ? (
+              <Button
+                variant="secondary"
+                onClick={() => setPreviewOpen(true)}
+              >
+                Vista previa
+              </Button>
             ) : null}
             <Button disabled={saving} onClick={() => void save()}>
               {saving ? "Guardando…" : "Guardar cambios"}
@@ -958,7 +1018,14 @@ export function TicketPublicationEditor({
                 <Input
                   className="mt-1.5"
                   value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  onChange={(e) => {
+                    const title = e.target.value;
+                    setForm({
+                      ...form,
+                      title,
+                      ...(slugTouched ? {} : { slug: slugify(title) }),
+                    });
+                  }}
                 />
               </label>
               <label className="text-sm font-medium">
@@ -966,13 +1033,15 @@ export function TicketPublicationEditor({
                 <Input
                   className="mt-1.5"
                   value={form.slug}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      slug: e.target.value.toLowerCase().replace(/\s+/g, "-"),
-                    })
-                  }
+                  onChange={(e) => {
+                    setSlugTouched(true);
+                    setForm({ ...form, slug: slugify(e.target.value) });
+                  }}
                 />
+                <span className="mt-1 block text-xs font-normal text-zinc-400">
+                  Se genera automáticamente a partir del título público. Editalo
+                  solo si necesitás uno distinto.
+                </span>
               </label>
               <label className="text-sm font-medium">
                 Categoría
@@ -1105,7 +1174,7 @@ export function TicketPublicationEditor({
               </label>
               <NumberField
                 label="Cupo total"
-                min={0}
+                min={(publication?.soldCount ?? 0) + (publication?.reservedCount ?? 0)}
                 value={form.capacity}
                 onChange={(e) =>
                   setForm({ ...form, capacity: Number(e.target.value) })
@@ -1385,6 +1454,20 @@ export function TicketPublicationEditor({
           ) : null}
         </div>
       </div>
+      <Modal
+        open={previewOpen}
+        title="Vista previa"
+        description="Así ve el público esta publicación. La compra no está disponible desde acá."
+        onClose={() => setPreviewOpen(false)}
+        wide
+      >
+        <div className="@container bg-[#f7f7f5] p-4 sm:p-6">
+          <PublicTickets
+            publication={{ ...form, ticketTypes: types } as TicketPublication}
+            preview
+          />
+        </div>
+      </Modal>
     </section>
   );
 }

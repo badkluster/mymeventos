@@ -174,8 +174,13 @@ const eventSchema = new Schema({
   paymentSnapshot: Schema.Types.Mixed,
   paymentPlanSnapshot: Schema.Types.Mixed,
   contractReadyChecklist: Schema.Types.Mixed,
+  cancellationReason: String, cancelledAt: Date, cancelledBy: { type: Schema.Types.ObjectId, ref: 'User' },
   ...base
 }, { timestamps: true });
+// Support index for the venue/date time-slot availability check (assertVenueAvailable in
+// events.routes.ts) — intentionally not unique: multiple draft/quoted events may share a
+// salon+day while only reserved/confirmed events are checked for time-slot overlap.
+eventSchema.index({ salonId: 1, eventDate: 1, status: 1 });
 
 const eventStaffAssignmentSchema = new Schema({
   eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
@@ -284,6 +289,7 @@ const contractSchema = new Schema({
   approvedAt: Date,
   approvedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
   cancelledAt: Date,
+  cancellationReason: String,
   pdfUrl: String, pdfSecureUrl: String, pdfPublicId: String, pdfGeneratedAt: Date,
   ...base
 }, { timestamps: true });
@@ -312,11 +318,13 @@ contractAddendumSchema.index({ contractId: 1, deletedAt: 1 });
 
 const paymentSchema = new Schema({
   paymentNumber: { type: String, required: true, unique: true, index: true },
-  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
-  eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
-  contractId: { type: Schema.Types.ObjectId, ref: 'Contract', required: true, index: true },
+  source: { type: String, enum: ['manual', 'ticket_order'], default: 'manual', index: true },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
+  eventId: { type: Schema.Types.ObjectId, ref: 'Event', index: true },
+  contractId: { type: Schema.Types.ObjectId, ref: 'Contract', index: true },
   quoteId: { type: Schema.Types.ObjectId, ref: 'Quote', index: true },
-  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true },
+  ticketOrderId: { type: Schema.Types.ObjectId, ref: 'TicketOrder', index: true },
   type: { type: String, enum: ['deposit', 'installment', 'balance', 'addendum', 'extra', 'security_deposit', 'adjustment', 'refund', 'other'], default: 'installment', index: true },
   method: { type: String, enum: ['cash', 'bank_transfer', 'mercado_pago', 'card', 'other'] },
   status: { type: String, enum: ['pending', 'paid', 'cancelled', 'refunded'], default: 'pending', index: true },
@@ -334,12 +342,15 @@ const paymentSchema = new Schema({
   planInstallmentId: String,
   affectsContractBalance: { type: Boolean, default: true },
   refundedPaymentId: { type: Schema.Types.ObjectId, ref: 'Payment' },
+  refundedAmount: { type: Number, default: 0, min: 0 },
+  cancellationReason: String,
   cancelledBy: { type: Schema.Types.ObjectId, ref: 'User' },
   cancelledAt: Date,
   ...base
 }, { timestamps: true });
 paymentSchema.index({ contractId: 1, status: 1, deletedAt: 1 });
 paymentSchema.index({ customerId: 1, paidAt: -1, createdAt: -1 });
+paymentSchema.index({ ticketOrderId: 1 }, { unique: true, sparse: true });
 
 export const Lead = models.Lead || model('Lead', leadSchema);
 export const LeadActivity = models.LeadActivity || model('LeadActivity', activitySchema);

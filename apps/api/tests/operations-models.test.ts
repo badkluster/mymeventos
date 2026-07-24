@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   CatalogItemType,
   ConsumptionRuleTarget,
+  ExpenseSourceType,
+  ExpenseStatus,
   InventoryAdjustmentType,
   InventoryCategory,
   InventoryItemType,
@@ -12,6 +14,7 @@ import {
 import {
   CatalogItem,
   ConsumptionRule,
+  Expense,
   InventoryAdjustment,
   InventoryItem,
   ServiceExtra,
@@ -24,6 +27,29 @@ describe('Operations models', () => {
 
     await expect(supplier.validate()).resolves.toBeUndefined();
     expect(supplier.active).toBe(true);
+  });
+
+  it('validates supplier expenses and rejects negative amounts', async () => {
+    const validExpense = {
+      eventId: '507f1f77bcf86cd799439011',
+      salonId: '507f1f77bcf86cd799439012',
+      supplierId: '507f1f77bcf86cd799439013',
+      sourceType: ExpenseSourceType.SUPPLIER_ASSIGNMENT,
+      sourceId: 'supplier-assignment-1',
+      description: 'Servicio de fotografía',
+      amount: 85000,
+    };
+
+    const expense = new Expense(validExpense);
+    await expect(expense.validate()).resolves.toBeUndefined();
+    expect(expense.status).toBe(ExpenseStatus.PAID);
+    expect(expense.currency).toBe('ARS');
+    await expect(new Expense({ ...validExpense, amount: -1 }).validate()).rejects.toThrow();
+  });
+
+  it('defines one unique financial record per event supplier assignment', () => {
+    const financialIndex = Expense.schema.indexes().find(([fields]) => fields.eventId === 1 && fields.sourceType === 1 && fields.sourceId === 1 && fields.deletedAt === 1);
+    expect(financialIndex?.[1]).toMatchObject({ unique: true });
   });
 
   it('rejects catalog items with invalid types', async () => {

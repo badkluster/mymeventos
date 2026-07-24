@@ -7,7 +7,7 @@ import { User } from '../users/user.model';
 import { Salon } from '../salons/salon.model';
 import { SalonStockItem } from '../salons/salonStockItem.model';
 import { EventTablewareAllocation } from './eventTablewareAllocation.model';
-import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -23,6 +23,8 @@ import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.servic
 import { sendEmail } from '../email/email.service';
 import { uploadBuffer } from '../uploads/cloudinary.service';
 import { generateOperationalPdf, generateOperationalWord, type OperationalDocumentType } from './event-operational-document.service';
+import { eventExpenses, syncEventSupplierExpenses } from './event-supplier-expenses.service';
+import { syncEventAlertCalendarItems } from './event-alert-calendar-sync.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const optionalObjectId = objectId.optional().or(z.literal(''));
@@ -98,7 +100,7 @@ const assignmentBaseBody = z.object({
 const assignmentBody = assignmentBaseBody.refine((body) => body.roleLabel || body.staffSubrole, 'Debe indicar rol o subrol.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.');
 const createAssignmentSchema = z.object({ body: assignmentBody, params: z.object({ id: objectId }), query: z.object({}) });
 const updateAssignmentSchema = z.object({ body: assignmentBaseBody.partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.'), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
-const statusSchema = z.object({ body: z.object({ status: z.enum(eventStatuses) }), params: z.object({ id: objectId }), query: z.object({}) });
+const statusSchema = z.object({ body: z.object({ status: z.enum(eventStatuses), reason: z.string().trim().optional() }), params: z.object({ id: objectId }), query: z.object({}) });
 const updateSchema = z.object({
   body: z.object({
     eventType: z.string().trim().optional(),
@@ -131,10 +133,33 @@ const eventPaymentSchema = z.object({
     paidAt: z.coerce.date().optional(),
     reference: z.string().trim().optional(),
     notes: z.string().trim().optional(),
-    planInstallmentId: z.string().trim().optional()
+    planInstallmentId: z.string().trim().optional(),
+    allowOverpayment: z.boolean().optional(),
+    overrideReason: z.string().trim().optional()
   }),
   params: z.object({ id: objectId }),
   query: z.object({})
+});
+const eventSupplierAssignmentSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  supplierId: objectId,
+  serviceType: z.string().trim().max(180).optional().or(z.literal('')),
+  arrivalTime: z.string().trim().max(40).optional().or(z.literal('')),
+  agreedAmount: z.coerce.number().min(0).optional(),
+  status: z.enum(['pending', 'confirmed', 'paid', 'cancelled']).optional(),
+  notes: z.string().trim().max(1500).optional().or(z.literal('')),
+});
+const eventSuppliersSchema = z.object({
+  body: z.object({ items: z.array(eventSupplierAssignmentSchema).max(100) }).superRefine((body, context) => {
+    const ids = new Set<string>();
+    body.items.forEach((item, index) => {
+      if (ids.has(item.id)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'id'], message: 'Cada asignación de proveedor debe tener un identificador único.' });
+      if (['confirmed', 'paid'].includes(item.status ?? 'pending') && !(Number(item.agreedAmount) > 0)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'agreedAmount'], message: 'Una asignación confirmada debe tener un monto acordado mayor a cero.' });
+      ids.add(item.id);
+    });
+  }),
+  params: z.object({ id: objectId }),
+  query: z.object({}),
 });
 const paymentReceiptSchema = z.object({ body: z.object({ email: z.string().trim().email().optional() }).optional(), params: z.object({ id: objectId, paymentId: objectId }), query: z.object({}) });
 const operationalDocumentType = z.enum(['timeline', 'logistics', 'guest_list']);
@@ -168,6 +193,57 @@ function eventDay(value: Date | string | undefined): string | undefined {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
   return date.toISOString().slice(0, 10);
+}
+
+const lockedEventStatuses = new Set(['reserved', 'confirmed']);
+
+/** Parses "HH:MM" into minutes since midnight, or undefined if missing/malformed. */
+function timeToMinutes(value: unknown): number | undefined {
+  if (typeof value !== 'string') return undefined;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return undefined;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return undefined;
+  return hours * 60 + minutes;
+}
+
+/**
+ * A missing/unparsable start or end time is treated as occupying the full day (0–1440):
+ * we can't safely assume a partial slot when the actual boundaries are unknown, and the
+ * safe default is to block rather than risk a silent double-booking.
+ * An end time at or before the start time is interpreted as crossing midnight (common for
+ * parties running e.g. 21:00–05:00), extending the slot past 1440.
+ */
+function timeSlot(startTime: unknown, endTime: unknown): { start: number; end: number } {
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  if (start === undefined || end === undefined) return { start: 0, end: 1440 };
+  return { start, end: end <= start ? end + 1440 : end };
+}
+
+function slotsOverlap(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
+  return a.start < b.end && b.start < a.end;
+}
+
+/**
+ * Venue/date availability lock (time-slot based, not full-day): only events already
+ * `reserved`/`confirmed` at the same salón on the same calendar day are considered —
+ * draft/quoted events remain free to overlap (speculative quoting for the same date/salon
+ * is allowed until one of them actually gets reserved). No setup/breakdown buffer is added
+ * between events; this is a deliberate simplification, not an oversight.
+ */
+async function assertVenueAvailable(input: { salonId: string; day: string; startTime?: string; endTime?: string; excludeEventId?: string }): Promise<void> {
+  const { salonId, day, startTime, endTime, excludeEventId } = input;
+  const dayStart = new Date(`${day}T00:00:00.000Z`);
+  const dayEnd = new Date(`${day}T23:59:59.999Z`);
+  const query: Record<string, unknown> = { salonId, status: { $in: Array.from(lockedEventStatuses) }, eventDate: { $gte: dayStart, $lte: dayEnd }, deletedAt: null };
+  if (excludeEventId) query._id = { $ne: excludeEventId };
+  const candidates: any[] = await Event.find(query).select('startTime endTime eventName eventType').lean();
+  if (!candidates.length) return;
+  const requested = timeSlot(startTime, endTime);
+  const conflict = candidates.find((candidate) => slotsOverlap(requested, timeSlot(candidate.startTime, candidate.endTime)));
+  if (conflict) throw new ApiError(422, 'EVENT_VENUE_SLOT_CONFLICT', `El salón ya tiene "${conflict.eventName || conflict.eventType || 'otro evento'}" reservado en un horario superpuesto ese día.`);
 }
 
 function resourcePlanWithTableware(plan: any, allocations: any[]): Record<string, unknown> {
@@ -451,6 +527,7 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
   });
   await LeadActivity.create({ customerId: customer._id, eventId: event._id, type: 'event_created', title: 'Evento creado', description: `Se creó el evento ${event.eventName}.`, createdBy: request.user!.id });
   await writeAuditLog(request, 'EVENT_CREATE', 'Event', event._id.toString(), { customerId: customer._id.toString(), salonId });
+  await syncEventAlertCalendarItems(event, event.resourcePlanSnapshot?.alerts, request.user!.id);
 
   let contract: any;
   let contractCreated = false;
@@ -482,11 +559,40 @@ router.get('/:id/payments', requirePermission(Permission.PAYMENTS_READ), validat
   return sendSuccess(response, { items, summary });
 }));
 
+router.get('/:id/expenses', requirePermission(Permission.EVENTS_READ), requirePermission(Permission.SUPPLIERS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  return sendSuccess(response, await eventExpenses(request.params.id));
+}));
+
+router.put('/:id/suppliers', requirePermission(Permission.EVENTS_UPDATE), requirePermission(Permission.SUPPLIERS_READ), validateRequest(eventSuppliersSchema), asyncHandler(async (request, response) => {
+  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  const result = await syncEventSupplierExpenses({ eventId: request.params.id, assignments: request.body.items, userId: request.user!.id });
+  await writeAuditLog(request, 'EVENT_SUPPLIERS_SYNC', 'Event', request.params.id, {
+    assignmentCount: result.assignments.length,
+    expenseIds: result.expenses.map((expense: any) => expense._id.toString()),
+    totalPaidExpenses: result.summary.totalPaid,
+    expenses: result.expenses.map((expense: any) => ({
+      id: expense._id.toString(),
+      sourceId: expense.sourceId,
+      supplierId: expense.supplierId?._id?.toString?.() ?? expense.supplierId?.toString?.(),
+      amount: expense.amount,
+      status: expense.status,
+    })),
+  });
+  return sendSuccess(response, result, 200, 'Proveedores y gastos del evento actualizados correctamente.');
+}));
+
 router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(eventPaymentSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
   let contract: any = await Contract.findOne({ eventId: event._id, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).sort({ versionNumber: -1, createdAt: -1 });
   if (!contract) throw new ApiError(422, 'Primero debe generar un contrato para registrar cobros del evento.');
+
+  const canOverride = userHasPermission(request.user!, Permission.PAYMENTS_APPROVE);
+  if (request.body.allowOverpayment && !canOverride) throw new ApiError(403, 'PAYMENT_OVERRIDE_NOT_AUTHORIZED');
+  const previousBalance = contract.balanceAmount;
 
   const payment = await createPayment({
     ...request.body,
@@ -496,7 +602,8 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
     contractId: contract._id.toString(),
     customerId: event.customerId?.toString(),
     salonId: event.salonId?.toString(),
-    quoteId: event.quoteId?.toString()
+    quoteId: event.quoteId?.toString(),
+    allowOverpayment: request.body.allowOverpayment && canOverride
   }, request.user!.id);
   contract = await Contract.findOne({ _id: contract._id, deletedAt: null });
 
@@ -536,6 +643,10 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
     await payment.save();
   } catch (error) { console.error('No se pudo generar o enviar el comprobante de pago:', error); }
   await writeAuditLog(request, 'EVENT_PAYMENT_CREATE', 'Payment', payment._id.toString(), { eventId: request.params.id, planInstallmentId: request.body.planInstallmentId });
+  if (request.body.allowOverpayment && canOverride) {
+    const contractAfter: any = await Contract.findOne({ _id: contract._id, deletedAt: null }).select('balanceAmount').lean();
+    await writeAuditLog(request, 'PAYMENT_OVERPAYMENT_OVERRIDE', 'Payment', payment._id.toString(), { contractId: contract._id, eventId: request.params.id, requestedAmount: payment.amount, previousBalance, resultingBalance: contractAfter?.balanceAmount, reason: request.body.overrideReason });
+  }
   return sendSuccess(response, { payment, paymentPlanSnapshot: event.paymentPlanSnapshot, receiptEmailSent }, 201, getApiMessage('PAYMENT_CREATED'));
 }));
 
@@ -723,8 +834,19 @@ router.post('/:id/create-contract', requirePermission(Permission.CONTRACTS_CREAT
 router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
+  // Las asignaciones financieras sólo pueden mutarse mediante PUT /:id/suppliers,
+  // que sincroniza el gasto de forma transaccional. Los demás editores siguen
+  // enviando el plan completo por compatibilidad, por eso preservamos esta rama.
+  const updateBody: Record<string, any> = { ...request.body };
+  if (Object.prototype.hasOwnProperty.call(updateBody, 'resourcePlanSnapshot')) {
+    if (!updateBody.resourcePlanSnapshot || typeof updateBody.resourcePlanSnapshot !== 'object' || Array.isArray(updateBody.resourcePlanSnapshot)) throw new ApiError(422, 'EVENT_RESOURCE_PLAN_INVALID');
+    updateBody.resourcePlanSnapshot = {
+      ...updateBody.resourcePlanSnapshot,
+      supplierAssignments: event.resourcePlanSnapshot?.supplierAssignments ?? [],
+    };
+  }
   const currentReservationDay = eventDay(event.eventDate);
-  const nextReservationDay = request.body.eventDate ? eventDay(request.body.eventDate) : undefined;
+  const nextReservationDay = updateBody.eventDate ? eventDay(updateBody.eventDate) : undefined;
   if (nextReservationDay && nextReservationDay !== currentReservationDay && event.salonId) {
     const allocations = await EventTablewareAllocation.find({ eventId: event._id, source: 'salon_stock' }).lean();
     const availableItems = await tablewareAvailability(event.salonId.toString(), nextReservationDay, event._id.toString());
@@ -734,10 +856,27 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
       if (!item || allocation.quantity > item.maxAssignableQuantity) throw new ApiError(422, `No se puede cambiar la fecha: no hay disponibilidad de ${allocation.itemName} para el ${nextReservationDay}.`);
     }
   }
-  const contractSensitiveFields = ['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'estimatedAmount', 'finalAmount', 'commercialSnapshot', 'menuSnapshot', 'servicesSnapshot', 'paymentSnapshot', 'paymentPlanSnapshot'];
-  const hasSensitiveChanges = contractSensitiveFields.some((field) => Object.prototype.hasOwnProperty.call(request.body, field) && JSON.stringify(event[field]) !== JSON.stringify(request.body[field]));
-  Object.assign(event, request.body, { updatedBy: request.user!.id });
+  const resultingStatus = updateBody.status ?? event.status;
+  const scheduleChanged = ['eventDate', 'startTime', 'endTime'].some((field) => Object.prototype.hasOwnProperty.call(updateBody, field));
+  if (lockedEventStatuses.has(resultingStatus) && scheduleChanged && event.salonId) {
+    const resultingDay = nextReservationDay ?? currentReservationDay;
+    if (resultingDay) {
+      await assertVenueAvailable({
+        salonId: event.salonId.toString(),
+        day: resultingDay,
+        startTime: updateBody.startTime ?? event.startTime,
+        endTime: updateBody.endTime ?? event.endTime,
+        excludeEventId: event._id.toString()
+      });
+    }
+  }
+  const contractSensitiveFields =['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'estimatedAmount', 'finalAmount', 'commercialSnapshot', 'menuSnapshot', 'servicesSnapshot', 'paymentSnapshot', 'paymentPlanSnapshot'];
+  const hasSensitiveChanges = contractSensitiveFields.some((field) => Object.prototype.hasOwnProperty.call(updateBody, field) && JSON.stringify(event[field]) !== JSON.stringify(updateBody[field]));
+  Object.assign(event, updateBody, { updatedBy: request.user!.id });
   await event.save();
+  if (Object.prototype.hasOwnProperty.call(updateBody, 'resourcePlanSnapshot')) {
+    await syncEventAlertCalendarItems(event, event.resourcePlanSnapshot?.alerts, request.user!.id);
+  }
   if (nextReservationDay && nextReservationDay !== currentReservationDay) await EventTablewareAllocation.updateMany({ eventId: event._id }, { $set: { eventDay: nextReservationDay, updatedBy: request.user!.id } });
   if (!hasSensitiveChanges) {
     await writeAuditLog(request, 'EVENT_UPDATE', 'Event', event._id.toString(), { contractAffected: false });
@@ -768,13 +907,27 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
 }));
 
 router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validateRequest(statusSchema), asyncHandler(async (request, response) => {
+  const isCancellation = ['cancelled', 'lost'].includes(request.body.status);
+  if (isCancellation) {
+    if (!userHasPermission(request.user!, Permission.EVENTS_CANCEL)) throw new ApiError(403, 'FORBIDDEN');
+    if (!request.body.reason || !request.body.reason.trim()) throw new ApiError(422, 'EVENT_CANCELLATION_REASON_REQUIRED');
+  }
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
+  if (lockedEventStatuses.has(request.body.status) && event.salonId) {
+    const day = eventDay(event.eventDate);
+    if (day) await assertVenueAvailable({ salonId: event.salonId.toString(), day, startTime: event.startTime, endTime: event.endTime, excludeEventId: event._id.toString() });
+  }
   event.status = request.body.status;
+  if (isCancellation) {
+    event.cancellationReason = request.body.reason;
+    event.cancelledAt = event.cancelledAt ?? new Date();
+    event.cancelledBy = request.user!.id;
+  }
   event.updatedBy = request.user!.id;
   await event.save();
   if (['cancelled', 'lost'].includes(event.status)) await EventTablewareAllocation.deleteMany({ eventId: event._id });
-  await writeAuditLog(request, 'EVENT_STATUS_UPDATE', 'Event', event._id.toString(), { status: event.status });
+  await writeAuditLog(request, 'EVENT_STATUS_UPDATE', 'Event', event._id.toString(), { status: event.status, reason: request.body.reason });
   return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
 }));
 

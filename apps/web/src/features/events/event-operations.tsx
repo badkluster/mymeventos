@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CalendarClock, ClipboardCheck, Download, FileText, Mail, MessageCircle, PackageCheck, Plus, Save, Trash2, Truck } from 'lucide-react';
 import { Button, Input, Modal, NumberField, Select, Textarea } from '@/components/ui/primitives';
+import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
-import type { Event, EventAlertItem, EventGuestList, EventInventoryItem, EventProductItem, EventResourcePlan, EventStaffNote, EventSupplierAssignment, EventTaskItem, EventTimelineItem } from '@/features/quotes/types';
+import { displayLabel, supplierCategoryLabels } from '@/lib/display-labels';
+import type { Event, EventAlertItem, EventGuestList, EventInventoryItem, EventProductItem, EventResourcePlan, EventStaffNote, EventSupplierAssignment, EventTaskItem, EventTimelineItem, SupplierOption } from '@/features/quotes/types';
 import { GuestListWorkspace } from '@/features/events/guest-list-workspace';
 
 type SaveEvent = (payload: Record<string, unknown>) => void;
@@ -432,7 +434,7 @@ const operationalViews = [
   ['moments', 'Momentos'],
   ['guests', 'Lista invitados y mesas'],
   ['logistics', 'Logística'],
-  ['linen', 'Mantelería y vajilla'],
+  ['linen', 'Vajilla'],
   ['products', 'Stock de productos']
 ] as const;
 
@@ -455,6 +457,10 @@ export function EventGuestListEditor({ event, plan, saving, onSave, onSyncSummar
 type SalonTablewareItem = { _id: string; name: string; category: string; currentQuantity: number; unitOfMeasure: string; reservedQuantity: number; availableQuantity: number; maxAssignableQuantity: number };
 type TablewareAllocation = { _id?: string; salonStockItemId?: string; source: 'salon_stock' | 'external'; itemName: string; category?: string; unit?: string; quantity: number; notes?: string };
 type ExternalTablewareItem = { id: string; name: string; category: string; unit: string; quantity?: number; notes?: string };
+
+const tablewareCategories = ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY'];
+const automaticShortageNote = 'Refuerzo automático por faltante de stock del salón.';
+const legacyShortageNote = 'Refuerzo por faltante de stock del salón.';
 
 export function EventTablewareEditor({ event, saving, onNotice }: { event: Event; saving: boolean; onNotice?: (message: string, variant?: 'success' | 'error') => void }) {
   const [items, setItems] = useState<SalonTablewareItem[]>([]);
@@ -486,16 +492,21 @@ export function EventTablewareEditor({ event, saving, onNotice }: { event: Event
     if (!guestCount) { setMessage('Indicá la cantidad de invitados en el evento para armar la sugerencia.'); return; }
     const suggested: Record<string, number> = {};
     for (const item of items) {
-      if (['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY'].includes(item.category)) suggested[item._id] = Math.min(guestCount, item.maxAssignableQuantity);
+      if (tablewareCategories.includes(item.category)) suggested[item._id] = Math.min(guestCount, item.maxAssignableQuantity);
     }
     setQuantities(suggested);
     setMessage(`Se prearmó una unidad por invitado para platos, copas, vasos y cubiertos. Revisá y ajustá antes de guardar.`);
   };
   const addExternalShortages = () => {
     if (!guestCount) { setMessage('Indicá la cantidad de invitados antes de calcular faltantes.'); return; }
-    const shortages = items.filter((item) => ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY'].includes(item.category)).map((item) => ({ item, missing: Math.max(0, guestCount - Math.min(guestCount, item.maxAssignableQuantity)) })).filter(({ missing }) => missing > 0);
+    const shortages = items.filter((item) => tablewareCategories.includes(item.category)).map((item) => ({ item, missing: Math.max(0, guestCount - Math.min(guestCount, item.maxAssignableQuantity)) })).filter(({ missing }) => missing > 0);
     if (!shortages.length) { setMessage('El stock propio alcanza para la sugerencia actual.'); return; }
-    setExternal((current) => [...current, ...shortages.map(({ item, missing }) => ({ id: makeId(), name: `${item.name} adicional`, category: 'Vajilla adicional', unit: item.unitOfMeasure || 'unidad', quantity: missing, notes: 'Refuerzo por faltante de stock del salón.' }))]);
+    const generatedNames = new Set(shortages.map(({ item }) => `${item.name} adicional`));
+    setExternal((current) => [
+      ...current.filter((item) => item.notes !== automaticShortageNote && !(item.notes === legacyShortageNote && generatedNames.has(item.name))),
+      ...shortages.map(({ item, missing }) => ({ id: makeId(), name: `${item.name} adicional`, category: 'Vajilla adicional', unit: item.unitOfMeasure || 'unidad', quantity: missing, notes: automaticShortageNote }))
+    ]);
+    setMessage('Se actualizaron los faltantes de vajilla externa según la disponibilidad del salón.');
   };
   const save = async () => {
     setSubmitting(true); setMessage(undefined);
@@ -595,22 +606,30 @@ export function EventResourcesEditor({ plan, saving, onSave, section = 'all' }: 
   const cleanProducts = products.filter((item) => item.name.trim()).map((item) => ({ ...item, totalCost: Number(item.totalCost ?? Number(item.quantity ?? 0) * Number(item.unitCost ?? 0)) || undefined }));
   const cleanInventory = inventory.filter((item) => item.name.trim());
   const visibleProducts = products.map((item, index) => ({ item, index })).filter(({ item }) => productCategory === 'all' || (item.productionCategory ?? 'other') === productCategory);
+  const pendingProducts = products.filter((item) => ['planned', 'missing'].includes(item.status ?? 'planned')).length;
+  const estimatedProductCost = products.reduce((total, item) => total + Number(item.totalCost ?? Number(item.quantity ?? 0) * Number(item.unitCost ?? 0)), 0);
+  const formatAmount = (amount: number) => new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount);
   return <div className="space-y-5">
     {section !== 'inventory' && <SectionCard title="Stock de productos" icon={<PackageCheck className="h-4 w-4" />} action={<Button variant="secondary" onClick={() => setProducts((current) => [...current, { id: makeId(), name: '', category: '', productionCategory: productCategory === 'all' ? 'savory' : productCategory, quantity: undefined, unit: 'unidad', status: 'planned', notes: '' }])}><Plus className="mr-2 h-4 w-4" />Agregar insumo</Button>}>
-      <div className="flex flex-wrap gap-2">{([['all', 'Todos'], ['savory', 'Salados'], ['sweet', 'Dulces'], ['beverages', 'Bebidas'], ['other', 'Otros']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setProductCategory(value)} className={`rounded-lg px-3 py-2 text-sm font-medium ${productCategory === value ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>{label} ({value === 'all' ? products.length : products.filter((item) => (item.productionCategory ?? 'other') === value).length})</button>)}</div>
-      {visibleProducts.length ? <div className="mt-4 space-y-3">{visibleProducts.map(({ item, index }) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 lg:grid-cols-[minmax(160px,1fr)_115px_110px_80px_90px_110px_105px_105px_120px_44px]">
-        <Input aria-label="Producto" placeholder="Gaseosa, hielo, descartables..." value={item.name} onChange={(event) => updateProduct(index, { name: event.target.value })} />
-        <Input aria-label="Categoría" placeholder="Categoría" value={item.category ?? ''} onChange={(event) => updateProduct(index, { category: event.target.value })} />
-        <Select aria-label="Rubro de producción" value={item.productionCategory ?? 'other'} onChange={(event) => updateProduct(index, { productionCategory: event.target.value })}>{Object.entries(productionCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-        <NumberField label="Cantidad a comprar" min={0} value={item.quantity ?? ''} onChange={(event) => updateProduct(index, { quantity: numeric(event.target.value) })} />
-        <Input aria-label="Unidad" placeholder="Unidad" value={item.unit ?? ''} onChange={(event) => updateProduct(index, { unit: event.target.value })} />
-        <Input aria-label="Proveedor" placeholder="Proveedor" value={item.supplierName ?? ''} onChange={(event) => updateProduct(index, { supplierName: event.target.value })} />
-        <NumberField label="Costo por unidad" min={0} value={item.unitCost ?? ''} onChange={(event) => updateProduct(index, { unitCost: numeric(event.target.value) })} />
-        <NumberField label="Costo total" min={0} value={item.totalCost ?? ''} onChange={(event) => updateProduct(index, { totalCost: numeric(event.target.value) })} />
-        <Select aria-label="Estado" value={item.status ?? 'planned'} onChange={(event) => updateProduct(index, { status: event.target.value })}>{Object.entries(resourceStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-        <IconButton label="Quitar insumo" disabled={saving} onClick={() => setProducts((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
-        <Textarea aria-label="Notas" className="lg:col-span-10" placeholder="Marca, compra pendiente, reposición..." value={item.notes ?? ''} onChange={(event) => updateProduct(index, { notes: event.target.value })} />
-      </div>)}</div> : <EmptyRows text={`No hay productos cargados en ${productCategory === 'all' ? 'stock' : productionCategoryLabels[productCategory].toLowerCase()}.`} />}
+      <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Insumos</p><p className="mt-1 text-2xl font-semibold text-zinc-950">{products.length}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-amber-700">Pendientes</p><p className="mt-1 text-2xl font-semibold text-amber-950">{pendingProducts}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Costo estimado</p><p className="mt-1 text-2xl font-semibold text-emerald-950">$ {formatAmount(estimatedProductCost)}</p></div></div>
+      <div className="flex flex-wrap gap-2 border-b border-zinc-100 pb-4">{([['all', 'Todos'], ['savory', 'Salados'], ['sweet', 'Dulces'], ['beverages', 'Bebidas'], ['other', 'Otros']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setProductCategory(value)} className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${productCategory === value ? 'bg-zinc-950 text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950'}`}>{label} <span className={productCategory === value ? 'text-zinc-300' : 'text-zinc-400'}>{value === 'all' ? products.length : products.filter((item) => (item.productionCategory ?? 'other') === value).length}</span></button>)}</div>
+      {visibleProducts.length ? <div className="space-y-3">{visibleProducts.map(({ item, index }) => <article key={item.id ?? index} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300">
+        <div className="grid items-end gap-3 lg:grid-cols-[minmax(240px,1fr)_150px_145px_44px]">
+          <Field label="Insumo"><Input aria-label="Producto" className="font-medium" placeholder="Gaseosa, hielo, descartables..." value={item.name} onChange={(event) => updateProduct(index, { name: event.target.value })} /></Field>
+          <Field label="Rubro"><Select aria-label="Rubro de producción" value={item.productionCategory ?? 'other'} onChange={(event) => updateProduct(index, { productionCategory: event.target.value })}>{Object.entries(productionCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+          <Field label="Estado"><Select aria-label="Estado" value={item.status ?? 'planned'} onChange={(event) => updateProduct(index, { status: event.target.value })}>{Object.entries(resourceStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+          <IconButton label="Quitar insumo" disabled={saving} onClick={() => setProducts((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
+        </div>
+        <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 md:grid-cols-2 xl:grid-cols-[minmax(150px,1.1fr)_110px_100px_minmax(150px,1fr)_130px_140px]">
+          <Field label="Categoría o detalle"><Input aria-label="Categoría" placeholder="Ej.: postre, bebidas frías" value={item.category ?? ''} onChange={(event) => updateProduct(index, { category: event.target.value })} /></Field>
+          <Field label="Cantidad"><Input aria-label="Cantidad a comprar" type="number" min={0} value={item.quantity ?? ''} onChange={(event) => updateProduct(index, { quantity: numeric(event.target.value) })} /></Field>
+          <Field label="Unidad"><Input aria-label="Unidad" placeholder="kg, u." value={item.unit ?? ''} onChange={(event) => updateProduct(index, { unit: event.target.value })} /></Field>
+          <Field label="Proveedor"><Input aria-label="Proveedor" placeholder="Sin asignar" value={item.supplierName ?? ''} onChange={(event) => updateProduct(index, { supplierName: event.target.value })} /></Field>
+          <Field label="Costo unitario"><Input aria-label="Costo por unidad" type="number" min={0} placeholder="$ 0" value={item.unitCost ?? ''} onChange={(event) => updateProduct(index, { unitCost: numeric(event.target.value) })} /></Field>
+          <Field label="Costo total"><Input aria-label="Costo total" className="font-medium" type="number" min={0} placeholder="$ 0" value={item.totalCost ?? ''} onChange={(event) => updateProduct(index, { totalCost: numeric(event.target.value) })} /></Field>
+        </div>
+        <details className="mt-4 rounded-xl bg-zinc-50 px-3 py-2.5" defaultOpen={Boolean(item.notes)}><summary className="cursor-pointer text-sm font-medium text-zinc-600 marker:text-zinc-400">Notas, entrega o reposición</summary><Textarea aria-label="Notas" className="mt-3 min-h-20 bg-white" placeholder="Marca, horario de entrega, compra pendiente, reposición..." value={item.notes ?? ''} onChange={(event) => updateProduct(index, { notes: event.target.value })} /></details>
+      </article>)}</div> : <EmptyRows text={`No hay productos cargados en ${productCategory === 'all' ? 'stock' : productionCategoryLabels[productCategory].toLowerCase()}.`} />}
     </SectionCard>}
     {section !== 'products' && <SectionCard title="Mantelería, vajilla, mobiliario y equipos" icon={<PackageCheck className="h-4 w-4" />} action={<Button variant="secondary" onClick={() => setInventory((current) => [...current, { id: makeId(), name: '', category: 'Vajilla', quantityRequired: undefined, quantityReserved: undefined, quantityReturned: undefined, unit: 'unidad', status: 'planned', notes: '' }])}><Plus className="mr-2 h-4 w-4" />Agregar recurso</Button>}>
       {inventory.length ? <div className="space-y-3">{inventory.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 lg:grid-cols-[minmax(180px,1fr)_130px_100px_100px_100px_100px_130px_44px]">
@@ -629,25 +648,115 @@ export function EventResourcesEditor({ plan, saving, onSave, section = 'all' }: 
   </div>;
 }
 
-export function EventSuppliersEditor({ plan, saving, onSave }: { plan?: EventResourcePlan; saving: boolean; onSave: SavePlan }) {
+const emptyQuickSupplier = { name: '', businessName: '', category: 'OTHER', contactPerson: '', phone: '', whatsapp: '', email: '', notes: '' };
+
+export function EventSuppliersEditor({ plan, saving, onSave }: { plan?: EventResourcePlan; saving: boolean; onSave: (items: EventSupplierAssignment[]) => void }) {
+  const { showToast } = useToast();
   const basePlan = useMemo(() => normalizeResourcePlan(plan), [plan]);
-  const [items, setItems] = useState<EventSupplierAssignment[]>(basePlan.supplierAssignments ?? []);
+  const [items, setItems] = useState<EventSupplierAssignment[]>(() => (basePlan.supplierAssignments ?? []).map((item) => ({ ...item, id: item.id ?? makeId() })));
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickSupplier, setQuickSupplier] = useState(emptyQuickSupplier);
+
+  useEffect(() => {
+    let active = true;
+    api.get<{ items: SupplierOption[] }>('/suppliers?active=true')
+      .then((response) => { if (active) setSuppliers(response.items ?? []); })
+      .catch((error) => { if (active) showToast({ message: error instanceof Error ? error.message : 'No se pudo cargar el catálogo de proveedores.', variant: 'error' }); })
+      .finally(() => { if (active) setLoadingSuppliers(false); });
+    return () => { active = false; };
+  }, [showToast]);
+
   const update = (index: number, changes: Partial<EventSupplierAssignment>) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
-  const clean = items.filter((item) => item.supplierName.trim() || item.serviceType?.trim());
-  return <SectionCard title="Servicios externos y proveedores" icon={<Truck className="h-4 w-4" />} action={<Button variant="secondary" onClick={() => setItems((current) => [...current, { id: makeId(), supplierName: '', serviceType: '', status: 'pending', notes: '' }])}><Plus className="mr-2 h-4 w-4" />Agregar proveedor</Button>}>
-    {items.length ? <div className="space-y-3">{items.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 lg:grid-cols-[minmax(160px,1fr)_140px_130px_120px_100px_120px_120px_44px]">
-      <Input aria-label="Proveedor" placeholder="Proveedor" value={item.supplierName} onChange={(event) => update(index, { supplierName: event.target.value })} />
-      <Input aria-label="Servicio" placeholder="Foto, DJ, decoración..." value={item.serviceType ?? ''} onChange={(event) => update(index, { serviceType: event.target.value })} />
-      <Input aria-label="Contacto" placeholder="Contacto" value={item.contactName ?? ''} onChange={(event) => update(index, { contactName: event.target.value })} />
-      <Input aria-label="Teléfono" placeholder="Teléfono" value={item.phone ?? ''} onChange={(event) => update(index, { phone: event.target.value })} />
-      <Input aria-label="Llegada" placeholder="Llegada" value={item.arrivalTime ?? ''} onChange={(event) => update(index, { arrivalTime: event.target.value })} />
-      <NumberField label="Monto acordado" min={0} value={item.agreedAmount ?? ''} onChange={(event) => update(index, { agreedAmount: numeric(event.target.value) })} />
-      <Select aria-label="Estado" value={item.status ?? 'pending'} onChange={(event) => update(index, { status: event.target.value })}>{Object.entries(supplierStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-      <IconButton label="Quitar proveedor" disabled={saving} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
-      <Textarea aria-label="Notas" className="lg:col-span-8" placeholder="Horarios, condiciones, pago..." value={item.notes ?? ''} onChange={(event) => update(index, { notes: event.target.value })} />
-    </div>)}</div> : <EmptyRows text="No hay proveedores externos cargados para este evento." />}
-    <SaveBar saving={saving} onSave={() => onSave({ ...basePlan, supplierAssignments: clean })} />
-  </SectionCard>;
+  const selectSupplier = (index: number, supplierId: string) => {
+    const supplier = suppliers.find((option) => option._id === supplierId);
+    update(index, {
+      supplierId,
+      supplierName: supplier?.name ?? '',
+      category: supplier?.category,
+      contactName: supplier?.contactPerson ?? '',
+      phone: supplier?.phone || supplier?.whatsapp || '',
+    });
+  };
+  const save = () => {
+    if (items.some((item) => !item.supplierId)) {
+      showToast({ message: 'Seleccioná un proveedor del catálogo en cada asignación.', variant: 'error' });
+      return;
+    }
+    if (items.some((item) => ['confirmed', 'paid'].includes(item.status ?? 'pending') && !(Number(item.agreedAmount) > 0))) {
+      showToast({ message: 'Una asignación confirmada debe tener un monto acordado mayor a cero.', variant: 'error' });
+      return;
+    }
+    onSave(items.map((item) => ({ ...item, id: item.id ?? makeId() })));
+  };
+  const createQuickSupplier = async () => {
+    if (quickSupplier.name.trim().length < 2) {
+      showToast({ message: 'Ingresá el nombre del proveedor.', variant: 'error' });
+      return;
+    }
+    setQuickSaving(true);
+    try {
+      const response = await api.post<{ supplier: SupplierOption }>('/suppliers', quickSupplier);
+      const supplier = response.supplier;
+      setSuppliers((current) => [...current.filter((item) => item._id !== supplier._id), supplier].sort((left, right) => left.name.localeCompare(right.name, 'es')));
+      setItems((current) => {
+        const blankIndex = current.findIndex((item) => !item.supplierId);
+        const assignment = { id: makeId(), supplierId: supplier._id, supplierName: supplier.name, category: supplier.category, contactName: supplier.contactPerson ?? '', phone: supplier.phone || supplier.whatsapp || '', serviceType: '', status: 'pending' as const, notes: '' };
+        return blankIndex >= 0 ? current.map((item, index) => index === blankIndex ? { ...item, ...assignment, id: item.id ?? assignment.id } : item) : [...current, assignment];
+      });
+      setQuickSupplier(emptyQuickSupplier);
+      setQuickOpen(false);
+      showToast({ message: 'Proveedor creado y seleccionado. Completá el servicio y guardá la asignación.', variant: 'success' });
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : 'No se pudo crear el proveedor.', variant: 'error' });
+    } finally {
+      setQuickSaving(false);
+    }
+  };
+  const pendingAssignments = items.filter((item) => item.status === 'pending' || !item.status).length;
+  const confirmedAssignments = items.filter((item) => ['confirmed', 'paid'].includes(item.status ?? 'pending')).length;
+  const committedAmount = items.reduce((total, item) => total + Number(item.agreedAmount ?? 0), 0);
+  const formatAmount = (amount: number) => new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount);
+
+  return <><SectionCard title="Servicios externos y proveedores" icon={<Truck className="h-4 w-4" />} action={<div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => setQuickOpen(true)}><Plus className="mr-2 h-4 w-4" />Alta rápida</Button><Button variant="secondary" onClick={() => setItems((current) => [...current, { id: makeId(), supplierId: '', supplierName: '', serviceType: '', status: 'pending', notes: '' }])}><Plus className="mr-2 h-4 w-4" />Asignar proveedor</Button></div>}>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Asignados</p><p className="mt-1 text-2xl font-semibold text-zinc-950">{items.length}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-amber-700">Por confirmar</p><p className="mt-1 text-2xl font-semibold text-amber-950">{pendingAssignments}</p></div><div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-sky-700">Confirmados</p><p className="mt-1 text-2xl font-semibold text-sky-950">{confirmedAssignments}</p></div><div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Monto comprometido</p><p className="mt-1 text-2xl font-semibold text-emerald-950">$ {formatAmount(committedAmount)}</p></div></div>
+    <p className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">Las asignaciones confirmadas o pagadas generan un gasto del evento. Guardar nuevamente actualiza ese gasto, sin duplicarlo.</p>
+    {items.length ? <div className="space-y-3">{items.map((item, index) => {
+      const currentSupplierAvailable = suppliers.some((supplier) => supplier._id === item.supplierId);
+      return <article key={item.id ?? index} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300">
+        <div className="grid items-end gap-3 lg:grid-cols-[minmax(260px,1fr)_155px_44px]">
+          <Field label="Proveedor"><Select aria-label="Proveedor" disabled={loadingSuppliers} value={item.supplierId ?? ''} onChange={(event) => selectSupplier(index, event.target.value)}><option value="">{loadingSuppliers ? 'Cargando proveedores...' : 'Seleccionar proveedor'}</option>{item.supplierId && !currentSupplierAvailable ? <option value={item.supplierId}>{item.supplierName || 'Proveedor legado'} (no disponible)</option> : null}{suppliers.map((supplier) => <option key={supplier._id} value={supplier._id}>{supplier.name}{supplier.businessName ? ` · ${supplier.businessName}` : ''}</option>)}</Select></Field>
+          <Field label="Estado"><Select aria-label="Estado" value={item.status ?? 'pending'} onChange={(event) => update(index, { status: event.target.value })}>{Object.entries(supplierStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+          <IconButton label="Quitar proveedor" disabled={saving} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
+        </div>
+        <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 md:grid-cols-2 xl:grid-cols-[minmax(180px,1.2fr)_130px_140px_minmax(185px,1fr)]">
+          <Field label="Servicio contratado"><Input aria-label="Servicio" placeholder="Foto, DJ, decoración..." value={item.serviceType ?? ''} onChange={(event) => update(index, { serviceType: event.target.value })} /></Field>
+          <Field label="Llegada"><Input aria-label="Llegada" placeholder="Ej.: 18:30" value={item.arrivalTime ?? ''} onChange={(event) => update(index, { arrivalTime: event.target.value })} /></Field>
+          <Field label="Monto acordado"><Input aria-label="Monto acordado" className="font-medium" type="number" min={0} placeholder="$ 0" value={item.agreedAmount ?? ''} onChange={(event) => update(index, { agreedAmount: numeric(event.target.value) })} /></Field>
+          <Field label="Contacto del catálogo"><div className="min-h-[42px] rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700"><p className="font-medium text-zinc-900">{item.contactName || 'Sin contacto cargado'}</p><p className="mt-0.5 text-xs text-zinc-500">{item.phone || 'Sin teléfono cargado'} · {displayLabel(supplierCategoryLabels, item.category ?? 'OTHER')}</p></div></Field>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2"><span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">Rubro: {displayLabel(supplierCategoryLabels, item.category ?? 'OTHER')}</span>{item.expenseId ? <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.expenseStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-600'}`}>{item.expenseStatus === 'paid' ? 'Gasto registrado' : 'Gasto anulado'}</span> : null}</div>
+        <details className="mt-4 rounded-xl bg-zinc-50 px-3 py-2.5" defaultOpen={Boolean(item.notes)}><summary className="cursor-pointer text-sm font-medium text-zinc-600 marker:text-zinc-400">Notas, condiciones y seguimiento</summary><Textarea aria-label="Notas" className="mt-3 min-h-20 bg-white" placeholder="Horarios, condiciones de pago, requerimientos y observaciones..." value={item.notes ?? ''} onChange={(event) => update(index, { notes: event.target.value })} /></details>
+      </article>; })}</div> : <EmptyRows text="No hay proveedores externos cargados para este evento." />}
+    <SaveBar saving={saving} onSave={save} text="Guardar proveedores y gastos" />
+  </SectionCard>
+  <Modal open={quickOpen} title="Alta rápida de proveedor" description="Se incorpora al mismo catálogo del menú Proveedores y queda seleccionado en este evento." onClose={() => { if (!quickSaving) setQuickOpen(false); }}>
+    <div className="space-y-4 p-6">
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Nombre *<Input autoFocus value={quickSupplier.name} onChange={(event) => setQuickSupplier((current) => ({ ...current, name: event.target.value }))} placeholder="Nombre visible" /></label>
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Razón social<Input value={quickSupplier.businessName} onChange={(event) => setQuickSupplier((current) => ({ ...current, businessName: event.target.value }))} /></label>
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Rubro<Select value={quickSupplier.category} onChange={(event) => setQuickSupplier((current) => ({ ...current, category: event.target.value }))}>{Object.entries(supplierCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Persona de contacto<Input value={quickSupplier.contactPerson} onChange={(event) => setQuickSupplier((current) => ({ ...current, contactPerson: event.target.value }))} /></label>
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Teléfono<Input value={quickSupplier.phone} onChange={(event) => setQuickSupplier((current) => ({ ...current, phone: event.target.value }))} /></label>
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700">WhatsApp<Input value={quickSupplier.whatsapp} onChange={(event) => setQuickSupplier((current) => ({ ...current, whatsapp: event.target.value }))} /></label>
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700 md:col-span-2">Email<Input type="email" value={quickSupplier.email} onChange={(event) => setQuickSupplier((current) => ({ ...current, email: event.target.value }))} /></label>
+      </div>
+      <label className="block space-y-1.5 text-sm font-medium text-zinc-700">Notas<Textarea value={quickSupplier.notes} onChange={(event) => setQuickSupplier((current) => ({ ...current, notes: event.target.value }))} /></label>
+      <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" disabled={quickSaving} onClick={() => setQuickOpen(false)}>Cancelar</Button><Button disabled={quickSaving || quickSupplier.name.trim().length < 2} onClick={() => void createQuickSupplier()}>{quickSaving ? 'Creando...' : 'Crear y seleccionar'}</Button></div>
+    </div>
+  </Modal></>;
 }
 
 export function EventTasksEditor({ plan, saving, onSave }: { plan?: EventResourcePlan; saving: boolean; onSave: SavePlan }) {

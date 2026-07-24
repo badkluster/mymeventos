@@ -41,6 +41,20 @@ body {
 
 body { background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes hero-sheen {
+  0%, 100% { transform: translate3d(-6%, -3%, 0); }
+  50% { transform: translate3d(6%, 3%, 0); }
+}
+
 .dark [data-admin-shell] .bg-white { background-color: #151517; }
 .dark [data-admin-shell] .bg-zinc-50,
 .dark [data-admin-shell] .bg-zinc-50\/80 { background-color: #1f2024; }

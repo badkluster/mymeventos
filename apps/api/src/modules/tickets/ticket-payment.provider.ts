@@ -21,7 +21,7 @@ export interface TicketPaymentProvider {
 
 export class MockTicketPaymentProvider implements TicketPaymentProvider {
   readonly name = 'mock' as const;
-  async createCheckout(input: CreateTicketCheckoutInput): Promise<CreateTicketCheckoutResult> { return { providerPaymentId: `mock_${input.orderCode}`, providerPreferenceId: `mock_pref_${input.orderCode}`, checkoutUrl: `${env.CORS_ORIGIN}/entradas/mock-payment/${input.orderCode}`, status: 'pending' }; }
+  async createCheckout(input: CreateTicketCheckoutInput): Promise<CreateTicketCheckoutResult> { const returnUrl = input.returnUrl ? `?returnUrl=${encodeURIComponent(input.returnUrl)}` : ''; return { providerPaymentId: `mock_${input.orderCode}`, providerPreferenceId: `mock_pref_${input.orderCode}`, checkoutUrl: `${env.CORS_ORIGIN}/entradas/mock-payment/${input.orderCode}${returnUrl}`, status: 'pending' }; }
   async getPayment(providerPaymentId: string): Promise<TicketProviderPayment> { return { providerPaymentId, status: 'pending' }; }
   async cancelPayment(providerPaymentId: string): Promise<TicketProviderPayment> { return { providerPaymentId, status: 'cancelled' }; }
   async refundPayment(input: RefundTicketPaymentInput): Promise<TicketProviderRefund> { return { providerRefundId: `mock_refund_${input.idempotencyKey.slice(0, 18)}`, status: 'approved', amount: input.amount }; }
@@ -41,4 +41,9 @@ export class MercadoPagoTicketPaymentProvider implements TicketPaymentProvider {
   async validateWebhook(input: ValidateTicketWebhookInput): Promise<boolean> { if (!env.MERCADO_PAGO_WEBHOOK_SECRET) return false; if (!input.signature || !input.dataId) return false; const value = `id:${input.dataId};request-id:${input.requestId ?? ''};ts:${input.signature.match(/ts=([^,]+)/)?.[1] ?? ''};`; const expected = createHmac('sha256', env.MERCADO_PAGO_WEBHOOK_SECRET).update(value).digest('hex'); const received = input.signature.match(/v1=([^,]+)/)?.[1] ?? ''; return received.length === expected.length && timingSafeEqual(Buffer.from(received), Buffer.from(expected)); }
 }
 
-export function getTicketPaymentProvider(): TicketPaymentProvider { return env.TICKET_PAYMENT_PROVIDER === 'mercado_pago' && env.MERCADO_PAGO_ACCESS_TOKEN ? new MercadoPagoTicketPaymentProvider() : new MockTicketPaymentProvider(); }
+export function getTicketPaymentProvider(): TicketPaymentProvider {
+  const useMercadoPago = env.TICKET_PAYMENT_PROVIDER === 'mercado_pago' && env.MERCADO_PAGO_ACCESS_TOKEN;
+  if (!useMercadoPago && env.NODE_ENV === 'production')
+    throw new Error('Mercado Pago no está configurado: no se puede usar el simulador de pagos en producción.');
+  return useMercadoPago ? new MercadoPagoTicketPaymentProvider() : new MockTicketPaymentProvider();
+}

@@ -4,10 +4,10 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion, type Variants } from 'framer-motion';
-import { ArrowRight, Baby, BriefcaseBusiness, CakeSlice, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, ChevronUp, Clock3, Crown, ExternalLink, Gift, GlassWater, GraduationCap, Heart, LogIn, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
+import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, type Variants } from 'framer-motion';
+import { ArrowRight, Baby, BriefcaseBusiness, CakeSlice, CalendarDays, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Crown, ExternalLink, Gift, GlassWater, GraduationCap, Heart, LogIn, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { brandAssets } from '@/lib/brand-assets';
 import { localSeoPages, salonSeoPages } from '@/lib/local-seo';
@@ -88,9 +88,11 @@ const sectionAccents = [
   { card: 'border-indigo-300/25 bg-indigo-400/[0.06] hover:border-indigo-200/55', icon: 'border-indigo-300/35 bg-indigo-400/10 text-indigo-100', text: 'text-indigo-100', badge: 'border-indigo-300/20 bg-indigo-400/10 text-indigo-100', line: 'bg-indigo-300/65' }
 ];
 const accentFor = (index: number) => sectionAccents[index % sectionAccents.length];
-function cloudinaryImageUrl(url: string): string {
-  if (!url || !url.includes('/upload/') || url.includes('/upload/f_auto,q_auto/')) return url;
-  return url.replace('/upload/', '/upload/f_auto,q_auto/');
+function cloudinaryImageUrl(url: string, width?: number): string {
+  if (!url || !url.includes('/upload/')) return url;
+  const stripped = url.replace(/\/upload\/(?:w_\d+,c_limit,)?f_auto,q_auto\//, '/upload/');
+  const transform = width ? `w_${width},c_limit,f_auto,q_auto` : 'f_auto,q_auto';
+  return stripped.replace('/upload/', `/upload/${transform}/`);
 }
 
 function InstagramIcon({ className = '' }: { className?: string }) {
@@ -108,6 +110,22 @@ function TikTokIcon({ className = '' }: { className?: string }) {
 function WhatsAppIcon({ className = '' }: { className?: string }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor"><path d="M12.04 2C6.57 2 2.12 6.37 2.12 11.75c0 1.72.46 3.4 1.34 4.88L2 22l5.52-1.42a10.1 10.1 0 0 0 4.52.94c5.47 0 9.92-4.37 9.92-9.76S17.51 2 12.04 2Zm0 17.82a8.36 8.36 0 0 1-4.22-1.14l-.3-.18-3.27.84.87-3.12-.2-.32a7.9 7.9 0 0 1-1.2-4.15c0-4.44 3.73-8.05 8.32-8.05 4.58 0 8.31 3.61 8.31 8.05s-3.73 8.07-8.31 8.07Zm4.56-6.03c-.25-.12-1.48-.72-1.71-.8-.23-.09-.4-.13-.57.12-.17.25-.65.8-.8.97-.15.17-.3.19-.55.07-.25-.13-1.06-.38-2.02-1.21a7.5 7.5 0 0 1-1.4-1.71c-.15-.25-.02-.39.11-.51.12-.12.25-.3.37-.44.13-.15.17-.25.25-.42.09-.17.04-.32-.02-.44-.06-.13-.57-1.35-.78-1.84-.2-.48-.41-.42-.57-.43h-.48c-.17 0-.44.06-.67.32-.23.25-.88.85-.88 2.07s.9 2.4 1.03 2.57c.13.17 1.78 2.68 4.31 3.75.6.26 1.07.41 1.44.53.6.19 1.15.16 1.59.1.48-.07 1.48-.6 1.69-1.18.21-.58.21-1.08.15-1.18-.06-.11-.23-.17-.49-.3Z" /></svg>;
 }
+
+const nav: [string, string][] = [
+  ['Salones', 'salones'],
+  ['Paquetes', 'paquetes'],
+  ['Galería', 'galeria'],
+  ['FAQ', 'faq'],
+  ['Contacto', 'contacto'],
+  ['Ubicaciones', 'ubicaciones'],
+];
+
+const socialOptions = [
+  { key: 'whatsapp' as const, label: 'WhatsApp', icon: WhatsAppIcon, field: 'whatsapp' as const },
+  { key: 'instagram' as const, label: 'Instagram', icon: InstagramIcon, field: 'instagramUrl' as const },
+  { key: 'facebook' as const, label: 'Facebook', icon: FacebookIcon, field: 'facebookUrl' as const },
+  { key: 'tiktok' as const, label: 'TikTok', icon: TikTokIcon, field: 'tiktokUrl' as const },
+];
 
 function titleForSalon(salon: Salon) { return salon.publicTitle || salon.name; }
 function locationForSalon(salon: Salon) { return salon.locationText || salon.locality || salon.city || salon.address || 'La Plata'; }
@@ -215,30 +233,44 @@ function normalizeMapQuery(value: string, salon: Salon) {
   return withCity.replace(/\s+/g, ' ').trim();
 }
 
-// Reveal content slightly before it enters the viewport so scrolling always feels immediate.
-const viewport = { once: true, amount: 0.01, margin: '0px 0px 140px 0px' } as const;
+// Reveal content once it has genuinely scrolled into view, with motion pronounced enough to read as a deliberate entrance.
+const viewport = { once: true, amount: 0.22, margin: '0px 0px -80px 0px' } as const;
 const smoothEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 const softSpring = { type: 'spring', stiffness: 320, damping: 34, mass: 0.8 } as const;
 const sectionVariants: Variants = {
-  hidden: { opacity: 0.88, y: 8 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: smoothEase, when: 'beforeChildren', staggerChildren: 0.012 } },
+  hidden: { opacity: 0, y: 32 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: smoothEase, when: 'beforeChildren', staggerChildren: 0.07 } },
+};
+// Same reveal, but children start together with the section instead of waiting for it to finish first.
+// Needed for sections whose content (partially) animates via its own state rather than variant propagation,
+// so that content doesn't visually resolve before the section's own title/selectors do.
+const sectionVariantsSync: Variants = {
+  hidden: { opacity: 0, y: 32 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: smoothEase, staggerChildren: 0.07 } },
 };
 const listVariants: Variants = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.012 } },
+  visible: { transition: { staggerChildren: 0.08 } },
 };
 const cardVariants: Variants = {
-  hidden: { opacity: 0.82, y: 7 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: smoothEase } },
+  hidden: { opacity: 0, y: 26 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: smoothEase } },
 };
 const titleVariants: Variants = {
-  hidden: { opacity: 0.86, y: 6 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: smoothEase } },
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: smoothEase } },
 };
 const imageRevealVariants: Variants = {
-  hidden: { opacity: 0.9, scale: 1.006 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.24, ease: smoothEase } },
+  hidden: { opacity: 0, scale: 1.05 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.65, ease: smoothEase } },
 };
+const ctaFocusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8cdd3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]';
+
+const numberPop = (index: number): Variants => ({ hidden: { scale: 0.9 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.03 } } });
+const underlineGrow = (delayBase: number, index: number, delayStep: number): Variants => ({ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.42, delay: delayBase + index * delayStep, ease: smoothEase } } });
+const iconPop = (index: number): Variants => ({ hidden: { scale: 0.92, rotate: -4 }, visible: { scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.025 } } });
+const badgePop = (index: number): Variants => ({ hidden: { scale: 0.92 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.02 } } });
+const starPop = (index: number, starIndex: number): Variants => ({ hidden: { opacity: 0, scale: 0.75, rotate: -8 }, visible: { opacity: 1, scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.04 + starIndex * 0.025 } } });
 
 function AnimatedSection({ children, className, variants = sectionVariants, style, ...props }: React.ComponentProps<typeof motion.section>) {
   const shouldReduceMotion = useReducedMotion();
@@ -278,23 +310,20 @@ function PackageFullDetail({ item, accentText = 'text-[#c8cdd3]' }: { item: Pack
 }
 
 function PackageDetailModal({ item, accentText, onClose }: { item: Package; accentText: string; onClose: () => void }) {
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
-  }, []);
+  const panelRef = useRef<HTMLElement | null>(null);
+  useDialogA11y(true, onClose, panelRef);
 
   return <Portal>
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-md md:px-8" role="dialog" aria-modal="true" aria-label={`Detalle de ${item.name}`} onClick={onClose}>
-      <article className="mx-auto max-w-5xl overflow-hidden rounded-3xl border border-[#c8cdd3]/30 bg-[#080807] text-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <article ref={panelRef} className="mx-auto max-w-5xl overflow-hidden rounded-3xl border border-[#c8cdd3]/30 bg-[#080807] text-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <header className="relative border-b border-white/10 bg-[#10100f] p-5 md:p-7">
           <button type="button" onClick={onClose} aria-label="Cerrar detalle del paquete" className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-black/45 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
           <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Detalle del paquete</p>
           <h2 className="mt-3 max-w-3xl break-words pr-12 text-3xl font-semibold md:text-5xl">{item.name}</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Valor</p><p className={`mt-1 text-xl font-semibold ${accentText}`}>{money(packagePrice(item))}</p><p className="text-xs text-zinc-500">{packagePriceUnit(item)}</p></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Duración</p><p className="mt-1 font-semibold">{item.durationHours ? `${item.durationHours} hs` : 'A coordinar'}</p>{item.startTime && item.endTime ? <p className="text-xs text-zinc-500">{item.startTime} a {item.endTime}</p> : null}</div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Seña</p><p className="mt-1 font-semibold">{item.depositAmount ? money(item.depositAmount) : 'A consultar'}</p></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-400">Valor</p><p className={`mt-1 text-xl font-semibold ${accentText}`}>{money(packagePrice(item))}</p><p className="text-xs text-zinc-400">{packagePriceUnit(item)}</p></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-400">Duración</p><p className="mt-1 font-semibold">{item.durationHours ? `${item.durationHours} hs` : 'A coordinar'}</p>{item.startTime && item.endTime ? <p className="text-xs text-zinc-400">{item.startTime} a {item.endTime}</p> : null}</div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs uppercase tracking-[0.16em] text-zinc-400">Seña</p><p className="mt-1 font-semibold">{item.depositAmount ? money(item.depositAmount) : 'A consultar'}</p></div>
           </div>
           {item.description ? <p className="mt-5 max-w-4xl text-sm leading-7 text-zinc-300 md:text-base">{item.description}</p> : null}
         </header>
@@ -305,13 +334,13 @@ function PackageDetailModal({ item, accentText, onClose }: { item: Package; acce
             {item.menuSections?.length ? <div className="mt-5 space-y-5">{item.menuSections.map((section, index) => <div key={`${section.title ?? section.name ?? 'menu'}-${index}`} className="border-b border-white/10 pb-4 last:border-b-0 last:pb-0">
               <p className={`font-semibold ${accentText}`}>{section.title ?? section.name ?? 'Sección'}</p>
               <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-6 text-zinc-300">{section.items.map((menuItem) => <li key={menuItem} className="break-words">{menuItem}</li>)}</ul>
-            </div>)}</div> : <p className="mt-4 text-sm text-zinc-500">No hay menú cargado para este paquete.</p>}
+            </div>)}</div> : <p className="mt-4 text-sm text-zinc-400">No hay menú cargado para este paquete.</p>}
           </section>
 
           <aside className="space-y-5">
             <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
               <h3 className="text-xl font-semibold">Servicios incluidos</h3>
-              {item.includedServices?.length ? <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-300">{item.includedServices.map((service) => <li key={service} className="flex min-w-0 gap-2"><Check className={`mt-1 h-4 w-4 shrink-0 ${accentText}`} /><span className="min-w-0 break-words">{service}</span></li>)}</ul> : <p className="mt-4 text-sm text-zinc-500">No hay servicios cargados.</p>}
+              {item.includedServices?.length ? <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-300">{item.includedServices.map((service) => <li key={service} className="flex min-w-0 gap-2"><Check className={`mt-1 h-4 w-4 shrink-0 ${accentText}`} /><span className="min-w-0 break-words">{service}</span></li>)}</ul> : <p className="mt-4 text-sm text-zinc-400">No hay servicios cargados.</p>}
             </section>
 
             <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -321,7 +350,7 @@ function PackageDetailModal({ item, accentText, onClose }: { item: Package; acce
                 {item.promotionText ? <p><span className={accentText}>Promoción:</span> {item.promotionText}</p> : null}
                 {item.giftText ? <p><span className={accentText}>Beneficio:</span> {item.giftText}</p> : null}
                 {item.notes ? <p className="border-t border-white/10 pt-3 text-zinc-400">{item.notes}</p> : null}
-                {!item.paymentTerms && !item.promotionText && !item.giftText && !item.notes ? <p className="text-zinc-500">Condiciones a confirmar con el salón.</p> : null}
+                {!item.paymentTerms && !item.promotionText && !item.giftText && !item.notes ? <p className="text-zinc-400">Condiciones a confirmar con el salón.</p> : null}
               </div>
             </section>
           </aside>
@@ -341,17 +370,54 @@ function Portal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
+function useDialogA11y(active: boolean, onClose: () => void, containerRef: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    if (!active) return;
+    const previousActiveElement = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const mainEl = document.querySelector('main');
+    const previousAriaHidden = mainEl?.getAttribute('aria-hidden');
+    mainEl?.setAttribute('aria-hidden', 'true');
+
+    const focusables = () => containerRef.current
+      ? Array.from(containerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])'
+        ))
+      : [];
+
+    focusables()[0]?.focus({ preventScroll: true });
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+      if (event.key !== 'Tab') return;
+      const nodes = focusables();
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousAriaHidden == null) mainEl?.removeAttribute('aria-hidden');
+      else mainEl?.setAttribute('aria-hidden', previousAriaHidden);
+      previousActiveElement?.focus({ preventScroll: true });
+    };
+  }, [active, onClose, containerRef]);
+}
+
 function galleryImageSource(item: LandingItem, index: number) {
   return item.imageUrl || fallbackGallery[index % fallbackGallery.length];
 }
 
 function GalleryLightbox({ items, index, onClose, onSelect }: { items: LandingItem[]; index: number | null; onClose: () => void; onSelect: (index: number) => void }) {
-  useEffect(() => {
-    if (index === null) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
-  }, [index]);
+  const panelRef = useRef<HTMLElement | null>(null);
+  useDialogA11y(index !== null, onClose, panelRef);
 
   if (index === null || !items.length) return null;
 
@@ -361,12 +427,12 @@ function GalleryLightbox({ items, index, onClose, onSelect }: { items: LandingIt
   const change = (direction: 1 | -1) => onSelect((activeIndex + direction + items.length) % items.length);
 
   return <Portal>
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/92 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Galería M&M ampliada" onClick={onClose}>
+    <div ref={panelRef as React.RefObject<HTMLDivElement>} className="fixed inset-0 z-[100] grid place-items-center bg-black/92 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Galería M&M ampliada" onClick={onClose}>
       <button type="button" onClick={onClose} aria-label="Cerrar galería" className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
       {items.length > 1 ? <button type="button" onClick={(event) => { event.stopPropagation(); change(-1); }} aria-label="Imagen anterior" className="absolute left-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronLeft className="h-6 w-6" /></button> : null}
       <section className="w-full max-w-6xl" onClick={(event) => event.stopPropagation()}>
         <div className="overflow-hidden rounded-3xl border border-[#c8cdd3]/25 bg-[#080807] shadow-2xl">
-          <img src={activeSource} alt={active.altText || active.title || 'Momento M&M'} className="mx-auto max-h-[74vh] w-full object-contain" />
+          <img src={cloudinaryImageUrl(activeSource, 1600)} alt={active.altText || active.title || 'Momento M&M'} decoding="async" className="mx-auto max-h-[74vh] w-full object-contain" />
           <div className="border-t border-white/10 bg-black/45 px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -380,7 +446,7 @@ function GalleryLightbox({ items, index, onClose, onSelect }: { items: LandingIt
         </div>
         <div className="mt-4 flex max-h-20 flex-wrap items-center justify-center gap-2 overflow-y-auto">{items.map((item, itemIndex) => {
           const source = galleryImageSource(item, itemIndex);
-          return <button key={`${source}-gallery-lightbox-${itemIndex}`} type="button" onClick={() => onSelect(itemIndex)} aria-label={`Ver imagen ${itemIndex + 1}`} className={`h-14 w-20 overflow-hidden rounded-lg border transition ${itemIndex === activeIndex ? 'border-[#c8cdd3]' : 'border-white/15 hover:border-[#c8cdd3]/70'}`}><img src={source} alt={item.altText || item.title || `Momento M&M ${itemIndex + 1}`} className="h-full w-full object-cover" /></button>;
+          return <button key={`${source}-gallery-lightbox-${itemIndex}`} type="button" onClick={() => onSelect(itemIndex)} aria-label={`Ver imagen ${itemIndex + 1}`} className={`h-14 w-20 overflow-hidden rounded-lg border transition ${itemIndex === activeIndex ? 'border-[#c8cdd3]' : 'border-white/15 hover:border-[#c8cdd3]/70'}`}><img src={cloudinaryImageUrl(source, 200)} alt={item.altText || item.title || `Momento M&M ${itemIndex + 1}`} loading="lazy" decoding="async" className="h-full w-full object-cover" /></button>;
         })}</div>
       </section>
       {items.length > 1 ? <button type="button" onClick={(event) => { event.stopPropagation(); change(1); }} aria-label="Imagen siguiente" className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronRight className="h-6 w-6" /></button> : null}
@@ -394,32 +460,31 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
   const [mapOpen, setMapOpen] = useState(false);
   const media = useMemo(() => salon ? mediaForSalon(salon) : [], [salon]);
 
-  useEffect(() => {
-    if (!salon) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
-  }, [salon]);
-
-  if (!salon) return null;
-
-  const selectedMedia = media[Math.min(selectedIndex, Math.max(media.length - 1, 0))];
-  const selectedSource = selectedMedia?.secureUrl || selectedMedia?.url || imageForSalon(salon);
-  const lightboxMedia = lightboxIndex !== null ? media[Math.min(lightboxIndex, Math.max(media.length - 1, 0))] : undefined;
-  const lightboxSource = lightboxMedia?.secureUrl || lightboxMedia?.url;
-  const packages = salon.packages ?? [];
-  const extras = salon.extraServices ?? [];
-  const changeLightbox = (direction: 1 | -1) => setLightboxIndex((current) => {
-    if (current === null || !media.length) return current;
-    return (current + direction + media.length) % media.length;
-  });
+  const panelRef = useRef<HTMLElement | null>(null);
+  const lightboxPanelRef = useRef<HTMLElement | null>(null);
+  const mapPanelRef = useRef<HTMLElement | null>(null);
+  useDialogA11y(Boolean(salon) && lightboxIndex === null && !mapOpen, onClose, panelRef);
+  useDialogA11y(lightboxIndex !== null, () => setLightboxIndex(null), lightboxPanelRef);
+  useDialogA11y(mapOpen, () => setMapOpen(false), mapPanelRef);
 
   return <AnimatePresence>
-    <motion.div className="fixed inset-0 z-50 overflow-y-auto bg-black/82 px-4 py-5 backdrop-blur-md md:px-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.article className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-[#c8cdd3]/25 bg-[#080807] text-white shadow-2xl" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} onClick={(event) => event.stopPropagation()}>
+    {salon ? (() => {
+      const selectedMedia = media[Math.min(selectedIndex, Math.max(media.length - 1, 0))];
+      const selectedSource = selectedMedia?.secureUrl || selectedMedia?.url || imageForSalon(salon);
+      const lightboxMedia = lightboxIndex !== null ? media[Math.min(lightboxIndex, Math.max(media.length - 1, 0))] : undefined;
+      const lightboxSource = lightboxMedia?.secureUrl || lightboxMedia?.url;
+      const packages = salon.packages ?? [];
+      const extras = salon.extraServices ?? [];
+      const changeLightbox = (direction: 1 | -1) => setLightboxIndex((current) => {
+        if (current === null || !media.length) return current;
+        return (current + direction + media.length) % media.length;
+      });
+
+      return <motion.div key="salon-detail-overlay" className="fixed inset-0 z-50 overflow-y-auto bg-black/82 px-4 py-5 backdrop-blur-md md:px-8" role="dialog" aria-modal="true" aria-label={`Detalle de ${titleForSalon(salon)}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.article ref={panelRef as React.RefObject<HTMLElement>} key="salon-detail-panel" className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-[#c8cdd3]/25 bg-[#080807] text-white shadow-2xl" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} onClick={(event) => event.stopPropagation()}>
         <div className="relative h-[46vh] min-h-80 overflow-hidden bg-[#111113]">
           <button type="button" onClick={() => media.length && setLightboxIndex(Math.min(selectedIndex, Math.max(media.length - 1, 0)))} className="block h-full w-full text-left" aria-label={`Abrir galería de ${titleForSalon(salon)}`}>
-            {selectedMedia?.resourceType === 'video' ? <video src={selectedSource} className="h-full w-full object-cover" controls playsInline /> : <img src={selectedSource} alt={selectedMedia?.altText || selectedMedia?.title || titleForSalon(salon)} className="h-full w-full object-cover" />}
+            {selectedMedia?.resourceType === 'video' ? <video src={selectedSource} className="h-full w-full object-cover" controls playsInline /> : <img src={cloudinaryImageUrl(selectedSource, 1400)} alt={selectedMedia?.altText || selectedMedia?.title || titleForSalon(salon)} loading="lazy" decoding="async" className="h-full w-full object-cover" />}
           </button>
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#080807] via-black/20 to-transparent" />
           <button type="button" onClick={onClose} aria-label="Cerrar detalle del salón" className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-black/50 text-white backdrop-blur transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
@@ -435,16 +500,16 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
           <div className="space-y-7">
             {media.length > 1 ? <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">{media.slice(0, 12).map((item, index) => {
               const source = item.secureUrl || item.url;
-              return <button key={`${source}-${index}`} type="button" onClick={() => { setSelectedIndex(index); setLightboxIndex(index); }} aria-label={`Abrir imagen ${index + 1} de ${titleForSalon(salon)}`} className={`h-20 overflow-hidden rounded-xl border transition ${index === selectedIndex ? 'border-[#c8cdd3]' : 'border-white/10 hover:border-[#c8cdd3]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={source} alt={item.altText || item.title || titleForSalon(salon)} className="h-full w-full object-cover" />}</button>;
+              return <button key={`${source}-${index}`} type="button" onClick={() => { setSelectedIndex(index); setLightboxIndex(index); }} aria-label={`Abrir imagen ${index + 1} de ${titleForSalon(salon)}`} className={`h-20 overflow-hidden rounded-xl border transition ${index === selectedIndex ? 'border-[#c8cdd3]' : 'border-white/10 hover:border-[#c8cdd3]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={cloudinaryImageUrl(source, 200)} alt={item.altText || item.title || titleForSalon(salon)} loading="lazy" decoding="async" className="h-full w-full object-cover" />}</button>;
             })}</div> : null}
 
             <section>
               <h3 className="text-2xl font-semibold">Información del salón</h3>
               <p className="mt-4 text-sm leading-7 text-zinc-300 md:text-base">{salon.publicDescription || descriptionForSalon(salon)}</p>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Users className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Capacidad</p><p className="mt-1 font-semibold">{capacityForSalon(salon)}</p></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Clock3 className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Horario</p><p className="mt-1 font-semibold">{salon.defaultStartTime && salon.defaultEndTime ? `${salon.defaultStartTime} a ${salon.defaultEndTime}` : salon.defaultDurationHours ? `${salon.defaultDurationHours} horas` : 'A coordinar'}</p></div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><PackageCheck className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-500">Paquetes</p><p className="mt-1 font-semibold">{packages.length || 'A consultar'}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Users className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-400">Capacidad</p><p className="mt-1 font-semibold">{capacityForSalon(salon)}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Clock3 className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-400">Horario</p><p className="mt-1 font-semibold">{salon.defaultStartTime && salon.defaultEndTime ? `${salon.defaultStartTime} a ${salon.defaultEndTime}` : salon.defaultDurationHours ? `${salon.defaultDurationHours} horas` : 'A coordinar'}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><PackageCheck className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-400">Paquetes</p><p className="mt-1 font-semibold">{packages.length || 'A consultar'}</p></div>
               </div>
             </section>
 
@@ -452,7 +517,7 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
               <h3 className="text-2xl font-semibold">Paquetes disponibles</h3>
               <div className="mt-4 grid gap-3 md:grid-cols-2">{packages.map((item) => <article key={item._id} className="flex min-h-[260px] flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="flex items-start justify-between gap-3"><h4 className="font-semibold">{item.name}</h4>{item.badgeLabel ? <span className="rounded-md bg-[#c8cdd3] px-2 py-1 text-[10px] font-bold uppercase text-black">{item.badgeLabel}</span> : null}</div>
-                <p className="mt-3 text-xl font-semibold text-[#f1f5f9]">{money(packagePrice(item))} <span className="text-xs font-normal text-zinc-500">{packagePriceUnit(item)}</span></p>
+                <p className="mt-3 text-xl font-semibold text-[#f1f5f9]">{money(packagePrice(item))} <span className="text-xs font-normal text-zinc-400">{packagePriceUnit(item)}</span></p>
                 {item.description ? <p className="mt-3 text-sm leading-6 text-zinc-400">{item.description}</p> : null}
                 {item.includedServices?.length ? <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">{item.includedServices.slice(0, 4).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c8cdd3]" />{service}</li>)}</ul> : null}
                 {item.promotionText || item.giftText ? <p className="mt-3 text-sm text-[#d4d4d8]">{item.promotionText || item.giftText}</p> : null}
@@ -497,21 +562,21 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
         </div>
       </motion.article>
 
-      {lightboxIndex !== null && lightboxSource ? <Portal><div className="fixed inset-0 z-[100] grid place-items-center bg-black/92 p-4" role="dialog" aria-modal="true" aria-label={`Galería de ${titleForSalon(salon)}`} onClick={(event) => event.stopPropagation()}>
+      {lightboxIndex !== null && lightboxSource ? <Portal><div ref={lightboxPanelRef as React.RefObject<HTMLDivElement>} className="fixed inset-0 z-[100] grid place-items-center bg-black/92 p-4" role="dialog" aria-modal="true" aria-label={`Galería de ${titleForSalon(salon)}`} onClick={(event) => event.stopPropagation()}>
         <button type="button" onClick={() => setLightboxIndex(null)} aria-label="Cerrar galería" className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
         {media.length > 1 ? <button type="button" onClick={() => changeLightbox(-1)} aria-label="Imagen anterior" className="absolute left-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronLeft className="h-6 w-6" /></button> : null}
         <div className="max-h-[88vh] w-full max-w-6xl">
-          {lightboxMedia?.resourceType === 'video' ? <video src={lightboxSource} className="mx-auto max-h-[78vh] w-full rounded-2xl object-contain" controls playsInline autoPlay /> : <img src={lightboxSource} alt={lightboxMedia?.altText || lightboxMedia?.title || titleForSalon(salon)} className="mx-auto max-h-[78vh] w-full rounded-2xl object-contain" />}
+          {lightboxMedia?.resourceType === 'video' ? <video src={lightboxSource} className="mx-auto max-h-[78vh] w-full rounded-2xl object-contain" controls playsInline autoPlay /> : <img src={cloudinaryImageUrl(lightboxSource, 1600)} alt={lightboxMedia?.altText || lightboxMedia?.title || titleForSalon(salon)} decoding="async" className="mx-auto max-h-[78vh] w-full rounded-2xl object-contain" />}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{media.map((item, index) => {
             const source = item.secureUrl || item.url;
-            return <button key={`${source}-lightbox-${index}`} type="button" onClick={() => setLightboxIndex(index)} aria-label={`Ver imagen ${index + 1}`} className={`h-14 w-20 overflow-hidden rounded-lg border transition ${index === lightboxIndex ? 'border-[#c8cdd3]' : 'border-white/15 hover:border-[#c8cdd3]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={source} alt={item.altText || item.title || titleForSalon(salon)} className="h-full w-full object-cover" />}</button>;
+            return <button key={`${source}-lightbox-${index}`} type="button" onClick={() => setLightboxIndex(index)} aria-label={`Ver imagen ${index + 1}`} className={`h-14 w-20 overflow-hidden rounded-lg border transition ${index === lightboxIndex ? 'border-[#c8cdd3]' : 'border-white/15 hover:border-[#c8cdd3]/70'}`}>{item.resourceType === 'video' ? <video src={source} className="h-full w-full object-cover" /> : <img src={cloudinaryImageUrl(source, 200)} alt={item.altText || item.title || titleForSalon(salon)} loading="lazy" decoding="async" className="h-full w-full object-cover" />}</button>;
           })}</div>
         </div>
         {media.length > 1 ? <button type="button" onClick={() => changeLightbox(1)} aria-label="Imagen siguiente" className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/50 text-white transition hover:bg-white hover:text-black"><ChevronRight className="h-6 w-6" /></button> : null}
       </div></Portal> : null}
 
       {mapOpen ? <Portal><div className="fixed inset-0 z-[100] grid place-items-center bg-black/88 p-4" role="dialog" aria-modal="true" aria-label={`Mapa de ${titleForSalon(salon)}`} onClick={(event) => event.stopPropagation()}>
-        <section className="w-full max-w-5xl overflow-hidden rounded-3xl border border-[#c8cdd3]/30 bg-[#080807] shadow-2xl">
+        <section ref={mapPanelRef as React.RefObject<HTMLElement>} className="w-full max-w-5xl overflow-hidden rounded-3xl border border-[#c8cdd3]/30 bg-[#080807] shadow-2xl">
           <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
             <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#c8cdd3]">Ubicación</p><h3 className="mt-1 text-2xl font-semibold text-white">{titleForSalon(salon)}</h3><p className="mt-1 text-sm text-zinc-400">{salon.address || locationForSalon(salon)}</p><a href={mapExternalUrlForSalon(salon)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#f1f5f9] hover:text-white">Abrir en Google Maps <ExternalLink className="h-4 w-4" /></a></div>
             <button type="button" onClick={() => setMapOpen(false)} aria-label="Cerrar mapa" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 text-white transition hover:bg-white hover:text-black"><X className="h-5 w-5" /></button>
@@ -519,7 +584,8 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
           <iframe title={`Mapa ampliado de ${titleForSalon(salon)}`} src={mapUrlForSalon(salon)} className="h-[70vh] w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
         </section>
       </div></Portal> : null}
-    </motion.div>
+    </motion.div>;
+    })() : null}
   </AnimatePresence>;
 }
 
@@ -535,8 +601,20 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
   const [formMessage, setFormMessage] = useState('');
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [landingLoading, setLandingLoading] = useState(!initialLanding);
+  const [scrolled, setScrolled] = useState(false);
+  const [loadedMapIds, setLoadedMapIds] = useState<Set<string>>(new Set());
+  const [hasActiveTickets, setHasActiveTickets] = useState(false);
+  const [packagesRevealed, setPackagesRevealed] = useState(false);
+  const mobileMenuRef = useRef<HTMLElement | null>(null);
+  const socialPanelRef = useRef<HTMLElement | null>(null);
+
+  const { scrollY } = useScroll();
+  useMotionValueEvent(scrollY, 'change', (latest) => setScrolled(latest > 24));
+  useDialogA11y(mobileOpen, () => setMobileOpen(false), mobileMenuRef);
+  useDialogA11y(Boolean(socialNetwork), () => setSocialNetwork(null), socialPanelRef);
 
   useEffect(() => {
+    if (initialLanding) return;
     let mounted = true;
     void api.get<LandingPayload>('/public/landing')
       .then((response) => { if (mounted) setLanding(response); })
@@ -553,9 +631,17 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     return () => window.clearTimeout(timer);
   }, [landingLoading]);
 
+  useEffect(() => {
+    let mounted = true;
+    void api.get<{ publications: unknown[] }>('/public/tickets')
+      .then((response) => { if (mounted) setHasActiveTickets((response.publications?.length ?? 0) > 0); })
+      .catch(() => undefined);
+    return () => { mounted = false; };
+  }, []);
+
   const settings = landing.settings ?? {};
   const salons = landing.salons;
-  const heroImage = cloudinaryImageUrl(settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' }));
+  const heroImage = cloudinaryImageUrl(settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' }), 1920);
   const serviceBlocks = landing.serviceBlocks.length ? landing.serviceBlocks : fallbackServices;
   const eventTypes = landing.eventTypes.length ? landing.eventTypes : fallbackEventTypes;
   const faqs: LandingItem[] = landing.faqs.length ? landing.faqs : fallbackFaqs;
@@ -658,95 +744,84 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     }
   }
 
-  const nav = [
-    ['Salones', 'salones'],
-    ['Paquetes', 'paquetes'],
-    ['Galería', 'galeria'],
-    ['FAQ', 'faq'],
-    ['Contacto', 'contacto'],
-    ['Ubicaciones', 'ubicaciones'],
-  ];
-
-  const socialOptions = [
-    { key: 'whatsapp' as const, label: 'WhatsApp', icon: WhatsAppIcon, field: 'whatsapp' as const },
-    { key: 'instagram' as const, label: 'Instagram', icon: InstagramIcon, field: 'instagramUrl' as const },
-    { key: 'facebook' as const, label: 'Facebook', icon: FacebookIcon, field: 'facebookUrl' as const },
-    { key: 'tiktok' as const, label: 'TikTok', icon: TikTokIcon, field: 'tiktokUrl' as const },
-  ];
   const activeSocial = socialOptions.find((item) => item.key === socialNetwork);
   const shouldReduceMotion = useReducedMotion();
 
   return <main className="min-h-screen overflow-x-hidden bg-[#050505] text-white">
-    <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/75 backdrop-blur-xl">
+    <header className={`fixed inset-x-0 top-0 z-40 border-b transition-[background-color,border-color] duration-300 ${scrolled ? 'border-white/10 bg-black/85 backdrop-blur-sm' : 'border-transparent bg-black/0'}`}>
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-3 px-4 md:h-24 md:px-8">
         <button type="button" onClick={() => scrollTo('inicio')} className="group inline-flex shrink-0 items-center rounded-xl px-1 py-1 transition hover:opacity-85" aria-label="Ir al inicio">
           <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={174} height={74} className="h-11 w-auto max-w-[150px] object-contain brightness-110 contrast-125 drop-shadow-[0_8px_18px_rgba(0,0,0,.45)] md:h-16 md:max-w-none" priority />
         </button>
-        <nav className="hidden items-center gap-6 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100 xl:gap-8 lg:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="group relative pb-1 transition hover:text-[#dbe1e8]"><span>{label}</span><span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></button>)}<Link href="/entradas" className="group relative pb-1 transition hover:text-[#dbe1e8]"><span>Entradas</span><span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></Link></nav>
-        <div className="hidden items-center gap-3 lg:flex"><Link href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 text-zinc-400 transition hover:border-[#c8cdd3]/45 hover:bg-white/[0.04] hover:text-white"><LogIn className="h-4.5 w-4.5" /></Link><button type="button" onClick={() => scrollTo('contacto')} className="rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(229,231,235,.18)] transition hover:bg-[#e5e7eb]">Solicitá presupuesto</button></div>
+        <nav className="hidden items-center gap-6 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100 xl:gap-8 lg:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="group relative pb-1 transition hover:text-[#dbe1e8]"><span>{label}</span><span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></button>)}{hasActiveTickets ? <Link href="/entradas" className="group relative pb-1 transition hover:text-[#dbe1e8]"><span>Entradas</span><span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></Link> : null}</nav>
+        <div className="hidden items-center gap-3 lg:flex"><Link href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 text-zinc-400 transition hover:border-[#c8cdd3]/45 hover:bg-white/[0.04] hover:text-white"><LogIn className="h-4.5 w-4.5" /></Link><button type="button" onClick={() => scrollTo('contacto')} className={`rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(229,231,235,.18)] transition hover:bg-[#e5e7eb] ${ctaFocusRing}`}>Solicitá presupuesto</button></div>
         <button type="button" onClick={() => setMobileOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/[0.04] text-white lg:hidden" aria-label="Abrir menú"><Menu className="h-5 w-5" /></button>
       </div>
-      {mobileOpen ? <Portal><div className="fixed inset-0 z-[100] overflow-y-auto bg-[#050505] px-5 py-5 lg:hidden">
+      {mobileOpen ? <Portal><div ref={mobileMenuRef as React.RefObject<HTMLDivElement>} className="fixed inset-0 z-[100] overflow-y-auto bg-[#050505] px-5 py-5 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú de navegación">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(200,205,211,.12),transparent_36%),linear-gradient(180deg,rgba(255,255,255,.04),transparent_42%)]" />
         <div className="relative flex items-center justify-between border-b border-white/10 pb-5">
           <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={174} height={74} className="h-16 w-auto object-contain brightness-110 contrast-125" />
           <button type="button" onClick={() => setMobileOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/[0.03] text-white" aria-label="Cerrar menú"><X className="h-5 w-5" /></button>
         </div>
-        <nav className="relative mt-8 grid gap-2">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo(id), 0); }} className="group flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-zinc-100 transition hover:border-[#dbe1e8]/60 hover:text-[#dbe1e8]"><span className="relative pb-1">{label}<span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></span><ArrowRight className="h-4 w-4 text-[#c8cdd3] transition group-hover:text-[#dbe1e8]" /></button>)}<Link href="/entradas" onClick={() => setMobileOpen(false)} className="group flex items-center justify-between rounded-2xl border border-[#dbe1e8]/30 bg-white/[0.06] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-white"><span>Entradas</span><ArrowRight className="h-4 w-4 text-[#c8cdd3]" /></Link></nav>
+        <nav className="relative mt-8 grid gap-2">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo(id), 0); }} className="group flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-zinc-100 transition hover:border-[#dbe1e8]/60 hover:text-[#dbe1e8]"><span className="relative pb-1">{label}<span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></span><ArrowRight className="h-4 w-4 text-[#c8cdd3] transition group-hover:text-[#dbe1e8]" /></button>)}{hasActiveTickets ? <Link href="/entradas" onClick={() => setMobileOpen(false)} className="group flex items-center justify-between rounded-2xl border border-[#dbe1e8]/30 bg-white/[0.06] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-white"><span>Entradas</span><ArrowRight className="h-4 w-4 text-[#c8cdd3]" /></Link> : null}</nav>
         <div className="relative mt-8 grid gap-3">
-          <button type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo('contacto'), 0); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#c8cdd3] px-5 py-4 text-sm font-semibold text-black">Solicitá presupuesto <ArrowRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo('contacto'), 0); }} className={`inline-flex items-center justify-center gap-2 rounded-xl bg-[#c8cdd3] px-5 py-4 text-sm font-semibold text-black ${ctaFocusRing}`}>Solicitá presupuesto <ArrowRight className="h-4 w-4" /></button>
           <Link href="/admin/login" onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center rounded-xl border border-white/10 px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Ingresar al backoffice</Link>
         </div>
       </div></Portal> : null}
     </header>
 
     <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
-      <motion.img src={heroImage} alt="Salón M&M preparado para evento" className="absolute inset-0 h-full w-full object-cover will-change-transform" initial={shouldReduceMotion ? false : { opacity: 0.94, scale: 1.012 }} animate={shouldReduceMotion ? undefined : { opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: smoothEase }} />
+      <motion.img src={heroImage} alt="Salón M&M preparado para evento" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover will-change-transform" initial={shouldReduceMotion ? false : { opacity: 0.7, scale: 1.09 }} animate={shouldReduceMotion ? undefined : { opacity: 1, scale: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(5,5,5,1),rgba(5,5,5,.08)_38%,rgba(5,5,5,.64))]" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen [animation:hero-sheen_16s_ease-in-out_infinite] bg-[radial-gradient(55%_55%_at_25%_15%,rgba(200,205,211,.18),transparent_60%)]" />
       <div className="relative mx-auto grid min-h-[calc(92vh-5rem)] max-w-7xl content-center px-4 py-12 md:min-h-[calc(92vh-6rem)] md:px-8 md:py-16">
         <motion.div initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : 'visible'} variants={listVariants} className="min-w-0 max-w-3xl">
           <motion.p variants={cardVariants} className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f1f5f9] sm:text-xs sm:tracking-[0.42em]">M&M Eventos</motion.p>
           <motion.h1 variants={cardVariants} className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</motion.h1>
           <motion.p variants={cardVariants} className="mt-6 max-w-xl text-sm leading-7 text-zinc-200 sm:text-base md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</motion.p>
-          <motion.div variants={cardVariants} className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><motion.button type="button" onClick={() => scrollTo('contacto')} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] sm:px-6">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-4 w-4" /></motion.button><motion.button type="button" onClick={() => scrollTo('salones')} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9] sm:px-6">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-4 w-4" /></motion.button></motion.div>
+          <motion.div variants={cardVariants} className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><motion.button type="button" onClick={() => scrollTo('contacto')} whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.02 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_0_rgba(200,205,211,0)] transition hover:bg-[#e5e7eb] hover:shadow-[0_8px_30px_rgba(200,205,211,.25)] sm:px-6 ${ctaFocusRing}`}>{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button><motion.button type="button" onClick={() => scrollTo('salones')} whileHover={shouldReduceMotion ? undefined : { y: -3 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9] sm:px-6 ${ctaFocusRing}`}>{settings.heroSecondaryCtaLabel || 'Ver salones'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button></motion.div>
           <motion.div variants={listVariants} className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => setSelectedSalon(salon)} whileHover={shouldReduceMotion ? undefined : { y: -2, borderColor: 'rgba(200,205,211,.8)' }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#c8cdd3]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f1f5f9]" /><span className="truncate">{heroLocationForSalon(salon)}</span></motion.button>)}</motion.div>
         </motion.div>
       </div>
+      <motion.button type="button" onClick={() => scrollTo('salones')} aria-label="Ver más contenido" initial={shouldReduceMotion ? false : { opacity: 0 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: [0, 8, 0] }} transition={shouldReduceMotion ? undefined : { opacity: { delay: 0.6, duration: 0.4 }, y: { delay: 1, duration: 1.8, repeat: Infinity, ease: 'easeInOut' } }} className={`absolute bottom-6 left-1/2 hidden -translate-x-1/2 rounded-full border border-white/20 bg-black/30 p-2 text-white backdrop-blur transition hover:border-[#c8cdd3] hover:text-[#c8cdd3] md:grid ${ctaFocusRing}`}>
+        <ChevronDown className="h-5 w-5" />
+      </motion.button>
     </section>
 
     <AnimatedSection id="salones" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones totalmente equipados, listos para llevar adelante tu evento" />
       <AnimatedGrid className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.01 }} transition={softSpring} className="group flex h-full min-h-[470px] flex-col overflow-hidden rounded-2xl border border-[#c8cdd3]/25 bg-[#10100f] shadow-2xl shadow-black/30">
-        <motion.div variants={imageRevealVariants} className="relative h-56 shrink-0 overflow-hidden"><img src={imageForSalon(salon)} alt={titleForSalon(salon)} className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025]" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></motion.div>
+        <motion.div variants={imageRevealVariants} className="relative h-56 shrink-0 overflow-hidden"><img src={cloudinaryImageUrl(imageForSalon(salon), 900)} alt={titleForSalon(salon)} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025]" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></motion.div>
         <div className="flex flex-1 flex-col p-5"><h3 className="truncate text-xl font-semibold" title={titleForSalon(salon)}>{titleForSalon(salon)}</h3><div className="mt-3 grid min-h-9 grid-cols-2 gap-3 text-sm text-zinc-200"><span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={locationForSalon(salon)}>{heroLocationForSalon(salon)}</span></span><span className="inline-flex min-w-0 items-center gap-1"><Users className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={capacityForSalon(salon)}>{capacityForSalon(salon)}</span></span></div><p className="mt-4 line-clamp-2 min-h-12 text-base leading-7 text-zinc-300">{descriptionForSalon(salon)}</p><div className="mt-auto grid grid-cols-2 gap-2 pt-6"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#c8cdd3]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#c8cdd3] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto</button></div></div>
       </motion.article>)}</AnimatedGrid>
     </AnimatedSection>
 
     <AnimatedSection className="border-y border-[#c8cdd3]/15 bg-[#0b0b0c] px-5 py-12 md:px-8">
-      <AnimatedGrid className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <motion.div key={step} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className="relative flex items-center gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] p-5"><motion.span className="text-3xl font-semibold text-[#dbe1e8]" variants={{ hidden: { scale: 0.9 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.03 } } }}>{index + 1}</motion.span><div><h3 className="text-base font-semibold">{step}</h3><p className="mt-1 text-sm leading-6 text-zinc-300">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div><motion.span aria-hidden className="absolute inset-x-0 bottom-0 h-px origin-left bg-gradient-to-r from-transparent via-[#c8cdd3]/60 to-transparent" variants={{ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.42, delay: 0.08 + index * 0.04, ease: smoothEase } } }} /></motion.div>)}</AnimatedGrid>
+      <AnimatedGrid className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <motion.div key={step} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className="relative flex items-center gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] p-5"><motion.span className="text-3xl font-semibold text-[#dbe1e8]" variants={numberPop(index)}>{index + 1}</motion.span><div><h3 className="text-base font-semibold">{step}</h3><p className="mt-1 text-sm leading-6 text-zinc-300">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div><motion.span aria-hidden className="absolute inset-x-0 bottom-0 h-px origin-left bg-gradient-to-r from-transparent via-[#c8cdd3]/60 to-transparent" variants={underlineGrow(0.08, index, 0.04)} /></motion.div>)}</AnimatedGrid>
     </AnimatedSection>
 
-    <AnimatedSection id="paquetes" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection id="paquetes" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24" variants={sectionVariantsSync} onViewportEnter={() => setPackagesRevealed(true)}>
       <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, descubrilos." />
       <AnimatedGrid className="mb-6 flex flex-wrap justify-center gap-2">{displaySalons.map((salon) => {
         const active = selectedPackageSalon?._id === salon._id;
         return <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => setSelectedPackageSalonId(salon._id)} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }} transition={softSpring} className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${active ? 'border-[#c8cdd3] bg-[#c8cdd3] text-black' : 'border-white/15 bg-white/[0.03] text-zinc-300 hover:border-[#c8cdd3]/70 hover:text-white'}`}>{titleForSalon(salon)}</motion.button>;
       })}</AnimatedGrid>
       <AnimatePresence mode="wait">
-      {selectedPackageSalon ? <motion.div key={selectedPackageSalon._id} initial={shouldReduceMotion ? false : { opacity: 0.82, y: 6 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0.82 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#c8cdd3]/20 bg-white/[0.03] p-5 md:flex-row md:items-center md:justify-between">
+      {selectedPackageSalon ? <motion.div key={selectedPackageSalon._id} initial={shouldReduceMotion ? false : { opacity: 0.82, y: 6 }} animate={shouldReduceMotion ? undefined : (packagesRevealed ? { opacity: 1, y: 0 } : { opacity: 0.82, y: 6 })} exit={shouldReduceMotion ? undefined : { opacity: 0.82 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#c8cdd3]/20 bg-white/[0.03] p-5 md:flex-row md:items-center md:justify-between">
         <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#c8cdd3]">Salón seleccionado</p><h3 className="mt-2 text-2xl font-semibold">{titleForSalon(selectedPackageSalon)}</h3><p className="mt-1 text-sm text-zinc-400">{heroLocationForSalon(selectedPackageSalon)} · {capacityForSalon(selectedPackageSalon)}</p></div>
         <button type="button" onClick={() => setSelectedSalon(selectedPackageSalon)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">Ver salón <ArrowRight className="h-4 w-4" /></button>
       </motion.div> : null}
       </AnimatePresence>
       <AnimatePresence mode="wait">
-      {selectedPackageCards.length ? <motion.div key={`${selectedPackageSalon?._id || 'todos'}-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate="visible" exit={shouldReduceMotion ? undefined : 'hidden'} variants={listVariants} className="grid items-stretch gap-5 lg:grid-cols-3">{selectedPackageCards.map((item, index) => {
+      {selectedPackageCards.length ? <motion.div key={`${selectedPackageSalon?._id || 'todos'}-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : (packagesRevealed ? 'visible' : 'hidden')} exit={shouldReduceMotion ? undefined : 'hidden'} variants={listVariants} className="grid items-stretch gap-5 lg:grid-cols-3">{selectedPackageCards.map((item, index) => {
         const accent = accentFor(index + 2);
         return <motion.article key={`${selectedPackageSalon?._id || 'paquete'}-${item._id}-${index}`} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.006 }} transition={softSpring} className={`min-w-0 max-w-full overflow-hidden flex min-h-[430px] flex-col rounded-2xl border p-4 transition-colors sm:p-6 ${accent.card}`}>
         <span className={`mb-5 block h-1.5 w-14 rounded-full ${accent.line}`} />
         <div className="grid min-w-0 gap-3 sm:flex sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h3 className={`max-w-full break-words text-lg font-semibold uppercase tracking-[0.1em] sm:text-xl sm:tracking-[0.12em] ${accent.text}`} title={item.name}>{item.name}</h3>
-            <p className="mt-1 text-xs text-zinc-500">{selectedPackageSalon ? titleForSalon(selectedPackageSalon) : item.salonName || 'M&M Eventos'}</p>
+            <p className="mt-1 text-xs text-zinc-400">{selectedPackageSalon ? titleForSalon(selectedPackageSalon) : item.salonName || 'M&M Eventos'}</p>
           </div>
           <span className={`w-fit max-w-full shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${accent.badge}`}>{item.badgeLabel || ['Más elegido', 'Premium', 'Exclusivo'][index]}</span>
         </div>
@@ -760,7 +835,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
           <button type="button" onClick={() => selectedPackageSalon ? setSelectedSalon(selectedPackageSalon) : scrollTo('contacto')} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
         </div>
       </motion.article>;
-      })}</motion.div> : <motion.div key={`${selectedPackageSalon?._id || 'todos'}-sin-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate="visible" exit={shouldReduceMotion ? undefined : 'hidden'} variants={cardVariants} className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</motion.div>}
+      })}</motion.div> : <motion.div key={`${selectedPackageSalon?._id || 'todos'}-sin-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : (packagesRevealed ? 'visible' : 'hidden')} exit={shouldReduceMotion ? undefined : 'hidden'} variants={cardVariants} className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</motion.div>}
       </AnimatePresence>
     </AnimatedSection>
 
@@ -768,14 +843,14 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       <SectionTitle eyebrow="Tipos de eventos" title="Celebraciones que sabemos resolver" />
       <AnimatedGrid className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">{eventTypes.slice(0, 6).map((item, index) => {
         const accent = accentFor(index);
-        return <motion.div key={item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -6, rotate: index % 2 ? 0.4 : -0.4 }} transition={softSpring} className={`group rounded-xl border p-4 text-center transition-colors ${accent.card}`}><motion.span className="inline-block" variants={{ hidden: { scale: 0.9, rotate: -4 }, visible: { scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.025 } } }}><IconBadge name={eventTypeIconName(item, index)} tone={accent.icon} /></motion.span><h3 className={`mt-3 text-sm font-semibold uppercase tracking-[0.08em] ${accent.text}`}>{item.title}</h3></motion.div>;
+        return <motion.div key={item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -6, rotate: index % 2 ? 0.4 : -0.4 }} transition={softSpring} className={`group rounded-xl border p-4 text-center transition-colors ${accent.card}`}><motion.span className="inline-block" variants={iconPop(index)}><IconBadge name={eventTypeIconName(item, index)} tone={accent.icon} /></motion.span><h3 className={`mt-3 text-sm font-semibold uppercase tracking-[0.08em] ${accent.text}`}>{item.title}</h3></motion.div>;
       })}</AnimatedGrid>
     </AnimatedSection>
 
     <AnimatedSection className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><motion.div variants={cardVariants}><p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]">Servicios incluidos</p><h2 className="mt-3 text-3xl font-semibold md:text-4xl">Todo lo que necesitás, nosotros lo hacemos.</h2></motion.div><AnimatedGrid className="grid gap-4 sm:grid-cols-2">{serviceBlocks.slice(0, 8).map((item, index) => {
         const accent = accentFor(index + 1);
-        return <motion.div key={item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { x: 4, y: -3 }} transition={softSpring} className={`flex gap-4 rounded-xl border p-4 transition-colors ${accent.card}`}><motion.div variants={{ hidden: { scale: 0.92 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.02 } } }}><IconBadge name={item.icon} tone={accent.icon} /></motion.div><div><h3 className={`font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-2 text-sm leading-6 text-zinc-300">{item.description}</p></div></motion.div>;
+        return <motion.div key={item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { x: 4, y: -3 }} transition={softSpring} className={`flex gap-4 rounded-xl border p-4 transition-colors ${accent.card}`}><motion.div variants={badgePop(index)}><IconBadge name={item.icon} tone={accent.icon} /></motion.div><div><h3 className={`font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-2 text-sm leading-6 text-zinc-300">{item.description}</p></div></motion.div>;
       })}</AnimatedGrid></div>
     </AnimatedSection>
 
@@ -783,19 +858,19 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       <SectionTitle eyebrow="Promociones y beneficios" title="Motivos para reservar hoy" />
       <AnimatedGrid className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item, index) => {
         const accent = accentFor(index + 2);
-        return <motion.article key={item._id || item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -7, scale: 1.006 }} transition={softSpring} className={`group overflow-hidden rounded-xl border p-5 transition-colors ${accent.card}`}><motion.span className={`mb-4 block h-1.5 w-12 origin-left rounded-full ${accent.line}`} variants={{ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.38, delay: index * 0.04, ease: smoothEase } } }} />{item.imageUrl ? <motion.img src={item.imageUrl} alt={item.title || 'Promoción M&M'} className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" variants={imageRevealVariants} /> : <motion.span className="inline-block" variants={{ hidden: { scale: 0.92, rotate: -4 }, visible: { scale: 1, rotate: 0, transition: softSpring } }}><IconBadge name={item.icon || 'Gift'} tone={accent.icon} /></motion.span>}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}</motion.article>;
+        return <motion.article key={item._id || item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -7, scale: 1.006 }} transition={softSpring} className={`group overflow-hidden rounded-xl border p-5 transition-colors ${accent.card}`}><motion.span className={`mb-4 block h-1.5 w-12 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.04)} />{item.imageUrl ? <motion.img src={cloudinaryImageUrl(item.imageUrl, 700)} alt={item.title || 'Promoción M&M'} loading="lazy" decoding="async" className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" variants={imageRevealVariants} /> : <motion.span className="inline-block" variants={iconPop(index)}><IconBadge name={item.icon || 'Gift'} tone={accent.icon} /></motion.span>}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}</motion.article>;
       })}</AnimatedGrid>
     </AnimatedSection>
 
     <AnimatedSection id="galeria" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
-      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería" subtitle="Momentos únicos que perduran para toda la vida" /><AnimatedGrid className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <motion.button key={item._id || item.imageUrl || index} variants={imageRevealVariants} whileHover={shouldReduceMotion ? undefined : { y: -4, scale: 1.006 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }} transition={softSpring} type="button" onClick={() => setGalleryLightboxIndex(index)} aria-label={`Abrir ${item.altText || item.title || 'momento M&M'}`} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><span aria-hidden className="absolute inset-0 bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-[1.025]" style={{ backgroundImage: `linear-gradient(0deg, rgba(0,0,0,.16), rgba(0,0,0,.16)), url(${galleryImageSource(item, index)})` }} /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition-opacity duration-300 group-hover:opacity-100">{item.title}</span><span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-black/45 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100"><Camera className="h-4 w-4" /></span></motion.button>)}</AnimatedGrid></div>
+      <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería" subtitle="Momentos únicos que perduran para toda la vida" /><AnimatedGrid className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <motion.button key={item._id || item.imageUrl || index} variants={imageRevealVariants} whileHover={shouldReduceMotion ? undefined : { y: -4, scale: 1.006 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }} transition={softSpring} type="button" onClick={() => setGalleryLightboxIndex(index)} aria-label={`Abrir ${item.altText || item.title || 'momento M&M'}`} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><img src={cloudinaryImageUrl(galleryImageSource(item, index), index === 0 ? 900 : 500)} alt={item.altText || item.title || 'Momento M&M'} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025]" /><span aria-hidden className="absolute inset-0 bg-black/16" /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition-opacity duration-300 group-hover:opacity-100">{item.title}</span><span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-black/45 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100"><Camera className="h-4 w-4" /></span></motion.button>)}</AnimatedGrid></div>
     </AnimatedSection>
 
     <AnimatedSection className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Testimonios" title="Lo que dicen quienes ya celebraron" />
       <AnimatedGrid className="grid gap-4 md:grid-cols-3">{(landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }]).slice(0, 3).map((item, index) => {
         const accent = accentFor(index);
-        return <motion.blockquote key={item._id || item.customerName} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`rounded-xl border p-6 ${accent.card}`}><motion.span className={`mb-5 block h-1 w-10 origin-left rounded-full ${accent.line}`} variants={{ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.36, delay: index * 0.045, ease: smoothEase } } }} /><p className="text-base leading-7 text-zinc-200">“{item.quote}”</p><footer className="mt-6 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-sm text-zinc-300">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, starIndex) => <motion.span key={starIndex} variants={{ hidden: { opacity: 0, scale: 0.75, rotate: -8 }, visible: { opacity: 1, scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.04 + starIndex * 0.025 } } }}><Star className="h-3.5 w-3.5 fill-current" /></motion.span>)}</span></footer></motion.blockquote>;
+        return <motion.blockquote key={item._id || item.customerName} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`rounded-xl border p-6 ${accent.card}`}><motion.span className={`mb-5 block h-1 w-10 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.045)} /><p className="text-base leading-7 text-zinc-200">“{item.quote}”</p><footer className="mt-6 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-sm text-zinc-300">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, starIndex) => <motion.span key={starIndex} variants={starPop(index, starIndex)}><Star className="h-3.5 w-3.5 fill-current" /></motion.span>)}</span></footer></motion.blockquote>;
       })}</AnimatedGrid>
     </AnimatedSection>
 
@@ -813,7 +888,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
 
     <AnimatedSection id="contacto" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <motion.div variants={cardVariants} className="overflow-hidden rounded-3xl border border-[#c8cdd3]/35 bg-[#0f0f10] shadow-[0_0_50px_rgba(229,231,235,.10)] lg:grid lg:grid-cols-[0.75fr_1.25fr]">
-        <motion.div variants={imageRevealVariants} className="relative min-h-80 overflow-hidden p-8"><img src={gallery[0]?.imageUrl || heroImage} alt="Detalle de evento M&M" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><motion.span variants={cardVariants}><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Respuesta rápida</motion.span><motion.span variants={cardVariants}><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Propuesta a medida</motion.span><motion.span variants={cardVariants}><Check className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Sin compromiso</motion.span></div></div></motion.div>
+        <motion.div variants={imageRevealVariants} className="relative min-h-80 overflow-hidden p-8"><img src={cloudinaryImageUrl(gallery[0]?.imageUrl || heroImage, 900)} alt="Detalle de evento M&M" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><motion.span variants={cardVariants}><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Respuesta rápida</motion.span><motion.span variants={cardVariants}><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Propuesta a medida</motion.span><motion.span variants={cardVariants}><Check className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Sin compromiso</motion.span></div></div></motion.div>
         <motion.form onSubmit={submit} variants={listVariants} className="grid gap-4 p-5 md:grid-cols-2 md:p-8">
           {formMessage ? <motion.p variants={cardVariants} className={`rounded-xl border p-3 text-sm md:col-span-2 ${formState === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-red-400/30 bg-red-400/10 text-red-100'}`}>{formMessage}</motion.p> : null}
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Nombre<input required name="name" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu nombre" /></motion.label>
@@ -825,7 +900,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => { setSelectedSalonId(event.target.value); setSelectedContactPackageId(''); }} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Propuesta de interés<select name="packageTemplateId" value={selectedContactPackageId} onChange={(event) => setSelectedContactPackageId(event.target.value)} disabled={!selectedSalonId} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3] disabled:opacity-50"><option value="">Propuesta personalizada</option>{contactPackages.map((item) => <option key={item._id} value={item._id}>{item.name} · {money(packagePrice(item))} {packagePriceUnit(item)}</option>)}</select></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400 md:col-span-2">Mensaje<textarea name="message" maxLength={700} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Contanos más detalles de tu evento..." /></motion.label>
-          <motion.button variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} disabled={formState === 'loading'} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] disabled:opacity-60 md:col-span-2">{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></motion.button>
+          <motion.button variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.01 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} disabled={formState === 'loading'} className={`inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb] hover:shadow-[0_8px_30px_rgba(200,205,211,.25)] disabled:opacity-60 md:col-span-2 ${ctaFocusRing}`}>{formState === 'loading' ? 'Enviando...' : 'Solicitar presupuesto'} <Send className="h-4 w-4" /></motion.button>
         </motion.form>
       </motion.div>
     </AnimatedSection>
@@ -837,16 +912,18 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
           {displaySalons.slice(0, 3).map((salon, index) => {
             const accent = accentFor(index + 3);
             return <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -7, scale: 1.01 }} transition={softSpring} className={`overflow-hidden rounded-2xl border ${accent.card}`}>
-              <motion.div variants={imageRevealVariants} className="relative h-72 bg-[#111113]">
-                <iframe
+              <motion.div variants={imageRevealVariants} viewport={{ once: true, amount: 0.3, margin: '0px 0px -100px 0px' }} onViewportEnter={() => setLoadedMapIds((current) => (current.has(salon._id) ? current : new Set(current).add(salon._id)))} className="relative h-72 bg-[#111113]">
+                {loadedMapIds.has(salon._id) ? <iframe
                   title={`Mapa de ${titleForSalon(salon)}`}
                   src={mapUrlForSalon(salon)}
                   className="h-full w-full"
-                  loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                   style={{ border: 0 }}
                   allowFullScreen
-                />
+                /> : <div className="grid h-full w-full place-items-center gap-2 bg-[radial-gradient(circle_at_30%_20%,rgba(200,205,211,.1),transparent_55%)] text-center text-sm font-semibold text-zinc-500" aria-hidden="true">
+                  <MapPin className="h-7 w-7 text-[#c8cdd3]/50" />
+                  Cargando mapa…
+                </div>}
               </motion.div>
               <div className="p-5">
                 <span className={`mb-4 block h-1.5 w-12 rounded-full ${accent.line}`} />
@@ -866,7 +943,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
 
     <footer className="border-t border-white/10 bg-[#080808] px-5 py-10 md:px-8">
       <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-5">
-        <div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-500">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div>
+        <div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-400">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Búsquedas locales</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{footerSeoLinks.map((item) => <Link key={item.href} href={item.href} className="text-left hover:text-white">{item.label}</Link>)}</div></div>
@@ -875,16 +952,16 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     </footer>
 
     {activeSocial ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Elegir salón para ${activeSocial.label}`}>
-      <section className="w-full max-w-lg rounded-2xl border border-[#c8cdd3]/35 bg-[#0f0f10] p-5 shadow-2xl">
+      <section ref={socialPanelRef as React.RefObject<HTMLElement>} className="w-full max-w-lg rounded-2xl border border-[#c8cdd3]/35 bg-[#0f0f10] p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#c8cdd3]">Contacto por salón</p><h2 className="mt-2 text-2xl font-semibold">Elegí a cuál {activeSocial.label} acceder</h2><p className="mt-2 text-sm text-zinc-400">Cada salón administra su propio canal.</p></div><button type="button" onClick={() => setSocialNetwork(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/15 text-white transition hover:bg-white hover:text-black" aria-label="Cerrar selector"><X className="h-4 w-4" /></button></div>
         <div className="mt-5 grid gap-3">{displaySalons.map((salon) => {
           const href = activeSocial.key === 'whatsapp' ? waLink(salonWhatsAppNumber(salon, settings.whatsappNumber), settings.whatsappDefaultMessage) : salon[activeSocial.field];
-          return href ? <a key={salon._id} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/10"><span><strong className="block text-white">{titleForSalon(salon)}</strong><span className="text-zinc-500">{locationForSalon(salon)}</span></span><activeSocial.icon className="h-5 w-5 text-[#c8cdd3]" /></a> : <div key={salon._id} className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-500"><strong className="block text-zinc-300">{titleForSalon(salon)}</strong>Sin {activeSocial.label} configurado</div>;
+          return href ? <a key={salon._id} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/10"><span><strong className="block text-white">{titleForSalon(salon)}</strong><span className="text-zinc-400">{locationForSalon(salon)}</span></span><activeSocial.icon className="h-5 w-5 text-[#c8cdd3]" /></a> : <div key={salon._id} className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-400"><strong className="block text-zinc-300">{titleForSalon(salon)}</strong>Sin {activeSocial.label} configurado</div>;
         })}</div>
       </section>
     </div> : null}
 
-    <SalonDetailModal key={selectedSalon?._id ?? 'salon-detail'} salon={selectedSalon} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
+    <SalonDetailModal salon={selectedSalon} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
     <GalleryLightbox items={gallery} index={galleryLightboxIndex} onClose={() => setGalleryLightboxIndex(null)} onSelect={setGalleryLightboxIndex} />
 
     <button type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>

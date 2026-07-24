@@ -274,6 +274,7 @@ const orderSchema = new Schema(
         "paid",
         "expired",
         "cancelled",
+        "refund_processing",
         "refunded",
         "partially_refunded",
         "failed",

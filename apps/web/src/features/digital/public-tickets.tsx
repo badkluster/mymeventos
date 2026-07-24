@@ -22,7 +22,7 @@ import { ticketLabel } from "./ticket-labels";
 function Frame({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-dvh bg-[#f7f7f5] px-4 py-6 text-zinc-900 sm:py-10">
-      <div className="mx-auto max-w-6xl">
+      <div className="@container mx-auto max-w-6xl">
         <nav className="mb-5 flex items-center justify-between gap-4 text-sm">
           <Link href="/" className="flex items-center gap-2 font-bold tracking-[.12em] text-zinc-950">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-950 text-xs text-amber-300">M&M</span>
@@ -186,10 +186,25 @@ export function TicketsCatalog() {
     </Frame>
   );
 }
-export function PublicTickets({ slug }: { slug: string }) {
-  const [publication, setPublication] = useState<TicketPublication>();
+export function PublicTickets({
+  slug,
+  publication: providedPublication,
+  preview = false,
+}: {
+  slug?: string;
+  publication?: TicketPublication;
+  preview?: boolean;
+}) {
+  const [publication, setPublication] = useState<TicketPublication | undefined>(
+    providedPublication,
+  );
   const [error, setError] = useState("");
   useEffect(() => {
+    if (providedPublication) {
+      setPublication(providedPublication);
+      return;
+    }
+    if (!slug) return;
     void api
       .get<{
         publication: TicketPublication;
@@ -199,15 +214,15 @@ export function PublicTickets({ slug }: { slug: string }) {
         setPublication({ ...data.publication, ticketTypes: data.types }),
       )
       .catch((cause: Error) => setError(cause.message));
-  }, [slug]);
-  if (!publication)
-    return (
-      <Frame>
-        <p className="rounded-2xl bg-white p-6">
-          {error || "Cargando entradas…"}
-        </p>
-      </Frame>
+  }, [slug, providedPublication]);
+  if (!publication) {
+    const loading = (
+      <p className="rounded-2xl bg-white p-6">
+        {error || "Cargando entradas…"}
+      </p>
     );
+    return preview ? loading : <Frame>{loading}</Frame>;
+  }
   const mapQuery = [publication.venueName, publication.address]
     .filter(Boolean)
     .join(", ");
@@ -220,8 +235,7 @@ export function PublicTickets({ slug }: { slug: string }) {
   const gallery = (publication.gallery ?? []).filter(
     (image) => image && image !== publication.coverImage,
   );
-  return (
-    <Frame>
+  const content = (
       <article
         className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-xl"
         style={{
@@ -230,7 +244,7 @@ export function PublicTickets({ slug }: { slug: string }) {
         }}
       >
         <header
-          className="relative min-h-[25rem] overflow-hidden p-6 text-white sm:p-10"
+          className="relative min-h-[25rem] overflow-hidden p-6 text-white @[640px]:p-10"
           style={{
             backgroundColor: appearance.primary,
             ...(publication.coverImage
@@ -242,12 +256,18 @@ export function PublicTickets({ slug }: { slug: string }) {
               : {}),
           }}
         >
-          <Link
-            href="/entradas"
-            className="relative inline-flex rounded-full bg-white/15 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/25"
-          >
-            ← Todas las experiencias
-          </Link>
+          {preview ? (
+            <span className="relative inline-flex rounded-full bg-white/15 px-4 py-2 text-sm font-medium">
+              Vista previa
+            </span>
+          ) : (
+            <Link
+              href="/entradas"
+              className="relative inline-flex rounded-full bg-white/15 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/25"
+            >
+              ← Todas las experiencias
+            </Link>
+          )}
           <div className="relative mt-32 max-w-3xl">
             <p
               className="text-xs font-bold uppercase tracking-[.22em]"
@@ -255,7 +275,7 @@ export function PublicTickets({ slug }: { slug: string }) {
             >
               Entradas digitales
             </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight @[640px]:text-6xl">
               {publication.title}
             </h1>
             {publication.shortDescription ? (
@@ -265,13 +285,13 @@ export function PublicTickets({ slug }: { slug: string }) {
             ) : null}
           </div>
         </header>
-        <div className="grid gap-8 p-5 sm:p-8 lg:grid-cols-[1fr_360px]">
+        <div className="grid gap-8 p-5 @[640px]:p-8 @[1024px]:grid-cols-[1fr_360px]">
           <div className="space-y-8">
             <section>
               <p className="whitespace-pre-line text-base leading-7 text-zinc-600">
                 {publication.fullDescription || publication.description}
               </p>
-              <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              <div className="mt-7 grid gap-3 @[640px]:grid-cols-2">
                 <div className="flex gap-3 rounded-2xl border border-zinc-200/80 bg-white/70 p-4">
                   <ThemeIcon color={appearance.secondary}>
                     <CalendarDays className="h-5 w-5" />
@@ -333,7 +353,7 @@ export function PublicTickets({ slug }: { slug: string }) {
             {gallery.length ? (
               <section>
                 <h2 className="text-xl font-semibold">Galería</h2>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 @[640px]:grid-cols-2">
                   {gallery.map((image) => (
                     <img
                       key={image}
@@ -346,7 +366,7 @@ export function PublicTickets({ slug }: { slug: string }) {
               </section>
             ) : null}
             {publication.accessInfo || publication.restrictions ? (
-              <section className="grid gap-3 sm:grid-cols-2">
+              <section className="grid gap-3 @[640px]:grid-cols-2">
                 <div className="rounded-2xl bg-zinc-950 p-5 text-white">
                   <Info
                     className="h-5 w-5"
@@ -430,7 +450,7 @@ export function PublicTickets({ slug }: { slug: string }) {
               </section>
             ) : null}
           </div>
-          <aside className="h-fit rounded-3xl border border-zinc-200 bg-white p-5 shadow-lg lg:sticky lg:top-5">
+          <aside className="h-fit rounded-3xl border border-zinc-200 bg-white p-5 shadow-lg @[1024px]:sticky @[1024px]:top-5">
             <p className="text-xs font-bold uppercase tracking-[.18em] text-zinc-500">
               Reservá tu lugar
             </p>
@@ -489,15 +509,21 @@ export function PublicTickets({ slug }: { slug: string }) {
                 </div>
               ))}
             </div>
-            <Link className="mt-5 block" href={`/entradas/${slug}/checkout`}>
-              <Button
-                className="w-full rounded-xl"
-                style={{ backgroundColor: appearance.primary }}
-              >
-                <Ticket className="mr-2 h-4 w-4" />
-                Continuar a compra
-              </Button>
-            </Link>
+            {preview ? (
+              <p className="mt-5 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-3 text-center text-sm text-zinc-500">
+                Vista previa: la compra no está disponible desde acá.
+              </p>
+            ) : (
+              <Link className="mt-5 block" href={`/entradas/${slug}/checkout`}>
+                <Button
+                  className="w-full rounded-xl"
+                  style={{ backgroundColor: appearance.primary }}
+                >
+                  <Ticket className="mr-2 h-4 w-4" />
+                  Continuar a compra
+                </Button>
+              </Link>
+            )}
             {publication.termsAndConditions || publication.refundPolicy ? (
               <p className="mt-4 text-xs leading-5 text-zinc-500">
                 Al continuar aceptás los términos y las políticas de compra de
@@ -507,8 +533,8 @@ export function PublicTickets({ slug }: { slug: string }) {
           </aside>
         </div>
       </article>
-    </Frame>
   );
+  return preview ? content : <Frame>{content}</Frame>;
 }
 export function TicketCheckout({ slug }: { slug: string }) {
   const [publication, setPublication] = useState<TicketPublication>();
@@ -537,8 +563,20 @@ export function TicketCheckout({ slug }: { slug: string }) {
       )
       .catch((cause: Error) => setError(cause.message));
   }, [slug]);
-  const count = Object.values(quantities).reduce(
-    (sum, value) => sum + value,
+  useEffect(() => {
+    if (!publication) return;
+    const validIds = new Set((publication.ticketTypes ?? []).map((type) => type._id));
+    setQuantities((current) => {
+      const filtered = Object.fromEntries(
+        Object.entries(current).filter(([ticketTypeId]) => validIds.has(ticketTypeId)),
+      );
+      return Object.keys(filtered).length === Object.keys(current).length
+        ? current
+        : filtered;
+    });
+  }, [publication]);
+  const count = (publication?.ticketTypes ?? []).reduce(
+    (sum, type) => sum + (quantities[type._id] ?? 0),
     0,
   );
   const total = useMemo(
@@ -559,9 +597,9 @@ export function TicketCheckout({ slug }: { slug: string }) {
         order: { publicId: string };
       }>(`/public/tickets/${slug}/orders`, {
         buyer,
-        selections: Object.entries(quantities)
-          .filter(([, quantity]) => quantity)
-          .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
+        selections: (publication?.ticketTypes ?? [])
+          .filter((type) => quantities[type._id])
+          .map((type) => ({ ticketTypeId: type._id, quantity: quantities[type._id] })),
         idempotencyKey: cartIdempotencyKey || crypto.randomUUID(),
       });
       window.localStorage.setItem(`${cartKey}:pending-order`, result.order.publicId);
@@ -622,20 +660,28 @@ export function TicketCheckout({ slug }: { slug: string }) {
                     money(ticketPrice(type))
                   )}
                 </p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {type.availableCount ?? 0} disponibles
+                </p>
               </div>
               <NumberField
                 className="w-24"
                 inputClassName="w-full"
                 label={`Cantidad de ${type.name}`}
                 min="0"
-                max={type.maxPerOrder ?? 10}
+                max={Math.min(type.maxPerOrder ?? 10, type.availableCount ?? 0)}
                 value={quantities[type._id] ?? 0}
-                onChange={(event) =>
-                  setQuantities({
-                    ...quantities,
-                    [type._id]: Number(event.target.value),
-                  })
-                }
+                onChange={(event) => {
+                  const bound = Math.max(
+                    0,
+                    Math.min(
+                      Number(event.target.value) || 0,
+                      type.maxPerOrder ?? 10,
+                      type.availableCount ?? 0,
+                    ),
+                  );
+                  setQuantities({ ...quantities, [type._id]: bound });
+                }}
               />
             </div>
           ))}
@@ -703,6 +749,11 @@ export function TicketCheckout({ slug }: { slug: string }) {
 export function MockTicketPayment({ orderCode }: { orderCode: string }) {
   const [order, setOrder] = useState<any>();
   const [message, setMessage] = useState("");
+  const [approved, setApproved] = useState(false);
+  const returnUrl =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("returnUrl")
+      : null;
   const load = () =>
     api
       .get<{ order: any }>(`/public/tickets/mock-payment/${orderCode}`)
@@ -718,11 +769,12 @@ export function MockTicketPayment({ orderCode }: { orderCode: string }) {
         { action: value },
       );
       setOrder(result.order);
-      setMessage(
-        value === "approve"
-          ? "Pago aprobado: las entradas fueron emitidas."
-          : "Estado de pago simulado actualizado.",
-      );
+      if (value === "approve") {
+        setApproved(true);
+        setMessage("Pago aprobado: las entradas fueron emitidas.");
+      } else {
+        setMessage("Estado de pago simulado actualizado.");
+      }
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "No se pudo simular el pago.",
@@ -763,22 +815,35 @@ export function MockTicketPayment({ orderCode }: { orderCode: string }) {
             {message}
           </p>
         ) : null}
-        <div className="mt-6 grid gap-2 sm:grid-cols-2">
-          <Button onClick={() => void action("approve")}>
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Aprobar pago
-          </Button>
-          <Button variant="secondary" onClick={() => void action("pending")}>
-            Pago pendiente
-          </Button>
-          <Button variant="secondary" onClick={() => void action("reject")}>
-            <XCircle className="mr-2 h-4 w-4" />
-            Rechazar pago
-          </Button>
-          <Button variant="danger" onClick={() => void action("cancel")}>
-            Cancelar
-          </Button>
-        </div>
+        {approved ? (
+          returnUrl ? (
+            <Button className="mt-4 w-full" onClick={() => window.location.assign(returnUrl)}>
+              <ArrowRight className="mr-2 h-4 w-4" />
+              Ver mis entradas
+            </Button>
+          ) : (
+            <p className="mt-4 text-sm text-zinc-500">
+              Ya podés cerrar esta pestaña; te enviamos tus entradas por email.
+            </p>
+          )
+        ) : (
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+            <Button onClick={() => void action("approve")}>
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Aprobar pago
+            </Button>
+            <Button variant="secondary" onClick={() => void action("pending")}>
+              Pago pendiente
+            </Button>
+            <Button variant="secondary" onClick={() => void action("reject")}>
+              <XCircle className="mr-2 h-4 w-4" />
+              Rechazar pago
+            </Button>
+            <Button variant="danger" onClick={() => void action("cancel")}>
+              Cancelar
+            </Button>
+          </div>
+        )}
       </article>
     </Frame>
   );
@@ -786,6 +851,7 @@ export function MockTicketPayment({ orderCode }: { orderCode: string }) {
 export function PublicTicket({ token }: { token: string }) {
   const [ticket, setTicket] = useState<DigitalTicket>();
   const [qr, setQr] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
     void api
       .get<{
@@ -795,12 +861,13 @@ export function PublicTicket({ token }: { token: string }) {
       .then((data) => {
         setTicket(data.ticket);
         setQr(data.qrDataUrl);
-      });
+      })
+      .catch((cause: Error) => setError(cause.message || "No pudimos encontrar esta entrada."));
   }, [token]);
   if (!ticket)
     return (
       <Frame>
-        <p>Cargando entrada…</p>
+        <p>{error || "Cargando entrada…"}</p>
       </Frame>
     );
   return (

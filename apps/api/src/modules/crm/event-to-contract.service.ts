@@ -1,5 +1,8 @@
 import { Contract, ContractAddendum, Event } from './crm.models';
 import { ApiError } from '../../middlewares/errorHandler';
+import { recalculateContractTotals } from './contract-financials.service';
+
+export { recalculateContractTotals };
 
 const missingMessage = 'El evento todavía no tiene todos los datos necesarios para generar contrato.';
 
@@ -167,20 +170,6 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
   return { contract, created: true };
 }
 
-export async function recalculateContractTotals(contractId: string): Promise<any> {
-  const contract: any = await Contract.findOne({ _id: contractId, deletedAt: null });
-  if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
-  const addendums = await ContractAddendum.find({ contractId, deletedAt: null });
-  const approvedAddendumsAmount = addendums.filter((item: any) => item.status === 'approved').reduce((sum: number, item: any) => sum + Number(item.totalAmount || 0), 0);
-  const pendingAddendumsAmount = addendums.filter((item: any) => ['draft', 'pending_approval'].includes(item.status)).reduce((sum: number, item: any) => sum + Number(item.totalAmount || 0), 0);
-  contract.approvedAddendumsAmount = approvedAddendumsAmount;
-  contract.pendingAddendumsAmount = pendingAddendumsAmount;
-  contract.totalAmount = Number(contract.baseAmount || 0) + approvedAddendumsAmount - Number(contract.discountsAmount || 0);
-  contract.balanceAmount = contract.totalAmount - Number(contract.paidAmount || 0);
-  await contract.save();
-  return contract;
-}
-
 function validateContractForApproval(contract: any): void {
   if (!contract?.customerSnapshot?.fullName || !contract?.eventSnapshot?.eventDate || !contract?.eventSnapshot?.guestCount || Number(contract?.totalAmount || 0) <= 0) {
     throw new ApiError(422, 'CONTRACT_NOT_APPROVABLE');
@@ -207,10 +196,12 @@ export async function requestContractChanges(contractId: string, userId: string)
   return contract;
 }
 
-export async function cancelContract(contractId: string, userId: string): Promise<any> {
+export async function cancelContract(contractId: string, userId: string, reason: string): Promise<any> {
+  if (!reason || !reason.trim()) throw new ApiError(422, 'CONTRACT_CANCELLATION_REASON_REQUIRED');
   const contract: any = await Contract.findOne({ _id: contractId, deletedAt: null });
   if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
   contract.status = 'cancelled';
+  contract.cancellationReason = reason;
   contract.cancelledAt = contract.cancelledAt ?? new Date();
   contract.updatedBy = userId;
   await contract.save();

@@ -19,7 +19,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
 }));
 
 import { ApiError } from '../src/middlewares/errorHandler';
-import { approveAddendum, approveContract, createAddendum, createContractFromEvent } from '../src/modules/crm/event-to-contract.service';
+import { approveAddendum, approveContract, cancelContract, createAddendum, createContractFromEvent } from '../src/modules/crm/event-to-contract.service';
 
 function eventQuery(event: any) {
   return { populate: vi.fn().mockReturnThis(), then: undefined, exec: undefined, [Symbol.toStringTag]: 'MockQuery', lean: vi.fn(), catch: undefined, finally: undefined, then: (resolve: (value: any) => unknown) => resolve(event) };
@@ -132,6 +132,22 @@ describe('event to contract service', () => {
     expect(contract.approvedAddendumsAmount).toBe(15000);
     expect(contract.totalAmount).toBe(115000);
     expect(contract.balanceAmount).toBe(95000);
+  });
+
+  it('requires a reason to cancel a contract', async () => {
+    await expect(cancelContract('contract-1', 'user-1', '')).rejects.toBeInstanceOf(ApiError);
+    expect(mocks.contractFindOne).not.toHaveBeenCalled();
+  });
+
+  it('cancels a contract and stores the reason', async () => {
+    const contract = { _id: 'contract-1', status: 'approved', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.contractFindOne.mockResolvedValue(contract);
+
+    const result = await cancelContract('contract-1', 'user-1', 'El cliente rescindió el contrato.');
+
+    expect(result.status).toBe('cancelled');
+    expect(result.cancellationReason).toBe('El cliente rescindió el contrato.');
+    expect(contract.save).toHaveBeenCalled();
   });
 });
 

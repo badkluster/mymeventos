@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Eye, PackageCheck, Pencil, Plus, Power, Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { slugify } from '@/lib/slugify';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
@@ -29,7 +30,6 @@ type SalonForm = {
 };
 
 const emptyForm: SalonForm = { name: '', slug: '', address: '', city: '', whatsapp: '', email: '', instagramUrl: '', facebookUrl: '', tiktokUrl: '', managerUserId: '', maxCapacity: 0, active: true, visibleOnWebsite: true, publicShortDescription: '' };
-const slugify = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const errorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && 'code' in error && error.code === 'ROUTE_NOT_FOUND') return 'La API no encontró el endpoint de Salones. Revisá que el backend esté actualizado y en ejecución.';
   return error instanceof Error ? error.message : fallback;

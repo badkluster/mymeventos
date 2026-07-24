@@ -1,8 +1,20 @@
 import { Contract, Payment } from './crm.models';
 import { ApiError } from '../../middlewares/errorHandler';
+import {
+  amount,
+  defaultAffectsContractBalance,
+  nonPayableContractStatuses,
+  recalculateContractPayments,
+  releaseContractBalance,
+  releaseRefundAmount,
+  reserveContractBalance,
+  reserveRefundAmount
+} from './contract-financials.service';
 
-const balanceTypes = new Set(['deposit', 'installment', 'balance', 'addendum', 'extra', 'adjustment', 'refund', 'other']);
+export { computeFinancialSummary as paymentSummary, recalculateContractPayments } from './contract-financials.service';
+
 const refundableStatuses = new Set(['paid']);
+const terminalPaymentStatuses = new Set(['cancelled', 'refunded']);
 
 type PaymentPayload = {
   customerId?: string;
@@ -21,20 +33,35 @@ type PaymentPayload = {
   notes?: string;
   planInstallmentId?: string;
   affectsContractBalance?: boolean;
+  allowOverpayment?: boolean;
+  allowExcessRefund?: boolean;
+  overrideReason?: string;
+  reason?: string;
 };
 
-function amount(value: unknown): number {
-  return Number(value || 0);
+function assertOverrideReason(allow: boolean | undefined, reason: string | undefined): void {
+  if (allow && !(reason && reason.trim())) throw new ApiError(422, 'PAYMENT_OVERRIDE_REASON_REQUIRED');
 }
 
-function defaultAffectsContractBalance(type?: string): boolean {
-  return Boolean(type && balanceTypes.has(type)) && type !== 'security_deposit';
+function assertReasonProvided(reason: string | undefined): void {
+  if (!reason || !reason.trim()) throw new ApiError(422, 'PAYMENT_CANCELLATION_REASON_REQUIRED');
 }
 
-function signedAmount(payment: any): number {
-  if (payment.status !== 'paid' || !payment.affectsContractBalance) return 0;
-  const value = amount(payment.amount);
-  return payment.type === 'refund' ? -value : value;
+const paymentMethods = ['cash', 'bank_transfer', 'mercado_pago', 'card', 'other'] as const;
+function normalizePaymentMethod(method: string | undefined): (typeof paymentMethods)[number] {
+  return (paymentMethods as readonly string[]).includes(method ?? '') ? (method as (typeof paymentMethods)[number]) : 'other';
+}
+
+/** Ticket-order-sourced payments are a read-side ledger entry only — refunds/edits happen through the tickets module (see refundTicketOrder), never through this service. */
+function assertEditableManualPayment(payment: { source?: string }): void {
+  if (payment.source === 'ticket_order') throw new ApiError(422, 'PAYMENT_TICKET_ORDER_READONLY');
+}
+
+/** pending -> paid | cancelled ; paid -> cancelled ; cancelled/refunded are terminal; `refunded` is never reachable via a direct status write. */
+function assertValidPaymentStatusTransition(current: string, next?: string): void {
+  if (!next || next === current) return;
+  if (terminalPaymentStatuses.has(current)) throw new ApiError(422, 'PAYMENT_INVALID_STATUS_TRANSITION');
+  if (next === 'refunded') throw new ApiError(422, 'PAYMENT_INVALID_STATUS_TRANSITION');
 }
 
 async function nextPaymentNumber(): Promise<string> {
@@ -43,31 +70,10 @@ async function nextPaymentNumber(): Promise<string> {
   return `PAY-${year}-${String(count + 1).padStart(5, '0')}`;
 }
 
-export async function recalculateContractPayments(contractId: string): Promise<any> {
-  const contract: any = await Contract.findOne({ _id: contractId, deletedAt: null });
-  if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
-  const payments = await Payment.find({ contractId, deletedAt: null });
-  const paidAmount = payments.reduce((sum: number, payment: any) => sum + signedAmount(payment), 0);
-  contract.paidAmount = Math.max(0, paidAmount);
-  contract.balanceAmount = Number(contract.totalAmount || 0) - Number(contract.paidAmount || 0);
-  await contract.save();
-  return contract;
-}
-
-export async function paymentSummary(query: Record<string, unknown>): Promise<Record<string, number>> {
-  const payments = await Payment.find({ ...query, deletedAt: null });
-  const paidAmount = Math.max(0, payments.reduce((sum: number, payment: any) => sum + signedAmount(payment), 0));
-  const refundedAmount = payments.reduce((sum: number, payment: any) => sum + (payment.status === 'paid' && payment.type === 'refund' ? amount(payment.amount) : 0), 0);
-  const pendingAmount = payments.filter((payment: any) => payment.status === 'pending' && payment.affectsContractBalance).reduce((sum: number, payment: any) => sum + amount(payment.amount), 0);
-  const securityDepositAmount = payments.filter((payment: any) => payment.status === 'paid' && payment.type === 'security_deposit').reduce((sum: number, payment: any) => sum + amount(payment.amount), 0);
-  const overdueAmount = payments.filter((payment: any) => payment.status === 'pending' && payment.dueDate && new Date(payment.dueDate) < new Date()).reduce((sum: number, payment: any) => sum + amount(payment.amount), 0);
-  return { paidAmount, refundedAmount, pendingAmount, securityDepositAmount, overdueAmount };
-}
-
 async function contractForPayment(contractId: string): Promise<any> {
   const contract: any = await Contract.findOne({ _id: contractId, deletedAt: null });
   if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
-  if (contract.status === 'cancelled') throw new ApiError(422, 'CONTRACT_CANCELLED');
+  if (nonPayableContractStatuses.has(contract.status)) throw new ApiError(422, contract.status === 'cancelled' ? 'CONTRACT_CANCELLED' : 'CONTRACT_NOT_PAYABLE');
   return contract;
 }
 
@@ -77,71 +83,125 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
   const type = payload.type ?? 'installment';
   const status = payload.status ?? 'pending';
   if (status === 'paid' && !payload.method) throw new ApiError(422, 'PAYMENT_METHOD_REQUIRED');
-  const payment = await Payment.create({
-    paymentNumber: await nextPaymentNumber(),
-    customerId: payload.customerId ?? contract.customerId,
-    eventId: payload.eventId ?? contract.eventId,
-    contractId: contract._id,
-    quoteId: payload.quoteId ?? contract.quoteId,
-    salonId: payload.salonId ?? contract.salonId,
-    type,
-    method: payload.method,
-    status,
-    amount: payload.amount,
-    dueDate: payload.dueDate,
-    paidAt: status === 'paid' ? payload.paidAt ?? new Date() : payload.paidAt,
-    receiptNumber: payload.receiptNumber,
-    reference: payload.reference,
-    notes: payload.notes,
-    planInstallmentId: payload.planInstallmentId,
-    affectsContractBalance: payload.affectsContractBalance ?? defaultAffectsContractBalance(type),
-    createdBy: userId,
-    updatedBy: userId
-  });
-  await recalculateContractPayments(contract._id.toString());
-  return payment;
+  const affectsContractBalance = payload.affectsContractBalance ?? defaultAffectsContractBalance(type);
+  const requestedAmount = amount(payload.amount);
+
+  let reserved = false;
+  if (status === 'paid' && affectsContractBalance) {
+    assertOverrideReason(payload.allowOverpayment, payload.overrideReason);
+    await reserveContractBalance(contract._id.toString(), requestedAmount, { allowOverpayment: payload.allowOverpayment });
+    reserved = true;
+  }
+
+  try {
+    const payment = await Payment.create({
+      paymentNumber: await nextPaymentNumber(),
+      customerId: payload.customerId ?? contract.customerId,
+      eventId: payload.eventId ?? contract.eventId,
+      contractId: contract._id,
+      quoteId: payload.quoteId ?? contract.quoteId,
+      salonId: payload.salonId ?? contract.salonId,
+      type,
+      method: payload.method,
+      status,
+      amount: payload.amount,
+      dueDate: payload.dueDate,
+      paidAt: status === 'paid' ? payload.paidAt ?? new Date() : payload.paidAt,
+      receiptNumber: payload.receiptNumber,
+      reference: payload.reference,
+      notes: payload.notes,
+      planInstallmentId: payload.planInstallmentId,
+      affectsContractBalance,
+      createdBy: userId,
+      updatedBy: userId
+    });
+    await recalculateContractPayments(contract._id.toString());
+    return payment;
+  } catch (error) {
+    if (reserved) await releaseContractBalance(contract._id.toString(), requestedAmount);
+    throw error;
+  }
 }
 
 export async function updatePayment(paymentId: string, payload: PaymentPayload, userId: string): Promise<any> {
   const payment: any = await Payment.findOne({ _id: paymentId, deletedAt: null });
   if (!payment) throw new ApiError(404, 'PAYMENT_NOT_FOUND');
+  assertEditableManualPayment(payment);
   if (payment.status === 'paid') {
     const allowed = ['receiptNumber', 'reference', 'notes'];
     const forbidden = Object.keys(payload).filter((key) => !allowed.includes(key));
     if (forbidden.length) throw new ApiError(422, 'PAYMENT_PAID_LOCKED');
   }
+  assertValidPaymentStatusTransition(payment.status, payload.status);
   if (payload.status === 'paid' && !payload.method && !payment.method) throw new ApiError(422, 'PAYMENT_METHOD_REQUIRED');
-  Object.assign(payment, payload, {
-    affectsContractBalance: payload.affectsContractBalance ?? payment.affectsContractBalance ?? defaultAffectsContractBalance(payload.type ?? payment.type),
-    paidAt: payload.status === 'paid' && !payment.paidAt ? new Date() : payload.paidAt ?? payment.paidAt,
-    updatedBy: userId
-  });
-  await payment.save();
-  await recalculateContractPayments(payment.contractId.toString());
-  return payment;
+
+  const transitioningToPaid = payload.status === 'paid' && payment.status !== 'paid';
+  const affectsContractBalance = payload.affectsContractBalance ?? payment.affectsContractBalance ?? defaultAffectsContractBalance(payload.type ?? payment.type);
+  const finalAmount = amount(payload.amount ?? payment.amount);
+
+  let reserved = false;
+  if (transitioningToPaid && affectsContractBalance) {
+    assertOverrideReason(payload.allowOverpayment, payload.overrideReason);
+    await reserveContractBalance(payment.contractId.toString(), finalAmount, { allowOverpayment: payload.allowOverpayment });
+    reserved = true;
+  }
+
+  try {
+    Object.assign(payment, payload, {
+      affectsContractBalance,
+      paidAt: payload.status === 'paid' && !payment.paidAt ? new Date() : payload.paidAt ?? payment.paidAt,
+      updatedBy: userId
+    });
+    await payment.save();
+    await recalculateContractPayments(payment.contractId.toString());
+    return payment;
+  } catch (error) {
+    if (reserved) await releaseContractBalance(payment.contractId.toString(), finalAmount);
+    throw error;
+  }
 }
 
 export async function markPaymentPaid(paymentId: string, payload: PaymentPayload, userId: string): Promise<any> {
   const payment: any = await Payment.findOne({ _id: paymentId, deletedAt: null });
   if (!payment) throw new ApiError(404, 'PAYMENT_NOT_FOUND');
+  assertEditableManualPayment(payment);
+  assertValidPaymentStatusTransition(payment.status, 'paid');
   if (!payload.method && !payment.method) throw new ApiError(422, 'PAYMENT_METHOD_REQUIRED');
-  payment.status = 'paid';
-  payment.method = payload.method ?? payment.method;
-  payment.paidAt = payload.paidAt ?? payment.paidAt ?? new Date();
-  payment.receiptNumber = payload.receiptNumber ?? payment.receiptNumber;
-  payment.reference = payload.reference ?? payment.reference;
-  payment.notes = payload.notes ?? payment.notes;
-  payment.updatedBy = userId;
-  await payment.save();
-  await recalculateContractPayments(payment.contractId.toString());
-  return payment;
+  const paymentAmount = amount(payment.amount);
+  const wasAlreadyPaid = payment.status === 'paid';
+
+  let reserved = false;
+  if (!wasAlreadyPaid && payment.affectsContractBalance) {
+    assertOverrideReason(payload.allowOverpayment, payload.overrideReason);
+    await reserveContractBalance(payment.contractId.toString(), paymentAmount, { allowOverpayment: payload.allowOverpayment });
+    reserved = true;
+  }
+
+  try {
+    payment.status = 'paid';
+    payment.method = payload.method ?? payment.method;
+    payment.paidAt = payload.paidAt ?? payment.paidAt ?? new Date();
+    payment.receiptNumber = payload.receiptNumber ?? payment.receiptNumber;
+    payment.reference = payload.reference ?? payment.reference;
+    payment.notes = payload.notes ?? payment.notes;
+    payment.updatedBy = userId;
+    await payment.save();
+    await recalculateContractPayments(payment.contractId.toString());
+    return payment;
+  } catch (error) {
+    if (reserved) await releaseContractBalance(payment.contractId.toString(), paymentAmount);
+    throw error;
+  }
 }
 
-export async function cancelPayment(paymentId: string, userId: string): Promise<any> {
+export async function cancelPayment(paymentId: string, userId: string, reason: string): Promise<any> {
+  assertReasonProvided(reason);
   const payment: any = await Payment.findOne({ _id: paymentId, deletedAt: null });
   if (!payment) throw new ApiError(404, 'PAYMENT_NOT_FOUND');
+  assertEditableManualPayment(payment);
   if (payment.status === 'refunded') throw new ApiError(422, 'PAYMENT_REFUNDED_LOCKED');
   payment.status = 'cancelled';
+  payment.cancellationReason = reason;
   payment.cancelledAt = payment.cancelledAt ?? new Date();
   payment.cancelledBy = userId;
   payment.updatedBy = userId;
@@ -151,29 +211,83 @@ export async function cancelPayment(paymentId: string, userId: string): Promise<
 }
 
 export async function refundPayment(paymentId: string, payload: PaymentPayload, userId: string): Promise<any> {
+  assertReasonProvided(payload.reason);
   const original: any = await Payment.findOne({ _id: paymentId, deletedAt: null });
   if (!original) throw new ApiError(404, 'PAYMENT_NOT_FOUND');
+  assertEditableManualPayment(original);
   if (!refundableStatuses.has(original.status) || original.type === 'refund') throw new ApiError(422, 'PAYMENT_NOT_REFUNDABLE');
-  const refund = await Payment.create({
+
+  const requestedAmount = amount(payload.amount ?? original.amount);
+  assertOverrideReason(payload.allowExcessRefund, payload.overrideReason);
+  const { previousRefundable, resultingRefundable } = await reserveRefundAmount(original._id.toString(), requestedAmount, { allowExcessRefund: payload.allowExcessRefund });
+
+  try {
+    const refund = await Payment.create({
+      paymentNumber: await nextPaymentNumber(),
+      customerId: original.customerId,
+      eventId: original.eventId,
+      contractId: original.contractId,
+      quoteId: original.quoteId,
+      salonId: original.salonId,
+      type: 'refund',
+      method: payload.method ?? original.method ?? 'other',
+      status: 'paid',
+      amount: requestedAmount,
+      paidAt: payload.paidAt ?? new Date(),
+      receiptNumber: payload.receiptNumber,
+      reference: payload.reference ?? `Reembolso de ${original.paymentNumber}`,
+      notes: payload.notes,
+      cancellationReason: payload.reason,
+      affectsContractBalance: true,
+      refundedPaymentId: original._id,
+      createdBy: userId,
+      updatedBy: userId
+    });
+    await recalculateContractPayments(original.contractId.toString());
+    return { payment: refund, originalPayment: original, refundable: { previousRefundable, resultingRefundable } };
+  } catch (error) {
+    await releaseRefundAmount(original._id.toString(), requestedAmount);
+    throw error;
+  }
+}
+
+/**
+ * Records a real Payment ledger entry for a paid TicketOrder, so digital-ticket sales show up
+ * alongside manual event/contract payments for accounting/reporting. Called from
+ * ticket.service.ts#markOrderPaid, which only ever transitions an order to "paid" once
+ * (atomic conditional update), so this naturally runs at most once per order; the upfront
+ * lookup plus the unique sparse index on ticketOrderId are defense-in-depth against races/retries.
+ */
+export async function recordTicketOrderPayment(
+  order: { _id: unknown; totalAmount: number; currency?: string; publicId: string; paidAt?: Date },
+  details: { method: string; reference?: string; userId?: string }
+): Promise<any> {
+  if (!order.totalAmount) return null;
+  const existing = await Payment.findOne({ ticketOrderId: order._id, deletedAt: null }).lean();
+  if (existing) return existing;
+  return Payment.create({
     paymentNumber: await nextPaymentNumber(),
-    customerId: original.customerId,
-    eventId: original.eventId,
-    contractId: original.contractId,
-    quoteId: original.quoteId,
-    salonId: original.salonId,
-    type: 'refund',
-    method: payload.method ?? original.method ?? 'other',
+    source: 'ticket_order',
+    ticketOrderId: order._id,
+    type: 'other',
+    method: normalizePaymentMethod(details.method),
     status: 'paid',
-    amount: payload.amount ?? original.amount,
-    paidAt: payload.paidAt ?? new Date(),
-    receiptNumber: payload.receiptNumber,
-    reference: payload.reference ?? `Reembolso de ${original.paymentNumber}`,
-    notes: payload.notes,
-    affectsContractBalance: true,
-    refundedPaymentId: original._id,
-    createdBy: userId,
-    updatedBy: userId
+    amount: order.totalAmount,
+    paidAt: order.paidAt ?? new Date(),
+    reference: details.reference,
+    notes: `Entrada digital · orden ${order.publicId}`,
+    affectsContractBalance: false,
+    createdBy: details.userId,
+    updatedBy: details.userId
   });
-  await recalculateContractPayments(original.contractId.toString());
-  return { payment: refund, originalPayment: original };
+}
+
+/** Keeps the ticket-order Payment ledger entry in sync when refundTicketOrder (tickets module) approves a refund. */
+export async function syncTicketOrderRefund(ticketOrderId: unknown, input: { full: boolean; refundAmount: number; userId?: string }): Promise<void> {
+  await Payment.updateOne(
+    { ticketOrderId, deletedAt: null },
+    input.full
+      ? { $set: { status: 'refunded', refundedAmount: input.refundAmount, updatedBy: input.userId } }
+      : { $set: { updatedBy: input.userId }, $inc: { refundedAmount: input.refundAmount } }
+  );
 }

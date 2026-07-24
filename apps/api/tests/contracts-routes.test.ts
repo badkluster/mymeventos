@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   contractFindOne: vi.fn(),
   addendumFind: vi.fn(),
   addendumFindOne: vi.fn(),
-  writeAuditLog: vi.fn()
+  writeAuditLog: vi.fn(),
+  cancelContract: vi.fn()
 }));
 
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne, find: vi.fn() } }));
@@ -30,7 +31,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   ContractAddendum: { find: mocks.addendumFind, findOne: mocks.addendumFindOne, countDocuments: vi.fn(), create: vi.fn() },
   Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn(), create: vi.fn() }
 }));
-vi.mock('../src/modules/crm/event-to-contract.service', () => ({ approveContract: vi.fn(), requestContractChanges: vi.fn(), cancelContract: vi.fn(), recalculateContractTotals: vi.fn(), createAddendum: vi.fn(), updateAddendum: vi.fn(), approveAddendum: vi.fn(), createContractFromEvent: vi.fn() }));
+vi.mock('../src/modules/crm/event-to-contract.service', () => ({ approveContract: vi.fn(), requestContractChanges: vi.fn(), cancelContract: mocks.cancelContract, recalculateContractTotals: vi.fn(), createAddendum: vi.fn(), updateAddendum: vi.fn(), approveAddendum: vi.fn(), createContractFromEvent: vi.fn() }));
 vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: mocks.writeAuditLog }));
 vi.mock('../src/modules/crm/quote-pdf.service', () => ({ generateAndUploadQuotePdf: vi.fn() }));
 
@@ -98,5 +99,35 @@ describe('contracts routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.deleted).toBe(true);
     expect(contract.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it('rejects cancellation without a reason', async () => {
+    mocks.contractFindOne.mockReturnValue(chainLean({ _id: contractId, salonId }));
+
+    const response = await request(app).post(`/api/contracts/${contractId}/cancel`).set('Cookie', adminCookie).send({});
+
+    expect(response.status).toBe(400);
+    expect(mocks.cancelContract).not.toHaveBeenCalled();
+  });
+
+  it('cancels a contract with a reason', async () => {
+    mocks.contractFindOne.mockReturnValue(chainLean({ _id: contractId, salonId }));
+    mocks.cancelContract.mockResolvedValue({ _id: contractId, status: 'cancelled', cancellationReason: 'El cliente rescindió el contrato.' });
+
+    const response = await request(app).post(`/api/contracts/${contractId}/cancel`).set('Cookie', adminCookie).send({ reason: 'El cliente rescindió el contrato.' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.cancelContract).toHaveBeenCalledWith(contractId, adminId, 'El cliente rescindió el contrato.');
+  });
+
+  it('rejects setting status=cancelled through the generic status route (must use /cancel)', async () => {
+    const contract = { _id: contractId, salonId, status: 'approved', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.contractFindOne.mockResolvedValue(contract);
+
+    const response = await request(app).patch(`/api/contracts/${contractId}/status`).set('Cookie', adminCookie).send({ status: 'cancelled' });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('CONTRACT_STATUS_CANCEL_NOT_ALLOWED');
+    expect(contract.save).not.toHaveBeenCalled();
   });
 });

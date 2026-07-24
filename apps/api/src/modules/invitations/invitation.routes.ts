@@ -29,7 +29,7 @@ const mediaSchema = z.object({ id: z.string().trim().min(1).max(80), type: z.enu
 const makeSectionSchema = <T extends z.ZodRawShape>(type: string, data: z.ZodObject<T>) => z.object({ ...sectionBase, type: z.literal(type), data });
 const invitationSectionSchema = z.union([
   makeSectionSchema('opening', z.object({ overline: z.string().max(120).optional(), message: z.string().max(500).optional(), recipientText: z.string().max(180).optional(), eventLabel: z.string().max(120).optional(), eventTitle: z.string().max(180).optional(), buttonLabel: z.string().max(80).optional(), imageUrl: z.string().url().optional() })),
-  makeSectionSchema('hero', z.object({ title: z.string().max(180).optional(), subtitle: z.string().max(500).optional(), imageUrl: z.string().url().optional(), height: z.enum(['70vh', '85vh', '100svh']).optional(), alignment: z.enum(['left', 'center', 'right']).optional(), buttonLabel: z.string().max(80).optional() })),
+  makeSectionSchema('hero', z.object({ title: z.string().max(180).optional(), subtitle: z.string().max(500).optional(), imageUrl: z.string().url().optional().or(z.literal('')), height: z.enum(['70vh', '85vh', '100svh']).optional(), alignment: z.enum(['left', 'center', 'right']).optional(), buttonLabel: z.string().max(80).optional() })),
   makeSectionSchema('welcome', z.object({ title: z.string().max(180).optional(), message: z.string().max(4000).optional(), signature: z.string().max(180).optional(), imageUrl: z.string().url().optional().or(z.literal('')), imagePosition: z.enum(['top', 'left', 'right']).optional(), imageStyle: z.enum(['arch', 'rounded', 'circle']).optional() })),
   makeSectionSchema('hosts', z.object({ title: z.string().max(180).optional(), names: z.array(z.string().max(120)).max(10).optional() })),
   makeSectionSchema('event_details', z.object({ pretitle: z.string().max(180).optional() })),
@@ -38,13 +38,13 @@ const invitationSectionSchema = z.union([
   makeSectionSchema('custom', z.object({ eyebrow: z.string().max(180).optional(), title: z.string().max(180).optional(), body: z.string().max(4000).optional() })),
   makeSectionSchema('gallery', z.object({ title: z.string().max(180).optional(), layout: z.enum(['grid', 'carousel', 'single', 'editorial', 'masonry', 'full', 'collage', 'film']).optional(), items: z.array(mediaSchema).max(20).default([]) })),
   makeSectionSchema('schedule', z.object({ title: z.string().max(180).optional(), items: z.array(z.object({ id: z.string().min(1).max(80), time: z.string().max(20), title: z.string().max(180), description: z.string().max(500).optional(), icon: z.string().max(40).optional() })).max(20).default([]) })),
-  makeSectionSchema('venue', z.object({ title: z.string().max(180).optional(), description: z.string().max(500).optional(), imageUrl: z.string().url().optional() })),
-  makeSectionSchema('map', z.object({ title: z.string().max(180).optional(), mapsUrl: z.string().url().optional() })),
+  makeSectionSchema('venue', z.object({ title: z.string().max(180).optional(), description: z.string().max(500).optional(), imageUrl: z.string().url().optional().or(z.literal('')) })),
+  makeSectionSchema('map', z.object({ title: z.string().max(180).optional(), mapsUrl: z.string().url().optional().or(z.literal('')) })),
   makeSectionSchema('dress_code', z.object({ title: z.string().max(180).optional(), description: z.string().max(1000).optional(), colors: z.array(z.string().regex(/^#[0-9a-fA-F]{3,8}$/)).max(8).optional() })),
   makeSectionSchema('gift_registry', z.object({ title: z.string().max(180).optional(), message: z.string().max(1000).optional(), alias: z.string().max(120).optional(), cbu: z.string().max(120).optional(), bank: z.string().max(120).optional(), holder: z.string().max(120).optional() })),
   makeSectionSchema('music', z.object({ label: z.string().max(120).optional(), url: z.string().url().optional().or(z.literal('')), loop: z.boolean().optional(), volume: z.coerce.number().min(0).max(1).optional() })),
   makeSectionSchema('rsvp', z.object({ title: z.string().max(180).optional(), subtitle: z.string().max(500).optional(), notificationEmail: z.string().trim().email().optional().or(z.literal('')), notificationEnabled: z.boolean().optional() })),
-  makeSectionSchema('contact', z.object({ title: z.string().max(180).optional(), phone: z.string().max(50).optional(), email: z.string().email().optional(), instagram: z.string().max(100).optional() })),
+  makeSectionSchema('contact', z.object({ title: z.string().max(180).optional(), phone: z.string().max(50).optional(), email: z.string().email().optional().or(z.literal('')), instagram: z.string().max(100).optional() })),
   makeSectionSchema('share', z.object({ title: z.string().max(180).optional(), message: z.string().max(500).optional() })),
   makeSectionSchema('footer', z.object({ message: z.string().max(500).optional() }))
 ]);

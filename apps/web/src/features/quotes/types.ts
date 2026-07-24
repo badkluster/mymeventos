@@ -61,7 +61,51 @@ export type Customer = { _id: string; fullName?: string; firstName?: string; las
 export type EventTimelineItem = { id?: string; time?: string; title: string; area?: string; owner?: string; status?: 'pending' | 'ready' | 'done' | 'cancelled' | string; notes?: string };
 export type EventProductItem = { id?: string; name: string; category?: string; productionCategory?: 'savory' | 'sweet' | 'beverages' | 'other' | string; quantity?: number; unit?: string; supplierName?: string; unitCost?: number; totalCost?: number; status?: 'planned' | 'reserved' | 'purchased' | 'used' | 'returned' | string; notes?: string };
 export type EventInventoryItem = { id?: string; name: string; category?: string; quantityRequired?: number; quantityReserved?: number; quantityReturned?: number; unit?: string; status?: 'planned' | 'reserved' | 'delivered' | 'returned' | 'missing' | 'damaged' | string; notes?: string };
-export type EventSupplierAssignment = { id?: string; supplierName: string; serviceType?: string; contactName?: string; phone?: string; agreedAmount?: number; status?: 'pending' | 'confirmed' | 'paid' | 'cancelled' | string; arrivalTime?: string; notes?: string };
+export type EventSupplierAssignment = {
+  id?: string;
+  supplierId?: string;
+  /** Copia histórica del nombre. Las nuevas asignaciones siempre usan supplierId. */
+  supplierName?: string;
+  category?: string;
+  serviceType?: string;
+  contactName?: string;
+  phone?: string;
+  agreedAmount?: number;
+  status?: 'pending' | 'confirmed' | 'paid' | 'cancelled' | string;
+  arrivalTime?: string;
+  notes?: string;
+  expenseId?: string;
+  expenseStatus?: 'paid' | 'cancelled';
+};
+export type SupplierOption = {
+  _id: string;
+  name: string;
+  businessName?: string;
+  category?: string;
+  contactPerson?: string;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+  active?: boolean;
+};
+export type EventExpense = {
+  _id: string;
+  eventId: string;
+  salonId: string;
+  supplierId: string | SupplierOption | null;
+  sourceType: 'supplier_assignment' | string;
+  sourceId: string;
+  category?: string;
+  description: string;
+  amount: number;
+  currency?: string;
+  status: 'paid' | 'cancelled';
+  paidAt?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
+  notes?: string;
+};
+export type EventExpenseSummary = { totalPaid: number; totalCancelled: number; activeExpenseCount: number; cancelledExpenseCount: number };
 export type EventTaskItem = { id?: string; title: string; owner?: string; dueDate?: string; priority?: 'low' | 'normal' | 'high' | 'critical' | string; status?: 'pending' | 'in_progress' | 'done' | 'blocked' | string; notes?: string };
 export type EventAlertItem = { id?: string; title: string; remindAt?: string; channel?: string; status?: 'pending' | 'scheduled' | 'sent' | 'done' | string; notes?: string };
 export type EventStaffNote = { id?: string; title?: string; notes: string };
@@ -186,14 +230,17 @@ export type ContractAddendum = {
   cancelledAt?: string;
   createdAt?: string;
 };
+export type TicketOrderRef = { _id: string; publicId: string; totalAmount?: number; status?: string; buyer?: { name?: string; email?: string } };
 export type Payment = {
   _id: string;
   paymentNumber: string;
-  customerId: string | Customer;
-  eventId: string | Event;
-  contractId: string | Contract;
+  source?: 'manual' | 'ticket_order';
+  customerId?: string | Customer;
+  eventId?: string | Event;
+  contractId?: string | Contract;
   quoteId?: string | Quote;
-  salonId: string | Salon;
+  salonId?: string | Salon;
+  ticketOrderId?: string | TicketOrderRef;
   type: string;
   method?: string;
   status: string;
@@ -209,6 +256,7 @@ export type Payment = {
   reference?: string;
   notes?: string;
   affectsContractBalance?: boolean;
+  refundedAmount?: number;
   refundedPaymentId?: string | Payment;
   cancelledAt?: string;
   createdAt?: string;

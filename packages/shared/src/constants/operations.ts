@@ -87,6 +87,15 @@ export enum SupplierCategory {
   OTHER = 'OTHER',
 }
 
+export enum ExpenseStatus {
+  PAID = 'paid',
+  CANCELLED = 'cancelled',
+}
+
+export enum ExpenseSourceType {
+  SUPPLIER_ASSIGNMENT = 'supplier_assignment',
+}
+
 export enum InventoryAdjustmentType {
   IN = 'IN',
   OUT = 'OUT',

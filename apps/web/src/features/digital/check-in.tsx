@@ -30,6 +30,7 @@ export function TicketCheckIn({ publicationId }: { publicationId: string }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimer = useRef<number | undefined>(undefined);
+  const scanningRef = useRef(false);
   const stop = () => {
     if (scanTimer.current) window.clearInterval(scanTimer.current);
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -124,7 +125,8 @@ export function TicketCheckIn({ publicationId }: { publicationId: string }) {
         videoRef.current.srcObject = stream;
         const detector = new window.BarcodeDetector!({ formats: ["qr_code"] });
         scanTimer.current = window.setInterval(() => {
-          if (!videoRef.current || working) return;
+          if (!videoRef.current || scanningRef.current) return;
+          scanningRef.current = true;
           void detector
             .detect(videoRef.current)
             .then((codes) => {
@@ -134,7 +136,10 @@ export function TicketCheckIn({ publicationId }: { publicationId: string }) {
                 void checkIn(value);
               }
             })
-            .catch(() => undefined);
+            .catch(() => undefined)
+            .finally(() => {
+              scanningRef.current = false;
+            });
         }, 700);
       }, 0);
     } catch {

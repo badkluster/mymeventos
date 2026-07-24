@@ -11,7 +11,9 @@ export function publicRateLimit(options: { windowMs: number; max: number }): Req
   const buckets = new Map<string, Bucket>();
   return (request, response, next) => {
     const now = Date.now();
-    const key = `${request.ip}:${request.baseUrl}:${request.method}`;
+    // request.path (not just baseUrl) so distinct public endpoints — e.g. Mercado
+    // Pago's payment webhook vs. buyer checkout/resume-payment — get separate budgets.
+    const key = `${request.ip}:${request.baseUrl}${request.path}:${request.method}`;
     const current = buckets.get(key);
     const bucket = !current || current.resetAt <= now ? { count: 0, resetAt: now + options.windowMs } : current;
     bucket.count += 1;

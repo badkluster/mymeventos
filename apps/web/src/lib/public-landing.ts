@@ -71,9 +71,11 @@ export type PublicLanding = {
 
 type ApiEnvelope<T> = { success: boolean; data?: T };
 
-export function cloudinaryImageUrl(url?: string): string {
-  if (!url || !url.includes('/upload/') || url.includes('/upload/f_auto,q_auto/')) return url ?? '';
-  return url.replace('/upload/', '/upload/f_auto,q_auto/');
+export function cloudinaryImageUrl(url?: string, width?: number): string {
+  if (!url || !url.includes('/upload/')) return url ?? '';
+  const stripped = url.replace(/\/upload\/(?:w_\d+,c_limit,)?f_auto,q_auto\//, '/upload/');
+  const transform = width ? `w_${width},c_limit,f_auto,q_auto` : 'f_auto,q_auto';
+  return stripped.replace('/upload/', `/upload/${transform}/`);
 }
 
 export function titleForPublicSalon(salon?: PublicSalon): string {

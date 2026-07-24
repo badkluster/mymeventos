@@ -7,6 +7,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
 import { ApiError } from '../../middlewares/errorHandler';
 import { Supplier } from './operations.models';
+import { writeAuditLog } from '../audit/audit.service';
 
 const router = Router();
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
@@ -47,6 +48,7 @@ router.get('/', requirePermission(Permission.SUPPLIERS_READ), asyncHandler(async
 }));
 router.post('/', requirePermission(Permission.SUPPLIERS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
   const supplier = await Supplier.create({ ...request.body, createdBy: request.user!.id, updatedBy: request.user!.id });
+  await writeAuditLog(request, 'SUPPLIER_CREATE', 'Supplier', supplier._id.toString());
   return sendSuccess(response, { supplier }, 201);
 }));
 router.get('/:id', requirePermission(Permission.SUPPLIERS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
@@ -57,11 +59,13 @@ router.get('/:id', requirePermission(Permission.SUPPLIERS_READ), validateRequest
 router.patch('/:id', requirePermission(Permission.SUPPLIERS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const supplier = await Supplier.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { ...request.body, updatedBy: request.user!.id }, { new: true, runValidators: true });
   if (!supplier) throw new ApiError(404, 'SUPPLIER_NOT_FOUND');
+  await writeAuditLog(request, 'SUPPLIER_UPDATE', 'Supplier', supplier._id.toString());
   return sendSuccess(response, { supplier });
 }));
 router.delete('/:id', requirePermission(Permission.SUPPLIERS_DELETE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const supplier = await Supplier.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { deletedAt: new Date(), deletedBy: request.user!.id, updatedBy: request.user!.id, active: false }, { new: true });
   if (!supplier) throw new ApiError(404, 'SUPPLIER_NOT_FOUND');
+  await writeAuditLog(request, 'SUPPLIER_DELETE', 'Supplier', supplier._id.toString());
   return sendSuccess(response, { deleted: true });
 }));
 

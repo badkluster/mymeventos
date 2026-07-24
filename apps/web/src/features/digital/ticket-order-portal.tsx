@@ -33,10 +33,42 @@ type Portal = {
   }>;
 };
 
+function useCountdown(target?: string) {
+  const [remainingMs, setRemainingMs] = useState<number>(() =>
+    target ? new Date(target).getTime() - Date.now() : 0,
+  );
+  useEffect(() => {
+    if (!target) return;
+    const tick = () => setRemainingMs(new Date(target).getTime() - Date.now());
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [target]);
+  if (!target || remainingMs <= 0) return null;
+  const minutes = Math.floor(remainingMs / 60_000);
+  const seconds = Math.floor((remainingMs % 60_000) / 1000);
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 export function TicketOrderPortal({ orderCode }: { orderCode: string }) {
   const [data, setData] = useState<Portal>();
   const [error, setError] = useState("");
-  const resumePayment = async () => { const token = new URLSearchParams(window.location.search).get('token'); if (!token) return; try { const result = await api.post<{ checkoutUrl: string }>(`/public/ticket-orders/${orderCode}/resume-payment?token=${encodeURIComponent(token)}`, {}); window.location.assign(result.checkoutUrl); } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo retomar el pago.'); } };
+  const [resuming, setResuming] = useState(false);
+  const countdown = useCountdown(
+    data?.order.canResumePayment ? data.order.expiresAt : undefined,
+  );
+  const resumePayment = async () => {
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token || resuming) return;
+    setResuming(true);
+    try {
+      const result = await api.post<{ checkoutUrl: string }>(`/public/ticket-orders/${orderCode}/resume-payment?token=${encodeURIComponent(token)}`, {});
+      window.location.assign(result.checkoutUrl);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo retomar el pago.');
+      setResuming(false);
+    }
+  };
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token");
     if (!token) {
@@ -70,7 +102,13 @@ export function TicketOrderPortal({ orderCode }: { orderCode: string }) {
           </p>
           <h1 className="mt-3 text-3xl font-semibold">Tus entradas</h1>
           <p className="mt-3 text-zinc-300">
-            {data.order.status === 'paid' ? `Hola ${data.order.buyer.name}. Tu pago fue aprobado; recibirás un email con tus entradas y el detalle de la compra.` : data.order.status === 'payment_pending' || data.order.status === 'pending' ? 'Estamos confirmando tu pago. Esta página se actualizará automáticamente.' : `El pago no pudo completarse (${ticketLabel(data.order.status)}). Podés volver a intentar la compra.`}
+            {data.order.status === 'paid'
+              ? `Hola ${data.order.buyer.name}. Tu pago fue aprobado; recibirás un email con tus entradas y el detalle de la compra.`
+              : data.order.status === 'expired'
+                ? 'Tu reserva venció antes de completar el pago. Volvé a elegir tus entradas para intentar de nuevo.'
+                : (data.order.status === 'payment_pending' || data.order.status === 'pending') && data.order.canResumePayment
+                  ? 'Estamos confirmando tu pago. Esta página se actualizará automáticamente.'
+                  : `El pago no pudo completarse (${ticketLabel(data.order.status)}). Podés volver a intentar la compra.`}
           </p>
         </header>
         <section className="rounded-3xl border bg-white p-6">
@@ -96,7 +134,16 @@ export function TicketOrderPortal({ orderCode }: { orderCode: string }) {
               {data.publication.venueName || data.publication.address}
             </p>
           ) : null}
-          {data.order.canResumePayment ? <div className="mt-5 border-t pt-5"><p className="text-sm text-zinc-600">Tu reserva se mantiene hasta {new Intl.DateTimeFormat('es-AR', { timeStyle: 'short' }).format(new Date(data.order.expiresAt!))}.</p><Button className="mt-3" onClick={() => void resumePayment()}>Retomar pago</Button></div> : null}
+          {data.order.canResumePayment ? (
+            <div className="mt-5 border-t pt-5">
+              <p className="text-sm text-zinc-600">
+                {countdown ? <>Tu reserva vence en <b>{countdown}</b>.</> : "Tu reserva está por vencer."}
+              </p>
+              <Button className="mt-3" disabled={resuming} onClick={() => void resumePayment()}>
+                {resuming ? "Retomando…" : "Retomar pago"}
+              </Button>
+            </div>
+          ) : null}
         </section>
         <section className="grid gap-4 sm:grid-cols-2">
           {data.tickets.map((ticket) => (

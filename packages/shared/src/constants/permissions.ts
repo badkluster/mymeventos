@@ -37,6 +37,8 @@ export enum Permission {
   EVENTS_CREATE = 'events.create',
   EVENTS_UPDATE = 'events.update',
   EVENTS_CANCEL = 'events.cancel',
+  // No route implements event deletion today (an Event is only ever cancelled/lost via status,
+  // never hard- or soft-deleted) — this permission is declared for future use, not enforced anywhere.
   EVENTS_DELETE = 'events.delete',
 
   // Contracts
@@ -139,7 +141,7 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.USERS_READ,
     Permission.SALONS_READ, Permission.SALONS_CREATE, Permission.SALONS_UPDATE,
     Permission.LEADS_READ, Permission.LEADS_CREATE, Permission.LEADS_UPDATE, Permission.LEADS_ASSIGN, Permission.LEADS_CONVERT,
-    Permission.QUOTES_READ, Permission.QUOTES_CREATE, Permission.QUOTES_UPDATE, Permission.QUOTES_APPROVE,
+    Permission.QUOTES_READ, Permission.QUOTES_CREATE, Permission.QUOTES_UPDATE, Permission.QUOTES_APPROVE, Permission.QUOTES_DELETE,
     Permission.CUSTOMERS_READ, Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_UPDATE,
     Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE, Permission.EVENTS_CANCEL,
     Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE, Permission.CONTRACTS_APPROVE, Permission.CONTRACTS_CANCEL,
@@ -160,9 +162,9 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.USERS_READ,
     Permission.SALONS_READ,
     Permission.LEADS_READ, Permission.LEADS_CREATE, Permission.LEADS_UPDATE, Permission.LEADS_ASSIGN, Permission.LEADS_CONVERT,
-    Permission.QUOTES_READ, Permission.QUOTES_CREATE, Permission.QUOTES_UPDATE,
+    Permission.QUOTES_READ, Permission.QUOTES_CREATE, Permission.QUOTES_UPDATE, Permission.QUOTES_DELETE,
     Permission.CUSTOMERS_READ, Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_UPDATE,
-    Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE,
+    Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE, Permission.EVENTS_CANCEL,
     Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE,
     Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE,
     Permission.INVITATIONS_READ,

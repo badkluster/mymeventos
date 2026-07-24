@@ -19,7 +19,6 @@ import {
   TicketType,
 } from "./ticket.models";
 import {
-  claimTicketCheckIn,
   createTicketCheckout,
   expirePendingOrders,
   markOrderPaid,
@@ -205,6 +204,8 @@ const mockPaymentActionBody = z.object({
 const refundBody = z.object({
   amount: z.coerce.number().positive().optional(),
   reason: z.string().trim().min(3).max(500),
+  ticketIds: z.array(id).max(200).optional(),
+  force: z.boolean().optional(),
 });
 const defaultTicketPolicies = {
   termsAndConditions:
@@ -296,8 +297,8 @@ publicRouter.post(
             type: req.body?.type,
             liveMode: req.body?.live_mode,
           },
-          $inc: { attempts: 1 },
         },
+        $inc: { attempts: 1 },
       },
       { upsert: true, new: true },
     );
@@ -677,8 +678,12 @@ admin.post(
     if (!order) throw new ApiError(404, "TICKET_ORDER_NOT_FOUND");
     const refund = await refundTicketOrder(
       order,
-      req.body.amount,
-      req.body.reason,
+      {
+        amount: req.body.amount,
+        reason: req.body.reason,
+        ticketIds: req.body.ticketIds,
+        force: req.body.force,
+      },
       req.user!.id,
     );
     await writeAuditLog(
@@ -686,7 +691,7 @@ admin.post(
       "ticket_order_refunded",
       "TicketOrder",
       String(order._id),
-      { amount: req.body.amount, reason: req.body.reason },
+      { amount: req.body.amount, reason: req.body.reason, ticketIds: req.body.ticketIds },
     );
     return sendSuccess(res, { refund });
   }),
@@ -1194,7 +1199,7 @@ admin.get(
 );
 admin.post(
   "/orders/:orderId/mark-paid",
-  requirePermission(Permission.TICKETS_UPDATE),
+  requirePermission(Permission.DIGITAL_TICKET_PAYMENTS_RECONCILE),
   validateRequest(
     schema(
       z.object({
@@ -1311,7 +1316,7 @@ admin.post(
     if (payload.idempotencyKey) {
       const prior: any = await TicketAccessAttempt.findOne({
         publicationId: req.params.publicationId,
-        action: "check_in",
+        action: "validate",
         idempotencyKey: payload.idempotencyKey,
       }).lean();
       if (prior)
@@ -1328,9 +1333,9 @@ admin.post(
     }).lean();
     const result = !existing
       ? "invalid"
-      : ["issued", "valid"].includes(existing.status)
+      : existing.status === "issued"
         ? "valid"
-        : existing.status === "checked_in" || existing.status === "used"
+        : existing.status === "checked_in"
           ? "already_checked_in"
           : existing.status;
     await TicketAccessAttempt.create({
@@ -1382,7 +1387,7 @@ admin.post(
       ticket ?? (await DigitalTicket.findById(req.body.ticketId).lean());
     const result = ticket
       ? "accepted"
-      : existing?.status === "checked_in" || existing?.status === "used"
+      : existing?.status === "checked_in"
         ? "already_checked_in"
         : (existing?.status ?? "invalid");
     await TicketAccessAttempt.create({
@@ -1411,7 +1416,7 @@ admin.post(
 );
 admin.post(
   "/publications/:publicationId/check-in/revert",
-  requirePermission(Permission.TICKETS_UPDATE),
+  requirePermission(Permission.DIGITAL_TICKET_CHECKIN_REVERSE),
   validateRequest(schema(checkInBody, { publicationId: id })),
   asyncHandler(async (req, res) => {
     const publication = await publicationForUser(req.params.publicationId);
@@ -1420,13 +1425,19 @@ admin.post(
     const ticket: any = await DigitalTicket.findOneAndUpdate(
       {
         publicationId: publication._id,
-        publicToken: req.body.token,
-        status: "used",
+        $or: [
+          { qrTokenHash: ticketTokenHash(req.body.token) },
+          { publicToken: req.body.token },
+          { ticketCode: req.body.token },
+        ],
+        status: "checked_in",
         deletedAt: null,
       },
       {
         $set: {
-          status: "valid",
+          status: "issued",
+          checkedInAt: null,
+          checkedInBy: null,
           validatedAt: null,
           validatedByUserId: null,
           updatedBy: req.user!.id,
@@ -1565,6 +1576,7 @@ publicRouter.get(
     }),
   ),
   asyncHandler(async (req, res) => {
+    await expirePendingOrders();
     const order: any = await TicketOrder.findOne({
       publicId: req.params.orderCode,
       deletedAt: null,

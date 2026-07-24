@@ -464,7 +464,7 @@ router.post('/:id/convert-to-event', requirePermission(Permission.EVENTS_CREATE)
   return sendSuccess(response, result, result.createdEvent ? 201 : 200, getApiMessage(result.createdEvent ? 'EVENT_CREATED_FROM_QUOTE' : 'EVENT_ALREADY_CREATED_FROM_QUOTE'));
 }));
 
-router.delete('/:id', requirePermission(Permission.QUOTES_UPDATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.delete('/:id', requirePermission(Permission.QUOTES_DELETE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, quote); quote.deletedAt = new Date(); quote.deletedBy = request.user!.id; quote.updatedBy = request.user!.id; await quote.save();
   const linkedRequests: any[] = await QuoteRequest.find({ convertedQuoteIds: quote._id, deletedAt: null });
   await Promise.all(linkedRequests.map(async (quoteRequest) => {

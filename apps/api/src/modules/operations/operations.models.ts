@@ -3,6 +3,8 @@ import {
   BeverageType,
   CatalogItemType,
   ConsumptionRuleTarget,
+  ExpenseSourceType,
+  ExpenseStatus,
   InventoryAdjustmentType,
   InventoryCategory,
   InventoryItemType,
@@ -32,6 +34,26 @@ const supplierSchema = new Schema({
   active: { type: Boolean, default: true, index: true },
   ...base,
 }, { timestamps: true });
+
+const expenseSchema = new Schema({
+  eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  supplierId: { type: Schema.Types.ObjectId, ref: 'Supplier', required: true, index: true },
+  sourceType: { type: String, enum: Object.values(ExpenseSourceType), required: true, index: true },
+  sourceId: { type: String, required: true, trim: true },
+  category: { type: String, enum: Object.values(SupplierCategory), default: SupplierCategory.OTHER, index: true },
+  description: { type: String, required: true, trim: true },
+  amount: { type: Number, required: true, min: 0 },
+  currency: { type: String, default: 'ARS' },
+  status: { type: String, enum: Object.values(ExpenseStatus), default: ExpenseStatus.PAID, index: true },
+  paidAt: Date,
+  cancelledAt: Date,
+  cancellationReason: String,
+  notes: String,
+  ...base,
+}, { timestamps: true });
+expenseSchema.index({ eventId: 1, sourceType: 1, sourceId: 1, deletedAt: 1 }, { unique: true });
+expenseSchema.index({ salonId: 1, status: 1, paidAt: -1, deletedAt: 1 });
 
 const catalogItemSchema = new Schema({
   name: { type: String, required: true, trim: true, index: true },
@@ -122,6 +144,7 @@ const consumptionRuleSchema = new Schema({
 }, { timestamps: true });
 
 export const Supplier = models.Supplier || model('Supplier', supplierSchema);
+export const Expense = models.Expense || model('Expense', expenseSchema);
 export const CatalogItem = models.CatalogItem || model('CatalogItem', catalogItemSchema);
 export const ServiceExtra = models.ServiceExtra || model('ServiceExtra', serviceExtraSchema);
 export const InventoryItem = models.InventoryItem || model('InventoryItem', inventoryItemSchema);

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
 import { Contract, ContractAddendum, Customer, Event, Payment } from './crm.models';
 import { Salon } from '../salons/salon.model';
-import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -19,6 +19,7 @@ const statuses = ['draft', 'pending_approval', 'approved', 'requires_changes', '
 const addendumStatuses = ['draft', 'pending_approval', 'approved', 'rejected', 'cancelled'] as const;
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const statusSchema = z.object({ body: z.object({ status: z.enum(statuses) }), params: z.object({ id: objectId }), query: z.object({}) });
+const cancelContractSchema = z.object({ body: z.object({ reason: z.string().trim().min(1) }), params: z.object({ id: objectId }), query: z.object({}) });
 const updateSchema = z.object({
   body: z.object({
     customerSnapshot: z.unknown().optional(),
@@ -55,7 +56,9 @@ const contractPaymentSchema = z.object({
     receiptNumber: z.string().trim().optional(),
     reference: z.string().trim().optional(),
     notes: z.string().trim().optional(),
-    affectsContractBalance: z.boolean().optional()
+    affectsContractBalance: z.boolean().optional(),
+    allowOverpayment: z.boolean().optional(),
+    overrideReason: z.string().trim().optional()
   }),
   params: z.object({ id: objectId }),
   query: z.object({})
@@ -146,10 +149,10 @@ router.post('/:id/refresh-snapshots', requirePermission(Permission.CONTRACTS_UPD
 }));
 
 router.patch('/:id/status', requirePermission(Permission.CONTRACTS_UPDATE), validateRequest(statusSchema), asyncHandler(async (request, response) => {
+  if (request.body.status === 'cancelled') throw new ApiError(422, 'CONTRACT_STATUS_CANCEL_NOT_ALLOWED');
   const contract: any = await Contract.findOne({ _id: request.params.id, deletedAt: null });
   await ensureContractAccess(request, contract);
   contract.status = request.body.status;
-  contract.cancelledAt = request.body.status === 'cancelled' ? new Date() : contract.cancelledAt;
   contract.updatedBy = request.user!.id;
   await contract.save();
   await writeAuditLog(request, 'CONTRACT_STATUS_UPDATE', 'Contract', contract._id.toString(), { status: contract.status });
@@ -182,10 +185,10 @@ router.post('/:id/request-changes', requirePermission(Permission.CONTRACTS_UPDAT
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
 }));
 
-router.post('/:id/cancel', requirePermission(Permission.CONTRACTS_CANCEL), validateRequest(idSchema), asyncHandler(async (request, response) => {
+router.post('/:id/cancel', requirePermission(Permission.CONTRACTS_CANCEL), validateRequest(cancelContractSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
-  const contract = await cancelContract(request.params.id, request.user!.id);
-  await writeAuditLog(request, 'CONTRACT_CANCEL', 'Contract', contract._id.toString());
+  const contract = await cancelContract(request.params.id, request.user!.id, request.body.reason);
+  await writeAuditLog(request, 'CONTRACT_CANCEL', 'Contract', contract._id.toString(), { reason: request.body.reason });
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
 }));
 
@@ -197,9 +200,17 @@ router.get('/:id/payments', requirePermission(Permission.PAYMENTS_READ), validat
 }));
 
 router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(contractPaymentSchema), asyncHandler(async (request, response) => {
-  await ensureContractAccess(request, await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean());
-  const payment = await createPayment({ ...request.body, contractId: request.params.id }, request.user!.id);
+  const contract: any = await Contract.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureContractAccess(request, contract);
+  const canOverride = userHasPermission(request.user!, Permission.PAYMENTS_APPROVE);
+  if (request.body.allowOverpayment && !canOverride) throw new ApiError(403, 'PAYMENT_OVERRIDE_NOT_AUTHORIZED');
+  const previousBalance = contract?.balanceAmount;
+  const payment = await createPayment({ ...request.body, contractId: request.params.id, allowOverpayment: request.body.allowOverpayment && canOverride }, request.user!.id);
   await writeAuditLog(request, 'CONTRACT_PAYMENT_CREATE', 'Payment', payment._id.toString(), { contractId: request.params.id });
+  if (request.body.allowOverpayment && canOverride) {
+    const contractAfter: any = await Contract.findOne({ _id: request.params.id, deletedAt: null }).select('balanceAmount').lean();
+    await writeAuditLog(request, 'PAYMENT_OVERPAYMENT_OVERRIDE', 'Payment', payment._id.toString(), { contractId: request.params.id, requestedAmount: payment.amount, previousBalance, resultingBalance: contractAfter?.balanceAmount, reason: request.body.overrideReason });
+  }
   return sendSuccess(response, { payment }, 201, getApiMessage('PAYMENT_CREATED'));
 }));
 

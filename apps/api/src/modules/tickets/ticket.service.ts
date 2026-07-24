@@ -19,6 +19,10 @@ import {
   getTicketPaymentProvider,
   type TicketProviderPaymentStatus,
 } from "./ticket-payment.provider";
+import {
+  recordTicketOrderPayment,
+  syncTicketOrderRefund,
+} from "../crm/payments.service";
 
 export const token = (bytes = 24) => randomBytes(bytes).toString("base64url");
 export const orderPublicId = () =>
@@ -273,7 +277,6 @@ export async function reservePublicOrder(input: {
   buyer: any;
   selections: Array<{ ticketTypeId: string; quantity: number }>;
   idempotencyKey: string;
-  expiresInMinutes?: number;
 }) {
   const existing = await TicketOrder.findOne({
     publicationId: input.publication._id,
@@ -304,6 +307,24 @@ export async function reservePublicOrder(input: {
   let publicationReserved = false;
   try {
     for (const selected of input.selections) {
+      const candidate: any = await TicketType.findOne({
+        _id: selected.ticketTypeId,
+        publicationId: publication._id,
+        deletedAt: null,
+        status: "active",
+      }).lean();
+      if (
+        !candidate ||
+        (candidate.salesOpenAt && candidate.salesOpenAt > now) ||
+        (candidate.salesCloseAt && candidate.salesCloseAt < now) ||
+        selected.quantity > candidate.maxPerOrder ||
+        selected.quantity < (candidate.minPerOrder ?? 1)
+      )
+        throw new ApiError(
+          409,
+          "TICKET_TYPE_UNAVAILABLE",
+          "Uno de los tipos de entrada no está disponible.",
+        );
       const type: any = await TicketType.findOneAndUpdate(
         {
           _id: selected.ticketTypeId,
@@ -320,17 +341,11 @@ export async function reservePublicOrder(input: {
         { $inc: { reservedCount: selected.quantity } },
         { new: true },
       );
-      if (
-        !type ||
-        (type.salesOpenAt && type.salesOpenAt > now) ||
-        (type.salesCloseAt && type.salesCloseAt < now) ||
-        selected.quantity > type.maxPerOrder ||
-        selected.quantity < (type.minPerOrder ?? 1)
-      )
+      if (!type)
         throw new ApiError(
           409,
-          "TICKET_TYPE_UNAVAILABLE",
-          "Uno de los tipos de entrada no está disponible.",
+          "TICKET_SOLD_OUT",
+          "No hay cupos suficientes para uno de los tipos de entrada.",
         );
       reserved.push({ type, quantity: selected.quantity });
     }
@@ -371,10 +386,7 @@ export async function reservePublicOrder(input: {
     const expiresAt = subtotal
       ? new Date(
           Date.now() +
-            (input.expiresInMinutes ??
-              publication.paymentConfig?.reservationMinutes ??
-              5) *
-              60_000,
+            (publication.paymentConfig?.reservationMinutes ?? 5) * 60_000,
         )
       : undefined;
     const order: any = await TicketOrder.create({
@@ -488,6 +500,11 @@ export async function markOrderPaid(
     { orderId: paid._id, status: "reserved" },
     { $set: { status: "cancelled" } },
   );
+  await recordTicketOrderPayment(paid, {
+    method: details.method,
+    reference: details.reference,
+    userId: details.userId,
+  });
   await issueTicketsForPaidOrder(String(paid._id));
   void sendOrderTicketsEmail(String(paid._id)).catch(() => undefined);
   return paid;
@@ -495,8 +512,10 @@ export async function markOrderPaid(
 
 export async function createTicketCheckout(order: any, publication: any) {
   if (!order.totalAmount)
+    // Free orders are issued immediately (see reservePublicOrder) — send the
+    // buyer straight to their tickets, not through any payment provider page.
     return {
-      checkoutUrl: `${publicAppUrl()}/entradas/mock-payment/${order.publicId}`,
+      checkoutUrl: `${publicAppUrl()}/entradas/compra/${order.publicId}?token=${encodeURIComponent(orderAccessToken(order))}`,
       provider: "free",
       providerPaymentId: undefined,
     };
@@ -604,66 +623,120 @@ export async function reconcileTicketPayment(
 
 export async function refundTicketOrder(
   order: any,
-  amount: number | undefined,
-  reason: string,
+  input: {
+    amount?: number;
+    reason: string;
+    ticketIds?: string[];
+    force?: boolean;
+  },
   userId: string,
 ) {
-  if (order.status !== "paid")
+  const { amount, reason, ticketIds, force } = input;
+  // Atomically claim the order so two concurrent/duplicate refund requests
+  // can't both pass the "paid" check and both trigger a real provider refund.
+  const claimed: any = await TicketOrder.findOneAndUpdate(
+    { _id: order._id, status: "paid" },
+    { $set: { status: "refund_processing" } },
+    { new: true },
+  );
+  if (!claimed)
     throw new ApiError(
       409,
       "TICKET_ORDER_NOT_REFUNDABLE",
-      "Solo se pueden devolver órdenes pagadas.",
+      "Solo se pueden devolver órdenes pagadas, o ya hay una devolución en curso para esta orden.",
     );
-  const payment: any = await TicketPayment.findOne({ orderId: order._id });
-  if (!payment?.providerPaymentId)
-    throw new ApiError(
-      409,
-      "TICKET_PAYMENT_NOT_FOUND",
-      "No existe un pago para devolver.",
-    );
-  const providerRefund = await getTicketPaymentProvider().refundPayment({
-    providerPaymentId: payment.providerPaymentId,
-    amount,
-    idempotencyKey: token(18),
-  });
-  const refundAmount = providerRefund.amount ?? order.totalAmount;
-  const refund = await TicketRefund.create({
-    orderId: order._id,
-    paymentId: payment._id,
-    provider: payment.provider,
-    providerRefundId: providerRefund.providerRefundId,
-    type: refundAmount < order.totalAmount ? "partial" : "full",
-    status: providerRefund.status === "approved" ? "approved" : "processing",
-    amount: refundAmount,
-    reason,
-    requestedBy: userId,
-    idempotencyKey: token(18),
-  });
-  if (providerRefund.status === "approved") {
-    const full = refundAmount >= order.totalAmount;
-    await TicketOrder.updateOne(
-      { _id: order._id },
-      {
-        $set: {
-          status: full ? "refunded" : "partially_refunded",
-          paymentStatus: "refunded",
-        },
-      },
-    );
-    if (full)
-      await DigitalTicket.updateMany(
-        {
-          orderId: order._id,
-          status: { $in: ["issued", "checked_in", "valid", "used"] },
-        },
-        { $set: { status: "refunded" } },
+  try {
+    if (
+      amount !== undefined &&
+      amount < claimed.totalAmount &&
+      !ticketIds?.length
+    )
+      throw new ApiError(
+        400,
+        "TICKET_REFUND_TICKETS_REQUIRED",
+        "Para un reembolso parcial indicá qué entradas se devuelven.",
       );
-    await TicketPayment.updateOne(
-      { _id: payment._id },
-      { $set: { status: full ? "refunded" : "partially_refunded" } },
+    const affectedTickets = await DigitalTicket.find({
+      orderId: claimed._id,
+      deletedAt: null,
+      ...(ticketIds?.length ? { _id: { $in: ticketIds } } : {}),
+    }).lean();
+    if (affectedTickets.some((t: any) => t.status === "checked_in") && !force)
+      throw new ApiError(
+        409,
+        "TICKET_ALREADY_CHECKED_IN",
+        "Una o más entradas ya tuvieron ingreso registrado. Confirmá explícitamente para devolverlas igual.",
+      );
+    const payment: any = await TicketPayment.findOne({ orderId: claimed._id });
+    if (!payment)
+      throw new ApiError(
+        409,
+        "TICKET_PAYMENT_NOT_FOUND",
+        "No existe un pago para devolver.",
+      );
+    // A payment without providerPaymentId was recorded manually (efectivo/transferencia,
+    // ver markOrderPaid) — no hay cargo online que reversar en el proveedor.
+    const providerRefund = payment.providerPaymentId
+      ? await getTicketPaymentProvider().refundPayment({
+          providerPaymentId: payment.providerPaymentId,
+          amount,
+          idempotencyKey: `refund:${claimed._id}`,
+        })
+      : { providerRefundId: undefined, status: "approved" as const, amount };
+    const refundAmount = providerRefund.amount ?? claimed.totalAmount;
+    const full = !ticketIds?.length && refundAmount >= claimed.totalAmount;
+    const refund = await TicketRefund.create({
+      orderId: claimed._id,
+      paymentId: payment._id,
+      provider: payment.provider,
+      providerRefundId: providerRefund.providerRefundId,
+      type: full ? "full" : "partial",
+      status: providerRefund.status === "approved" ? "approved" : "processing",
+      amount: refundAmount,
+      ticketIds: affectedTickets.map((t: any) => t._id),
+      reason,
+      requestedBy: userId,
+      idempotencyKey: `refund:${claimed._id}`,
+    });
+    if (providerRefund.status === "approved") {
+      await TicketOrder.updateOne(
+        { _id: claimed._id },
+        {
+          $set: {
+            status: full ? "refunded" : "partially_refunded",
+            paymentStatus: "refunded",
+          },
+        },
+      );
+      if (affectedTickets.length)
+        await DigitalTicket.updateMany(
+          { _id: { $in: affectedTickets.map((t: any) => t._id) } },
+          { $set: { status: "refunded" } },
+        );
+      await TicketPayment.updateOne(
+        { _id: payment._id },
+        { $set: { status: full ? "refunded" : "partially_refunded" } },
+      );
+      await syncTicketOrderRefund(claimed._id, {
+        full,
+        refundAmount,
+        userId,
+      });
+    } else {
+      // El proveedor no aprobó de inmediato: liberamos el candado para permitir reintentar.
+      await TicketOrder.updateOne(
+        { _id: claimed._id, status: "refund_processing" },
+        { $set: { status: "paid" } },
+      );
+    }
+    return refund;
+  } catch (error) {
+    await TicketOrder.updateOne(
+      { _id: claimed._id, status: "refund_processing" },
+      { $set: { status: "paid" } },
     );
+    throw error;
   }
-  return refund;
 }
 
 export async function ticketPublicView(publicToken: string) {
@@ -714,7 +787,7 @@ export function claimTicketCheckIn(
         { publicToken },
         { ticketCode: publicToken },
       ],
-      status: { $in: ["issued", "valid"] },
+      status: "issued",
       deletedAt: null,
     },
     {
@@ -743,7 +816,7 @@ export function claimTicketCheckInById(
     {
       _id: ticketId,
       publicationId,
-      status: { $in: ["issued", "valid"] },
+      status: "issued",
       deletedAt: null,
     },
     {
@@ -769,7 +842,7 @@ export async function regenerateTicketQr(ticketId: string, userId: string) {
   });
   if (!current)
     throw new ApiError(404, "TICKET_NOT_FOUND", "La entrada no existe.");
-  if (!["issued", "valid"].includes(current.status))
+  if (current.status !== "issued")
     throw new ApiError(
       409,
       "TICKET_QR_NOT_REGENERABLE",
