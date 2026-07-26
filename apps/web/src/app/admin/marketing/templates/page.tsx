@@ -3,7 +3,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Copy, FileStack, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
@@ -102,7 +101,7 @@ export default function MarketingTemplatesPage() {
               </div>
             </article>
           ))}
-          {!items.length ? <p className="col-span-full py-16 text-center text-sm text-zinc-500">No hay plantillas todavía. <Link href="#" onClick={(e) => { e.preventDefault(); void createTemplate(); }} className="font-semibold text-zinc-900 underline">Creá la primera</Link>.</p> : null}
+          {!items.length ? <p className="col-span-full py-16 text-center text-sm text-zinc-500">No hay plantillas todavía. <button type="button" onClick={() => void createTemplate()} className="font-semibold text-zinc-900 underline">Creá la primera</button>.</p> : null}
         </div>
       )}
     </section>

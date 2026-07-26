@@ -10,7 +10,7 @@ import { UsersStaffTabs } from '@/components/admin/users-staff-tabs';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
-import { displayLabel, payrollPaymentTypeLabels, staffEmploymentStatusLabels, staffSubroleLabels } from '@/lib/display-labels';
+import { displayLabel, documentTypeLabels, payrollPaymentTypeLabels, staffEmploymentStatusLabels, staffSubroleLabels } from '@/lib/display-labels';
 
 type Salon = { _id: string; name?: string };
 type Staff = {
@@ -21,6 +21,9 @@ type Staff = {
   lastName?: string;
   fullName?: string;
   phone?: string;
+  documentType?: string;
+  documentNumber?: string;
+  canAccessBackoffice?: boolean;
   active?: boolean;
   salonIds?: Array<string | Salon>;
   staffProfile?: { staffCode?: string; staffSubroles?: string[]; employmentStatus?: string; notes?: string };
@@ -30,7 +33,7 @@ type Staff = {
 type ListResponse = { items: Staff[]; staffSubroles: string[]; employmentStatuses: string[] };
 
 const emptyForm = {
-  username: '', email: '', firstName: '', lastName: '', phone: '', salonIds: [] as string[], active: true,
+  username: '', email: '', firstName: '', lastName: '', phone: '', documentType: 'DNI', documentNumber: '', salonIds: [] as string[], active: true, canAccessBackoffice: false,
   staffCode: '', staffSubroles: [] as string[], employmentStatus: 'ACTIVE', staffNotes: '',
   workType: 'EVENT_BASED', workNotes: '',
   paymentType: 'PER_EVENT', eventRate: '', hourlyRate: '', monthlySalary: '', currency: 'ARS', paymentNotes: '',
@@ -86,7 +89,8 @@ export default function StaffPage() {
     setEditing(staff);
     setForm({
       username: staff.username ?? '', email: staff.email ?? '', firstName: staff.firstName ?? '', lastName: staff.lastName ?? '', phone: staff.phone ?? '',
-      salonIds: (staff.salonIds ?? []).map(entityId), active: staff.active !== false,
+      documentType: staff.documentType ?? 'DNI', documentNumber: staff.documentNumber ?? '',
+      salonIds: (staff.salonIds ?? []).map(entityId), active: staff.active !== false, canAccessBackoffice: staff.canAccessBackoffice === true,
       staffCode: staff.staffProfile?.staffCode ?? '', staffSubroles: staff.staffProfile?.staffSubroles ?? [], employmentStatus: staff.staffProfile?.employmentStatus ?? 'ACTIVE', staffNotes: staff.staffProfile?.notes ?? '',
       workType: staff.workSchedule?.type ?? 'EVENT_BASED', workNotes: staff.workSchedule?.notes ?? '',
       paymentType: staff.payrollProfile?.paymentType ?? 'PER_EVENT', eventRate: String(staff.payrollProfile?.eventRate ?? ''), hourlyRate: String(staff.payrollProfile?.hourlyRate ?? ''), monthlySalary: String(staff.payrollProfile?.monthlySalary ?? ''), currency: staff.payrollProfile?.currency ?? 'ARS', paymentNotes: '',
@@ -102,9 +106,12 @@ export default function StaffPage() {
       firstName: form.firstName,
       lastName: form.lastName,
       phone: form.phone,
+      documentType: form.documentType,
+      documentNumber: form.documentNumber,
       salonIds: form.salonIds,
       primarySalonId: form.salonIds[0] || undefined,
       active: form.active,
+      canAccessBackoffice: form.canAccessBackoffice,
       staffProfile: { staffCode: form.staffCode, staffSubroles: form.staffSubroles, employmentStatus: form.employmentStatus, notes: form.staffNotes },
       workSchedule: { type: form.workType, weeklyAvailability: [], notes: form.workNotes },
       payrollProfile: { paymentType: form.paymentType, eventRate: Number(form.eventRate) || undefined, hourlyRate: Number(form.hourlyRate) || undefined, monthlySalary: Number(form.monthlySalary) || undefined, currency: form.currency || 'ARS', paymentNotes: form.paymentNotes, active: true },
@@ -141,13 +148,20 @@ export default function StaffPage() {
 function StaffModal({ open, form, setForm, salons, subroles, saving, editing, onClose, onSave }: { open: boolean; form: typeof emptyForm; setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>; salons: Salon[]; subroles: string[]; saving: boolean; editing: Staff | null; onClose: () => void; onSave: () => void }) {
   if (!open) return null;
   return <Modal open title={editing ? 'Editar staff' : 'Nuevo staff'} onClose={onClose}><div className="space-y-5 p-6">
-    <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Nombre" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} /><Input placeholder="Apellido" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} /><Input placeholder="Usuario / legajo único" value={form.username} disabled={Boolean(editing)} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} /><Input placeholder="Email opcional" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /><Input placeholder="Teléfono" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /><Input placeholder="Código staff" value={form.staffCode} onChange={(event) => setForm((current) => ({ ...current, staffCode: event.target.value }))} /></div>
+    <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Nombre" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} /><Input placeholder="Apellido" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} /><Input placeholder="Usuario / legajo único" value={form.username} disabled={Boolean(editing)} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} /><Input placeholder="Email opcional" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /><Input placeholder="Teléfono" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /><Input placeholder="Código staff" value={form.staffCode} onChange={(event) => setForm((current) => ({ ...current, staffCode: event.target.value }))} /><Select value={form.documentType} onChange={(event) => setForm((current) => ({ ...current, documentType: event.target.value }))}>{Object.entries(documentTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select><Input placeholder="Número de documento" value={form.documentNumber} onChange={(event) => setForm((current) => ({ ...current, documentNumber: event.target.value }))} /></div>
     <section><h3 className="text-sm font-semibold text-zinc-900">Subroles operativos</h3><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{subroles.map((subrole) => <label key={subrole} className="flex items-center gap-2 rounded-xl border border-zinc-100 px-3 py-2 text-sm"><input type="checkbox" checked={form.staffSubroles.includes(subrole)} onChange={() => setForm((current) => ({ ...current, staffSubroles: toggle(current.staffSubroles, subrole) }))} />{displayLabel(staffSubroleLabels, subrole)}</label>)}</div></section>
     <section><h3 className="text-sm font-semibold text-zinc-900">Salones vinculados</h3><div className="mt-3 grid gap-2 sm:grid-cols-2">{salons.map((salon) => <label key={salon._id} className="flex items-center gap-2 rounded-xl border border-zinc-100 px-3 py-2 text-sm"><input type="checkbox" checked={form.salonIds.includes(salon._id)} onChange={() => setForm((current) => ({ ...current, salonIds: toggle(current.salonIds, salon._id) }))} />{salon.name}</label>)}</div></section>
-    <div className="grid gap-3 md:grid-cols-3"><Select value={form.employmentStatus} onChange={(event) => setForm((current) => ({ ...current, employmentStatus: event.target.value }))}>{Object.entries(staffEmploymentStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select><Select value={form.workType} onChange={(event) => setForm((current) => ({ ...current, workType: event.target.value }))}><option value="EVENT_BASED">Por evento</option><option value="FIXED">Fijo</option><option value="FLEXIBLE">Flexible</option></Select><Select value={form.paymentType} onChange={(event) => setForm((current) => ({ ...current, paymentType: event.target.value }))}>{Object.entries(payrollPaymentTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></div>
+    <div className="grid gap-3 md:grid-cols-3">
+      <div><label className="mb-1 block text-xs font-medium text-zinc-500">Estado laboral</label><Select value={form.employmentStatus} onChange={(event) => setForm((current) => ({ ...current, employmentStatus: event.target.value }))}>{Object.entries(staffEmploymentStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></div>
+      <div><label className="mb-1 block text-xs font-medium text-zinc-500">Modalidad de trabajo</label><Select value={form.workType} onChange={(event) => setForm((current) => ({ ...current, workType: event.target.value }))}><option value="EVENT_BASED">Por evento</option><option value="FIXED">Fijo</option><option value="FLEXIBLE">Flexible</option></Select></div>
+      <div><label className="mb-1 block text-xs font-medium text-zinc-500">Forma de pago</label><Select value={form.paymentType} onChange={(event) => setForm((current) => ({ ...current, paymentType: event.target.value }))}>{Object.entries(payrollPaymentTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></div>
+    </div>
     <div className="grid gap-3 md:grid-cols-4"><Input placeholder="Tarifa evento" value={form.eventRate} onChange={(event) => setForm((current) => ({ ...current, eventRate: event.target.value }))} /><Input placeholder="Tarifa hora" value={form.hourlyRate} onChange={(event) => setForm((current) => ({ ...current, hourlyRate: event.target.value }))} /><Input placeholder="Mensual" value={form.monthlySalary} onChange={(event) => setForm((current) => ({ ...current, monthlySalary: event.target.value }))} /><Input placeholder="Moneda" value={form.currency} onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value }))} /></div>
     <Textarea placeholder="Notas laborales" value={form.staffNotes} onChange={(event) => setForm((current) => ({ ...current, staffNotes: event.target.value }))} />
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />Staff activo</label>
+    <div className="grid gap-2 sm:grid-cols-2">
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />Staff activo</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.canAccessBackoffice} onChange={(event) => setForm((current) => ({ ...current, canAccessBackoffice: event.target.checked }))} />Acceso al backoffice</label>
+    </div>
     <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={saving || !form.username || !form.firstName || !form.lastName} onClick={onSave}>Guardar</Button></div>
   </div></Modal>;
 }

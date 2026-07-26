@@ -24,6 +24,8 @@ const createStaffSchema = z.object({
     firstName: z.string().trim().min(1),
     lastName: z.string().trim().min(1),
     phone: optionalText,
+    documentType: optionalText,
+    documentNumber: optionalText,
     salonIds: z.array(objectId).default([]),
     primarySalonId: objectId.optional().or(z.literal('')),
     canAccessBackoffice: z.boolean().optional(),
