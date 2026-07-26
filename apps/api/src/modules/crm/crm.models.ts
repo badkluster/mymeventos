@@ -19,6 +19,7 @@ const leadSchema = new Schema({
   status: { type: String, enum: ['new', 'contacted', 'follow_up', 'quote_sent', 'negotiation', 'won', 'lost', 'converted'], default: 'new', index: true },
   lostReason: String, message: String, notes: String, promotionId: Schema.Types.ObjectId,
   convertedCustomerId: { type: Schema.Types.ObjectId, ref: 'Customer' }, convertedEventId: { type: Schema.Types.ObjectId, ref: 'Event' }, convertedAt: Date,
+  tags: { type: [String], default: [], index: true },
   ...base
 }, { timestamps: true });
 
@@ -66,7 +67,9 @@ const customerSchema = new Schema({
   documentNumber: String, address: String, occupation: String,
   alternativeContacts: [Schema.Types.Mixed], notes: String, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceLeadIds: [{ type: Schema.Types.ObjectId, ref: 'Lead' }],
   createdFromLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, createdFromQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
-  salonIds: [{ type: Schema.Types.ObjectId, ref: 'Salon', index: true }], ...base
+  salonIds: [{ type: Schema.Types.ObjectId, ref: 'Salon', index: true }],
+  tags: { type: [String], default: [], index: true },
+  ...base
 }, { timestamps: true });
 
 const contactSchema = new Schema({ customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true }, name: String, relationship: String, phone: String, email: String, notes: String }, { timestamps: true });
@@ -210,7 +213,7 @@ const calendarNotificationSchema = new Schema({
 }, { _id: false });
 
 const calendarItemSchema = new Schema({
-  type: { type: String, enum: ['event', 'alert', 'reminder', 'note', 'task', 'payment_window'], required: true, index: true },
+  type: { type: String, enum: ['event', 'alert', 'reminder', 'note', 'task', 'payment_window', 'meeting'], required: true, index: true },
   title: { type: String, required: true, trim: true, index: true },
   description: String,
   startAt: { type: Date, required: true, index: true },
@@ -291,9 +294,12 @@ const contractSchema = new Schema({
   cancelledAt: Date,
   cancellationReason: String,
   pdfUrl: String, pdfSecureUrl: String, pdfPublicId: String, pdfGeneratedAt: Date,
+  importJobId: { type: Schema.Types.ObjectId, ref: 'ImportJob', index: true },
+  importRowNumber: Number,
   ...base
 }, { timestamps: true });
 contractSchema.index({ eventId: 1, deletedAt: 1 });
+contractSchema.index({ importJobId: 1, importRowNumber: 1 }, { unique: true, sparse: true });
 
 const contractAddendumSchema = new Schema({
   addendumNumber: { type: String, required: true, unique: true, index: true },

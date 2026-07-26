@@ -57,6 +57,23 @@ export type SalonMedia = {
   duration?: number;
 };
 
+export type AttendanceOutsideAreaPolicy = 'allow' | 'flag' | 'block' | 'require_reason';
+
+export type AttendanceLocationRule = {
+  latitude?: number;
+  longitude?: number;
+  allowedRadiusMeters?: number;
+  requireLocation?: boolean;
+  outsideAreaPolicy?: AttendanceOutsideAreaPolicy;
+};
+
+export const attendanceOutsideAreaPolicyLabels: Record<AttendanceOutsideAreaPolicy, string> = {
+  allow: 'Permitir igualmente',
+  flag: 'Permitir y marcar para revisión',
+  block: 'Bloquear el fichaje',
+  require_reason: 'Permitir solo si el empleado indica un motivo'
+};
+
 export type SalonManager = {
   _id: string;
   firstName?: string;
@@ -116,6 +133,7 @@ export type Salon = {
   locationText?: string;
   mapUrl?: string;
   extraServices?: SalonExtra[];
+  attendanceLocationRule?: AttendanceLocationRule;
   activePackageCount?: number;
   createdAt?: string;
   updatedAt?: string;

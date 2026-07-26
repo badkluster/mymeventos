@@ -164,6 +164,14 @@ const ruleSchema = z.object({
   query: z.object({})
 });
 const ruleParamsSchema = z.object({ body: z.object({}).optional(), params: z.object({ id: objectId, packageTemplateId: objectId }), query: z.object({}) });
+const attendanceLocationRuleFields = z.object({
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
+  allowedRadiusMeters: z.coerce.number().positive().optional(),
+  requireLocation: z.boolean().optional(),
+  outsideAreaPolicy: z.enum(['allow', 'flag', 'block', 'require_reason']).optional()
+});
+const attendanceLocationRuleSchema = z.object({ body: attendanceLocationRuleFields, params: idParams.shape.params, query: z.object({}) });
 
 function listScope(request: Request): Record<string, unknown> {
   if (request.user!.roles.includes(Role.ADMIN)) return {};
@@ -410,6 +418,19 @@ router.delete('/:id/stock-items/:itemId', requirePermission(Permission.SALONS_UP
   if (!item) throw new ApiError(404, 'SALON_STOCK_ITEM_NOT_FOUND');
   await writeAuditLog(request, 'SALON_STOCK_ITEM_DELETE', 'SalonStockItem', item._id.toString());
   return sendSuccess(response, { deleted: true }, 200, getApiMessage('SALON_STOCK_ITEM_DELETED'));
+}));
+
+router.get('/:id/attendance-location-rule', requirePermission(Permission.SALONS_READ), validateRequest(idParams), asyncHandler(async (request, response) => {
+  const salon = await getSalonOrFail(request, request.params.id);
+  return sendSuccess(response, { attendanceLocationRule: salon.attendanceLocationRule ?? null });
+}));
+
+router.patch('/:id/attendance-location-rule', requirePermission(Permission.SALONS_UPDATE), validateRequest(attendanceLocationRuleSchema), asyncHandler(async (request, response) => {
+  await ensureSalonAccess(request, request.params.id);
+  const salon = await Salon.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { attendanceLocationRule: request.body, updatedBy: request.user!.id }, { new: true });
+  if (!salon) throw new ApiError(404, 'SALON_NOT_FOUND');
+  await writeAuditLog(request, 'SALON_ATTENDANCE_LOCATION_RULE_UPDATE', 'Salon', request.params.id);
+  return sendSuccess(response, { attendanceLocationRule: salon.attendanceLocationRule ?? null }, 200, getApiMessage('SALON_UPDATED'));
 }));
 
 router.delete('/:id', requirePermission(Permission.SALONS_UPDATE), validateRequest(idParams), asyncHandler(async (request, response) => {

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from '@/components/theme-provider';
 import { brandAssets } from '@/lib/brand-assets';
+import { AnalyticsTracker } from '@/components/analytics-tracker';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mymeventos-api-ashy.vercel.app';
 
@@ -30,7 +31,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col"><ThemeProvider>{children}</ThemeProvider></body>
+      <body className="min-h-full flex flex-col"><ThemeProvider>{children}<AnalyticsTracker /></ThemeProvider></body>
     </html>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -108,6 +109,13 @@ export default function QuotesPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
   useEffect(() => {
+    if (searchParams?.get('create') === '1') {
+      setInitialCustomerId('');
+      setFormQuote(undefined);
+      setFormRequest(undefined);
+      setIsFormOpen(true);
+      return;
+    }
     const customerId = searchParams?.get('customerId');
     if (!customerId || !customers.some((customer) => customer._id === customerId)) return;
     const timer = window.setTimeout(() => {

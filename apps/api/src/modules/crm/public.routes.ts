@@ -34,6 +34,10 @@ const schema = z.object({
     guestCount: z.coerce.number().int().min(1).max(1000),
     salonId: z.string().regex(/^[0-9a-fA-F]{24}$/),
     packageTemplateId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+    attributionId: z.string().trim().max(120).regex(/^[A-Za-z0-9._:-]+$/).optional(),
+    utmSource: z.string().trim().max(120).optional(),
+    utmMedium: z.string().trim().max(120).optional(),
+    utmCampaign: z.string().trim().max(120).optional(),
     message: z.string().max(700).optional().refine((value) => countWords(value) <= messageMaxWords, `El mensaje no puede superar ${messageMaxWords} palabras.`)
   }),
   params: z.object({}),

@@ -27,6 +27,20 @@ const environmentSchema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().optional(), CLOUDINARY_API_KEY: z.string().optional(), CLOUDINARY_API_SECRET: z.string().optional(), CLOUDINARY_URL: z.string().optional(),
   MERCADO_PAGO_ACCESS_TOKEN: z.string().optional(), MERCADO_PAGO_WEBHOOK_SECRET: z.string().optional(),
   MERCADO_PAGO_ENVIRONMENT: z.enum(['test', 'production']).default('test'), TICKET_PAYMENT_PROVIDER: z.enum(['mock', 'mercado_pago']).default('mock'),
+  MARKETING_EMAIL_PROVIDER: z.enum(['mock', 'resend']).default('mock'),
+  RESEND_API_KEY: z.string().optional(), RESEND_WEBHOOK_SECRET: z.string().optional(),
+  MARKETING_FROM_EMAIL: z.string().optional(), MARKETING_FROM_NAME: z.string().optional(), MARKETING_REPLY_TO: z.string().optional(),
+  MARKETING_PUBLIC_URL: z.string().optional(),
+  MARKETING_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(25),
+  MARKETING_SEND_RATE_LIMIT: z.coerce.number().int().positive().max(500).default(10),
+  MARKETING_CRON_SECRET: z.string().optional(),
+  MOBILE_ACCESS_TOKEN_TTL: z.string().default('30m'),
+  MOBILE_REFRESH_TOKEN_TTL: z.string().default('30d'),
+  MOBILE_OFFLINE_PUNCH_MAX_AGE_MINUTES: z.coerce.number().int().positive().default(720),
+  MOBILE_DEEP_LINK_SCHEME: z.string().default('mymeventos'),
+  ATTENDANCE_DEFAULT_TIMEZONE: z.string().default('America/Argentina/Buenos_Aires'),
+  ATTENDANCE_DEFAULT_LOCATION_ACCURACY_METERS: z.coerce.number().positive().default(50),
+  ATTENDANCE_DEFAULT_GEOFENCE_RADIUS_METERS: z.coerce.number().positive().default(150),
   SEED_ADMIN_USERNAME: z.string().optional(), SEED_ADMIN_EMAIL: z.string().optional(), SEED_ADMIN_PASSWORD: z.string().optional()
 });
 

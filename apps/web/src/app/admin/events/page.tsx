@@ -1,7 +1,8 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Eye, Plus, Search } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -39,6 +40,7 @@ function normalize(response: ListResponse): { items: Event[]; meta: PaginationMe
 
 export default function EventsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const [items, setItems] = useState<Event[]>([]);
   const [salons, setSalons] = useState<Salon[]>([]);
@@ -78,6 +80,9 @@ export default function EventsPage() {
     const timer = window.setTimeout(() => setFilters((current) => ({ ...current, page: 1, query: searchInput.trim() })), 350);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
+  useEffect(() => {
+    if (searchParams?.get('create') === '1') setCreateOpen(true);
+  }, [searchParams]);
 
   const updateFilters = (changes: Partial<typeof filters>) => setFilters((current) => ({ ...current, ...changes }));
   const updateStatus = async (event: Event, status: string) => {

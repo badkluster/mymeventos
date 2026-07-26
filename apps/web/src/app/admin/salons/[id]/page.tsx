@@ -12,9 +12,9 @@ import { CloudinaryUpload, type UploadedAsset } from '@/components/cloudinary-up
 import { useToast } from '@/components/ui/toast-provider';
 import { cleanMenuSections, cleanStringList, MenuSectionsEditor, StringListEditor, type MenuSectionValue } from '@/components/admin/structured-list-editors';
 import { TableActionButton } from '@/components/admin/table-action-button';
-import { eventTypeOptions, money, salonStockCategoryLabels, salonStockCategoryOptions, type PackageRule, type Salon, type SalonExtra, type SalonMedia, type SalonStockCategory, type SalonStockItem, type UserOption } from '@/features/salons/types';
+import { attendanceOutsideAreaPolicyLabels, eventTypeOptions, money, salonStockCategoryLabels, salonStockCategoryOptions, type AttendanceLocationRule, type AttendanceOutsideAreaPolicy, type PackageRule, type Salon, type SalonExtra, type SalonMedia, type SalonStockCategory, type SalonStockItem, type UserOption } from '@/features/salons/types';
 
-type Tab = 'general' | 'commercial' | 'packages' | 'extras' | 'stock' | 'landing';
+type Tab = 'general' | 'commercial' | 'packages' | 'extras' | 'stock' | 'attendance' | 'landing';
 type TemplateScope = 'salon' | 'global';
 type RuleForm = {
   name: string;
@@ -66,6 +66,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'packages', label: 'Paquetes' },
   { id: 'extras', label: 'Extras' },
   { id: 'stock', label: 'Vajilla' },
+  { id: 'attendance', label: 'Asistencia' },
   { id: 'landing', label: 'Landing' }
 ];
 const tabIds = tabs.map((item) => item.id);
@@ -143,6 +144,9 @@ export default function SalonDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNoticeState] = useState('');
   const [landingMedia, setLandingMedia] = useState({ heroImageUrl: '', galleryImageUrlsText: '' });
+  const [draggedGalleryIndex, setDraggedGalleryIndex] = useState<number>();
+  const [attendanceLocation, setAttendanceLocation] = useState<AttendanceLocationRule>({ allowedRadiusMeters: 150, requireLocation: false, outsideAreaPolicy: 'flag' });
+  const [savingAttendanceLocation, setSavingAttendanceLocation] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const salonId = params?.id ?? '';
 
@@ -188,6 +192,16 @@ export default function SalonDetailPage() {
     setLandingMedia({
       heroImageUrl: cloudinaryImageUrl(salon.heroImageUrl ?? ''),
       galleryImageUrlsText: salon.galleryImageUrls?.map(cloudinaryImageUrl).join('\n') ?? ''
+    });
+  }, [salon?._id]);
+  useEffect(() => {
+    if (!salon) return;
+    setAttendanceLocation({
+      latitude: salon.attendanceLocationRule?.latitude,
+      longitude: salon.attendanceLocationRule?.longitude,
+      allowedRadiusMeters: salon.attendanceLocationRule?.allowedRadiusMeters ?? 150,
+      requireLocation: salon.attendanceLocationRule?.requireLocation ?? false,
+      outsideAreaPolicy: salon.attendanceLocationRule?.outsideAreaPolicy ?? 'flag'
     });
   }, [salon?._id]);
 
@@ -287,6 +301,21 @@ export default function SalonDetailPage() {
     }, 'Configuración comercial guardada correctamente.');
   }
 
+  async function saveAttendanceLocation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingAttendanceLocation(true);
+    setNotice('');
+    try {
+      const response = await api.patch<{ attendanceLocationRule: AttendanceLocationRule | null }>(`/salons/${salonId}/attendance-location-rule`, attendanceLocation);
+      setSalon((current) => current && { ...current, attendanceLocationRule: response.attendanceLocationRule ?? undefined });
+      setNotice('Geocerca de asistencia guardada correctamente.');
+    } catch (error) {
+      setNotice(errorMessage(error, 'No se pudo guardar la geocerca de asistencia.'));
+    } finally {
+      setSavingAttendanceLocation(false);
+    }
+  }
+
   async function saveLanding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -376,6 +405,20 @@ export default function SalonDetailPage() {
           setNotice(errorMessage(error, 'El archivo se quitó del salón, pero no se pudo eliminar de Cloudinary.'));
         }
       }
+    }
+  }
+
+  async function reorderGalleryAssets(fromIndex: number, toIndex: number) {
+    if (!salon || fromIndex === toIndex) return;
+    const nextMedia = [...(salon.mediaGallery ?? [])];
+    const [moved] = nextMedia.splice(fromIndex, 1);
+    if (!moved) return;
+    nextMedia.splice(toIndex, 0, moved);
+    const orderedMedia = nextMedia.map((item, index) => ({ ...item, displayOrder: index }));
+    const mediaImageUrls = orderedMedia.filter((item) => item.resourceType === 'image').map((item) => item.secureUrl || item.url);
+    const galleryImageUrls = uniqueUrls([...mediaImageUrls, ...galleryTextToUrls(landingMedia.galleryImageUrlsText).filter((url) => !mediaImageUrls.includes(url))]);
+    if (await saveSalon({ mediaGallery: orderedMedia, galleryImageUrls }, 'Galería reordenada correctamente.')) {
+      setLandingMedia((current) => ({ ...current, galleryImageUrlsText: galleryImageUrls.join('\n') }));
     }
   }
 
@@ -636,9 +679,18 @@ export default function SalonDetailPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><Utensils className="h-4 w-4" />Stock de vajilla</h2><p className="mt-1 text-sm text-zinc-500">{stockItems.length} artículos · {stockItems.reduce((total, item) => total + item.currentQuantity, 0)} unidades registradas para {salon.name}.</p></div><Button onClick={openNewStockItem}><Plus className="mr-2 h-4 w-4" />Nuevo artículo</Button></div>
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="min-w-[850px] w-full text-sm"><thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500"><tr>{['Categoría', 'Artículo', 'Stock actual', 'Unidad', 'Inventario al', 'Estado'].map((label) => <th key={label} className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide">{label}</th>)}<th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide">Acciones</th></tr></thead><tbody className="divide-y divide-zinc-100">{stockItems.map((item) => <tr key={item._id} className="hover:bg-amber-50/35"><td className="px-5 py-4 text-zinc-600">{salonStockCategoryLabels[item.category]}</td><td className="px-5 py-4"><p className="font-medium text-zinc-900">{item.name}</p>{item.notes && <p className="mt-0.5 text-xs text-zinc-500">{item.notes}</p>}</td><td className="px-5 py-4 text-lg font-semibold text-zinc-950">{item.currentQuantity}</td><td className="px-5 py-4 text-zinc-600">{item.unitOfMeasure}</td><td className="px-5 py-4 text-zinc-600">{formatDate(item.stockAsOf)}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.active ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-0.5"><TableActionButton icon={Pencil} label="Editar artículo" onClick={() => openEditStockItem(item)} /><TableActionButton icon={Trash2} label="Eliminar artículo" onClick={() => setStockItemToDelete(item)} disabled={saving} /></div></td></tr>)}</tbody></table></div>{!stockItems.length && <div className="grid place-items-center px-6 py-14 text-center"><Utensils className="h-9 w-9 text-zinc-400" /><p className="mt-3 text-sm text-zinc-500">Todavía no hay artículos de vajilla cargados para este salón.</p></div>}</div>
     </div>}
+    {tab === 'attendance' && <form onSubmit={saveAttendanceLocation} className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-3">
+      <div className="lg:col-span-3 rounded-xl border border-zinc-100 bg-zinc-50 p-4"><h2 className="font-semibold text-zinc-950">Geocerca de fichaje móvil</h2><p className="mt-1 text-sm text-zinc-500">Define el punto y radio dentro del cual se considera válido un fichaje de entrada/salida desde la app móvil de personal. Si no se configura latitud y longitud, no se valida ubicación para este salón.</p></div>
+      <Field label="Latitud"><Input type="number" step="any" min={-90} max={90} value={attendanceLocation.latitude ?? ''} onChange={(event) => setAttendanceLocation((current) => ({ ...current, latitude: event.target.value === '' ? undefined : Number(event.target.value) }))} placeholder="-34.6037" /></Field>
+      <Field label="Longitud"><Input type="number" step="any" min={-180} max={180} value={attendanceLocation.longitude ?? ''} onChange={(event) => setAttendanceLocation((current) => ({ ...current, longitude: event.target.value === '' ? undefined : Number(event.target.value) }))} placeholder="-58.3816" /></Field>
+      <Field label="Radio permitido (metros)"><Input type="number" min={10} step={10} value={attendanceLocation.allowedRadiusMeters ?? 150} onChange={(event) => setAttendanceLocation((current) => ({ ...current, allowedRadiusMeters: Number(event.target.value) }))} /></Field>
+      <label className="flex items-center gap-2 self-end pb-3 text-sm text-zinc-700"><input type="checkbox" checked={Boolean(attendanceLocation.requireLocation)} onChange={(event) => setAttendanceLocation((current) => ({ ...current, requireLocation: event.target.checked }))} />Exigir ubicación para fichar en este salón</label>
+      <Field label="Política fuera de zona" className="lg:col-span-2"><Select value={attendanceLocation.outsideAreaPolicy ?? 'flag'} onChange={(event) => setAttendanceLocation((current) => ({ ...current, outsideAreaPolicy: event.target.value as AttendanceOutsideAreaPolicy }))}>{(Object.entries(attendanceOutsideAreaPolicyLabels) as [AttendanceOutsideAreaPolicy, string][]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+      <footer className="lg:col-span-3 flex justify-end"><Button disabled={savingAttendanceLocation}><Save className="mr-2 h-4 w-4" />{savingAttendanceLocation ? 'Guardando…' : 'Guardar geocerca'}</Button></footer>
+    </form>}
     {tab === 'landing' && <form onSubmit={saveLanding} className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-2">
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Imagen principal</h2><p className="mt-1 text-sm text-zinc-500">Se sube a Cloudinary y queda disponible para la futura landing.</p></div><div className="flex flex-wrap gap-2"><CloudinaryUpload context="salons" salonId={salonId} accept="image/*,.heic,.heif" label={salon.heroImageUrl ? 'Cambiar imagen principal' : 'Subir imagen principal'} onUploaded={(asset) => void setHeroFromUpload(asset)} />{salon.heroImageUrl ? <Button type="button" variant="danger" onClick={() => void removeHeroImage()}><Trash2 className="mr-2 h-4 w-4" />Quitar imagen</Button> : null}</div></div>{salon.heroImageUrl && <div className="mt-4 h-56 rounded-xl border border-zinc-200 bg-cover bg-center" style={{ backgroundImage: `url(${cloudinaryImageUrl(salon.heroImageUrl)})` }} />}</div>
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Galería de imágenes y videos</h2><p className="mt-1 text-sm text-zinc-500">Acepta imágenes y videos. Los archivos se guardan en Cloudinary.</p></div><CloudinaryUpload context="salons" salonId={salonId} accept="image/*,.heic,.heif,video/*" label="Subir a galería" multiple onUploaded={(asset) => void addGalleryAsset(asset)} onUploadedBatch={(assets) => void addGalleryAssets(assets)} /></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(salon.mediaGallery ?? []).map((item, index) => <article key={item.publicId ?? item.url} className="overflow-hidden rounded-xl border border-zinc-200 bg-white"><div className="grid h-36 place-items-center bg-zinc-100">{item.resourceType === 'video' ? <video src={item.secureUrl || item.url} className="h-full w-full object-cover" controls /> : <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${mediaUrl(item.secureUrl || item.url, item.resourceType)})` }} />}</div><div className="p-3"><p className="truncate text-sm font-medium text-zinc-800">{item.title || item.publicId || 'Archivo de galería'}</p><p className="mt-1 text-xs text-zinc-500">{item.resourceType === 'video' ? 'Video' : 'Imagen'} · {item.publicVisible ? 'Visible' : 'Oculto'}</p><Button type="button" variant="danger" className="mt-3 w-full" onClick={() => void removeGalleryAsset(index)}>Eliminar</Button></div></article>)}{!(salon.mediaGallery ?? []).length && <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">Todavía no hay archivos en la galería.</p>}</div></div>
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Imagen principal</h2><p className="mt-1 text-sm text-zinc-500">La portada principal que se muestra en la landing del salón.</p></div><div className="space-y-2"><div className="flex flex-wrap gap-2"><CloudinaryUpload context="salons" salonId={salonId} accept="image/jpeg,image/png,image/webp,image/avif,image/gif,.heic,.heif" label={salon.heroImageUrl ? 'Cambiar imagen principal' : 'Subir imagen principal'} dropzone onUploaded={(asset) => void setHeroFromUpload(asset)} />{salon.heroImageUrl ? <Button type="button" variant="danger" onClick={() => void removeHeroImage()}><Trash2 className="mr-2 h-4 w-4" />Quitar imagen</Button> : null}</div><p className="max-w-md text-xs leading-5 text-zinc-500">Permitidas: JPG, PNG, WEBP, AVIF, GIF, HEIC y HEIF. Máximo 25 MB por archivo.</p></div></div>{salon.heroImageUrl && <div className="mt-4 h-36 rounded-xl border border-zinc-200 bg-cover bg-center sm:h-44" style={{ backgroundImage: `url(${cloudinaryImageUrl(salon.heroImageUrl)})` }} />}</div>
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Galería de imágenes y videos</h2><p className="mt-1 text-sm text-zinc-500">Arrastrá una miniatura para definir el orden en que se verá en la landing. La grilla se adapta al ancho de pantalla.</p></div><div className="space-y-2"><CloudinaryUpload context="salons" salonId={salonId} accept="image/jpeg,image/png,image/webp,image/avif,image/gif,.heic,.heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-m4v,video/mpeg" label="Subir a galería" multiple dropzone onUploaded={(asset) => void addGalleryAsset(asset)} onUploadedBatch={(assets) => void addGalleryAssets(assets)} /><p className="max-w-md text-xs leading-5 text-zinc-500">Imágenes: JPG, PNG, WEBP, AVIF, GIF, HEIC y HEIF. Videos: MP4, WEBM, MOV, AVI, M4V y MPEG. Máximo 25 MB por archivo.</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">{(salon.mediaGallery ?? []).map((item, index) => <article key={item.publicId ?? item.url} draggable onDragStart={() => setDraggedGalleryIndex(index)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedGalleryIndex !== undefined) void reorderGalleryAssets(draggedGalleryIndex, index); setDraggedGalleryIndex(undefined); }} onDragEnd={() => setDraggedGalleryIndex(undefined)} className={`group relative cursor-grab overflow-hidden rounded-lg border bg-white p-1.5 shadow-sm transition active:cursor-grabbing ${draggedGalleryIndex === index ? 'border-zinc-950 opacity-50' : 'border-zinc-200 hover:border-zinc-400'}`}><div className="relative h-20 overflow-hidden rounded-md bg-zinc-100 sm:h-24">{item.resourceType === 'video' ? <video src={item.secureUrl || item.url} className="h-full w-full object-cover" muted playsInline preload="metadata" /> : <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${mediaUrl(item.secureUrl || item.url, item.resourceType)})` }} />}{item.resourceType === 'video' ? <span className="absolute bottom-1 left-1 rounded bg-zinc-950/75 px-1.5 py-0.5 text-[10px] font-medium text-white">Video</span> : null}<button type="button" draggable={false} aria-label={`Eliminar ${item.title || 'archivo de galería'}`} title="Eliminar archivo" className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-md bg-white/95 text-red-600 opacity-100 shadow-sm transition hover:bg-red-50 sm:opacity-0 sm:group-hover:opacity-100" onClick={() => void removeGalleryAsset(index)}><Trash2 className="h-3.5 w-3.5" /></button></div><div className="px-1 pb-0.5 pt-2"><p className="truncate text-xs font-medium text-zinc-800">{item.title || item.publicId || 'Archivo de galería'}</p><p className="mt-0.5 text-[11px] text-zinc-500">{item.resourceType === 'video' ? 'Video' : 'Imagen'} · {item.publicVisible ? 'Visible' : 'Oculto'}</p></div></article>)}{!(salon.mediaGallery ?? []).length && <p className="col-span-full rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">Todavía no hay archivos en la galería.</p>}</div></div>
       <Field label="Título público"><Input name="publicTitle" defaultValue={salon.publicTitle} /></Field><Field label="Slug público"><Input name="slug" defaultValue={salon.slug} required /></Field>
       <Field label="Descripción corta" className="lg:col-span-2"><Textarea name="publicShortDescription" defaultValue={salon.publicShortDescription} /></Field><Field label="Descripción pública" className="lg:col-span-2"><Textarea name="publicDescription" defaultValue={salon.publicDescription} /></Field>
       <label className="flex items-center gap-2 text-sm text-zinc-700"><input name="visibleOnWebsite" type="checkbox" defaultChecked={salon.visibleOnWebsite} />Visible en web</label><Field label="Orden de aparición"><Input name="displayOrder" type="number" min={0} defaultValue={salon.displayOrder ?? 0} /></Field>

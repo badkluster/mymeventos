@@ -767,6 +767,7 @@ admin.get(
     const query = publicationListQuery.parse(req.query);
     const filter: Record<string, unknown> = { deletedAt: null };
     if (query.status) filter.status = query.status;
+    else if (!query.search) filter.status = { $ne: "archived" };
     if (query.category) filter.category = query.category;
     if (query.visibility === "public") filter["visibility.isPublic"] = true;
     if (query.visibility === "private")

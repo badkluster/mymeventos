@@ -15,7 +15,10 @@ export const app = express();
 // Middleware
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
-app.use(express.json());
+// `verify` stashes the raw bytes on the request so webhook handlers (e.g. Resend's
+// Svix-signed marketing webhook) can HMAC the exact payload instead of a
+// re-serialized (and potentially non-identical) JSON.stringify of req.body.
+app.use(express.json({ verify: (request, _response, buffer) => { (request as express.Request).rawBody = buffer; } }));
 app.use(cookieParser());
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 

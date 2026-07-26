@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "M&M Eventos Staff",
+    "slug": "mym-eventos-staff",
+    "scheme": "mymeventos",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mymeventos.staff",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Usamos tu ubicación únicamente al registrar tu entrada o salida, para validar que estás en el salón correspondiente.",
+        "NSFaceIDUsageDescription": "Usá Face ID para desbloquear tu sesión de forma rápida y segura en este dispositivo."
+      }
+    },
+    "android": {
+      "package": "com.mymeventos.staff",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0B0F"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Usamos tu ubicación únicamente al registrar tu entrada o salida, para validar que estás en el salón correspondiente."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Usá Face ID para desbloquear tu sesión de forma rápida y segura en este dispositivo."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permitinos acceder a tus fotos para elegir un avatar.",
+          "cameraPermission": "Permitinos usar la cámara para tomarte una foto de perfil."
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0B0F"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

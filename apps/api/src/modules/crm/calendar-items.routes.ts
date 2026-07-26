@@ -11,7 +11,7 @@ import { writeAuditLog } from '../audit/audit.service';
 import { isCalendarItemOwner } from './calendar-item-access';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
-const itemTypes = ['event', 'alert', 'reminder', 'note', 'task', 'payment_window'] as const;
+const itemTypes = ['event', 'alert', 'reminder', 'note', 'task', 'payment_window', 'meeting'] as const;
 const itemStatuses = ['pending', 'scheduled', 'done', 'cancelled'] as const;
 const priorities = ['low', 'normal', 'high', 'critical'] as const;
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });

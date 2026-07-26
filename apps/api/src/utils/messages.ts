@@ -41,7 +41,38 @@ export const ApiMessages = {
   PAYMENT_CREATED: 'Pago registrado correctamente.', PAYMENT_UPDATED: 'Pago actualizado correctamente.', PAYMENT_DELETED: 'Pago eliminado correctamente.', PAYMENT_CANCELLED: 'Pago cancelado correctamente.', PAYMENT_REFUNDED: 'Reembolso registrado correctamente.', PAYMENT_NOT_FOUND: 'Pago no encontrado.', PAYMENT_CONTRACT_REQUIRED: 'El pago debe estar asociado a un contrato.', PAYMENT_METHOD_REQUIRED: 'Indicá el medio de pago para marcarlo como cobrado.', PAYMENT_PAID_LOCKED: 'Un pago cobrado no puede modificar importes ni asociación.', PAYMENT_REFUNDED_LOCKED: 'Un pago reembolsado no puede cancelarse.', PAYMENT_NOT_REFUNDABLE: 'Este pago no puede reembolsarse.', PAYMENT_TICKET_ORDER_READONLY: 'Este pago proviene de una compra de entradas digitales. Para modificarlo o reembolsarlo, hacelo desde la orden en Entradas digitales.',
   PAYMENT_EXCEEDS_BALANCE: 'El monto ingresado supera el saldo pendiente del contrato.', PAYMENT_REFUND_EXCEEDS_ORIGINAL: 'El monto a reembolsar supera lo disponible para reembolso de este pago.', PAYMENT_OVERRIDE_REASON_REQUIRED: 'Indicá el motivo para autorizar un monto por encima del saldo o del reembolso disponible.', PAYMENT_OVERRIDE_NOT_AUTHORIZED: 'No tenés permisos para autorizar un monto por encima del saldo o del reembolso disponible.', PAYMENT_INVALID_STATUS_TRANSITION: 'El pago no puede pasar a ese estado desde su estado actual.', PAYMENT_CANCELLATION_REASON_REQUIRED: 'Indicá el motivo de la cancelación del pago.',
   EVENT_CANCELLATION_REASON_REQUIRED: 'Indicá el motivo de la cancelación o pérdida del evento.',
-  EVENT_VENUE_SLOT_CONFLICT: 'El salón ya tiene otro evento reservado en un horario superpuesto ese día.'
+  EVENT_VENUE_SLOT_CONFLICT: 'El salón ya tiene otro evento reservado en un horario superpuesto ese día.',
+  MARKETING_CAMPAIGN_NOT_FOUND: 'Campaña no encontrada.', MARKETING_CAMPAIGN_NOT_EDITABLE: 'La campaña ya no se puede editar en su estado actual.', MARKETING_CAMPAIGN_NOT_SENDABLE: 'La campaña no está en condiciones de enviarse.', MARKETING_CAMPAIGN_NOT_CANCELLABLE: 'La campaña ya no se puede cancelar.', MARKETING_CAMPAIGN_MISSING_CONTENT: 'La campaña necesita asunto y contenido antes de enviarse.', MARKETING_CAMPAIGN_MISSING_AUDIENCE: 'La campaña necesita una audiencia con al menos un destinatario.', MARKETING_CAMPAIGN_SCHEDULE_IN_PAST: 'No podés programar una campaña en una fecha pasada.', MARKETING_CAMPAIGN_LOCKED: 'La campaña ya está siendo procesada por otro proceso.', MARKETING_CRON_FORBIDDEN: 'No autorizado.', MARKETING_WEBHOOK_INVALID_SIGNATURE: 'Firma de webhook inválida.', MARKETING_TEST_EMAIL_LIMIT: 'Como máximo se pueden enviar 5 direcciones de prueba por vez.', MARKETING_UNSUBSCRIBE_TOKEN_INVALID: 'El enlace de baja no es válido o ya fue utilizado.',
+
+  // Mobile staff app: auth, devices, attendance
+  MOBILE_ACCESS_DENIED: 'Tu usuario no tiene acceso habilitado a la aplicación móvil.',
+  MOBILE_DEVICE_REQUIRED: 'Falta información del dispositivo.',
+  MOBILE_DEVICE_NOT_FOUND: 'Dispositivo no encontrado.',
+  MOBILE_DEVICE_REVOKED: 'Dispositivo revocado correctamente.',
+  PASSWORD_RESET_REQUESTED: 'Si el usuario existe, vas a recibir un email con instrucciones.',
+  PASSWORD_RESET_TOKEN_INVALID: 'El enlace para restablecer la contraseña no es válido o expiró.',
+  PASSWORD_RESET_SUCCESS: 'Contraseña restablecida correctamente. Iniciá sesión nuevamente.',
+  ATTENDANCE_ACCOUNT_INACTIVE: 'Tu cuenta no está habilitada para fichar en este momento.',
+  ATTENDANCE_ALREADY_ACTIVE: 'Ya tenés una jornada activa. Finalizála antes de iniciar otra.',
+  ATTENDANCE_NO_ACTIVE_SESSION: 'No tenés una jornada activa en este momento.',
+  ATTENDANCE_DUPLICATE_REQUEST: 'Esta marcación ya fue procesada.',
+  ATTENDANCE_LOCATION_REQUIRED: 'Necesitamos tu ubicación para registrar esta marcación.',
+  ATTENDANCE_OUTSIDE_GEOFENCE: 'Estás fuera de la zona permitida para fichar en este salón.',
+  ATTENDANCE_REASON_REQUIRED_OUTSIDE_AREA: 'Indicá un motivo: estás fuera de la zona habitual del salón.',
+  ATTENDANCE_SESSION_NOT_FOUND: 'Jornada no encontrada.',
+  ATTENDANCE_INCIDENT_NOT_FOUND: 'Incidencia no encontrada.',
+  ATTENDANCE_ADJUSTMENT_NOT_FOUND: 'Solicitud de corrección no encontrada.',
+  ATTENDANCE_ADJUSTMENT_NOT_PENDING: 'Esta solicitud ya fue revisada.',
+  ATTENDANCE_ADJUSTMENT_ALREADY_PENDING: 'Ya existe una solicitud de corrección pendiente para esta jornada.',
+  ATTENDANCE_ADJUSTMENT_INVALID_RANGE: 'El horario de salida solicitado debe ser posterior al de entrada.',
+  ATTENDANCE_ADJUSTMENT_CREATED: 'Solicitud de corrección enviada correctamente.',
+  ATTENDANCE_ADJUSTMENT_REVIEWED: 'Solicitud de corrección revisada correctamente.',
+  ATTENDANCE_INCIDENT_CREATED: 'Incidencia registrada correctamente.',
+  ATTENDANCE_INCIDENT_RESOLVED: 'Incidencia resuelta correctamente.',
+  ATTENDANCE_SESSION_CLOSED: 'Jornada cerrada administrativamente.',
+  ATTENDANCE_SETTINGS_UPDATED: 'Configuración de asistencia actualizada correctamente.',
+  ATTENDANCE_CHECK_IN_SUCCESS: 'Entrada registrada correctamente.',
+  ATTENDANCE_CHECK_OUT_SUCCESS: 'Salida registrada correctamente.'
 } as const;
 
 export type ApiMessageCode = keyof typeof ApiMessages;

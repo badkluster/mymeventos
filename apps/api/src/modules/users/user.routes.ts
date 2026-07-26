@@ -13,6 +13,8 @@ import { getApiMessage } from '../../utils/messages';
 import { generateTemporaryPassword, normalizeUserInput, sanitizeUser, syncUserManagedSalons, validatePrimarySalonFields } from './user.service';
 import { buildUserFullName } from './user.model';
 import { EventStaffAssignment } from '../crm/crm.models';
+import { MobileDevice } from '../mobile/mobileDevice.model';
+import { RefreshToken } from '../auth/refreshToken.model';
 
 const router = Router();
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
@@ -133,6 +135,7 @@ const staffProfilePatchSchema = z.object({ body: staffProfileSchema, params: z.o
 const workSchedulePatchSchema = z.object({ body: workScheduleSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const payrollProfilePatchSchema = z.object({ body: payrollProfileSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const passwordResetSchema = z.object({ body: z.object({ password: z.string().min(8).optional() }).default({}), params: z.object({ id: objectId }), query: z.object({}) });
+const deviceParams = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, deviceId: objectId }), query: z.object({}) });
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
 function buildQuery(request: Request): Record<string, unknown> {
@@ -226,6 +229,25 @@ router.get('/:id/event-assignments', requirePermission(Permission.USERS_READ), v
   if (!current) throw new ApiError(404, 'USER_NOT_FOUND');
   const items = await EventStaffAssignment.find({ staffUserId: request.params.id, deletedAt: null }).populate('eventId', 'eventName eventType eventDate startTime endTime status salonId').populate('salonId', 'name').sort({ shiftStart: 1, createdAt: -1 }).lean();
   return sendSuccess(response, { items });
+}));
+
+router.get('/:id/devices', requirePermission(Permission.MOBILE_DEVICES_MANAGE), validateRequest(idParams), asyncHandler(async (request, response) => {
+  const current = await User.findOne({ _id: request.params.id, deletedAt: null }).select('_id').lean();
+  if (!current) throw new ApiError(404, 'USER_NOT_FOUND');
+  const devices = await MobileDevice.find({ userId: request.params.id }).sort({ lastUsedAt: -1 }).lean();
+  return sendSuccess(response, { devices });
+}));
+
+router.delete('/:id/devices/:deviceId', requirePermission(Permission.MOBILE_DEVICES_MANAGE), validateRequest(deviceParams), asyncHandler(async (request, response) => {
+  const device: any = await MobileDevice.findOneAndUpdate(
+    { _id: request.params.deviceId, userId: request.params.id },
+    { isActive: false, revokedAt: new Date(), revokedBy: request.user!.id },
+    { new: true }
+  );
+  if (!device) throw new ApiError(404, 'MOBILE_DEVICE_NOT_FOUND');
+  await RefreshToken.updateMany({ userId: request.params.id, installationId: device.installationId, revokedAt: null }, { revokedAt: new Date() });
+  await writeAuditLog(request, 'USER_MOBILE_DEVICE_REVOKE', 'MobileDevice', device._id.toString());
+  return sendSuccess(response, { revoked: true }, 200, getApiMessage('MOBILE_DEVICE_REVOKED'));
 }));
 
 router.patch('/:id/permissions', requireRole(Role.ADMIN), validateRequest(permissionsPatchSchema), asyncHandler(async (request, response) => {

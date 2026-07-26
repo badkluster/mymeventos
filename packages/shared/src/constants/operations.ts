@@ -88,12 +88,16 @@ export enum SupplierCategory {
 }
 
 export enum ExpenseStatus {
+  PENDING = 'pending',
   PAID = 'paid',
   CANCELLED = 'cancelled',
 }
 
 export enum ExpenseSourceType {
   SUPPLIER_ASSIGNMENT = 'supplier_assignment',
+  MANUAL = 'manual',
+  PRODUCTION = 'production',
+  IMPORT = 'import',
 }
 
 export enum InventoryAdjustmentType {

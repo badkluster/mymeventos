@@ -36,6 +36,20 @@ export const permissionLabels: Record<string,string>={
   'payments.read':'Pagos: ver','payments.create':'Pagos: crear','payments.update':'Pagos: editar','payments.approve':'Pagos: aprobar','payments.reject':'Pagos: rechazar','payments.cancel':'Pagos: cancelar',
   'suppliers.read':'Proveedores: ver','suppliers.create':'Proveedores: crear','suppliers.update':'Proveedores: editar','suppliers.delete':'Proveedores: eliminar',
   'landing.read':'Landing: ver','landing.update':'Landing: editar',
-  'reports.read':'Reportes: ver','reports.export':'Reportes: exportar','settings.read':'Configuración: ver','settings.update':'Configuración: editar'
+  'reports.read':'Reportes: ver','reports.export':'Reportes: exportar',
+  'reports.commercial.read':'Reportes comerciales: ver','reports.events.read':'Reportes de eventos: ver','reports.contracts.read':'Reportes de contratos: ver','reports.payments.read':'Reportes de pagos: ver','reports.production.read':'Reportes de producción: ver','reports.expenses.read':'Reportes de gastos: ver','reports.profitability.read':'Rentabilidad: ver','reports.analytics.read':'Reportes de analítica: ver',
+  'dashboard.view':'Dashboard: ver','dashboard.view_financial':'Dashboard: ver finanzas','dashboard.view_all_salons':'Dashboard: ver todos los salones',
+  'production.view':'Producción: ver','production.create':'Producción: crear','production.update':'Producción: editar','production.complete':'Producción: completar','production.reopen':'Producción: reabrir','production.generate':'Producción: generar','production.export':'Producción: exportar','production.rules.manage':'Producción: administrar reglas',
+  'expenses.view':'Gastos: ver','expenses.create':'Gastos: crear','expenses.update':'Gastos: editar','expenses.delete':'Gastos: eliminar','expenses.categories.manage':'Gastos: administrar categorías',
+  'analytics.view':'Analítica: ver','analytics.heatmap.view':'Heatmaps: ver','analytics.settings.manage':'Analítica: configurar','analytics.export':'Analítica: exportar',
+  'imports.create':'Importaciones: crear','imports.execute':'Importaciones: ejecutar','imports.view':'Importaciones: ver',
+  'settings.read':'Configuración: ver','settings.update':'Configuración: editar'
 };
+export {
+  MarketingCampaignStatusLabels as marketingCampaignStatusLabels,
+  MarketingRecipientStatusLabels as marketingRecipientStatusLabels,
+  PromotionDiscountTypeLabels as promotionDiscountTypeLabels,
+  MarketingTemplateCategoryLabels as marketingTemplateCategoryLabels,
+  MarketingUnsubscribeReasonLabels as marketingUnsubscribeReasonLabels
+} from '@mym/shared';
 export const displayLabel=(labels:Record<string,string>,value:string)=>labels[value]??'Sin especificar';

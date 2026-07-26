@@ -5,15 +5,24 @@ let configured = false;
 
 export function configureCloudinary(): void {
   if (configured) return;
-  if (env.CLOUDINARY_URL) {
-    cloudinary.config({ secure: true });
-    configured = true;
-    return;
+  let cloudName = env.CLOUDINARY_CLOUD_NAME;
+  let apiKey = env.CLOUDINARY_API_KEY;
+  let apiSecret = env.CLOUDINARY_API_SECRET;
+  if ((!cloudName || !apiKey || !apiSecret) && env.CLOUDINARY_URL) {
+    try {
+      const url = new URL(env.CLOUDINARY_URL);
+      if (url.protocol !== 'cloudinary:') throw new Error('Protocolo inválido');
+      cloudName = cloudName || url.hostname;
+      apiKey = apiKey || decodeURIComponent(url.username);
+      apiSecret = apiSecret || decodeURIComponent(url.password);
+    } catch {
+      throw new Error('CLOUDINARY_URL no tiene un formato válido. Usá cloudinary://API_KEY:API_SECRET@CLOUD_NAME.');
+    }
   }
-  if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_KEY || !env.CLOUDINARY_API_SECRET) {
+  if (!cloudName || !apiKey || !apiSecret) {
     throw new Error('Cloudinary no está configurado. Definí CLOUDINARY_URL o CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET.');
   }
-  cloudinary.config({ cloud_name: env.CLOUDINARY_CLOUD_NAME, api_key: env.CLOUDINARY_API_KEY, api_secret: env.CLOUDINARY_API_SECRET, secure: true });
+  cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret, secure: true });
   configured = true;
 }
 

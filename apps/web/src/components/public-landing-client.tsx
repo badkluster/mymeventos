@@ -11,6 +11,7 @@ import { ArrowRight, Baby, BriefcaseBusiness, CakeSlice, CalendarDays, Camera, C
 import { api } from '@/lib/api';
 import { brandAssets } from '@/lib/brand-assets';
 import { localSeoPages, salonSeoPages } from '@/lib/local-seo';
+import { analyticsAttributionId, emitAnalyticsEvent } from '@/components/analytics-tracker';
 
 type Media = { url: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
 type ExtraService = { _id?: string; name: string; description?: string; basePrice?: number; includedByDefault?: boolean };
@@ -718,6 +719,10 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
         salonId,
         packageTemplateId: packageTemplateId || undefined,
         message,
+        attributionId: analyticsAttributionId() || undefined,
+        utmSource: new URLSearchParams(window.location.search).get('utm_source') || undefined,
+        utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
+        utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
       });
       if (selectedSalonForRequest && salonWhatsAppNumber(selectedSalonForRequest)) {
         const whatsappUrl = waLink(salonWhatsAppNumber(selectedSalonForRequest), quoteRequestManagerMessage({
@@ -738,9 +743,11 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       setSelectedContactPackageId('');
       setFormState('success');
       setFormMessage('Recibimos tu solicitud. Un asesor de M&M Eventos se contactará para enviarte una propuesta personalizada.');
+      emitAnalyticsEvent('form_success', { sectionId: 'contact', elementId: 'contact-form', entityId: result.quoteRequestId });
     } catch (error) {
       setFormState('error');
       setFormMessage(error instanceof Error ? error.message : 'No se pudo enviar la solicitud. Revisá los datos e intentá nuevamente.');
+      emitAnalyticsEvent('form_error', { sectionId: 'contact', elementId: 'contact-form' });
     }
   }
 
@@ -771,7 +778,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       </div></Portal> : null}
     </header>
 
-    <section id="inicio" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
+    <section id="inicio" data-analytics-section="hero" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
       <motion.img src={heroImage} alt="Salón M&M preparado para evento" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover will-change-transform" initial={shouldReduceMotion ? false : { opacity: 0.7, scale: 1.09 }} animate={shouldReduceMotion ? undefined : { opacity: 1, scale: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(5,5,5,1),rgba(5,5,5,.08)_38%,rgba(5,5,5,.64))]" />
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen [animation:hero-sheen_16s_ease-in-out_infinite] bg-[radial-gradient(55%_55%_at_25%_15%,rgba(200,205,211,.18),transparent_60%)]" />
@@ -789,7 +796,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       </motion.button>
     </section>
 
-    <AnimatedSection id="salones" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection id="salones" data-analytics-section="salons" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones totalmente equipados, listos para llevar adelante tu evento" />
       <AnimatedGrid className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.01 }} transition={softSpring} className="group flex h-full min-h-[470px] flex-col overflow-hidden rounded-2xl border border-[#c8cdd3]/25 bg-[#10100f] shadow-2xl shadow-black/30">
         <motion.div variants={imageRevealVariants} className="relative h-56 shrink-0 overflow-hidden"><img src={cloudinaryImageUrl(imageForSalon(salon), 900)} alt={titleForSalon(salon)} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025]" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></motion.div>
@@ -801,7 +808,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       <AnimatedGrid className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <motion.div key={step} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className="relative flex items-center gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] p-5"><motion.span className="text-3xl font-semibold text-[#dbe1e8]" variants={numberPop(index)}>{index + 1}</motion.span><div><h3 className="text-base font-semibold">{step}</h3><p className="mt-1 text-sm leading-6 text-zinc-300">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div><motion.span aria-hidden className="absolute inset-x-0 bottom-0 h-px origin-left bg-gradient-to-r from-transparent via-[#c8cdd3]/60 to-transparent" variants={underlineGrow(0.08, index, 0.04)} /></motion.div>)}</AnimatedGrid>
     </AnimatedSection>
 
-    <AnimatedSection id="paquetes" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24" variants={sectionVariantsSync} onViewportEnter={() => setPackagesRevealed(true)}>
+    <AnimatedSection id="paquetes" data-analytics-section="packages" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24" variants={sectionVariantsSync} onViewportEnter={() => setPackagesRevealed(true)}>
       <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, descubrilos." />
       <AnimatedGrid className="mb-6 flex flex-wrap justify-center gap-2">{displaySalons.map((salon) => {
         const active = selectedPackageSalon?._id === salon._id;
@@ -847,14 +854,14 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       })}</AnimatedGrid>
     </AnimatedSection>
 
-    <AnimatedSection className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection data-analytics-section="services" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><motion.div variants={cardVariants}><p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#c8cdd3]">Servicios incluidos</p><h2 className="mt-3 text-3xl font-semibold md:text-4xl">Todo lo que necesitás, nosotros lo hacemos.</h2></motion.div><AnimatedGrid className="grid gap-4 sm:grid-cols-2">{serviceBlocks.slice(0, 8).map((item, index) => {
         const accent = accentFor(index + 1);
         return <motion.div key={item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { x: 4, y: -3 }} transition={softSpring} className={`flex gap-4 rounded-xl border p-4 transition-colors ${accent.card}`}><motion.div variants={badgePop(index)}><IconBadge name={item.icon} tone={accent.icon} /></motion.div><div><h3 className={`font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-2 text-sm leading-6 text-zinc-300">{item.description}</p></div></motion.div>;
       })}</AnimatedGrid></div>
     </AnimatedSection>
 
-    <AnimatedSection className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection data-analytics-section="promotions" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Promociones y beneficios" title="Motivos para reservar hoy" />
       <AnimatedGrid className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item, index) => {
         const accent = accentFor(index + 2);
@@ -862,11 +869,11 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       })}</AnimatedGrid>
     </AnimatedSection>
 
-    <AnimatedSection id="galeria" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection id="galeria" data-analytics-section="gallery" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
       <div className="mx-auto max-w-7xl"><SectionTitle eyebrow="Momentos M&M" title="Galería" subtitle="Momentos únicos que perduran para toda la vida" /><AnimatedGrid className="grid auto-rows-[150px] grid-cols-2 gap-3 md:grid-cols-6 md:auto-rows-[135px]">{gallery.slice(0, 10).map((item, index) => <motion.button key={item._id || item.imageUrl || index} variants={imageRevealVariants} whileHover={shouldReduceMotion ? undefined : { y: -4, scale: 1.006 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }} transition={softSpring} type="button" onClick={() => setGalleryLightboxIndex(index)} aria-label={`Abrir ${item.altText || item.title || 'momento M&M'}`} className={`group relative overflow-hidden rounded-xl border border-[#c8cdd3]/20 bg-[#111113] ${index === 0 ? 'md:col-span-2 md:row-span-2' : index === 3 ? 'md:col-span-2' : ''}`}><img src={cloudinaryImageUrl(galleryImageSource(item, index), index === 0 ? 900 : 500)} alt={item.altText || item.title || 'Momento M&M'} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025]" /><span aria-hidden className="absolute inset-0 bg-black/16" /><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left text-xs font-semibold opacity-0 transition-opacity duration-300 group-hover:opacity-100">{item.title}</span><span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-black/45 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100"><Camera className="h-4 w-4" /></span></motion.button>)}</AnimatedGrid></div>
     </AnimatedSection>
 
-    <AnimatedSection className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection data-analytics-section="testimonials" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Testimonios" title="Lo que dicen quienes ya celebraron" />
       <AnimatedGrid className="grid gap-4 md:grid-cols-3">{(landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }]).slice(0, 3).map((item, index) => {
         const accent = accentFor(index);
@@ -886,10 +893,10 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       })}</AnimatedGrid></div>
     </AnimatedSection>
 
-    <AnimatedSection id="contacto" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection id="contacto" data-analytics-section="contact" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <motion.div variants={cardVariants} className="overflow-hidden rounded-3xl border border-[#c8cdd3]/35 bg-[#0f0f10] shadow-[0_0_50px_rgba(229,231,235,.10)] lg:grid lg:grid-cols-[0.75fr_1.25fr]">
         <motion.div variants={imageRevealVariants} className="relative min-h-80 overflow-hidden p-8"><img src={cloudinaryImageUrl(gallery[0]?.imageUrl || heroImage, 900)} alt="Detalle de evento M&M" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover opacity-45" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" /><div className="relative"><p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#c8cdd3]">Hacemos realidad tu evento</p><h2 className="mt-4 text-3xl font-semibold">Contanos tu idea y te enviamos una propuesta personalizada.</h2><div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-zinc-300"><motion.span variants={cardVariants}><MessageCircle className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Respuesta rápida</motion.span><motion.span variants={cardVariants}><Sparkles className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Propuesta a medida</motion.span><motion.span variants={cardVariants}><Check className="mx-auto mb-2 h-5 w-5 text-[#c8cdd3]" />Sin compromiso</motion.span></div></div></motion.div>
-        <motion.form onSubmit={submit} variants={listVariants} className="grid gap-4 p-5 md:grid-cols-2 md:p-8">
+        <motion.form data-analytics-form="contact-form" onSubmit={submit} variants={listVariants} className="grid gap-4 p-5 md:grid-cols-2 md:p-8">
           {formMessage ? <motion.p variants={cardVariants} className={`rounded-xl border p-3 text-sm md:col-span-2 ${formState === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-red-400/30 bg-red-400/10 text-red-100'}`}>{formMessage}</motion.p> : null}
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Nombre<input required name="name" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu nombre" /></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Teléfono<input required name="phone" type="tel" minLength={6} maxLength={24} pattern="[+()0-9\s-]{6,24}" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu teléfono" /></motion.label>
@@ -905,7 +912,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       </motion.div>
     </AnimatedSection>
 
-    <AnimatedSection id="ubicaciones" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
+    <AnimatedSection id="ubicaciones" data-analytics-section="location" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
       <div className="mx-auto max-w-7xl">
         <SectionTitle eyebrow="Ubicaciones" title="Encontrá el salón más cómodo para tu evento" subtitle="Cada espacio tiene su mapa para que puedas calcular tiempos, accesos y coordinar una visita." />
         <AnimatedGrid className="grid gap-6 lg:grid-cols-3">
@@ -964,8 +971,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     <SalonDetailModal salon={selectedSalon} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
     <GalleryLightbox items={gallery} index={galleryLightboxIndex} onClose={() => setGalleryLightboxIndex(null)} onSelect={setGalleryLightboxIndex} />
 
-    <button type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>
-    <button type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 left-4 right-4 z-30 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:left-auto md:right-24">Solicitá tu presupuesto</button>
+    <button data-analytics-id="floating-whatsapp" type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>
+    <button data-analytics-id="floating-request-quote" type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 left-4 right-4 z-30 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:left-auto md:right-24">Solicitá tu presupuesto</button>
     <button type="button" onClick={() => scrollTo('inicio')} aria-label="Volver arriba" className="fixed bottom-4 left-4 z-30 hidden rounded-lg border border-white/20 bg-black/60 p-3 backdrop-blur md:grid"><ChevronUp className="h-4 w-4" /></button>
   </main>;
 }

@@ -16,5 +16,11 @@
       "source": "/health",
       "destination": "/api/health"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/marketing/process",
+      "schedule": "0 6 * * *"
+    }
   ]
 }

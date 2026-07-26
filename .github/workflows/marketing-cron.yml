@@ -1,0 +1,32 @@
+name: Marketing campaign batch processing
+
+# Free replacement for a paid Vercel Cron plan: GitHub Actions scheduled
+# workflows cost nothing for this kind of job (a few seconds of `curl` every
+# run, well inside the free minutes quota for public and private repos).
+# It just pings the same secret-protected internal endpoint the app already
+# exposes — see docs/MARKETING_CAMPAIGNS_OPERATIONS.md.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  process-marketing-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the marketing batch endpoint
+        run: |
+          status=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "${MARKETING_APP_BASE_URL}/api/marketing/process" \
+            -H "Authorization: Bearer ${MARKETING_CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{"maxTicks": 20}')
+          echo "HTTP status: $status"
+          cat response.json || true
+          if [ "$status" -ge 300 ]; then
+            echo "Marketing batch endpoint returned an error status."
+            exit 1
+          fi
+        env:
+          MARKETING_APP_BASE_URL: ${{ secrets.MARKETING_APP_BASE_URL }}
+          MARKETING_CRON_SECRET: ${{ secrets.MARKETING_CRON_SECRET }}

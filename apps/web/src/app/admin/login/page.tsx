@@ -28,7 +28,7 @@ export default function LoginPage() {
     setError('');
     try {
       await login(username, password);
-      router.replace('/admin');
+      router.replace('/admin/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudo iniciar sesión.');
     } finally {

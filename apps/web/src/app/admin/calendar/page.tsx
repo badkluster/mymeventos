@@ -19,6 +19,7 @@ import {
   Clock3,
   Eye,
   Filter,
+  Handshake,
   Info,
   Lock,
   Mail,
@@ -46,8 +47,8 @@ import { useSession } from '@/components/session-provider';
 import type { Event, Salon } from '@/features/quotes/types';
 
 type CalendarView = 'day' | 'week' | 'month' | 'year';
-type CalendarItemType = 'event' | 'alert' | 'reminder' | 'note' | 'task' | 'payment_window';
-type CalendarSourceFilter = 'all' | 'events' | 'alerts' | 'notes' | 'reminders' | 'tasks' | 'payments';
+type CalendarItemType = 'event' | 'alert' | 'reminder' | 'note' | 'task' | 'payment_window' | 'meeting';
+type CalendarSourceFilter = 'all' | 'events' | 'alerts' | 'notes' | 'reminders' | 'tasks' | 'payments' | 'meetings';
 type Priority = 'low' | 'normal' | 'high' | 'critical';
 type CalendarFilters = { query: string; status: string; salonId: string; source: CalendarSourceFilter; priority: '' | Priority; notifications: 'all' | 'with' | 'without' };
 type ListResponse = { items?: Event[] };
@@ -120,7 +121,7 @@ type CalendarForm = {
 };
 
 const viewLabels: Record<CalendarView, string> = { day: 'Dia', week: 'Semana', month: 'Mes', year: 'Año' };
-const sourceTypeByFilter: Partial<Record<CalendarSourceFilter, CalendarItemType>> = { alerts: 'alert', notes: 'note', reminders: 'reminder', tasks: 'task', payments: 'payment_window' };
+const sourceTypeByFilter: Partial<Record<CalendarSourceFilter, CalendarItemType>> = { alerts: 'alert', notes: 'note', reminders: 'reminder', tasks: 'task', payments: 'payment_window', meetings: 'meeting' };
 const monthFormatter = new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' });
 const dayFormatter = new Intl.DateTimeFormat('es-AR', { weekday: 'short', day: '2-digit' });
 const longDateFormatter = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
@@ -133,7 +134,8 @@ const typeMeta: Record<CalendarItemType, { label: string; icon: LucideIcon; tone
   reminder: { label: 'Recordatorio', icon: Bell, tone: 'border-sky-200 bg-sky-50 text-sky-800', dot: 'bg-sky-500', badge: 'bg-sky-100 text-sky-700' },
   note: { label: 'Nota', icon: StickyNote, tone: 'border-amber-200 bg-amber-50 text-amber-900', dot: 'bg-amber-500', badge: 'bg-amber-100 text-amber-800' },
   task: { label: 'Tarea', icon: CheckSquare, tone: 'border-emerald-200 bg-emerald-50 text-emerald-800', dot: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
-  payment_window: { label: 'Rango de pago', icon: CircleDollarSign, tone: 'border-indigo-200 bg-indigo-50 text-indigo-800', dot: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-700' }
+  payment_window: { label: 'Rango de pago', icon: CircleDollarSign, tone: 'border-indigo-200 bg-indigo-50 text-indigo-800', dot: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-700' },
+  meeting: { label: 'Reunión', icon: Handshake, tone: 'border-teal-200 bg-teal-50 text-teal-800', dot: 'bg-teal-500', badge: 'bg-teal-100 text-teal-700' }
 };
 const priorityMeta: Record<Priority, { label: string; className: string; rail: string }> = {
   low: { label: 'Baja', className: 'bg-zinc-100 text-zinc-600', rail: 'border-l-zinc-300' },
@@ -634,10 +636,10 @@ export default function CalendarPage() {
       <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(220px,1fr)_repeat(5,minmax(130px,170px))]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-          <Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-11 pl-10" placeholder="Buscar por evento, alerta, nota o tarea" />
+          <Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-11 pl-10" placeholder="Buscar por evento, alerta, nota, tarea o reunión" />
         </div>
         <Select aria-label="Filtrar origen" value={filters.source} onChange={(event) => updateFilters({ source: event.target.value as CalendarSourceFilter })} className="h-11">
-          <option value="all">Todo</option><option value="events">Eventos</option><option value="alerts">Alertas</option><option value="notes">Notas</option><option value="reminders">Recordatorios</option><option value="tasks">Tareas</option><option value="payments">Pagos</option>
+          <option value="all">Todo</option><option value="events">Eventos</option><option value="alerts">Alertas</option><option value="notes">Notas</option><option value="reminders">Recordatorios</option><option value="tasks">Tareas</option><option value="payments">Pagos</option><option value="meetings">Reuniones</option>
         </Select>
         <Select aria-label="Filtrar estado" value={filters.status} onChange={(event) => updateFilters({ status: event.target.value })} className="h-11">
           <option value="">Estados</option>{Object.entries(eventStatusOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -893,7 +895,7 @@ function SearchableRelationSelect({ label, value, options, placeholder, searchPl
 }
 
 function CalendarItemFormModal({ open, mode, form, salons, users, leads, customers, events, quotes, contracts, payments, suppliers, saving, onClose, onSubmit, onChange }: { open: boolean; mode: 'create' | 'edit'; form: CalendarForm; salons: Salon[]; users: LinkedEntity[]; leads: LinkedEntity[]; customers: LinkedEntity[]; events: LinkedEntity[]; quotes: LinkedEntity[]; contracts: LinkedEntity[]; payments: LinkedEntity[]; suppliers: LinkedEntity[]; saving: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onChange: (next: CalendarForm | ((current: CalendarForm) => CalendarForm)) => void }) {
-  return <Modal open={open} title={mode === 'edit' ? 'Editar item de calendario' : 'Crear item de calendario'} description="Agenda una alerta, recordatorio, nota, tarea o rango operativo." onClose={onClose}>
+  return <Modal open={open} title={mode === 'edit' ? 'Editar item de calendario' : 'Crear item de calendario'} description="Agenda una alerta, recordatorio, nota, tarea, reunión o rango operativo." onClose={onClose}>
     <form onSubmit={onSubmit} className="grid gap-4 p-5 md:grid-cols-2">
       <label className="text-sm font-medium text-zinc-700">Tipo<Select className="mt-1.5" value={form.type} onChange={(event) => onChange((current) => ({ ...current, type: event.target.value as CalendarItemType }))}>{(Object.keys(typeMeta) as CalendarItemType[]).filter((type) => type !== 'event').map((value) => <option key={value} value={value}>{typeMeta[value].label}</option>)}</Select></label>
       <label className="text-sm font-medium text-zinc-700">Prioridad<Select className="mt-1.5" value={form.priority} onChange={(event) => onChange((current) => ({ ...current, priority: event.target.value as Priority }))}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</Select></label>

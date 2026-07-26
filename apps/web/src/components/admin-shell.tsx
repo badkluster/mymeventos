@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, LogOut, Moon, Settings, ShieldX, Sun } from 'lucide-react';
+import { ChartNoAxesCombined, ChevronDown, LogOut, Moon, Settings, ShieldX, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { NotificationBell } from '@/components/admin/notification-bell';
 import { brandAssets } from '@/lib/brand-assets';
@@ -26,23 +26,47 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { resolvedTheme, setTheme } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [controlOpen, setControlOpen] = useState(false);
   const [newQuoteRequests, setNewQuoteRequests] = useState(0);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const items = visibleAdminModules(user);
   const currentModule = moduleForPath(pathname);
   const blocked = Boolean(currentModule && !userCanAccess(user, currentModule.permissions));
   const isActive = (href: string) => href === '/admin' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-  const configSubmenuPaths = new Set(['/admin/salons', '/admin/users', '/admin/staff', '/admin/landing', '/admin/settings']);
-  const configSubmenuOrder = new Map([['/admin/salons', 0], ['/admin/users', 1], ['/admin/landing', 2], ['/admin/settings', 3]]);
+  const configSubmenuPaths = new Set(['/admin/salons', '/admin/users', '/admin/staff', '/admin/attendance', '/admin/landing']);
+  const configSubmenuOrder = new Map([['/admin/salons', 0], ['/admin/users', 1], ['/admin/staff', 2], ['/admin/attendance', 3], ['/admin/landing', 4]]);
+  const hiddenNavigationPaths = new Set(['/admin/settings']);
   const configSubitems = items
-    .filter((item) => configSubmenuPaths.has(item.href) && item.href !== '/admin/staff')
-    .sort((a, b) => (configSubmenuOrder.get(a.href) ?? 99) - (configSubmenuOrder.get(b.href) ?? 99))
-    .map((item) => item.href === '/admin/settings' ? { ...item, label: 'General' } : item);
-  const mainItems = items.filter((item) => !configSubmenuPaths.has(item.href));
+    .filter((item) => configSubmenuPaths.has(item.href))
+    .sort((a, b) => (configSubmenuOrder.get(a.href) ?? 99) - (configSubmenuOrder.get(b.href) ?? 99));
+  const controlSubmenuPaths = new Set(['/admin/reports', '/admin/production', '/admin/expenses', '/admin/analytics', '/admin/imports', '/admin/suppliers']);
+  const controlSubmenuOrder = new Map([['/admin/reports', 0], ['/admin/production', 1], ['/admin/expenses', 2], ['/admin/analytics', 3], ['/admin/imports', 4], ['/admin/suppliers', 5]]);
+  const controlSubitems = items
+    .filter((item) => controlSubmenuPaths.has(item.href))
+    .sort((a, b) => (controlSubmenuOrder.get(a.href) ?? 99) - (controlSubmenuOrder.get(b.href) ?? 99));
+  const mainItems = items.filter((item) => !hiddenNavigationPaths.has(item.href) && !configSubmenuPaths.has(item.href) && !controlSubmenuPaths.has(item.href));
   const configActive = [...configSubmenuPaths].some((href) => isActive(href));
+  const controlActive = [...controlSubmenuPaths].some((href) => isActive(href));
   const showConfigSubmenu = settingsOpen || configActive;
+  const showControlSubmenu = controlOpen || controlActive;
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Usuario';
   const canSeeQuotes = userCanAccess(user, [Permission.QUOTES_READ]);
+  const controlMenu = controlSubitems.length ? <div className="pt-2">
+    <button type="button" aria-expanded={showControlSubmenu} onClick={() => setControlOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${controlActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+      <ChartNoAxesCombined className="h-4 w-4" />
+      <span className="flex-1">Administración y control</span>
+      <ChevronDown className={`h-4 w-4 transition-transform ${showControlSubmenu ? 'rotate-180' : ''}`} />
+    </button>
+    {showControlSubmenu ? <div className="mt-1 space-y-1 border-l border-border/70 pl-3">
+      {controlSubitems.map(({ href, label, icon: Icon }) => {
+        const active = isActive(href);
+        return <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+          <Icon className="h-4 w-4" />
+          {label}
+        </Link>;
+      })}
+    </div> : null}
+  </div> : null;
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -76,13 +100,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Image src={brandAssets.logoDarkOnLight} alt="M&M Eventos" width={150} height={150} className="h-auto w-32 object-contain" priority />
         </Link>
         <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" aria-label="Módulos del backoffice">
-          {mainItems.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+          {mainItems.map(({ href, label, icon: Icon }) => <div key={href}>
+            <Link href={href} aria-current={isActive(href) ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
               <Icon className="h-4 w-4" />
               <span className="flex-1">{label}</span>
               {href === '/admin/quotes' && canSeeQuotes && newQuoteRequests > 0 ? <span title={`${newQuoteRequests} solicitudes nuevas`} aria-label={`${newQuoteRequests} solicitudes nuevas`} className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold ${isActive(href) ? 'bg-white text-zinc-950' : 'bg-red-500 text-white'}`}>{newQuoteRequests > 99 ? '99+' : newQuoteRequests}</span> : null}
             </Link>
-          ))}
+            {href === '/admin/payments' ? controlMenu : null}
+          </div>)}
+          {!mainItems.some((item) => item.href === '/admin/payments') ? controlMenu : null}
           {configSubitems.length ? <div className="pt-2">
             <button type="button" aria-expanded={showConfigSubmenu} onClick={() => setSettingsOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${configActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
               <Settings className="h-4 w-4" />
@@ -91,7 +117,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </button>
             {showConfigSubmenu ? <div className="mt-1 space-y-1 border-l border-border/70 pl-3">
               {configSubitems.map(({ href, label, icon: Icon }) => {
-                const active = href === '/admin/users' ? isActive('/admin/users') || isActive('/admin/staff') : isActive(href);
+                const active = isActive(href);
                 return <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
                   <Icon className="h-4 w-4" />
                   {label}

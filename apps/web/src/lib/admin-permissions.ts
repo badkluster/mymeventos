@@ -1,12 +1,12 @@
 import { hasAnyPermission, Permission, type Role } from '@mym/shared';
 import type { ComponentType } from 'react';
-import { Bell, Building2, CalendarClock, CalendarDays, ClipboardList, CreditCard, FileText, Globe2, LayoutDashboard, Mail, ReceiptText, Settings, Ticket, Truck, UserRound, Users, UserRoundCog } from 'lucide-react';
+import { Activity, Bell, Building2, CalendarClock, CalendarDays, ChartNoAxesCombined, ChefHat, ClipboardList, Clock3, CreditCard, FileInput, FileText, Globe2, LayoutDashboard, Mail, Megaphone, ReceiptText, Settings, Ticket, Truck, UserRound, Users, UserRoundCog, WalletCards } from 'lucide-react';
 import type { SessionUser } from './auth';
 
 export type AdminModule = { href: string; label: string; title: string; description: string; icon: ComponentType<{ className?: string }>; permissions: Permission[] };
 
 export const adminModules: AdminModule[] = [
-  { href: '/admin', label: 'Panel', title: 'Panel', description: 'Accesos directos a los módulos implementados del backoffice.', icon: LayoutDashboard, permissions: [] },
+  { href: '/admin/dashboard', label: 'Dashboard', title: 'Dashboard gerencial', description: 'Indicadores, agenda y alertas operativas con información real.', icon: LayoutDashboard, permissions: [Permission.DASHBOARD_VIEW] },
   { href: '/admin/calendar', label: 'Calendario', title: 'Calendario', description: 'Agenda centralizada por día, semana, mes y año.', icon: CalendarClock, permissions: [Permission.EVENTS_READ] },
   { href: '/admin/leads', label: 'Leads', title: 'Leads', description: 'Seguimiento comercial y oportunidades abiertas.', icon: ClipboardList, permissions: [Permission.LEADS_READ] },
   { href: '/admin/customers', label: 'Clientes', title: 'Clientes', description: 'Clientes consolidados con historial comercial.', icon: UserRound, permissions: [Permission.CUSTOMERS_READ] },
@@ -16,12 +16,19 @@ export const adminModules: AdminModule[] = [
   { href: '/admin/digital-tickets', label: 'Entradas Digitales', title: 'Entradas Digitales', description: 'Publicaciones, órdenes, entradas y control de ingreso independientes.', icon: Ticket, permissions: [Permission.TICKETS_READ] },
   { href: '/admin/contracts', label: 'Contratos', title: 'Contratos', description: 'Contratos formales generados desde eventos.', icon: FileText, permissions: [Permission.CONTRACTS_READ] },
   { href: '/admin/payments', label: 'Pagos', title: 'Pagos', description: 'Señas, cuotas, saldos y depósitos asociados a contratos.', icon: CreditCard, permissions: [Permission.PAYMENTS_READ] },
+  { href: '/admin/reports', label: 'Reportes', title: 'Centro de reportes', description: 'Información comercial, operativa y financiera exportable.', icon: ChartNoAxesCombined, permissions: [Permission.REPORTS_READ] },
+  { href: '/admin/production', label: 'Producción', title: 'Producción', description: 'Planes por evento, consolidación y reglas de cálculo.', icon: ChefHat, permissions: [Permission.PRODUCTION_VIEW] },
+  { href: '/admin/expenses', label: 'Gastos', title: 'Gastos y rentabilidad', description: 'Costos, comprobantes, categorías y margen por evento.', icon: WalletCards, permissions: [Permission.EXPENSES_VIEW] },
+  { href: '/admin/analytics', label: 'Analítica', title: 'Analítica de la landing', description: 'Sesiones, conversión, secciones y mapas de clics first-party.', icon: Activity, permissions: [Permission.ANALYTICS_VIEW] },
+  { href: '/admin/imports', label: 'Importaciones', title: 'Importaciones', description: 'Asistente controlado para contratos, producción y gastos.', icon: FileInput, permissions: [Permission.IMPORTS_VIEW] },
   { href: '/admin/suppliers', label: 'Proveedores', title: 'Proveedores', description: 'Proveedores para productos, servicios y compras futuras.', icon: Truck, permissions: [Permission.SUPPLIERS_READ] },
+  { href: '/admin/marketing', label: 'Marketing', title: 'Marketing y Campañas', description: 'Campañas de email, plantillas, promociones y audiencias.', icon: Megaphone, permissions: [Permission.CAMPAIGNS_READ] },
   { href: '/admin/landing', label: 'Landing', title: 'Landing pública', description: 'Hero, promociones, galería, testimonios, preguntas frecuentes y bloques comerciales.', icon: Globe2, permissions: [Permission.LANDING_READ] },
   { href: '/admin/notifications', label: 'Notificaciones', title: 'Notificaciones', description: 'Avisos operativos, pendientes y accesos rápidos del backoffice.', icon: Bell, permissions: [] },
   { href: '/admin/salons', label: 'Salones', title: 'Salones', description: 'Salones, paquetes y reglas comerciales.', icon: Building2, permissions: [Permission.SALONS_READ] },
   { href: '/admin/users', label: 'Usuarios', title: 'Usuarios', description: 'Usuarios activos del backoffice.', icon: Users, permissions: [Permission.USERS_READ] },
   { href: '/admin/staff', label: 'Staff', title: 'Staff', description: 'Empleados operativos, horarios y asignaciones a eventos.', icon: UserRoundCog, permissions: [Permission.USERS_READ] },
+  { href: '/admin/attendance', label: 'Asistencia', title: 'Asistencia y app móvil', description: 'Jornadas activas, historial, incidencias, correcciones y configuración de fichaje móvil.', icon: Clock3, permissions: [Permission.ATTENDANCE_READ] },
   { href: '/admin/settings', label: 'Configuración', title: 'Configuración', description: 'Parámetros operativos del sistema.', icon: Settings, permissions: [Permission.SETTINGS_READ] }
 ];
 
@@ -36,5 +43,5 @@ export function visibleAdminModules(user: SessionUser | null | undefined): Admin
 }
 
 export function moduleForPath(pathname: string): AdminModule | undefined {
-  return adminModules.filter((module) => module.href !== '/admin').find((module) => pathname === module.href || pathname.startsWith(`${module.href}/`));
+  return adminModules.find((module) => pathname === module.href || pathname.startsWith(`${module.href}/`));
 }

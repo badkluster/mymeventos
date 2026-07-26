@@ -87,7 +87,21 @@ export enum Permission {
   // Campaigns
   CAMPAIGNS_READ = 'campaigns.read',
   CAMPAIGNS_CREATE = 'campaigns.create',
+  CAMPAIGNS_UPDATE = 'campaigns.update',
   CAMPAIGNS_SEND = 'campaigns.send',
+  CAMPAIGNS_CANCEL = 'campaigns.cancel',
+  CAMPAIGNS_RETRY = 'campaigns.retry',
+  CAMPAIGNS_DELETE = 'campaigns.delete',
+  CAMPAIGNS_EXPORT = 'campaigns.export',
+
+  // Marketing (templates, audiences, settings, unsubscribes)
+  MARKETING_TEMPLATES_READ = 'marketingTemplates.read',
+  MARKETING_TEMPLATES_MANAGE = 'marketingTemplates.manage',
+  MARKETING_AUDIENCES_READ = 'marketingAudiences.read',
+  MARKETING_AUDIENCES_MANAGE = 'marketingAudiences.manage',
+  MARKETING_SETTINGS_READ = 'marketingSettings.read',
+  MARKETING_SETTINGS_UPDATE = 'marketingSettings.update',
+  MARKETING_UNSUBSCRIBES_READ = 'marketingUnsubscribes.read',
 
   // Invitations
   INVITATIONS_READ = 'invitations.read',
@@ -124,13 +138,72 @@ export enum Permission {
   PAYROLL_READ = 'payroll.read',
   PAYROLL_MANAGE = 'payroll.manage',
 
+  // Mobile staff app — access gate + self-service attendance/profile actions.
+  // Deliberately NOT tied to Role.STAFF alone: any role can be granted mobile
+  // access via permissionOverrides (see docs/MOBILE_AUTHENTICATION.md).
+  MOBILE_ACCESS = 'mobile.access',
+  MOBILE_DEVICES_MANAGE = 'mobile.devices.manage',
+  ATTENDANCE_CLOCK = 'attendance.clock',
+  ATTENDANCE_HISTORY_SELF = 'attendance.history.self',
+  ATTENDANCE_SCHEDULE_SELF = 'attendance.schedule.self',
+  ATTENDANCE_INCIDENT_CREATE = 'attendance.incident.create',
+  ATTENDANCE_ADJUSTMENT_REQUEST = 'attendance.adjustment.request',
+  ATTENDANCE_READ = 'attendance.read',
+  ATTENDANCE_MANAGE = 'attendance.manage',
+  ATTENDANCE_SETTINGS_MANAGE = 'attendance.settings.manage',
+  PROFILE_VIEW_SELF = 'profile.view.self',
+  PROFILE_UPDATE_SELF = 'profile.update.self',
+  PROFILE_AVATAR_UPDATE = 'profile.avatar.update',
+  SECURITY_PASSWORD_CHANGE = 'security.password.change',
+
   // Settings
   SETTINGS_READ = 'settings.read',
   SETTINGS_UPDATE = 'settings.update',
 
   // Reports
   REPORTS_READ = 'reports.read',
-  REPORTS_EXPORT = 'reports.export'
+  REPORTS_EXPORT = 'reports.export',
+  REPORTS_COMMERCIAL_READ = 'reports.commercial.read',
+  REPORTS_EVENTS_READ = 'reports.events.read',
+  REPORTS_CONTRACTS_READ = 'reports.contracts.read',
+  REPORTS_PAYMENTS_READ = 'reports.payments.read',
+  REPORTS_PRODUCTION_READ = 'reports.production.read',
+  REPORTS_EXPENSES_READ = 'reports.expenses.read',
+  REPORTS_PROFITABILITY_READ = 'reports.profitability.read',
+  REPORTS_ANALYTICS_READ = 'reports.analytics.read',
+
+  // Dashboard
+  DASHBOARD_VIEW = 'dashboard.view',
+  DASHBOARD_FINANCIAL_VIEW = 'dashboard.view_financial',
+  DASHBOARD_ALL_SALONS_VIEW = 'dashboard.view_all_salons',
+
+  // Production
+  PRODUCTION_VIEW = 'production.view',
+  PRODUCTION_CREATE = 'production.create',
+  PRODUCTION_UPDATE = 'production.update',
+  PRODUCTION_COMPLETE = 'production.complete',
+  PRODUCTION_REOPEN = 'production.reopen',
+  PRODUCTION_GENERATE = 'production.generate',
+  PRODUCTION_EXPORT = 'production.export',
+  PRODUCTION_RULES_MANAGE = 'production.rules.manage',
+
+  // Expenses
+  EXPENSES_VIEW = 'expenses.view',
+  EXPENSES_CREATE = 'expenses.create',
+  EXPENSES_UPDATE = 'expenses.update',
+  EXPENSES_DELETE = 'expenses.delete',
+  EXPENSE_CATEGORIES_MANAGE = 'expenses.categories.manage',
+
+  // First-party analytics
+  ANALYTICS_VIEW = 'analytics.view',
+  ANALYTICS_HEATMAP_VIEW = 'analytics.heatmap.view',
+  ANALYTICS_SETTINGS_MANAGE = 'analytics.settings.manage',
+  ANALYTICS_EXPORT = 'analytics.export',
+
+  // Controlled imports
+  IMPORTS_CREATE = 'imports.create',
+  IMPORTS_EXECUTE = 'imports.execute',
+  IMPORTS_VIEW = 'imports.view'
 }
 
 import { Role } from './roles';
@@ -155,8 +228,22 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.SUPPLIERS_READ, Permission.SUPPLIERS_CREATE, Permission.SUPPLIERS_UPDATE, Permission.SUPPLIERS_DELETE,
     Permission.LANDING_READ, Permission.LANDING_UPDATE,
     Permission.PROMOTIONS_READ, Permission.PROMOTIONS_CREATE, Permission.PROMOTIONS_UPDATE,
-    Permission.CAMPAIGNS_READ, Permission.CAMPAIGNS_CREATE, Permission.CAMPAIGNS_SEND,
-    Permission.REPORTS_READ, Permission.REPORTS_EXPORT
+    Permission.CAMPAIGNS_READ, Permission.CAMPAIGNS_CREATE, Permission.CAMPAIGNS_UPDATE, Permission.CAMPAIGNS_SEND, Permission.CAMPAIGNS_CANCEL, Permission.CAMPAIGNS_RETRY, Permission.CAMPAIGNS_DELETE, Permission.CAMPAIGNS_EXPORT,
+    Permission.MARKETING_TEMPLATES_READ, Permission.MARKETING_TEMPLATES_MANAGE,
+    Permission.MARKETING_AUDIENCES_READ, Permission.MARKETING_AUDIENCES_MANAGE,
+    Permission.MARKETING_SETTINGS_READ, Permission.MARKETING_SETTINGS_UPDATE,
+    Permission.MARKETING_UNSUBSCRIBES_READ,
+    Permission.PAYROLL_READ, Permission.PAYROLL_MANAGE,
+    Permission.MOBILE_DEVICES_MANAGE,
+    Permission.ATTENDANCE_READ, Permission.ATTENDANCE_MANAGE, Permission.ATTENDANCE_SETTINGS_MANAGE,
+    Permission.REPORTS_READ, Permission.REPORTS_EXPORT,
+    Permission.REPORTS_COMMERCIAL_READ, Permission.REPORTS_EVENTS_READ, Permission.REPORTS_CONTRACTS_READ, Permission.REPORTS_PAYMENTS_READ,
+    Permission.REPORTS_PRODUCTION_READ, Permission.REPORTS_EXPENSES_READ, Permission.REPORTS_PROFITABILITY_READ, Permission.REPORTS_ANALYTICS_READ,
+    Permission.DASHBOARD_VIEW, Permission.DASHBOARD_FINANCIAL_VIEW, Permission.DASHBOARD_ALL_SALONS_VIEW,
+    Permission.PRODUCTION_VIEW, Permission.PRODUCTION_CREATE, Permission.PRODUCTION_UPDATE, Permission.PRODUCTION_COMPLETE, Permission.PRODUCTION_REOPEN, Permission.PRODUCTION_GENERATE, Permission.PRODUCTION_EXPORT, Permission.PRODUCTION_RULES_MANAGE,
+    Permission.EXPENSES_VIEW, Permission.EXPENSES_CREATE, Permission.EXPENSES_UPDATE, Permission.EXPENSES_DELETE, Permission.EXPENSE_CATEGORIES_MANAGE,
+    Permission.ANALYTICS_VIEW, Permission.ANALYTICS_HEATMAP_VIEW, Permission.ANALYTICS_SETTINGS_MANAGE, Permission.ANALYTICS_EXPORT,
+    Permission.IMPORTS_CREATE, Permission.IMPORTS_EXECUTE, Permission.IMPORTS_VIEW
   ],
   [Role.SALON_MANAGER]: [
     Permission.USERS_READ,
@@ -171,9 +258,28 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.TICKETS_READ, Permission.TICKETS_VALIDATE,
     Permission.SUPPLIERS_READ,
     Permission.LANDING_READ, Permission.LANDING_UPDATE,
-    Permission.REPORTS_READ
+    Permission.PROMOTIONS_READ,
+    Permission.CAMPAIGNS_READ, Permission.CAMPAIGNS_CREATE, Permission.CAMPAIGNS_UPDATE,
+    Permission.MARKETING_TEMPLATES_READ,
+    Permission.MARKETING_AUDIENCES_READ, Permission.MARKETING_AUDIENCES_MANAGE,
+    Permission.ATTENDANCE_READ, Permission.ATTENDANCE_MANAGE,
+    Permission.REPORTS_READ,
+    Permission.REPORTS_COMMERCIAL_READ, Permission.REPORTS_EVENTS_READ, Permission.REPORTS_CONTRACTS_READ, Permission.REPORTS_PAYMENTS_READ, Permission.REPORTS_PRODUCTION_READ, Permission.REPORTS_EXPENSES_READ,
+    Permission.DASHBOARD_VIEW,
+    Permission.PRODUCTION_VIEW, Permission.PRODUCTION_UPDATE,
+    Permission.EXPENSES_VIEW, Permission.EXPENSES_CREATE
   ],
   [Role.STAFF]: [
-    Permission.EVENTS_READ
+    Permission.EVENTS_READ,
+    Permission.MOBILE_ACCESS,
+    Permission.ATTENDANCE_CLOCK,
+    Permission.ATTENDANCE_HISTORY_SELF,
+    Permission.ATTENDANCE_SCHEDULE_SELF,
+    Permission.ATTENDANCE_INCIDENT_CREATE,
+    Permission.ATTENDANCE_ADJUSTMENT_REQUEST,
+    Permission.PROFILE_VIEW_SELF,
+    Permission.PROFILE_UPDATE_SELF,
+    Permission.PROFILE_AVATAR_UPDATE,
+    Permission.SECURITY_PASSWORD_CHANGE
   ]
 };

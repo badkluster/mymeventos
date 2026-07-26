@@ -19,7 +19,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { TableActionButton } from '@/components/admin/table-action-button';
@@ -154,6 +154,7 @@ function MetricCard({ label, value, icon: Icon, detail }: { label: string; value
 }
 
 export default function LeadsPage() {
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { showToast } = useToast();
   const [items, setItems] = useState<Lead[]>([]);
@@ -208,6 +209,11 @@ export default function LeadsPage() {
       .then((result) => setSalons(result.salons))
       .catch((error: Error) => setMessage(error.message));
   }, []);
+
+  useEffect(() => {
+    if (searchParams?.get('create') !== '1') return;
+    openCreateModal();
+  }, [searchParams]);
 
   const salonNames = useMemo(() => new Map(salons.map((salon) => [salon._id, salon.name])), [salons]);
   const visibleMetrics = useMemo(

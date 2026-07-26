@@ -73,26 +73,24 @@ Principios verificados en el código (no solo aspiracionales):
 
 ### 2.3 App móvil — `apps/mobile`
 
-**Estado real: scaffold vacío, sin funcionalidad alguna.** Contenido total del paquete:
+**Estado real (actualizado 2026-07-25): app real de personal/asistencia implementada**, dejó de ser scaffold. Stack: Expo SDK 57 + React Native 0.86 + React 19.2 + React Navigation (stack + bottom tabs, todavía v6) + zustand + `@mym/shared` (dependencia de workspace). Corre con **New Architecture obligatoria** (desde SDK 55 ya no se puede desactivar); no requirió cambios de código porque la app no tiene módulos nativos propios. Migrado desde SDK ~50.0.8 el 2026-07-26 para poder correr en Expo Go sobre emuladores/dispositivos Android 15+ (ver `docs/MOBILE_BUILDS.md` para el detalle de la migración). Ver `docs/MOBILE_STAFF_APP.md` (arquitectura y pantallas), `docs/MOBILE_AUTHENTICATION.md` (auth Bearer + gate de acceso), `docs/ATTENDANCE_ARCHITECTURE.md` (modelos/idempotencia/geocercas), `docs/MOBILE_BUILDS.md` (build/EAS, pendiente), `docs/MOBILE_QA.md` (cobertura de pruebas y QA manual real).
 
-- `package.json` con solo 4 dependencias (`expo ~50.0.8`, `expo-status-bar`, `react`, `react-native`) — sin navegación, sin cámara/scanner, sin geolocalización, sin almacenamiento seguro, sin cliente HTTP, sin dependencia de `@mym/shared`.
-- `src/index.ts` con una única línea: `export const mobilePlaceholder = true;`.
-- No existen pantallas, `App.tsx` (aunque `tsconfig.json` lo referencia), `app.json`/`app.config.js`, ni assets.
-- Git: un único commit histórico la tocó ("chore: initialize monorepo foundation").
+Cubre: login (con Bearer token, no cookie), biometría local, fichaje de entrada/salida con geolocalización + cola offline, historial y detalle de jornada, turnos (lee `EventStaffAssignment`, ya existente), incidencias, solicitudes de corrección, bandeja de notificaciones (reutiliza `/api/notifications`), perfil/avatar/contraseña/dispositivos.
 
-Todo lo descrito en la sección 5.4 del prompt maestro (fichaje, login de personal, geolocalización, escaneo de QR desde el móvil, etc.) es **pendiente en su totalidad**, aunque el backend ya modela varios conceptos relacionados (`AttendanceStatus`, permisos `PAYROLL_*`, `TICKETS_VALIDATE`) a la espera de un cliente que los consuma.
+**No implementado / fuera de alcance de esta iteración** (documentado, no oculto): notificaciones push reales (el token se persiste pero nada lo envía todavía), selector nativo de fecha/hora en "solicitar corrección" (campos de texto guiados), listener de conectividad en segundo plano (se chequea en los puntos de interacción), build EAS/credenciales de tienda, validación de entradas QR (deliberadamente fuera — módulo y permiso separados de Entradas Digitales).
 
 ### 2.4 Paquete compartido — `packages/shared`
 
 Único paquete realmente compartido; construido (`dist/`) y con tests propios (Vitest).
 
 - `constants/roles.ts`: `Role` (`ADMIN`, `MANAGER`, `SALON_MANAGER`, `STAFF`), `StaffSubrole`, `StaffEmploymentStatus`.
-- `constants/statuses.ts`: `LeadStatus`, `EventStatus`, `QuoteStatus`, `PaymentStatus`, `PaymentMethod`, `TicketStatus`, `InvitationStatus`, `InventoryMovementType`, `AttendanceStatus`, `PromotionType`.
+- `constants/statuses.ts`: `LeadStatus`, `EventStatus`, `QuoteStatus`, `PaymentStatus`, `PaymentMethod`, `TicketStatus`, `InvitationStatus`, `InventoryMovementType`, `AttendanceStatus` (dormant/superado, ver §2.3 y `docs/ATTENDANCE_ARCHITECTURE.md` §1), `PromotionType`.
+- `constants/attendance.ts` (nuevo): `WorkSessionStatus`, `TimePunchType`, `TimePunchSource`, `LocationValidationStatus`, `AttendanceAdjustmentStatus`, `AttendanceIncidentType`, `AttendanceIncidentStatus`, `AttendanceClassification` — el enum realmente usado por el fichaje móvil.
 - `constants/operations.ts`: enums de catálogo/inventario/consumo (`CatalogItemType`, `BeverageType`, `InventoryItemType`, `ConsumptionRuleTarget`, `RoundingMode`, `PricingMode`, `QuoteMode`, `SupplierCategory`, etc.).
-- `constants/permissions.ts`: enum `Permission` (claves punteadas, ej. `digitalTickets.publish`) + `RolePresets: Record<Role, Permission[]>` (ADMIN = todos los permisos; STAFF muy restringido).
+- `constants/permissions.ts`: enum `Permission` (claves punteadas, ej. `digitalTickets.publish`) + `RolePresets: Record<Role, Permission[]>` (ADMIN = todos los permisos; STAFF ahora incluye además autogestión móvil/asistencia: `mobile.access`, `attendance.clock`, `attendance.history.self`, `attendance.schedule.self`, `attendance.incident.create`, `attendance.adjustment.request`, `profile.*.self`, `security.password.change`; `MANAGER`/`SALON_MANAGER` suman `attendance.read`/`attendance.manage`).
 - `schemas/common.ts`: esquemas zod comunes (`ObjectIdSchema`, `PaginationSchema`, `MoneySchema`, `ContactDataSchema`, etc.).
 - `utils/permissionHelpers.ts`: `hasPermission`, `hasAnyPermission`, `hasAllPermissions`.
-- Consumo real: **39 archivos** en `apps/api`, **6 archivos** en `apps/web`, **0 archivos** en `apps/mobile` (coherente con que el móvil no tiene código funcional).
+- Consumo real: **39+ archivos** en `apps/api`, **6+ archivos** en `apps/web`, y ahora **`apps/mobile` también lo consume** (dependencia de workspace agregada al construir la app de personal — ya no es cierto que móvil no tenga código funcional ni que no use `@mym/shared`).
 
 ---
 
@@ -113,7 +111,7 @@ Todo lo descrito en la sección 5.4 del prompt maestro (fichaje, login de person
 
 ### `apps/api` (usar `pnpm --filter @mym/api <script>`)
 
-`start`, `dev` (nodemon + ts-node), `build` (`tsc`), `lint`/`typecheck` (ambos `tsc --noEmit`), `test` (`vitest run`), `seed`, `seed:digital-tickets`, `clean:digital-tickets-demo`, `seed:salon-stock`, `reset:admin-password`, `update:la-plata-packages`, `migrate:package-template-names`, `migrate:invitation-event-index`, `migrate:remove-ticket-payment-credentials`, `import:promo-infantil-packages`, `import:san-carlos-packages`, `import:la-plata-premium-packages`.
+`start`, `dev` (nodemon + ts-node), `build` (`tsc`), `lint`/`typecheck` (ambos `tsc --noEmit`), `test` (`vitest run`), `seed`, `seed:digital-tickets`, `seed:mobile-attendance` (usuarios + jornadas demo para la app de personal, idempotente — ver `docs/MOBILE_QA.md`), `clean:digital-tickets-demo`, `seed:salon-stock`, `reset:admin-password`, `update:la-plata-packages`, `migrate:package-template-names`, `migrate:invitation-event-index`, `migrate:remove-ticket-payment-credentials`, `import:promo-infantil-packages`, `import:san-carlos-packages`, `import:la-plata-premium-packages`.
 
 `reset:admin-password` está pensado para uso local/manual (no expone endpoint HTTP) y se bloquea si `NODE_ENV=production`.
 
@@ -123,7 +121,7 @@ Todo lo descrito en la sección 5.4 del prompt maestro (fichaje, login de person
 
 ### `apps/mobile` (usar `pnpm --filter @mym/mobile <script>`)
 
-`start` (`expo start`), `android`, `ios`, `web`, `typecheck`. Sin `lint`, `build` ni `test`.
+`start` (`expo start`), `android`, `ios`, `web`, `typecheck`, `test` (`jest`, entorno Node simple — ver `docs/MOBILE_QA.md` sobre por qué no se usa el preset `jest-expo`). Sin `lint` ni `build` (no hay build EAS configurado, ver `docs/MOBILE_BUILDS.md`).
 
 ### `packages/shared` (usar `pnpm --filter @mym/shared <script>`)
 
@@ -153,6 +151,11 @@ Consolidado desde `.env.example`, `apps/api/src/config/env.ts` y usos directos d
 | `SEED_ADMIN_USERNAME`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | Script `seed` |
 | `RESET_ADMIN_USERNAME`, `RESET_ADMIN_PASSWORD` | Script `reset:admin-password` (mínimo 12 caracteres, bloqueado en producción) |
 | `NEXT_PUBLIC_API_URL` | Base URL que usa `apps/web` para llamar a la API (`/api` en producción, `http://localhost:3001/api` en desarrollo) |
+| `MOBILE_ACCESS_TOKEN_TTL`, `MOBILE_REFRESH_TOKEN_TTL` | TTL de los tokens Bearer de la app móvil (`30m`/`30d` por defecto — más largos que los de cookie web) |
+| `MOBILE_OFFLINE_PUNCH_MAX_AGE_MINUTES` | Antigüedad máxima aceptada para una marcación offline antes de forzar la hora del servidor y marcarla para revisión (`720` = 12h por defecto) |
+| `MOBILE_DEEP_LINK_SCHEME` | Scheme usado para construir el link de recuperación de contraseña enviado por email (debe coincidir con `apps/mobile/app.json#scheme`) |
+| `ATTENDANCE_DEFAULT_TIMEZONE`, `ATTENDANCE_DEFAULT_LOCATION_ACCURACY_METERS`, `ATTENDANCE_DEFAULT_GEOFENCE_RADIUS_METERS` | Defaults de la configuración global de asistencia (editable desde `/admin/attendance` → Configuración, persistida en `SystemSetting`) |
+| `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_DEEP_LINK_SCHEME` (en `apps/mobile/.env`) | Config del cliente Expo — sin secretos, se embeben en el bundle JS |
 
 No se detectaron secretos versionados en el repositorio; `.env` existe localmente (ignorado por git) y `.env.example` documenta las claves sin valores sensibles.
 
@@ -251,7 +254,7 @@ Tabla de estado (Implementado / Parcial / Pendiente) contrastando backend, front
 | Clientes (Customer) | Implementado, conversión idempotente | Implementado | En menú | **Implementado** |
 | Contratos (Contract/ContractAddendum) | Implementado (versionado, PDF, aprobación) | Implementado (incl. vista de impresión) | En menú | **Implementado** (sin firma electrónica formal) |
 | Eventos (Event) | Implementado (snapshot operativo completo) | Implementado (incl. calendario 988 líneas) | En menú | **Implementado** (sin bloqueo duro de disponibilidad por fecha) |
-| Calendario general (CalendarItem) | Implementado (CRUD propio en `calendar-items.routes.ts`); las alertas/recordatorios cargados en la pestaña "Tareas" del detalle de un evento (`resourcePlanSnapshot.alerts`) se sincronizan automáticamente como `CalendarItem` (`type: 'reminder'`, `source: 'event'`, `eventId` seteado) vía `apps/api/src/modules/crm/event-alert-calendar-sync.service.ts` (invocado desde `POST /events` y `PATCH /events/:id`) | Implementado (`/admin/calendar`, filtros por tipo/estado/prioridad/notificación) | En menú | **Implementado**, sincronización unidireccional puntual (evento → calendario) para alertas de evento; el resto de los ítems (notas, tareas sueltas, rangos de pago) siguen siendo 100% manuales |
+| Calendario general (CalendarItem) | Implementado (CRUD propio en `calendar-items.routes.ts`); tipos soportados: `event`, `alert`, `reminder`, `note`, `task`, `payment_window`, `meeting` (este último agregado el 2026-07-25 para agendar reuniones con leads/clientes, sin acoplarse a `Event`/`Lead`/`Customer` — la vinculación es opcional vía `leadId`/`customerId`, igual que en el resto de los tipos); las alertas/recordatorios cargados en la pestaña "Tareas" del detalle de un evento (`resourcePlanSnapshot.alerts`) se sincronizan automáticamente como `CalendarItem` (`type: 'reminder'`, `source: 'event'`, `eventId` seteado) vía `apps/api/src/modules/crm/event-alert-calendar-sync.service.ts` (invocado desde `POST /events` y `PATCH /events/:id`) | Implementado (`/admin/calendar`, filtros por tipo/estado/prioridad/notificación) | En menú | **Implementado**, sincronización unidireccional puntual (evento → calendario) para alertas de evento; el resto de los ítems (notas, tareas sueltas, rangos de pago, reuniones) siguen siendo 100% manuales |
 | Salones | Implementado | Implementado (incluye gestión de paquetes embebida) | En menú | **Implementado** |
 | Paquetes (PackageTemplate/VenuePackageRule) | Implementado | Implementado, pero **embebido en Salón**, no es módulo propio | Sin entrada propia | **Implementado**, sin ruta dedicada |
 | Extras (ServiceExtra) | Implementado (modelo + rutas en `operations`) | No se identificó UI dedicada | No | **Parcial** |
@@ -259,20 +262,20 @@ Tabla de estado (Implementado / Parcial / Pendiente) contrastando backend, front
 | Inventario | Modelo + rutas implementadas, **no montadas** | Carpeta `admin/inventory` vacía | No | **Parcial / inconsistente** |
 | Reglas de consumo (ConsumptionRule) | Implementado, **no montado** | Carpeta `admin/consumption-rules` vacía | No | **Parcial / inconsistente** |
 | Proveedores (Supplier) | Implementado y **sí montado** (`suppliers.routes.ts`) | Implementado (lista + detalle) | En menú | **Implementado** |
-| Personal (Staff/Employee) | Implementado dentro de `User` (subrol, salones habilitados, asignación a eventos) | Implementado (CRUD) | **No enlazado en navegación** (solo accesible por URL directa `/admin/staff`) | **Implementado, con brecha de navegación** |
-| Fichaje/asistencia (Attendance) | Solo el enum `AttendanceStatus` y campos de perfil existen; sin lógica de fichaje geolocalizado | No existe | No | **Pendiente** |
-| Liquidaciones (Payroll) | Solo permisos (`PAYROLL_READ/MANAGE`) definidos | No existe página | No | **Pendiente** |
+| Personal (Staff/Employee) | Implementado dentro de `User` (subrol, salones habilitados, asignación a eventos) | Implementado (CRUD) | **Actualizado 2026-07-25: ya tiene entrada en el submenú "Configuración"** (antes solo accesible por URL directa) | **Implementado** |
+| Fichaje/asistencia (Attendance) | **Implementado 2026-07-25**: `WorkSession`/`TimePunch`/`AttendanceIncident`/`AttendanceAdjustmentRequest` (`apps/api/src/modules/attendance/`), geocercas por salón, idempotencia real, offline handling — ver `docs/ATTENDANCE_ARCHITECTURE.md` | Implementado: `/admin/attendance` (activos/historial/incidencias/correcciones/configuración) + pestaña "Asistencia" en `/admin/salons/[id]` (geocerca) | En submenú "Configuración" | **Implementado** (sin exportación de registros ni vista de liquidaciones agregada — ver `docs/ATTENDANCE_BACKOFFICE.md` §5) |
+| Liquidaciones (Payroll) | Solo permisos (`PAYROLL_READ/MANAGE`) definidos; `WorkSession` ya deja `workedMinutes`/`payableMinutes`/`attendanceClassification` listos como contrato de integración (ver `docs/ATTENDANCE_ARCHITECTURE.md` §8) | No existe página | No | **Pendiente** (sin cálculo salarial) |
 | Pagos (Payment) | Implementado (tipos, métodos incl. Mercado Pago, recibos PDF); desde 2026-07-24 el modelo `Payment` también acepta entradas de solo lectura con `source: 'ticket_order'` (`eventId`/`contractId`/`customerId`/`salonId` ahora opcionales, nuevo `ticketOrderId`) creadas automáticamente por `ticket.service.ts#markOrderPaid` al aprobarse una compra de entradas (webhook o marcado manual), y sincronizadas al estado `refunded`/`refundedAmount` desde `refundTicketOrder` | Implementado; la lista/detalle de Pagos muestra ambos orígenes (badge "Entrada digital"), con filtro `source`; las filas de entradas digitales son de solo lectura (edición/cobro/cancelación/reembolso se rechazan con `PAYMENT_TICKET_ORDER_READONLY`, se gestionan desde la orden en Entradas digitales) | En menú | **Implementado** (pagos manuales de eventos/contratos + pagos automáticos de entradas digitales conviven en la misma colección para trazabilidad contable; Mercado Pago real sigue integrado solo en el módulo de entradas, no hay cobro online iniciado desde Pagos) |
 | Landing / sitio público | Implementado como CMS (`LandingSettings` y afines) + página pública real con SEO/JSON-LD y formulario de consulta | Implementado | En menú (admin) | **Implementado** |
 | Invitaciones digitales | Implementado, independiente de `Event` (ver §6) | Implementado (workspace visual, temas, envío) | En menú | **Implementado** |
-| Entradas digitales (tickets) | Implementado, independiente de `Event` (ver §6); Mercado Pago real vía `fetch` + proveedor mock explícito | Implementado (publicaciones, órdenes, check-in, ajustes de Mercado Pago) | En menú | **Implementado** |
+| Entradas digitales (tickets) | Implementado, independiente de `Event` (ver §6); Mercado Pago real vía `fetch` + proveedor mock explícito; `GET /tickets/publications` oculta por defecto las publicaciones con `status: 'archived'` (excluidas salvo que se filtre explícitamente por `status=archived` o se use `search`) | Implementado (publicaciones, órdenes, check-in, ajustes de Mercado Pago) | En menú | **Implementado** |
 | Validación/escaneo QR | Implementado en backend (transición atómica `valid → used`, registro `TicketAccessAttempt`) y en frontend (API nativa `BarcodeDetector` + fallback manual) | Implementado | Dentro de Entradas Digitales | **Implementado** |
 | Usuarios / Roles / Permisos | Implementado | Implementado (incl. editor de permisos por usuario) | En menú | **Implementado** (solo 4 roles reales, ver §7) |
 | Notificaciones | Implementado (modelo, servicio, rutas) | Implementado (página + campana en header) | En menú | **Implementado** |
 | Auditoría (AuditLog) | Implementado y usado desde varias rutas mutantes | **Sin página de visualización** | No | **Parcial** (se registra, no se puede consultar desde la UI) |
 | Configuración general | Implementado (`SystemSetting` clave/valor) | Implementado | Submenú "Configuración" | **Implementado** |
-| Campañas / Promociones / Reportes | Solo scaffolding de permisos (`CAMPAIGNS_*`, `PROMOTIONS_*`, `REPORTS_*`) | Sin páginas | No | **Pendiente** |
-| App móvil (todo su alcance) | N/A | N/A | N/A | **Pendiente en su totalidad** (ver §2.3) |
+| Marketing y Campañas | Implementado desde 2026-07-25: `Promotion`, `MarketingTemplate`, `MarketingAudience`, `MarketingCampaign`, `MarketingRecipient`, `MarketingUnsubscribe`, `MarketingSendLog`, `MarketingWebhookEvent`, `MarketingSettings` (`apps/api/src/modules/marketing/`); segmentación de leads/clientes, envío por lotes con locks Mongo (primer motor de cron del proyecto, ver §12), proveedor Resend real vía `fetch` + mock explícito, webhooks firmados (Svix), baja pública de comunicaciones | Implementado (Resumen, Campañas con wizard de 5 pasos + editor visual de bloques de email, Plantillas, Promociones, Audiencias con estimación/muestra, Historial, Configuración institucional) | En menú | **Implementado** (ver `docs/MARKETING_MODULE.md`, `docs/MARKETING_EMAIL_PROVIDER.md`, `docs/MARKETING_CAMPAIGNS_OPERATIONS.md`); reemplaza el scaffolding de permisos `CAMPAIGNS_*`/`PROMOTIONS_*` que antes no tenía backend/frontend detrás. `Reports/*` (reportes generales) sigue siendo solo scaffolding de permisos, sin páginas — no confundir con este módulo |
+| App móvil de personal (`apps/mobile`) | Implementado 2026-07-25 (Expo real: login Bearer, fichaje geolocalizado, historial, turnos, incidencias, correcciones, perfil, biometría) | — (es la app móvil; ver `/admin/attendance` para su contraparte de gestión) | — | **Implementado**, ver §2.3 y `docs/MOBILE_STAFF_APP.md`. Push notifications y build EAS quedan pendientes (documentado, no fingido) |
 
 ---
 
@@ -286,6 +289,10 @@ Tabla de estado (Implementado / Parcial / Pendiente) contrastando backend, front
 | QR | `qrcode` (`toDataURL`) con token firmado (HMAC) embebido | **Real.** |
 | Subida de archivos | `multer` + `cloudinary` (subida por stream, borrado, URLs firmadas de descarga con expiración) | **Real.** Sin credenciales configuradas, lanza error — no hay fallback simulado. |
 | WhatsApp | Enlaces `wa.me` con mensaje prellenado | **Deliberadamente simple**, sin API oficial de WhatsApp Business (documentado como decisión, no como pendiente crítico). |
+| Resend (email masivo de Marketing) | `fetch` directo contra `https://api.resend.com` (sin SDK oficial) — envío por lote (`/emails/batch`), verificación de firma de webhook Svix (HMAC-SHA256, `timingSafeEqual`) implementada a mano | **Real y completa.** Existe un `MockMarketingEmailProvider` explícito (tipado como `'mock'`) usado cuando `MARKETING_EMAIL_PROVIDER=mock` o falta `RESEND_API_KEY` — modo de desarrollo declarado, no un stub oculto. Ver `docs/MARKETING_EMAIL_PROVIDER.md`. |
+| Geolocalización (app móvil) | `expo-location`, captura puntual al fichar (nunca en segundo plano) | **Real.** Validada contra geocercas reales por salón (`Salon.attendanceLocationRule`, haversine) — verificado en vivo bloqueando/aceptando marcaciones según distancia. |
+| Biometría (app móvil) | `expo-local-authentication` (Face ID/huella) | **Real**, pero solo protege el acceso local al token ya guardado — nunca se envía ni almacena nada biométrico. |
+| Push notifications (app móvil) | N/A | **No implementado.** El token se persiste (`MobileDevice.pushToken`) pero nada lo consume todavía — ver `docs/MOBILE_BUILDS.md` §6. La bandeja in-app sí es real (reutiliza `/api/notifications`). |
 
 No se encontraron comentarios `TODO`/`FIXME`/`HACK` en `apps/api/src`, ni `console.log` de simulación fuera de las rutas de mock ya señaladas.
 
@@ -304,6 +311,8 @@ No se encontraron comentarios `TODO`/`FIXME`/`HACK` en `apps/api/src`, ni `conso
 | 7 | Doble adaptador serverless de Vercel | `api/` (raíz) + `vercel.json` (raíz) vs. `apps/api/api/[...path].ts` + `apps/api/vercel.json`, casi idénticos | El adaptador raíz es el que efectivamente usa Vercel (`outputDirectory: apps/web/.next`, `buildCommand` en `vercel.json` raíz coincide con `docs/VERCEL_DEPLOYMENT.md`). El de `apps/api` parece remanente de una configuración de despliegue standalone anterior. No se elimina en esta tarea; se deja anotado como limpieza pendiente a confirmar con el usuario antes de borrar. |
 | 8 | Inconsistencia de nombres de paquete en comandos (`--filter api` vs `--filter @mym/api`) | `docs/VERCEL_DEPLOYMENT.md` | Se documenta la forma correcta (con scope) en §3; no se edita el doc original en esta tarea. |
 | 9 | Rutas de pruebas manuales en `DIGITAL_INVITATIONS_AND_TICKETS_TESTING.md` referencian navegación "dentro de un evento" | El doc de testing es de la implementación pre-corrección | Se marca como parcialmente desactualizado (§6); la intención de las pruebas (concurrencia, unicidad de QR, idempotencia) sigue siendo válida y debería reescribirse contra las rutas independientes actuales cuando se retome testing de este módulo. |
+| 10 | App móvil descrita como "pendiente en su totalidad" | `PROMPT_MAESTRO_CLAUDE_MYM_EVENTOS.md` §5.4, `docs/MYM_EVENTOS_LIFECYCLE_COMPLETION_AUDIT.md` (2026-07-22) | **Superado 2026-07-25**: implementada (ver §2.3, §8, `docs/MOBILE_STAFF_APP.md`). Esos dos documentos quedan como historial de la brecha original; no se editan pero no reflejan el estado actual del móvil. |
+| 11 | El toggle `attendanceConfig.canUseMobileApp` de `/admin/users/[id]` existía en la UI antes de esta tarea sin ningún consumidor real en el backend | Auditoría previa al desarrollo de esta tarea; confirmado con un login de prueba que lo ignoraba | Corregido: ahora es una de las dos condiciones obligatorias del login móvil (ver `docs/MOBILE_AUTHENTICATION.md` §2). Documentado como bug real encontrado y corregido en QA manual, no como diseño intencional previo. |
 
 ---
 
@@ -331,8 +340,17 @@ Estos archivos existentes se conservan como documentación granular por módulo.
 | `DIGITAL_INVITATIONS_AND_TICKETS.md` | Reporte de esa implementación acoplada | **Superado** (§6, §10.2) |
 | `DIGITAL_INVITATIONS_AND_TICKETS_TESTING.md` | Plan de pruebas de esa implementación | **Parcialmente desactualizado** (§10.9) |
 | `INDEPENDENT_DIGITAL_MODULES_CORRECTION.md` | Corrección: desacopla ambos módulos de Event | **Vigente y autoritativo** para la arquitectura de invitaciones/entradas |
+| `MARKETING_MODULE.md` | Arquitectura del módulo de Marketing y Campañas: modelos, segmentación, editor visual, variables, permisos | Vigente, creado 2026-07-25 |
+| `MARKETING_EMAIL_PROVIDER.md` | Proveedor Resend: configuración, verificación de firma Svix, pasos manuales para producción | Vigente, creado 2026-07-25 |
+| `MARKETING_CAMPAIGNS_OPERATIONS.md` | Runbook operativo: ciclo de vida de campañas, motor de lotes, cron en Vercel, diagnóstico de errores | Vigente, creado 2026-07-25 |
+| `MOBILE_STAFF_APP.md` | App móvil de personal: arquitectura, pantallas, flujo de fichaje, decisiones/simplificaciones explícitas | Vigente, creado 2026-07-25 |
+| `ATTENDANCE_ARCHITECTURE.md` | Modelos de asistencia, geocercas, reloj cliente/servidor, máquina de estados, idempotencia sin transacciones Mongo | Vigente, creado 2026-07-25 |
+| `ATTENDANCE_BACKOFFICE.md` | Gestión de asistencia desde `/admin/attendance` y `/admin/salons`/`/admin/users`, qué no se construyó | Vigente, creado 2026-07-25 |
+| `MOBILE_AUTHENTICATION.md` | Auth Bearer móvil, gate de doble condición, dispositivos, biometría, recuperación de contraseña | Vigente, creado 2026-07-25 |
+| `MOBILE_BUILDS.md` | Config de `app.json`, variables de entorno, estado de build EAS/push (pendientes) | Vigente, creado 2026-07-25 |
+| `MOBILE_QA.md` | Cobertura de tests (backend + mobile), QA manual E2E real ejecutado, bug encontrado y corregido, recomendaciones | Vigente, creado 2026-07-25 |
 
-No se creó ni eliminó ningún archivo dentro de `docs/` en esta tarea salvo `MYM_EVENTOS_PROJECT_CONTEXT.md`.
+No se creó ni eliminó ningún archivo dentro de `docs/` en esta tarea salvo `MYM_EVENTOS_PROJECT_CONTEXT.md` y los 6 archivos nuevos de la app móvil listados arriba.
 
 ---
 
@@ -346,11 +364,14 @@ En orden de relevancia:
 
 1. **Rate limiting en memoria** (`publicRateLimit.ts`) no es apto para múltiples instancias — auto-documentado en el código. Si el despliegue en Vercel escala a más de una instancia concurrente para rutas públicas, el rate limit deja de ser confiable. Requiere Redis o gateway antes de tráfico público serio.
 2. **Módulos de operaciones inconexos**: catálogo, inventario y reglas de consumo tienen backend completo pero desconectado (rutas no montadas) y frontend con carpetas vacías. Antes de continuar cualquier trabajo en inventario, confirmar con el usuario si se retoma esa integración o si el código debe eliminarse por estar abandonado.
-3. **App móvil inexistente** pese a que el prompt maestro y varias secciones de negocio (fichaje, validación de entradas desde el móvil) la dan por parcialmente construida. Cualquier tarea de "app móvil" debe partir de cero, no de una base existente.
+3. ~~App móvil inexistente~~ **Actualizado 2026-07-25: implementada** (ver §2.3, §8). **Migrada a Expo SDK 57 el 2026-07-26** (desde ~50.0.8) para arreglar el crash de Expo Go en emuladores/dispositivos Android 15+ (`DETECT_SCREEN_CAPTURE`, ver `docs/MOBILE_BUILDS.md`). Riesgos remanentes puntuales de la app móvil: sin rate limiting en `/api/mobile/auth/login` ni `/forgot-password` (mismo estado que sus equivalentes web); sin build EAS ni credenciales de firma; sin push notifications reales (token persistido, nada lo envía); sin tests de render de pantallas (solo lib/ tiene cobertura automatizada) — ver `docs/MOBILE_QA.md` §5 para el detalle priorizado. Fast-follows abiertos por la migración de SDK: (a) React Navigation quedó deliberadamente en v6 (no forzado por SDK 57, pero v6 ya no recibe soporte activo — evaluar el salto a v7 como tarea separada); (b) el proyecto ahora usa el preset `jest-expo/node` para tests (antes se evitaba por un bug de pnpm+Flow-stripping que resultó estar resuelto en `jest-expo@57` — ver comentario en `apps/mobile/jest.config.js`), lo que reabre la posibilidad de sumar tests de render con `@testing-library/react-native` (dependencia ya presente pero sin uso real todavía).
 4. **Doble configuración de Vercel** (`apps/api/vercel.json` + `apps/api/api/[...path].ts` vs. la raíz) — riesgo de confusión en despliegues futuros; confirmar con el usuario antes de eliminar los archivos duplicados.
 5. **Auditoría sin UI de consulta**: se registra `AuditLog` pero no hay pantalla para revisarlo — limita la trazabilidad operativa real pese a que el dato existe.
-6. **Personal (Staff) sin entrada de navegación**: el módulo funciona pero solo es alcanzable por URL directa, lo que puede hacerlo parecer "no implementado" para un usuario que navega el menú.
+6. ~~Personal (Staff) sin entrada de navegación~~ **Corregido 2026-07-25**: ahora tiene entrada en el submenú "Configuración" (junto con la nueva sección "Asistencia").
 7. **Mercado Pago solo integrado en Entradas Digitales**, no en Pagos de eventos/contratos (que siguen siendo manuales) — coherente con el alcance actual pero relevante si se pide "cobro online" para el flujo comercial principal.
+8. ~~Cron de Marketing dependía de un plan pago de Vercel~~ **Resuelto 2026-07-25, 100% gratuito**: `vercel.json` programa el cron de Vercel una vez al día (`0 6 * * *`, compatible con el plan Hobby gratuito) solo como red de seguridad; la cadencia real (cada 10 minutos) corre por `.github/workflows/marketing-cron.yml` (GitHub Actions, gratis en repos públicos y privados dentro de la cuota de minutos incluida). Requiere cargar los secrets `MARKETING_APP_BASE_URL` y `MARKETING_CRON_SECRET` en GitHub (Settings → Secrets and variables → Actions) — ver `docs/MARKETING_CAMPAIGNS_OPERATIONS.md` §3. Nota: GitHub desactiva automáticamente los workflows programados de un repositorio sin commits en 60 días; hay que reactivarlo manualmente desde la pestaña Actions si eso llega a pasar.
+9. **`User.attendanceConfig.allowedGeoLocations` (geocerca por usuario) queda dormant**: la fuente de verdad de geocercas pasó a ser `Salon.attendanceLocationRule` (por salón). El campo per-usuario no se borró (no se elimina código sin confirmar) pero no lo consume ningún flujo — ver `docs/ATTENDANCE_ARCHITECTURE.md` §3.
+10. **Exportación de registros de asistencia y vista agregada para liquidaciones**: no implementadas — ver `docs/ATTENDANCE_BACKOFFICE.md` §5 y `docs/ATTENDANCE_ARCHITECTURE.md` §8.
 
 ---
 

@@ -3,7 +3,8 @@
   "compilerOptions": {
     "noEmit": true,
     "jsx": "react-native",
-    "moduleResolution": "Bundler"
+    "moduleResolution": "Bundler",
+    "types": ["jest"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "App.tsx"],
   "exclude": ["node_modules"]

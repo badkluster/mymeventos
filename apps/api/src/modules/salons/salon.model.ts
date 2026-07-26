@@ -28,6 +28,19 @@ const salonMediaSchema = new Schema({
   duration: Number
 }, { _id: true });
 
+const attendanceLocationRuleSchema = new Schema({
+  latitude: Number,
+  longitude: Number,
+  allowedRadiusMeters: { type: Number, default: 150 },
+  requireLocation: { type: Boolean, default: false },
+  // What happens to a clock-in/out captured outside allowedRadiusMeters:
+  //  - 'allow': accepted and treated as valid.
+  //  - 'flag': accepted but the WorkSession is marked requiresReview.
+  //  - 'block': rejected outright (ATTENDANCE_OUTSIDE_GEOFENCE).
+  //  - 'require_reason': accepted only if the punch includes a note; otherwise blocked.
+  outsideAreaPolicy: { type: String, enum: ['allow', 'flag', 'block', 'require_reason'], default: 'flag' }
+}, { _id: false });
+
 const salonSchema = new Schema({
   name: { type: String, required: true, trim: true, unique: true },
   slug: { type: String, required: true, trim: true, lowercase: true, unique: true, index: true },
@@ -76,6 +89,7 @@ const salonSchema = new Schema({
   locationText: String,
   mapUrl: String,
   extraServices: { type: [extraServiceSchema], default: [] },
+  attendanceLocationRule: { type: attendanceLocationRuleSchema, default: undefined },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   deletedAt: { type: Date, default: null, index: true },
