@@ -5,14 +5,14 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, CircleDollarSign, ClipboardList,
-  ChefHat, FilePlus2, FileText, LoaderCircle, RefreshCw, TrendingDown, TrendingUp, UsersRound,
+  ChefHat, FilePlus2, LoaderCircle, RefreshCw, TrendingDown, TrendingUp, UsersRound,
 } from 'lucide-react';
 import { Permission } from '@mym/shared';
 import { useSession } from '@/components/session-provider';
 import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
 import { userCanAccess } from '@/lib/admin-permissions';
-import { displayLabel, eventStatusLabels, leadSourceLabels } from '@/lib/display-labels';
+import { displayLabel, leadSourceLabels } from '@/lib/display-labels';
 
 type Metric = {
   id: string;
@@ -23,6 +23,7 @@ type Metric = {
   format: 'integer' | 'decimal' | 'currency' | 'percentage';
   description: string;
   formula: string;
+  attributionDate?: string;
   drillDownHref?: string;
   drilldown?: string;
 };
@@ -76,6 +77,7 @@ const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
 const dateTime = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' });
 const dateOnly = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'short', day: '2-digit', month: 'short' });
+const priorityMetricIds = ['events.upcoming', 'leads.pending', 'payments.overdue', 'production.pending'];
 
 function argentinaDateParts() {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -97,10 +99,30 @@ function formatMetric(metric: Metric) {
   return number.format(metric.value);
 }
 
+function formatPrevious(metric: Metric) {
+  if (metric.format === 'currency') return money.format(metric.previousValue ?? 0);
+  if (metric.format === 'percentage') return `${number.format(metric.previousValue ?? 0)} %`;
+  return number.format(metric.previousValue ?? 0);
+}
+
 function metricTone(id: string) {
   if (id.includes('overdue') || id.includes('pending')) return 'border-amber-200 bg-amber-50/55';
   if (id.includes('accepted') || id.includes('collected') || id.includes('confirmed')) return 'border-emerald-200 bg-emerald-50/45';
   return 'border-zinc-200 bg-white';
+}
+
+function MetricCard({ item }: { item: Metric }) {
+  const currentSnapshot = item.attributionDate === 'current_snapshot';
+  return <Link href={item.drillDownHref || item.drilldown || '/admin/reports'} title={`${item.description} Fórmula: ${item.formula}`} className={`group rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${metricTone(item.id)}`}>
+    <div className="flex items-start justify-between gap-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{item.label}</p>
+      {currentSnapshot ? <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">Estado actual</span> : item.changePercentage === null ? <span className="text-xs text-zinc-400">Sin base</span> : item.changePercentage >= 0
+        ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><TrendingUp className="h-3.5 w-3.5" />{number.format(item.changePercentage)}%</span>
+        : <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700"><TrendingDown className="h-3.5 w-3.5" />{number.format(Math.abs(item.changePercentage))}%</span>}
+    </div>
+    <p className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950">{formatMetric(item)}</p>
+    <p className="mt-2 flex items-center justify-between text-xs text-zinc-500"><span>{currentSnapshot ? item.description : `Período anterior: ${formatPrevious(item)}`}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" /></p>
+  </Link>;
 }
 
 const severityStyle = {
@@ -185,11 +207,13 @@ export function DashboardWorkspace() {
     { label: 'Gestionar pagos', href: '/admin/payments', icon: CircleDollarSign, permission: Permission.PAYMENTS_READ },
     { label: 'Generar producción', href: '/admin/production?generate=1', icon: ChefHat, permission: Permission.PRODUCTION_GENERATE },
   ].filter((action) => userCanAccess(user, [action.permission]));
+  const priorityMetrics = summary ? priorityMetricIds.map((id) => summary.metrics.find((metric) => metric.id === id)).filter((metric): metric is Metric => Boolean(metric)) : [];
+  const secondaryMetrics = summary?.metrics.filter((metric) => !priorityMetricIds.includes(metric.id)) ?? [];
 
   return <section className="space-y-6">
     <PageHeader
       title={`Hola, ${user?.firstName || 'equipo'}`}
-      description="Una vista accionable del negocio y la operación. Todos los indicadores respetan el período y salón seleccionados."
+      description="Primero se muestran las acciones y pendientes que requieren atención. El análisis detallado queda disponible sin recargar la vista diaria."
       action={<Button variant="secondary" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</Button>}
     />
 
@@ -213,44 +237,7 @@ export function DashboardWorkspace() {
     {error ? <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><span><strong>No pudimos actualizar el dashboard.</strong> {error}</span><Button variant="secondary" onClick={() => void load()}>Reintentar</Button></div> : null}
     {loading && !summary ? <LoadingBlock /> : null}
 
-    {summary ? <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {summary.metrics.map((item) => <Link key={item.id} href={item.drillDownHref || item.drilldown || '/admin/reports'} title={`${item.description} Fórmula: ${item.formula}`} className={`group rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${metricTone(item.id)}`}>
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{item.label}</p>
-            {item.changePercentage === null ? <span className="text-xs text-zinc-400">Sin base</span> : item.changePercentage >= 0
-              ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><TrendingUp className="h-3.5 w-3.5" />{number.format(item.changePercentage)}%</span>
-              : <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700"><TrendingDown className="h-3.5 w-3.5" />{number.format(Math.abs(item.changePercentage))}%</span>}
-          </div>
-          <p className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950">{formatMetric(item)}</p>
-          <p className="mt-2 flex items-center justify-between text-xs text-zinc-500"><span>Período anterior: {item.format === 'currency' ? money.format(item.previousValue ?? 0) : number.format(item.previousValue ?? 0)}</span><ArrowRight className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" /></p>
-        </Link>)}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between"><div><h2 className="font-semibold text-zinc-950">Embudo comercial</h2><p className="mt-1 text-xs text-zinc-500">Volumen por etapa dentro del período.</p></div><ClipboardList className="h-5 w-5 text-zinc-400" /></div>
-          <div className="grid gap-2 sm:grid-cols-5">
-            {summary.funnel.map((stage, index) => <div key={stage.id} className="relative rounded-xl bg-zinc-50 p-3">
-              <span className="text-[11px] font-medium text-zinc-500">{stage.label}</span>
-              <p className="mt-2 text-xl font-semibold tabular-nums">{number.format(stage.value)}</p>
-              {index < summary.funnel.length - 1 ? <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-4 w-4 -translate-y-1/2 text-zinc-300 sm:block" /> : null}
-            </div>)}
-          </div>
-        </article>
-        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <h2 className="font-semibold text-zinc-950">Eventos por salón</h2>
-          <p className="mb-5 mt-1 text-xs text-zinc-500">Eventos activos cuya fecha cae en el período.</p>
-          <BreakdownBars items={summary.breakdowns.eventsBySalon} />
-        </article>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold">Eventos por tipo</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Distribución de la operación.</p><BreakdownBars items={summary.breakdowns.eventsByType.map((item) => ({ ...item, label: item.label || 'Sin especificar' }))} /></article>
-        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold">Origen de leads</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Canales que generaron consultas.</p><BreakdownBars items={summary.breakdowns.leadsBySource.map((item) => ({ ...item, label: displayLabel(leadSourceLabels, item.label) }))} /></article>
-        {summary.meta.financialVisible ? <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold">Gastos por categoría</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Gastos pagados durante el período.</p><BreakdownBars items={summary.breakdowns.expensesByCategory} format="currency" /></article> : <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5"><h2 className="font-semibold">Información financiera restringida</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Tu rol puede consultar la operación, pero no importes financieros.</p></article>}
-      </div>
-    </> : null}
+    {priorityMetrics.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{priorityMetrics.map((item) => <MetricCard key={item.id} item={item} />)}</div> : null}
 
     <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
       <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
@@ -275,5 +262,26 @@ export function DashboardWorkspace() {
         </div>
       </article>
     </div>
+
+    {summary ? <details className="group rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-zinc-800"><span>Ver análisis completo del período</span><span className="text-xs font-normal text-zinc-400 group-open:hidden">{secondaryMetrics.length} indicadores y distribuciones</span><span className="hidden text-xs font-normal text-zinc-400 group-open:inline">Ocultar análisis</span></summary>
+      <div className="space-y-5 border-t border-zinc-100 p-5">
+        {secondaryMetrics.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{secondaryMetrics.map((item) => <MetricCard key={item.id} item={item} />)}</div> : null}
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <article className="rounded-2xl border border-zinc-200 bg-white p-5">
+            <div className="mb-5 flex items-center justify-between"><div><h2 className="font-semibold text-zinc-950">Actividad comercial del período</h2><p className="mt-1 text-xs text-zinc-500">Volúmenes independientes por etapa; no representan una única cohorte de conversión.</p></div><ClipboardList className="h-5 w-5 text-zinc-400" /></div>
+            <div className="grid gap-2 sm:grid-cols-5">
+              {summary.funnel.map((stage) => <div key={stage.id} className="rounded-xl bg-zinc-50 p-3"><span className="text-[11px] font-medium text-zinc-500">{stage.label}</span><p className="mt-2 text-xl font-semibold tabular-nums">{number.format(stage.value)}</p></div>)}
+            </div>
+          </article>
+          <article className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold text-zinc-950">Eventos por salón</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Eventos activos cuya fecha cae en el período.</p><BreakdownBars items={summary.breakdowns.eventsBySalon} /></article>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <article className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Eventos por tipo</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Distribución de la operación.</p><BreakdownBars items={summary.breakdowns.eventsByType.map((item) => ({ ...item, label: item.label || 'Sin especificar' }))} /></article>
+          <article className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Origen de leads</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Canales que generaron consultas.</p><BreakdownBars items={summary.breakdowns.leadsBySource.map((item) => ({ ...item, label: displayLabel(leadSourceLabels, item.label) }))} /></article>
+          {summary.meta.financialVisible ? <article className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Gastos por categoría</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Gastos pagados durante el período.</p><BreakdownBars items={summary.breakdowns.expensesByCategory} format="currency" /></article> : <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5"><h2 className="font-semibold">Información financiera restringida</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Tu rol puede consultar la operación, pero no importes financieros.</p></article>}
+        </div>
+      </div>
+    </details> : null}
   </section>;
 }
