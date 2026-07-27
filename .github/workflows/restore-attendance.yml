@@ -1,0 +1,58 @@
+name: Restore attendance service
+
+on:
+  push:
+    branches: [fix/reporting-production-cleanup]
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    if: ${{ !contains(github.event.head_commit.message, 'restore attendance service safely') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore original service and apply focused fix
+        shell: python
+        run: |
+          import pathlib
+          import subprocess
+
+          path = pathlib.Path('apps/api/src/modules/attendance/attendance.service.ts')
+          original = subprocess.check_output([
+              'git', 'show', 'origin/main:apps/api/src/modules/attendance/attendance.service.ts'
+          ], text=True)
+          old = """  const timing = resolvePunchTiming(input.clientOccurredAt, input.networkStatus, settings);
+          if (timing.effectiveAt.getTime() <= activeSession.startedAt.getTime()) {
+            timing.effectiveAt = new Date(activeSession.startedAt.getTime() + 60_000);
+            timing.requiresReview = true;
+          }
+          """
+          new = """  const timing = resolvePunchTiming(input.clientOccurredAt, input.networkStatus, settings);
+          const startedAtMs = new Date(activeSession.startedAt).getTime();
+          if (input.clientOccurredAt.getTime() <= startedAtMs) timing.requiresReview = true;
+          if (timing.effectiveAt.getTime() <= startedAtMs) {
+            timing.effectiveAt = new Date(startedAtMs + 60_000);
+            timing.requiresReview = true;
+          }
+          """
+          if old not in original:
+              raise SystemExit('Expected checkout timing block was not found in main.')
+          path.write_text(original.replace(old, new, 1), encoding='utf-8')
+
+      - name: Commit focused restoration
+        run: |
+          if git diff --quiet; then
+            echo "No changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/src/modules/attendance/attendance.service.ts
+          git commit -m "fix(attendance): restore attendance service safely"
+          git push origin HEAD:fix/reporting-production-cleanup
