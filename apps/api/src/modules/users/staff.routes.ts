@@ -76,7 +76,14 @@ router.get('/', requirePermission(Permission.USERS_READ), asyncHandler(async (re
 router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(createStaffSchema), asyncHandler(async (request, response) => {
   const canAccessBackoffice = request.body.canAccessBackoffice ?? false;
   const temporaryPassword = canAccessBackoffice ? request.body.password ?? generateTemporaryPassword() : request.body.password;
-  const input = normalizeUserInput({ ...request.body, roles: [Role.STAFF], primaryRole: Role.STAFF, canAccessBackoffice, mustChangePassword: canAccessBackoffice });
+  const input = normalizeUserInput({
+    ...request.body,
+    roles: [Role.STAFF],
+    primaryRole: Role.STAFF,
+    attendanceConfig: { enabled: true, canUseMobileApp: true },
+    canAccessBackoffice,
+    mustChangePassword: canAccessBackoffice
+  });
   validatePrimarySalonFields({ ...input, salonIds: input.salonIds ?? [], managedSalonIds: [] });
   const user = await User.create({ ...input, email: input.email || undefined, passwordHash: temporaryPassword ? await hashPassword(temporaryPassword) : undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
   return sendSuccess(response, { staff: sanitizeUser(user), user: sanitizeUser(user), temporaryPassword: canAccessBackoffice && !request.body.password ? temporaryPassword : undefined }, 201);

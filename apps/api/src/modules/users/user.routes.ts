@@ -192,7 +192,12 @@ router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(cre
   const roles = request.body.roles?.length ? request.body.roles : [Role.STAFF];
   const canAccessBackoffice = request.body.canAccessBackoffice ?? roles.some((role: Role) => [Role.ADMIN, Role.MANAGER, Role.SALON_MANAGER].includes(role));
   const temporaryPassword = canAccessBackoffice ? request.body.password ?? generateTemporaryPassword() : request.body.password;
-  const input = normalizeUserInput({ ...request.body, roles, canAccessBackoffice, mustChangePassword: canAccessBackoffice ? request.body.mustChangePassword ?? true : false });
+  // Staff are ready to clock in as soon as their account is created. The stricter
+  // controls (geolocation, network and manual adjustments) remain opt-in.
+  const attendanceConfig = roles.includes(Role.STAFF)
+    ? { enabled: true, canUseMobileApp: true, ...request.body.attendanceConfig }
+    : request.body.attendanceConfig;
+  const input = normalizeUserInput({ ...request.body, roles, attendanceConfig, canAccessBackoffice, mustChangePassword: canAccessBackoffice ? request.body.mustChangePassword ?? true : false });
   validatePrimarySalonFields({ ...input, salonIds: input.salonIds ?? [], managedSalonIds: input.managedSalonIds ?? [] });
   if (await User.exists({ username: input.username })) throw new ApiError(409, 'USERNAME_ALREADY_EXISTS');
   const user = await User.create({ ...input, passwordHash: temporaryPassword ? await hashPassword(temporaryPassword) : undefined, createdBy: request.user!.id, updatedBy: request.user!.id });

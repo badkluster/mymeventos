@@ -8,9 +8,10 @@ import { api } from '@/lib/api';
 import { displayLabel, roleLabels } from '@/lib/display-labels';
 import { userCanAccess } from '@/lib/admin-permissions';
 import { permissionAreas } from '@/lib/permission-areas';
-import { Button, Input, PageHeader, Textarea } from '@/components/ui/primitives';
+import { Button, Input, PageHeader, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { useSession } from '@/components/session-provider';
+import { formatMinutes, salonName, workSessionStatusLabels, type AttendanceAdjustmentRequest, type AttendanceIncident, type WorkSession } from '@/features/attendance/types';
 import { Permission, Role, RolePresets } from '@mym/shared';
 
 type Salon = { _id: string; name?: string; slug?: string; active?: boolean };
@@ -24,10 +25,19 @@ type User = {
 };
 type DetailResponse = { user: User; roles: string[]; permissions: string[] };
 type Tab = 'profile' | 'access' | 'notifications' | 'employee' | 'attendance';
+type AttendanceOverview = {
+  sessions: WorkSession[];
+  sessionTotal: number;
+  incidents: AttendanceIncident[];
+  incidentTotal: number;
+  adjustments: AttendanceAdjustmentRequest[];
+  adjustmentTotal: number;
+};
 
 const entityId = (value: unknown) => typeof value === 'string' ? value : (value as { _id?: string } | undefined)?._id ?? '';
 const entityName = (value: unknown) => typeof value === 'string' ? value : (value as Salon | undefined)?.name ?? entityId(value);
 const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin acceso';
+const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin registrar';
 const name = (user?: User) => user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || user?.email || 'Usuario';
 const toggle = (items: string[], value: string) => items.includes(value) ? items.filter((item) => item !== value) : [...items, value];
 function grantedByRole(roles: string[], permission: Permission): boolean { return roles.includes(Role.ADMIN) || roles.some((role) => (RolePresets[role as Role] ?? []).includes(permission)); }
@@ -46,6 +56,7 @@ export default function UserDetailPage() {
   const { user: sessionUser } = useSession();
   const isAdmin = sessionUser?.roles?.includes('ADMIN') ?? false;
   const canUpdate = userCanAccess(sessionUser, [Permission.USERS_UPDATE]);
+  const canReadAttendance = userCanAccess(sessionUser, [Permission.ATTENDANCE_READ]);
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<string[]>(Object.keys(roleLabels));
   const [permissions, setPermissions] = useState<string[]>(Object.values(Permission));
@@ -57,6 +68,9 @@ export default function UserDetailPage() {
   const [notifications, setNotifications] = useState<Record<string, boolean>>({});
   const [employee, setEmployee] = useState({ employeeCode: '', position: '', department: '', employmentStatus: 'active', emergencyContactName: '', emergencyContactPhone: '', notes: '' });
   const [attendance, setAttendance] = useState({ enabled: false, canUseMobileApp: true, requiresGeolocation: false, requiresWifiOrIpValidation: false, allowedIpAddresses: '', allowManualAdjustment: false, notes: '' });
+  const [attendanceOverview, setAttendanceOverview] = useState<AttendanceOverview | null>(null);
+  const [attendanceOverviewLoading, setAttendanceOverviewLoading] = useState(false);
+  const [attendanceOverviewError, setAttendanceOverviewError] = useState('');
 
   const load = useCallback(async () => {
     const response = await api.get<DetailResponse>(`/users/${userId}`);
@@ -89,8 +103,40 @@ export default function UserDetailPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load().catch((error) => showToast({ message: error instanceof Error ? error.message : 'No se pudo cargar el usuario.', variant: 'error' })); }, [load, showToast]);
 
+  const loadAttendanceOverview = useCallback(async () => {
+    if (!userId || !canReadAttendance) return;
+    setAttendanceOverviewLoading(true);
+    setAttendanceOverviewError('');
+    try {
+      const query = new URLSearchParams({ userId, page: '1', limit: '8' });
+      const [sessionsResponse, incidentsResponse, adjustmentsResponse] = await Promise.all([
+        api.get<{ items: WorkSession[]; total: number }>(`/attendance/sessions?${query.toString()}`),
+        api.get<{ items: AttendanceIncident[]; total: number }>(`/attendance/incidents?${query.toString()}`),
+        api.get<{ items: AttendanceAdjustmentRequest[]; total: number }>(`/attendance/adjustments?${query.toString()}`)
+      ]);
+      setAttendanceOverview({
+        sessions: sessionsResponse.items ?? [],
+        sessionTotal: sessionsResponse.total ?? 0,
+        incidents: incidentsResponse.items ?? [],
+        incidentTotal: incidentsResponse.total ?? 0,
+        adjustments: adjustmentsResponse.items ?? [],
+        adjustmentTotal: adjustmentsResponse.total ?? 0
+      });
+    } catch (error) {
+      setAttendanceOverview(null);
+      setAttendanceOverviewError(error instanceof Error ? error.message : 'No se pudo cargar el resumen de asistencia.');
+    } finally {
+      setAttendanceOverviewLoading(false);
+    }
+  }, [canReadAttendance, userId]);
+
+  useEffect(() => {
+    if (tab === 'attendance') void loadAttendanceOverview();
+  }, [tab, loadAttendanceOverview]);
+
   const primarySalon = useMemo(() => entityName(user?.primarySalonId) || 'Sin principal', [user]);
   const managedSalon = useMemo(() => entityName(user?.primaryManagedSalonId) || 'Sin principal a cargo', [user]);
+  const isStaff = user?.roles?.includes(Role.STAFF) ?? false;
   const save = async (section: Tab) => {
     setSaving(section);
     try {
@@ -167,11 +213,26 @@ export default function UserDetailPage() {
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{['emailNotificationsEnabled','systemNotificationsEnabled','whatsappNotificationsEnabled','notifyOnNewLead','notifyOnNewQuoteRequest','notifyOnQuoteApproved','notifyOnContractApproved','notifyOnPaymentReceived','notifyOnEventReminder','notifyOnAssignedTask'].map((key) => <Check key={key} label={displayLabel(notificationLabels, key)} checked={notifications[key] !== false} onChange={() => setNotifications((current) => ({ ...current, [key]: current[key] === false }))} />)}</div>
     </Panel>}
     {tab === 'employee' && <Panel title="Ficha laboral" action={canUpdate ? <Button disabled={saving === 'employee'} onClick={() => void save('employee')}><Save className="mr-2 h-4 w-4" />Guardar</Button> : undefined}>
-      <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Legajo" value={employee.employeeCode} onChange={(event) => setEmployee((current) => ({ ...current, employeeCode: event.target.value }))} /><Input placeholder="Cargo" value={employee.position} onChange={(event) => setEmployee((current) => ({ ...current, position: event.target.value }))} /><Input placeholder="Área" value={employee.department} onChange={(event) => setEmployee((current) => ({ ...current, department: event.target.value }))} /><Input placeholder="Estado laboral" value={employee.employmentStatus} onChange={(event) => setEmployee((current) => ({ ...current, employmentStatus: event.target.value }))} /><Input placeholder="Contacto de emergencia" value={employee.emergencyContactName} onChange={(event) => setEmployee((current) => ({ ...current, emergencyContactName: event.target.value }))} /><Input placeholder="Teléfono de emergencia" value={employee.emergencyContactPhone} onChange={(event) => setEmployee((current) => ({ ...current, emergencyContactPhone: event.target.value }))} /></div><Textarea placeholder="Notas internas" value={employee.notes} onChange={(event) => setEmployee((current) => ({ ...current, notes: event.target.value }))} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <FormField label="Legajo"><Input value={employee.employeeCode} onChange={(event) => setEmployee((current) => ({ ...current, employeeCode: event.target.value }))} /></FormField>
+        <FormField label="Cargo"><Input value={employee.position} onChange={(event) => setEmployee((current) => ({ ...current, position: event.target.value }))} /></FormField>
+        <FormField label="Área"><Input value={employee.department} onChange={(event) => setEmployee((current) => ({ ...current, department: event.target.value }))} /></FormField>
+        <FormField label="Estado laboral"><Select value={employee.employmentStatus} onChange={(event) => setEmployee((current) => ({ ...current, employmentStatus: event.target.value }))}><option value="active">Activo</option><option value="inactive">Inactivo</option><option value="suspended">Suspendido</option><option value="terminated">Finalizado</option></Select></FormField>
+        <FormField label="Contacto de emergencia"><Input value={employee.emergencyContactName} onChange={(event) => setEmployee((current) => ({ ...current, emergencyContactName: event.target.value }))} /></FormField>
+        <FormField label="Teléfono de emergencia"><Input type="tel" value={employee.emergencyContactPhone} onChange={(event) => setEmployee((current) => ({ ...current, emergencyContactPhone: event.target.value }))} /></FormField>
+      </div>
+      <FormField label="Notas internas"><Textarea value={employee.notes} onChange={(event) => setEmployee((current) => ({ ...current, notes: event.target.value }))} /></FormField>
     </Panel>}
-    {tab === 'attendance' && <Panel title="Preparación para asistencia" action={canUpdate ? <Button disabled={saving === 'attendance'} onClick={() => void save('attendance')}><Save className="mr-2 h-4 w-4" />Guardar</Button> : undefined}>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><Check label="Habilitado" checked={attendance.enabled} onChange={() => setAttendance((current) => ({ ...current, enabled: !current.enabled }))} /><Check label="App móvil" checked={attendance.canUseMobileApp} onChange={() => setAttendance((current) => ({ ...current, canUseMobileApp: !current.canUseMobileApp }))} /><Check label="Geolocalización" checked={attendance.requiresGeolocation} onChange={() => setAttendance((current) => ({ ...current, requiresGeolocation: !current.requiresGeolocation }))} /><Check label="Validar red/IP" checked={attendance.requiresWifiOrIpValidation} onChange={() => setAttendance((current) => ({ ...current, requiresWifiOrIpValidation: !current.requiresWifiOrIpValidation }))} /><Check label="Ajuste manual" checked={attendance.allowManualAdjustment} onChange={() => setAttendance((current) => ({ ...current, allowManualAdjustment: !current.allowManualAdjustment }))} /></div><Textarea placeholder="IPs permitidas, una por línea" value={attendance.allowedIpAddresses} onChange={(event) => setAttendance((current) => ({ ...current, allowedIpAddresses: event.target.value }))} /><Textarea placeholder="Notas de asistencia" value={attendance.notes} onChange={(event) => setAttendance((current) => ({ ...current, notes: event.target.value }))} />
-    </Panel>}
+    {tab === 'attendance' && <div className="space-y-5">
+      <Panel title="Resumen de asistencia">
+        {!isStaff ? <EmptyAttendance message="Este usuario no tiene el rol de staff, por lo que no registra asistencia." /> : !canReadAttendance ? <EmptyAttendance message="No tenés permiso para ver el historial de asistencia." /> : attendanceOverviewLoading ? <p className="text-sm text-zinc-500">Cargando el resumen de asistencia…</p> : attendanceOverviewError ? <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{attendanceOverviewError}</p> : <AttendanceSummary overview={attendanceOverview} />}
+      </Panel>
+      <Panel title="Configuración de fichada" action={canUpdate ? <Button disabled={saving === 'attendance'} onClick={() => void save('attendance')}><Save className="mr-2 h-4 w-4" />Guardar</Button> : undefined}>
+        <p className="-mt-2 text-sm text-zinc-500">Los usuarios staff nuevos quedan habilitados para fichar desde la app. Activá requisitos adicionales sólo si corresponden a este empleado.</p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><Check label="Asistencia habilitada" checked={attendance.enabled} onChange={() => setAttendance((current) => ({ ...current, enabled: !current.enabled }))} /><Check label="App móvil" checked={attendance.canUseMobileApp} onChange={() => setAttendance((current) => ({ ...current, canUseMobileApp: !current.canUseMobileApp }))} /><Check label="Geolocalización" checked={attendance.requiresGeolocation} onChange={() => setAttendance((current) => ({ ...current, requiresGeolocation: !current.requiresGeolocation }))} /><Check label="Validar red/IP" checked={attendance.requiresWifiOrIpValidation} onChange={() => setAttendance((current) => ({ ...current, requiresWifiOrIpValidation: !current.requiresWifiOrIpValidation }))} /><Check label="Permitir ajuste manual" checked={attendance.allowManualAdjustment} onChange={() => setAttendance((current) => ({ ...current, allowManualAdjustment: !current.allowManualAdjustment }))} /></div>
+        <div className="grid gap-4 md:grid-cols-2"><FormField label="IPs permitidas"><Textarea className="min-h-28" placeholder="Una IP por línea" value={attendance.allowedIpAddresses} onChange={(event) => setAttendance((current) => ({ ...current, allowedIpAddresses: event.target.value }))} /></FormField><FormField label="Notas de asistencia"><Textarea className="min-h-28" value={attendance.notes} onChange={(event) => setAttendance((current) => ({ ...current, notes: event.target.value }))} /></FormField></div>
+      </Panel>
+    </div>}
   </section>;
 }
 
@@ -181,6 +242,26 @@ const notificationLabels: Record<string, string> = {
 function SummaryCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) { return <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3 text-zinc-500">{icon}<span className="text-xs font-semibold uppercase tracking-wide">{label}</span></div><p className="mt-3 text-sm font-semibold text-zinc-950">{value}</p></article>; }
 function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) { return <article className="space-y-5 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><header className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold text-zinc-950">{title}</h2>{action}</header>{children}</article>; }
 function Field({ label, value }: { label: string; value?: string }) { return <div><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p><p className="mt-1 text-sm text-zinc-900">{value || 'No informado'}</p></div>; }
+function FormField({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm font-medium text-zinc-700"><span className="mb-1.5 block">{label}</span>{children}</label>; }
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) { return <label className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-100 px-3 py-2 text-sm text-zinc-800"><input type="checkbox" checked={checked} onChange={onChange} />{label}</label>; }
 function SalonList({ title, items }: { title: string; items?: Array<string | Salon> }) { return <section><h3 className="text-sm font-semibold text-zinc-900">{title}</h3><div className="mt-3 flex flex-wrap gap-2">{items?.length ? items.map((item) => <span key={entityId(item)} className="rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700">{entityName(item)}</span>) : <span className="text-sm text-zinc-500">Sin asignar</span>}</div></section>; }
 function AreaSwitch({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) { return <button type="button" role="switch" aria-checked={checked} aria-label={`${checked ? 'Quitar' : 'Dar'} acceso a ${label}`} onClick={onChange} className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? 'bg-emerald-500' : 'bg-zinc-300'}`}><span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} /></button>; }
+
+function EmptyAttendance({ message }: { message: string }) { return <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-500">{message}</div>; }
+function AttendanceSummary({ overview }: { overview: AttendanceOverview | null }) {
+  if (!overview) return <EmptyAttendance message="Todavía no hay jornadas de asistencia para mostrar." />;
+  const activeSession = overview.sessions.find((session) => session.status === 'active');
+  const latestMinutes = overview.sessions.reduce((total, session) => total + (session.workedMinutes ?? 0), 0);
+  const reviewCount = overview.sessions.filter((session) => session.requiresReview).length;
+  const pendingItems = overview.incidents.filter((incident) => incident.status === 'pending' || incident.status === 'in_review').length + overview.adjustments.filter((adjustment) => adjustment.status === 'pending').length;
+  return <div className="space-y-5">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <AttendanceMetric label="Estado actual" value={activeSession ? 'En jornada' : 'Sin jornada activa'} detail={activeSession ? `Desde ${formatDateTime(activeSession.startedAt)}` : 'Sin fichada abierta'} />
+      <AttendanceMetric label="Jornadas registradas" value={String(overview.sessionTotal)} detail="Historial completo" />
+      <AttendanceMetric label="Horas recientes" value={formatMinutes(latestMinutes)} detail={`Últimas ${overview.sessions.length} jornadas`} />
+      <AttendanceMetric label="Pendientes" value={String(pendingItems + reviewCount)} detail="Revisiones, incidencias y ajustes" />
+    </div>
+    {!overview.sessions.length ? <EmptyAttendance message="Este empleado todavía no registró jornadas." /> : <div className="overflow-hidden rounded-xl border border-zinc-200"><div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3"><h3 className="text-sm font-semibold text-zinc-900">Últimas jornadas</h3></div><div className="overflow-x-auto"><table className="min-w-[680px] w-full text-sm"><thead className="border-b border-zinc-100 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500"><tr><th className="px-4 py-3">Inicio</th><th className="px-4 py-3">Salón</th><th className="px-4 py-3">Horas</th><th className="px-4 py-3">Estado</th></tr></thead><tbody className="divide-y divide-zinc-100">{overview.sessions.map((session) => <tr key={session._id}><td className="px-4 py-3 text-zinc-700">{formatDateTime(session.startedAt)}</td><td className="px-4 py-3 text-zinc-700">{salonName(session.salonId)}</td><td className="px-4 py-3 font-medium text-zinc-950">{formatMinutes(session.workedMinutes)}</td><td className="px-4 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${session.requiresReview ? 'bg-amber-100 text-amber-700' : session.status === 'active' || session.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>{session.requiresReview ? 'Revisar' : workSessionStatusLabels[session.status]}</span></td></tr>)}</tbody></table></div></div>}
+  </div>;
+}
+function AttendanceMetric({ label, value, detail }: { label: string; value: string; detail: string }) { return <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p><p className="mt-2 text-lg font-semibold text-zinc-950">{value}</p><p className="mt-1 text-xs text-zinc-500">{detail}</p></article>; }

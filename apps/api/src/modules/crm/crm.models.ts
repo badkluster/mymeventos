@@ -330,7 +330,7 @@ const paymentSchema = new Schema({
   contractId: { type: Schema.Types.ObjectId, ref: 'Contract', index: true },
   quoteId: { type: Schema.Types.ObjectId, ref: 'Quote', index: true },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true },
-  ticketOrderId: { type: Schema.Types.ObjectId, ref: 'TicketOrder', index: true },
+  ticketOrderId: { type: Schema.Types.ObjectId, ref: 'TicketOrder' },
   type: { type: String, enum: ['deposit', 'installment', 'balance', 'addendum', 'extra', 'security_deposit', 'adjustment', 'refund', 'other'], default: 'installment', index: true },
   method: { type: String, enum: ['cash', 'bank_transfer', 'mercado_pago', 'card', 'other'] },
   status: { type: String, enum: ['pending', 'paid', 'cancelled', 'refunded'], default: 'pending', index: true },
