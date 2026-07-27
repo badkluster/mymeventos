@@ -29,7 +29,7 @@ const productionPlanSchema = new Schema({
   supersedesPlanId: { type: Schema.Types.ObjectId, ref: 'ProductionPlan', index: true },
   supersededByPlanId: { type: Schema.Types.ObjectId, ref: 'ProductionPlan' },
   regenerationReason: String,
-  sourceFingerprint: { type: String, required: true, index: true },
+  sourceFingerprint: { type: String, default: 'legacy', index: true },
   sourceSnapshot: { type: Schema.Types.Mixed, required: true },
   ...auditFields,
 }, { timestamps: true });
