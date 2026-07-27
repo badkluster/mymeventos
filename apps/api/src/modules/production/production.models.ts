@@ -26,6 +26,10 @@ const productionPlanSchema = new Schema({
   notes: String,
   version: { type: Number, default: 1 },
   isCurrent: { type: Boolean, default: true, index: true },
+  supersedesPlanId: { type: Schema.Types.ObjectId, ref: 'ProductionPlan', index: true },
+  supersededByPlanId: { type: Schema.Types.ObjectId, ref: 'ProductionPlan' },
+  regenerationReason: String,
+  sourceFingerprint: { type: String, default: 'legacy', index: true },
   sourceSnapshot: { type: Schema.Types.Mixed, required: true },
   ...auditFields,
 }, { timestamps: true });

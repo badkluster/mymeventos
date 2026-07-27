@@ -179,6 +179,12 @@ export async function checkOut(userId: string, input: ClockInput) {
   if (!activeSession) throw new ApiError(409, 'ATTENDANCE_NO_ACTIVE_SESSION');
 
   const timing = resolvePunchTiming(input.clientOccurredAt, input.networkStatus);
+  const startedAtMs = new Date(activeSession.startedAt).getTime();
+  if (input.clientOccurredAt.getTime() <= startedAtMs) timing.requiresReview = true;
+  if (timing.effectiveAt.getTime() <= startedAtMs) {
+    timing.effectiveAt = new Date(startedAtMs + 60_000);
+    timing.requiresReview = true;
+  }
 
   const locationResult = await validateLocation(activeSession.salonId?.toString(), input.location, settings);
   if (locationResult.blocked) throw new ApiError(403, 'ATTENDANCE_OUTSIDE_GEOFENCE');
@@ -207,7 +213,7 @@ export async function checkOut(userId: string, input: ClockInput) {
     throw error;
   }
 
-  const workedMinutes = Math.max(0, Math.round((timing.effectiveAt.getTime() - activeSession.startedAt.getTime()) / 60_000));
+  const workedMinutes = Math.max(0, Math.round((timing.effectiveAt.getTime() - startedAtMs) / 60_000));
   const requiresReview = activeSession.requiresReview || timing.requiresReview || locationResult.requiresReview;
   const attendanceClassification = await classifySession(activeSession, settings);
 
