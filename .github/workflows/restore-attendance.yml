@@ -17,6 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
+      # This one-time job restores the untouched service before applying the focused timing fix.
       - name: Restore original service and apply focused fix
         shell: python
         run: |
