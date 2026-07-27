@@ -41,15 +41,23 @@ async function closureForEvent(eventId: string, salonId: string, userId: string)
 async function closureChecks(event: any, closure: any) {
   const eventId = event._id;
   const now = new Date();
-  const [plan, productionBlocked, staffOpen, contract, pendingPayments, pendingExpenses, expenseCount] = await Promise.all([
+  const currentPlanIds = await ProductionPlan.find({ eventId, isCurrent: true, deletedAt: null }).distinct('_id');
+  const results = await Promise.all([
     ProductionPlan.findOne({ eventId, isCurrent: true, deletedAt: null }).select('_id status').lean(),
-    ProductionItem.countDocuments({ productionPlanId: { $in: await ProductionPlan.find({ eventId, isCurrent: true, deletedAt: null }).distinct('_id') }, deletedAt: null, status: 'blocked' }),
+    ProductionItem.countDocuments({ productionPlanId: { $in: currentPlanIds }, deletedAt: null, status: 'blocked' }),
     EventStaffAssignment.countDocuments({ eventId, deletedAt: null, status: { $nin: ['completed', 'cancelled', 'no_show'] } }),
     Contract.findOne({ eventId, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).sort({ versionNumber: -1, createdAt: -1 }).select('_id contractNumber status totalAmount paidAmount balanceAmount').lean(),
     Payment.countDocuments({ eventId, deletedAt: null, affectsContractBalance: true, status: 'pending' }),
     Expense.countDocuments({ eventId, deletedAt: null, status: 'pending' }),
     Expense.countDocuments({ eventId, deletedAt: null, status: { $ne: 'cancelled' } }),
   ]);
+  const plan: any = results[0];
+  const productionBlocked = Number(results[1]);
+  const staffOpen = Number(results[2]);
+  const contract: any = results[3];
+  const pendingPayments = Number(results[4]);
+  const pendingExpenses = Number(results[5]);
+  const expenseCount = Number(results[6]);
   const eventOccurred = Boolean(event.eventDate && new Date(event.eventDate).getTime() <= now.getTime());
   const operational: Check[] = [
     { id: 'event-date', label: 'El evento ya ocurrió', ok: eventOccurred, severity: 'blocker', detail: event.eventDate ? undefined : 'El evento no tiene fecha definida.', href: `/admin/events/${eventId}` },
