@@ -57,7 +57,9 @@ $serial = Get-RunningEmulatorSerial $adbPath
 if (-not $serial) {
   Write-Host "Iniciando el emulador $AvdName..."
   # Deliberadamente visible: el emulador es la ventana con la que trabaja la persona.
-  Start-Process -FilePath $emulatorPath -ArgumentList "@$AvdName"
+  # A cold boot avoids a stuck/corrupted Quick Boot snapshot while preserving
+  # the emulator's installed apps and user data.
+  Start-Process -FilePath $emulatorPath -ArgumentList "@$AvdName", '-no-snapshot-load'
 }
 
 $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -78,6 +80,21 @@ Write-Host "Emulador listo ($serial). Abriendo Expo Go..."
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repositoryRoot
 try {
+  $metroListener = Get-NetTCPConnection -State Listen -LocalPort 8081 -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($metroListener) {
+    $metroProcess = Get-Process -Id $metroListener.OwningProcess -ErrorAction SilentlyContinue
+    if (-not $metroProcess -or $metroProcess.ProcessName -ne 'node') {
+      throw "El puerto 8081 ya está ocupado por otro proceso. Cerralo o liberá el puerto antes de iniciar Expo."
+    }
+    $expoUrl = 'exp://127.0.0.1:8081'
+    Write-Host "Metro ya está activo. Abriendo $expoUrl en Expo Go..."
+    & $adbPath -s $serial shell am start -a android.intent.action.VIEW -d $expoUrl | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw 'No se pudo abrir Expo Go con el Metro que ya estaba en ejecución.'
+    }
+    exit 0
+  }
+
   & pnpm --filter '@mym/mobile' run android
   exit $LASTEXITCODE
 } finally {
