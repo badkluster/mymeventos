@@ -103,6 +103,15 @@ function collectIds(value: any, keys: Set<string>, output = new Set<string>(), d
   return output;
 }
 
+function addTopLevelIds(value: any, output: Set<string>) {
+  const items = Array.isArray(value) ? value : value ? [value] : [];
+  for (const item of items) {
+    const candidate = typeof item === 'string' ? item : item?._id || item?.id;
+    const id = candidate?.toString?.();
+    if (id && /^[0-9a-fA-F]{24}$/.test(id)) output.add(id);
+  }
+}
+
 function sameId(left: unknown, right: unknown) {
   return Boolean(left && right && String(left) === String(right));
 }
@@ -111,9 +120,13 @@ async function productionSource(eventId: string) {
   const event: any = await Event.findOne({ _id: eventId, deletedAt: null }).lean();
   if (!event) throw new ApiError(404, 'EVENT_NOT_FOUND');
   if (!event.eventDate) throw new ApiError(409, 'PRODUCTION_EVENT_DATE_REQUIRED', 'El evento necesita una fecha antes de generar producción.');
+  const quoteId = event.sourceQuoteId || event.quoteId;
+  const quotePromise = quoteId
+    ? Quote.findOne({ _id: quoteId, deletedAt: null }).select('packageTemplateId packageName lineItems servicesSnapshot updatedAt').lean()
+    : Promise.resolve(null);
   const [contract, quote, rules]: any[] = await Promise.all([
     Contract.findOne({ eventId, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).sort({ versionNumber: -1, createdAt: -1 }).lean(),
-    Quote.findOne({ _id: event.sourceQuoteId || event.quoteId, deletedAt: null }).select('packageTemplateId packageName lineItems servicesSnapshot updatedAt').lean(),
+    quotePromise,
     ProductionRule.find({
       deletedAt: null, isActive: true,
       $and: [
@@ -127,7 +140,9 @@ async function productionSource(eventId: string) {
   const counts = guestCounts(event);
   const packageIds = collectIds([quote, contract?.commercialSnapshot, event.commercialSnapshot], new Set(['packageId', 'packageTemplateId']));
   if (quote?.packageTemplateId) packageIds.add(String(quote.packageTemplateId));
-  const serviceIds = collectIds([event.servicesSnapshot, event.lineItemsSnapshot, event.resourcePlanSnapshot?.services, contract?.servicesSnapshot, contract?.lineItemsSnapshot, quote?.servicesSnapshot, quote?.lineItems], new Set(['serviceId', 'serviceExtraId', '_id']));
+  const serviceSources = [event.servicesSnapshot, event.lineItemsSnapshot, event.resourcePlanSnapshot?.services, contract?.servicesSnapshot, contract?.lineItemsSnapshot, quote?.servicesSnapshot, quote?.lineItems];
+  const serviceIds = collectIds(serviceSources, new Set(['serviceId', 'serviceExtraId']));
+  serviceSources.forEach((source) => addTopLevelIds(source, serviceIds));
   const matchingRules = rules.filter((rule: any) => {
     if (rule.guestsFrom !== undefined && counts.total < rule.guestsFrom) return false;
     if (rule.guestsTo !== undefined && counts.total > rule.guestsTo) return false;
@@ -158,6 +173,20 @@ async function productionSource(eventId: string) {
   return { event, contract, counts, matchingRules, sourceSnapshot, sourceFingerprint: fingerprint(sourceSnapshot) };
 }
 
+async function previousManualItems(existing: any): Promise<SuggestedItem[]> {
+  if (!existing) return [];
+  const originals: any[] = await ProductionItem.find({ productionPlanId: existing._id, deletedAt: null, isManual: true }).lean();
+  if (!originals.length) return [];
+  const sectionIds = [...new Set(originals.map((item) => item.sectionId?.toString()).filter(Boolean))];
+  const sections: any[] = await ProductionSection.find({ _id: { $in: sectionIds } }).select('type').lean();
+  const typeBySection = new Map(sections.map((section) => [section._id.toString(), section.type]));
+  return originals.map((item) => ({
+    productId: item.productId?.toString(), name: item.productNameSnapshot, category: item.category, quantity: Number(item.plannedQuantity || 0), unit: item.unit,
+    sectionType: typeBySection.get(item.sectionId?.toString()) || 'miscellaneous', sourceType: 'manual' as const,
+    sourceId: item.sourceId || item._id.toString(), responsibleId: item.responsibleId?.toString(), observations: item.observations,
+  }));
+}
+
 export async function generateProductionPlan(request: Request, eventId: string, options: { regenerate?: boolean; reason?: string } = {}) {
   const source = await productionSource(eventId);
   assertSalon(request, source.event.salonId);
@@ -177,17 +206,7 @@ export async function generateProductionPlan(request: Request, eventId: string, 
     quantity: Number(item.quantity ?? item.plannedQuantity ?? 0), unit: item.unit || item.unitOfMeasure || 'unidad',
     sectionType: item.sectionType || (item.category === 'BEVERAGE' ? 'beverages' : 'miscellaneous'), sourceType: 'legacy_snapshot' as const, sourceId: item.id?.toString(),
   })).filter((item: SuggestedItem) => item.quantity > 0);
-  const manualItems: SuggestedItem[] = existing ? (await ProductionItem.find({ productionPlanId: existing._id, deletedAt: null, isManual: true }).lean()).map((item: any) => ({
-    productId: item.productId?.toString(), name: item.productNameSnapshot, category: item.category, quantity: Number(item.plannedQuantity || 0), unit: item.unit,
-    sectionType: 'miscellaneous', sourceType: 'manual' as const, sourceId: item.sourceId || item._id.toString(), responsibleId: item.responsibleId?.toString(), observations: item.observations,
-  })) : [];
-  if (existing && manualItems.length) {
-    const manualSectionIds = [...new Set((await ProductionItem.find({ productionPlanId: existing._id, deletedAt: null, isManual: true }).select('sectionId').lean()).map((item: any) => item.sectionId.toString()))];
-    const manualSections: any[] = await ProductionSection.find({ _id: { $in: manualSectionIds } }).select('type').lean();
-    const typeBySection = new Map(manualSections.map((section: any) => [section._id.toString(), section.type]));
-    const originals: any[] = await ProductionItem.find({ productionPlanId: existing._id, deletedAt: null, isManual: true }).lean();
-    manualItems.forEach((item, index) => { item.sectionType = typeBySection.get(originals[index]?.sectionId?.toString()) || 'miscellaneous'; });
-  }
+  const manualItems = await previousManualItems(existing);
   const suggested = mergeSuggested([...ruleItems, ...legacyItems, ...manualItems]);
   const version = existing ? Number(existing.version || 1) + 1 : 1;
   if (existing) await ProductionPlan.updateOne({ _id: existing._id, isCurrent: true }, { isCurrent: false, updatedBy: request.user!.id });
@@ -263,7 +282,7 @@ export async function refreshPlanStatus(planId: string) {
   return status;
 }
 
-export async function consolidatedProduction(request: Request, from: Date, to: Date, salonMatch: Record<string, unknown>) {
+export async function consolidatedProduction(_request: Request, from: Date, to: Date, salonMatch: Record<string, unknown>) {
   const plans: any[] = await ProductionPlan.find({ deletedAt: null, isCurrent: true, ...salonMatch, eventDate: { $gte: from, $lt: to }, status: { $nin: ['cancelled'] } }).select('_id').lean();
   const planIds = plans.map((plan) => plan._id);
   const rows: any[] = await ProductionItem.aggregate([
