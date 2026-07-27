@@ -7,9 +7,8 @@ import { Lead, Customer } from '../crm/crm.models';
 import { MarketingCampaign, MarketingSendLog, MarketingTemplate } from './marketing.models';
 
 const router = Router();
-router.use(requireAuth);
 
-router.get('/dashboard', requirePermission(Permission.CAMPAIGNS_READ), asyncHandler(async (request, response) => {
+router.get('/dashboard', requireAuth, requirePermission(Permission.CAMPAIGNS_READ), asyncHandler(async (request, response) => {
   const isAdmin = request.user!.roles.includes(Role.ADMIN);
   const salonScope = isAdmin ? null : accessibleSalonIds(request.user!);
   const campaignScopeMatch: Record<string, unknown> = { deletedAt: null };
