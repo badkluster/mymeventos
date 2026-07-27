@@ -37,24 +37,7 @@ import { PublicTickets } from "./public-tickets";
 import type { TicketPublication, TicketType } from "./types";
 import { ticketLabel } from "./ticket-labels";
 
-type Publication = TicketPublication & {
-  internalName?: string;
-  category?: string;
-  endsAt?: string;
-  soldCount?: number;
-  reservedCount?: number;
-  revenue?: number;
-  updatedAt?: string;
-  visibility?: { isPublic?: boolean };
-  location?: { mapsUrl?: string };
-  gallery?: string[];
-  appearance?: {
-    primaryColor?: string;
-    secondaryColor?: string;
-    backgroundColor?: string;
-    textColor?: string;
-  };
-};
+type Publication = TicketPublication;
 type Dashboard = {
   activePublications: number;
   ticketsSold: number;
@@ -559,11 +542,11 @@ function EditableTicketType({
     name: type.name,
     description: type.description ?? "",
     price: type.price ?? 0,
-    promotionalPrice: (type as any).promotionalPrice ?? 0,
-    promotionalStartsAt: toDateTimeLocal((type as any).promotionalStartsAt),
-    promotionalEndsAt: toDateTimeLocal((type as any).promotionalEndsAt),
+    promotionalPrice: type.promotionalPrice ?? 0,
+    promotionalStartsAt: toDateTimeLocal(type.promotionalStartsAt),
+    promotionalEndsAt: toDateTimeLocal(type.promotionalEndsAt),
     capacity: type.capacity ?? 1,
-    minPerOrder: (type as any).minPerOrder ?? 1,
+    minPerOrder: type.minPerOrder ?? 1,
     maxPerOrder: type.maxPerOrder ?? 8,
     status: type.status ?? "active",
   });
@@ -734,6 +717,90 @@ const defaultCancellationPolicy =
 const defaultRefundPolicy =
   "No se realizan reembolsos por arrepentimiento una vez confirmada la compra. Ante inconvenientes puntuales, escribinos y evaluamos cada caso.";
 
+type PublicationAppearance = {
+  primaryColor: string;
+  secondaryColor: string;
+  backgroundColor: string;
+  textColor: string;
+} & Record<string, string>;
+type PublicationForm = {
+  title: string;
+  internalName: string;
+  slug: string;
+  category: string;
+  description: string;
+  startsAt: string;
+  endsAt: string;
+  venueName: string;
+  address: string;
+  mapsUrl: string;
+  capacity: number;
+  coverImage: string;
+  gallery: string[];
+  termsAndConditions: string;
+  cancellationPolicy: string;
+  refundPolicy: string;
+  appearance: PublicationAppearance;
+  visibility: { isPublic: boolean; showInPublicCatalog: boolean };
+};
+type PublicationOrder = {
+  _id: string;
+  publicId: string;
+  buyer: { name: string; email: string };
+  status: string;
+  paymentStatus: string;
+};
+const initialPublicationForm: PublicationForm = {
+  title: "",
+  internalName: "",
+  slug: "",
+  category: "",
+  description: "",
+  startsAt: "",
+  endsAt: "",
+  venueName: "",
+  address: "",
+  mapsUrl: "",
+  capacity: 1,
+  coverImage: "",
+  gallery: [],
+  termsAndConditions: defaultTermsAndConditions,
+  cancellationPolicy: defaultCancellationPolicy,
+  refundPolicy: defaultRefundPolicy,
+  appearance: {
+    primaryColor: "#18181b",
+    secondaryColor: "#d4a373",
+    backgroundColor: "#fafaf9",
+    textColor: "#18181b",
+  },
+  visibility: { isPublic: true, showInPublicCatalog: true },
+};
+const publicationToForm = (
+  publication: Publication,
+  current: PublicationForm,
+): PublicationForm => ({
+  ...current,
+  title: publication.title ?? current.title,
+  internalName: publication.internalName ?? current.internalName,
+  slug: publication.slug ?? current.slug,
+  category: publication.category ?? current.category,
+  description: publication.description ?? current.description,
+  startsAt: toDateTimeLocal(publication.startsAt),
+  endsAt: toDateTimeLocal(publication.endsAt),
+  venueName: publication.venueName ?? current.venueName,
+  address: publication.address ?? current.address,
+  mapsUrl: publication.mapsUrl ?? publication.location?.mapsUrl ?? "",
+  capacity: publication.capacity ?? current.capacity,
+  coverImage: publication.coverImage ?? current.coverImage,
+  gallery: publication.gallery ?? [],
+  termsAndConditions:
+    publication.termsAndConditions ?? current.termsAndConditions,
+  cancellationPolicy: publication.cancellationPolicy ?? current.cancellationPolicy,
+  refundPolicy: publication.refundPolicy ?? current.refundPolicy,
+  appearance: { ...current.appearance, ...publication.appearance },
+  visibility: { ...current.visibility, ...publication.visibility },
+});
+
 export function TicketPublicationEditor({
   publicationId,
   create = false,
@@ -744,36 +811,12 @@ export function TicketPublicationEditor({
   const { showToast } = useToast();
   const [publication, setPublication] = useState<Publication>();
   const [types, setTypes] = useState<TicketType[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<PublicationOrder[]>([]);
   const [tab, setTab] = useState("general");
   const [saving, setSaving] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [form, setForm] = useState<any>({
-    title: "",
-    internalName: "",
-    slug: "",
-    category: "",
-    description: "",
-    startsAt: "",
-    endsAt: "",
-    venueName: "",
-    address: "",
-    mapsUrl: "",
-    capacity: 1,
-    coverImage: "",
-    gallery: [],
-    termsAndConditions: defaultTermsAndConditions,
-    cancellationPolicy: defaultCancellationPolicy,
-    refundPolicy: defaultRefundPolicy,
-    appearance: {
-      primaryColor: "#18181b",
-      secondaryColor: "#d4a373",
-      backgroundColor: "#fafaf9",
-      textColor: "#18181b",
-    },
-    visibility: { isPublic: true, showInPublicCatalog: true },
-  });
+  const [form, setForm] = useState<PublicationForm>(initialPublicationForm);
   const load = async () => {
     if (!publicationId) return;
     try {
@@ -781,20 +824,11 @@ export function TicketPublicationEditor({
         publication: Publication;
         types: TicketType[];
       }>(`/tickets/publications/${publicationId}`);
-      const item: any = data.publication;
+      const item = data.publication;
       setPublication(item);
       setTypes(data.types);
       if (item.slug) setSlugTouched(true);
-      setForm((current: any) => ({
-        ...current,
-        ...item,
-        startsAt: toDateTimeLocal(item.startsAt),
-        endsAt: toDateTimeLocal(item.endsAt),
-        mapsUrl: item.mapsUrl ?? item.location?.mapsUrl ?? "",
-        gallery: item.gallery ?? [],
-        appearance: item.appearance ?? current.appearance,
-        visibility: item.visibility ?? current.visibility,
-      }));
+      setForm((current) => publicationToForm(item, current));
     } catch (error) {
       showToast({
         message:
@@ -806,13 +840,14 @@ export function TicketPublicationEditor({
     }
   };
   useEffect(() => {
-    void load();
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
   }, [publicationId]);
   useEffect(() => {
     if (!publicationId || !["buyers", "payments"].includes(tab)) return;
     void api
       .get<{
-        orders: any[];
+        orders: PublicationOrder[];
       }>(`/tickets/orders?publicationId=${publicationId}&limit=100`)
       .then((data) => setOrders(data.orders))
       .catch((error) =>
@@ -825,7 +860,7 @@ export function TicketPublicationEditor({
         }),
       );
   }, [publicationId, tab]);
-  const save = async (override?: any) => {
+  const save = async (override?: Partial<PublicationForm>) => {
     const nextCapacity = override?.capacity ?? form.capacity;
     const capacityFloor =
       (publication?.soldCount ?? 0) + (publication?.reservedCount ?? 0);
@@ -883,19 +918,7 @@ export function TicketPublicationEditor({
         );
       else {
         setPublication(result.publication);
-        setForm((current: any) => ({
-          ...current,
-          ...result.publication,
-          startsAt: toDateTimeLocal(result.publication.startsAt),
-          endsAt: toDateTimeLocal(result.publication.endsAt),
-          mapsUrl:
-            result.publication.mapsUrl ??
-            result.publication.location?.mapsUrl ??
-            "",
-          gallery: result.publication.gallery ?? [],
-          appearance: result.publication.appearance ?? current.appearance,
-          visibility: result.publication.visibility ?? current.visibility,
-        }));
+        setForm((current) => publicationToForm(result.publication, current));
       }
     } catch (error) {
       showToast({

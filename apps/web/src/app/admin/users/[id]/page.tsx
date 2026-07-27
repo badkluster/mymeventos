@@ -152,7 +152,9 @@ export default function UserDetailPage() {
   }, [canReadAttendance, userId]);
 
   useEffect(() => {
-    if (tab === 'attendance') void loadAttendanceOverview();
+    if (tab !== 'attendance') return;
+    const timer = window.setTimeout(() => void loadAttendanceOverview(), 0);
+    return () => window.clearTimeout(timer);
   }, [tab, loadAttendanceOverview]);
 
   const primarySalon = useMemo(() => entityName(user?.primarySalonId) || 'Sin principal', [user]);

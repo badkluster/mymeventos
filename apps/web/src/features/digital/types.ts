@@ -220,7 +220,9 @@ export type TicketType = {
   capacity?: number;
   soldCount?: number;
   reservedCount?: number;
+  minPerOrder?: number;
   maxPerOrder?: number;
+  color?: string;
   status?: string;
   available?: number;
   availableCount?: number;
@@ -261,6 +263,17 @@ export type TicketPublication = {
   capacity?: number;
   availableCount?: number;
   maxTicketsPerOrder?: number;
+  internalName?: string;
+  category?: string;
+  soldCount?: number;
+  reservedCount?: number;
+  revenue?: number;
+  updatedAt?: string;
+  visibility?: {
+    isPublic?: boolean;
+    showInPublicCatalog?: boolean;
+  };
+  location?: { mapsUrl?: string };
   ticketTypes?: TicketType[];
 };
 export type TicketOrder = {

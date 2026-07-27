@@ -10,8 +10,17 @@ import { MarketingTabs } from '@/components/admin/marketing-tabs';
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
 
+type LeadAudienceFilters = {
+  statuses?: string[]; salonIds?: string[]; eventType?: string; tags?: string[];
+  guestCountMin?: number; guestCountMax?: number; converted?: boolean; hasQuote?: boolean;
+};
+type CustomerAudienceFilters = {
+  salonIds?: string[]; hasPastEvents?: boolean; hasFutureEvents?: boolean;
+  eventType?: string; minEventsCount?: number; tags?: string[];
+};
+type AudienceFilters = { lead?: LeadAudienceFilters; customer?: CustomerAudienceFilters };
 type Audience = {
-  _id: string; name: string; description?: string; sourceTypes: string[]; filters?: Record<string, unknown>;
+  _id: string; name: string; description?: string; sourceTypes: string[]; filters?: AudienceFilters;
   manualRecipients?: Array<{ email: string; firstName?: string; lastName?: string }>;
   salonId?: string; isDynamic: boolean; estimatedCount: number; lastCalculatedAt?: string;
 };
@@ -28,7 +37,7 @@ const emptyForm = {
 };
 
 function buildFiltersAndManual(form: typeof emptyForm) {
-  const filters: Record<string, unknown> = {};
+  const filters: AudienceFilters = {};
   if (form.sourceTypes.includes('lead')) {
     filters.lead = {
       statuses: form.leadStatuses.length ? form.leadStatuses : undefined,
@@ -85,8 +94,8 @@ export default function MarketingAudiencesPage() {
     setEstimate(null); setSample(null);
     setEditing(audience ?? null);
     if (!audience) { setForm(emptyForm); return; }
-    const leadFilters = (audience.filters as any)?.lead ?? {};
-    const customerFilters = (audience.filters as any)?.customer ?? {};
+    const leadFilters = audience.filters?.lead ?? {};
+    const customerFilters = audience.filters?.customer ?? {};
     setForm({
       ...emptyForm,
       name: audience.name, description: audience.description ?? '', sourceTypes: audience.sourceTypes, salonId: audience.salonId ?? '',

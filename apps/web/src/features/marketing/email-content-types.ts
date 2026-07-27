@@ -1,5 +1,32 @@
 export type EmailBlockType = 'logo' | 'heading' | 'text' | 'image' | 'button' | 'divider' | 'spacer' | 'columns' | 'promotion' | 'social' | 'contact' | 'footer';
 
+export type EmailBlockData = {
+  url?: string;
+  link?: string;
+  width?: number;
+  text?: string;
+  fontSize?: number;
+  color?: string;
+  alt?: string;
+  label?: string;
+  backgroundColor?: string;
+  textColor?: string;
+  borderRadius?: number;
+  thickness?: number;
+  height?: number;
+  leftText?: string;
+  rightText?: string;
+  showCode?: boolean;
+  showButton?: boolean;
+  instagramUrl?: string;
+  facebookUrl?: string;
+  whatsappUrl?: string;
+  showAddress?: boolean;
+  showPhone?: boolean;
+  showWhatsApp?: boolean;
+  showUnsubscribe?: boolean;
+};
+
 export type EmailBlock = {
   id: string;
   type: EmailBlockType;
@@ -8,7 +35,7 @@ export type EmailBlock = {
   paddingY: number;
   paddingX: number;
   align: 'left' | 'center' | 'right';
-  data: Record<string, any>;
+  data: EmailBlockData;
 };
 
 export type EmailContentSettings = {
@@ -35,7 +62,7 @@ export const EMAIL_BLOCK_LABELS: Record<EmailBlockType, string> = {
 
 export const AVAILABLE_EMAIL_BLOCKS: EmailBlockType[] = ['heading', 'text', 'image', 'button', 'divider', 'spacer', 'columns', 'promotion', 'social', 'contact', 'logo', 'footer'];
 
-function blockData(type: EmailBlockType): Record<string, any> {
+function blockData(type: EmailBlockType): EmailBlockData {
   switch (type) {
     case 'logo': return { url: '{{companyLogoUrl}}', width: 160, link: '{{buttonUrl}}' };
     case 'heading': return { text: 'Título de la sección', fontSize: 26, color: '#18181B' };
