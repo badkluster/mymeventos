@@ -1,6 +1,7 @@
+import { createHash } from 'crypto';
 import type { Request } from 'express';
-import { Contract, Event } from '../crm/crm.models';
-import { CatalogItem, InventoryItem } from '../operations/operations.models';
+import { Contract, Event, Quote } from '../crm/crm.models';
+import { InventoryItem } from '../operations/operations.models';
 import { ProductionItem, ProductionPlan, ProductionRule, ProductionSection } from './production.models';
 import { ApiError } from '../../middlewares/errorHandler';
 import { canAccessSalon } from '../../middlewares/auth';
@@ -40,8 +41,16 @@ function assertSalon(request: Request, salonId: unknown) {
 }
 
 type SuggestedItem = {
-  productId?: string; name: string; category?: string; quantity: number; unit: string; sectionType: string;
-  sourceType: 'rule' | 'legacy_snapshot'; sourceId?: string;
+  productId?: string;
+  name: string;
+  category?: string;
+  quantity: number;
+  unit: string;
+  sectionType: string;
+  sourceType: 'rule' | 'legacy_snapshot' | 'manual';
+  sourceId?: string;
+  responsibleId?: string;
+  observations?: string;
 };
 
 function mergeSuggested(items: SuggestedItem[]) {
@@ -49,21 +58,75 @@ function mergeSuggested(items: SuggestedItem[]) {
   for (const item of items) {
     const key = `${item.productId || normalizeProductName(item.name)}|${normalizeProductName(item.unit)}`;
     const existing = merged.get(key);
-    if (existing) existing.quantity = Number((existing.quantity + item.quantity).toFixed(3));
-    else merged.set(key, { ...item });
+    if (existing) {
+      existing.quantity = Number((existing.quantity + item.quantity).toFixed(3));
+      if (item.sourceType === 'manual') {
+        existing.sourceType = 'manual';
+        existing.sourceId = item.sourceId;
+        existing.responsibleId = item.responsibleId || existing.responsibleId;
+        existing.observations = [existing.observations, item.observations].filter(Boolean).join(' · ') || undefined;
+      }
+    } else merged.set(key, { ...item });
   }
   return [...merged.values()];
 }
 
-export async function generateProductionPlan(request: Request, eventId: string) {
+function normalizeForFingerprint(value: any): any {
+  if (value === null || value === undefined) return value;
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(normalizeForFingerprint);
+  if (typeof value === 'object') {
+    if (typeof value.toHexString === 'function') return value.toHexString();
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, normalizeForFingerprint(value[key])]));
+  }
+  return value;
+}
+
+function fingerprint(value: any) {
+  return createHash('sha256').update(JSON.stringify(normalizeForFingerprint(value))).digest('hex');
+}
+
+function collectIds(value: any, keys: Set<string>, output = new Set<string>(), depth = 0): Set<string> {
+  if (value === null || value === undefined || depth > 6) return output;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectIds(item, keys, output, depth + 1));
+    return output;
+  }
+  if (typeof value !== 'object') return output;
+  for (const [key, item] of Object.entries(value)) {
+    if (keys.has(key) && item) {
+      const id = typeof item === 'string' ? item : (item as any)?.toString?.();
+      if (id && /^[0-9a-fA-F]{24}$/.test(id)) output.add(id);
+    }
+    collectIds(item, keys, output, depth + 1);
+  }
+  return output;
+}
+
+function addTopLevelIds(value: any, output: Set<string>) {
+  const items = Array.isArray(value) ? value : value ? [value] : [];
+  for (const item of items) {
+    const candidate = typeof item === 'string' ? item : item?._id || item?.id;
+    const id = candidate?.toString?.();
+    if (id && /^[0-9a-fA-F]{24}$/.test(id)) output.add(id);
+  }
+}
+
+function sameId(left: unknown, right: unknown) {
+  return Boolean(left && right && String(left) === String(right));
+}
+
+async function productionSource(eventId: string) {
   const event: any = await Event.findOne({ _id: eventId, deletedAt: null }).lean();
   if (!event) throw new ApiError(404, 'EVENT_NOT_FOUND');
-  assertSalon(request, event.salonId);
-  const existing: any = await ProductionPlan.findOne({ eventId, isCurrent: true, deletedAt: null }).lean();
-  if (existing) return { plan: await productionPlanDetail(request, existing._id.toString()), created: false };
   if (!event.eventDate) throw new ApiError(409, 'PRODUCTION_EVENT_DATE_REQUIRED', 'El evento necesita una fecha antes de generar producción.');
-  const [contract, rules]: any[] = await Promise.all([
-    Contract.findOne({ eventId, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).sort({ versionNumber: -1 }).lean(),
+  const quoteId = event.sourceQuoteId || event.quoteId;
+  const quotePromise = quoteId
+    ? Quote.findOne({ _id: quoteId, deletedAt: null }).select('packageTemplateId packageName lineItems servicesSnapshot updatedAt').lean()
+    : Promise.resolve(null);
+  const [contract, quote, rules]: any[] = await Promise.all([
+    Contract.findOne({ eventId, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).sort({ versionNumber: -1, createdAt: -1 }).lean(),
+    quotePromise,
     ProductionRule.find({
       deletedAt: null, isActive: true,
       $and: [
@@ -72,45 +135,115 @@ export async function generateProductionPlan(request: Request, eventId: string) 
         { $or: [{ validFrom: { $exists: false } }, { validFrom: null }, { validFrom: { $lte: event.eventDate } }] },
         { $or: [{ validUntil: { $exists: false } }, { validUntil: null }, { validUntil: { $gte: event.eventDate } }] },
       ],
-    }).populate('productId').lean(),
+    }).populate('productId').sort({ createdAt: 1 }).lean(),
   ]);
   const counts = guestCounts(event);
-  const matchingRules = rules.filter((rule: any) => (rule.guestsFrom === undefined || counts.total >= rule.guestsFrom) && (rule.guestsTo === undefined || counts.total <= rule.guestsTo));
-  const ruleItems: SuggestedItem[] = matchingRules.map((rule: any) => {
-    const base = Number(rule.fixedQuantity ?? 0) + counts.total * Number(rule.quantityPerGuest ?? 0);
+  const packageIds = collectIds([quote, contract?.commercialSnapshot, event.commercialSnapshot], new Set(['packageId', 'packageTemplateId']));
+  if (quote?.packageTemplateId) packageIds.add(String(quote.packageTemplateId));
+  const serviceSources = [event.servicesSnapshot, event.lineItemsSnapshot, event.resourcePlanSnapshot?.services, contract?.servicesSnapshot, contract?.lineItemsSnapshot, quote?.servicesSnapshot, quote?.lineItems];
+  const serviceIds = collectIds(serviceSources, new Set(['serviceId', 'serviceExtraId']));
+  serviceSources.forEach((source) => addTopLevelIds(source, serviceIds));
+  const matchingRules = rules.filter((rule: any) => {
+    if (rule.guestsFrom !== undefined && counts.total < rule.guestsFrom) return false;
+    if (rule.guestsTo !== undefined && counts.total > rule.guestsTo) return false;
+    if (rule.packageId && ![...packageIds].some((id) => sameId(id, rule.packageId))) return false;
+    if (rule.serviceId && ![...serviceIds].some((id) => sameId(id, rule.serviceId))) return false;
+    return true;
+  });
+  const sourceSnapshot = {
+    event: {
+      id: event._id, eventName: event.eventName, eventType: event.eventType, eventDate: event.eventDate,
+      guestCounts: counts, menuSnapshot: event.menuSnapshot ?? null, servicesSnapshot: event.servicesSnapshot ?? null,
+      lineItemsSnapshot: event.lineItemsSnapshot ?? null, resourceProducts: event.resourcePlanSnapshot?.productItems ?? [],
+      updatedAt: event.updatedAt,
+    },
+    contract: contract ? {
+      id: contract._id, number: contract.contractNumber, status: contract.status, versionNumber: contract.versionNumber,
+      lineItems: contract.lineItemsSnapshot, menu: contract.menuSnapshot, services: contract.servicesSnapshot, updatedAt: contract.updatedAt,
+    } : null,
+    quote: quote ? { id: quote._id, packageTemplateId: quote.packageTemplateId, packageName: quote.packageName, updatedAt: quote.updatedAt } : null,
+    packageIds: [...packageIds].sort(),
+    serviceIds: [...serviceIds].sort(),
+    rules: matchingRules.map((rule: any) => ({
+      id: rule._id, updatedAt: rule.updatedAt, name: rule.name, productId: rule.productId?._id, packageId: rule.packageId, serviceId: rule.serviceId,
+      quantityPerGuest: rule.quantityPerGuest, fixedQuantity: rule.fixedQuantity, wastePercentage: rule.wastePercentage,
+      roundingMode: rule.roundingMode, packageSize: rule.packageSize, sectionType: rule.sectionType,
+    })),
+  };
+  return { event, contract, counts, matchingRules, sourceSnapshot, sourceFingerprint: fingerprint(sourceSnapshot) };
+}
+
+async function previousManualItems(existing: any): Promise<SuggestedItem[]> {
+  if (!existing) return [];
+  const originals: any[] = await ProductionItem.find({ productionPlanId: existing._id, deletedAt: null, isManual: true }).lean();
+  if (!originals.length) return [];
+  const sectionIds = [...new Set(originals.map((item) => item.sectionId?.toString()).filter(Boolean))];
+  const sections: any[] = await ProductionSection.find({ _id: { $in: sectionIds } }).select('type').lean();
+  const typeBySection = new Map(sections.map((section) => [section._id.toString(), section.type]));
+  return originals.map((item) => ({
+    productId: item.productId?.toString(), name: item.productNameSnapshot, category: item.category, quantity: Number(item.plannedQuantity || 0), unit: item.unit,
+    sectionType: typeBySection.get(item.sectionId?.toString()) || 'miscellaneous', sourceType: 'manual' as const,
+    sourceId: item.sourceId || item._id.toString(), responsibleId: item.responsibleId?.toString(), observations: item.observations,
+  }));
+}
+
+export async function generateProductionPlan(request: Request, eventId: string, options: { regenerate?: boolean; reason?: string } = {}) {
+  const source = await productionSource(eventId);
+  assertSalon(request, source.event.salonId);
+  const existing: any = await ProductionPlan.findOne({ eventId, isCurrent: true, deletedAt: null }).lean();
+  const sourceChanged = Boolean(existing && existing.sourceFingerprint !== source.sourceFingerprint);
+  if (existing && !sourceChanged) return { plan: await productionPlanDetail(request, existing._id.toString()), created: false, requiresRegeneration: false, sourceChanged: false };
+  if (existing && !options.regenerate) return { plan: await productionPlanDetail(request, existing._id.toString()), created: false, requiresRegeneration: true, sourceChanged: true, nextSourceFingerprint: source.sourceFingerprint };
+  if (existing && !(options.reason && options.reason.trim())) throw new ApiError(422, 'PRODUCTION_REGENERATION_REASON_REQUIRED', 'Indicá el motivo de la regeneración.');
+
+  const ruleItems: SuggestedItem[] = source.matchingRules.map((rule: any) => {
+    const base = Number(rule.fixedQuantity ?? 0) + source.counts.total * Number(rule.quantityPerGuest ?? 0);
     const quantity = round(base * (1 + Number(rule.wastePercentage ?? 0) / 100), rule.roundingMode, rule.packageSize);
     return { productId: rule.productId?._id?.toString(), name: rule.productId?.name || rule.name, category: rule.productId?.category, quantity, unit: rule.productId?.unitOfMeasure || 'unidad', sectionType: rule.sectionType, sourceType: 'rule' as const, sourceId: rule._id.toString() };
   }).filter((item: SuggestedItem) => item.quantity > 0);
-  const legacyItems: SuggestedItem[] = (event.resourcePlanSnapshot?.productItems ?? []).map((item: any) => ({
+  const legacyItems: SuggestedItem[] = (source.event.resourcePlanSnapshot?.productItems ?? []).map((item: any) => ({
     productId: item.catalogItemId?.toString(), name: item.name || item.productName || 'Producto', category: item.category,
     quantity: Number(item.quantity ?? item.plannedQuantity ?? 0), unit: item.unit || item.unitOfMeasure || 'unidad',
     sectionType: item.sectionType || (item.category === 'BEVERAGE' ? 'beverages' : 'miscellaneous'), sourceType: 'legacy_snapshot' as const, sourceId: item.id?.toString(),
   })).filter((item: SuggestedItem) => item.quantity > 0);
-  const suggested = mergeSuggested([...ruleItems, ...legacyItems]);
-  const plan: any = await ProductionPlan.create({
-    eventId: event._id, contractId: contract?._id, salonId: event.salonId, customerId: event.customerId, eventDate: event.eventDate,
-    guestCounts: counts, status: 'pending', generatedAt: new Date(), generatedBy: request.user!.id, version: 1, isCurrent: true,
-    sourceSnapshot: {
-      event: { eventName: event.eventName, eventType: event.eventType, eventDate: event.eventDate, guestCounts: counts },
-      contract: contract ? { id: contract._id, number: contract.contractNumber, status: contract.status, lineItems: contract.lineItemsSnapshot } : null,
-      menu: event.menuSnapshot ?? null, services: event.servicesSnapshot ?? null,
-      rules: matchingRules.map((rule: any) => ({ id: rule._id, name: rule.name, quantityPerGuest: rule.quantityPerGuest, fixedQuantity: rule.fixedQuantity, wastePercentage: rule.wastePercentage })),
-    },
-    createdBy: request.user!.id, updatedBy: request.user!.id,
-  });
-  const sectionTypes = [...new Set(suggested.map((item) => item.sectionType))];
-  const sections: any[] = sectionTypes.length ? await ProductionSection.insertMany(sectionTypes.map((type, index) => ({
-    productionPlanId: plan._id, type, name: sectionNames[type] ?? 'Otros', order: index, createdBy: request.user!.id, updatedBy: request.user!.id,
-  }))) : [];
-  const sectionByType = new Map(sections.map((section) => [section.type, section]));
-  if (suggested.length) await ProductionItem.insertMany(suggested.map((item, index) => ({
-    productionPlanId: plan._id, sectionId: sectionByType.get(item.sectionType)?._id, productId: item.productId,
-    normalizedProductName: normalizeProductName(item.name), productNameSnapshot: item.name, category: item.category,
-    plannedQuantity: item.quantity, unit: item.unit, dueAt: event.eventDate, sourceType: item.sourceType, sourceId: item.sourceId,
-    isManual: false, order: index, createdBy: request.user!.id, updatedBy: request.user!.id,
-  })));
-  await writeAuditLog(request, 'PRODUCTION_PLAN_GENERATE', 'ProductionPlan', plan._id.toString(), { eventId, itemCount: suggested.length, ruleCount: matchingRules.length });
-  return { plan: await productionPlanDetail(request, plan._id.toString()), created: true };
+  const manualItems = await previousManualItems(existing);
+  const suggested = mergeSuggested([...ruleItems, ...legacyItems, ...manualItems]);
+  const version = existing ? Number(existing.version || 1) + 1 : 1;
+  if (existing) await ProductionPlan.updateOne({ _id: existing._id, isCurrent: true }, { isCurrent: false, updatedBy: request.user!.id });
+  let plan: any;
+  try {
+    plan = await ProductionPlan.create({
+      eventId: source.event._id, contractId: source.contract?._id, salonId: source.event.salonId, customerId: source.event.customerId, eventDate: source.event.eventDate,
+      guestCounts: source.counts, status: 'pending', generatedAt: new Date(), generatedBy: request.user!.id, version, isCurrent: true,
+      supersedesPlanId: existing?._id, regenerationReason: existing ? options.reason?.trim() : undefined,
+      sourceFingerprint: source.sourceFingerprint, sourceSnapshot: source.sourceSnapshot,
+      createdBy: request.user!.id, updatedBy: request.user!.id,
+    });
+    const sectionTypes = [...new Set(suggested.map((item) => item.sectionType))];
+    const sections: any[] = sectionTypes.length ? await ProductionSection.insertMany(sectionTypes.map((type, index) => ({
+      productionPlanId: plan._id, type, name: sectionNames[type] ?? 'Otros', order: index, createdBy: request.user!.id, updatedBy: request.user!.id,
+    }))) : [];
+    const sectionByType = new Map(sections.map((section) => [section.type, section]));
+    if (suggested.length) await ProductionItem.insertMany(suggested.map((item, index) => ({
+      productionPlanId: plan._id, sectionId: sectionByType.get(item.sectionType)?._id, productId: item.productId,
+      normalizedProductName: normalizeProductName(item.name), productNameSnapshot: item.name, category: item.category,
+      plannedQuantity: item.quantity, unit: item.unit, dueAt: source.event.eventDate, sourceType: item.sourceType, sourceId: item.sourceId,
+      responsibleId: item.responsibleId, observations: item.observations, isManual: item.sourceType === 'manual', order: index,
+      transitions: item.sourceType === 'manual' ? [{ fromStatus: '', toStatus: 'pending', changedAt: new Date(), changedBy: request.user!.id, reason: 'Conservado de versión anterior' }] : [],
+      createdBy: request.user!.id, updatedBy: request.user!.id,
+    })));
+    if (existing) await ProductionPlan.updateOne({ _id: existing._id }, { supersededByPlanId: plan._id, updatedBy: request.user!.id });
+  } catch (error) {
+    if (plan?._id) {
+      await ProductionItem.deleteMany({ productionPlanId: plan._id });
+      await ProductionSection.deleteMany({ productionPlanId: plan._id });
+      await ProductionPlan.deleteOne({ _id: plan._id });
+    }
+    if (existing) await ProductionPlan.updateOne({ _id: existing._id }, { isCurrent: true, updatedBy: request.user!.id });
+    throw error;
+  }
+  await writeAuditLog(request, existing ? 'PRODUCTION_PLAN_REGENERATE' : 'PRODUCTION_PLAN_GENERATE', 'ProductionPlan', plan._id.toString(), { eventId, version, previousPlanId: existing?._id, itemCount: suggested.length, ruleCount: source.matchingRules.length, reason: options.reason });
+  return { plan: await productionPlanDetail(request, plan._id.toString()), created: true, regenerated: Boolean(existing), requiresRegeneration: false, sourceChanged };
 }
 
 export async function productionPlanDetail(request: Request, planId: string) {
@@ -126,6 +259,14 @@ export async function productionPlanDetail(request: Request, planId: string) {
   return { ...plan, sections: sections.map((section) => ({ ...section, items: items.filter((item) => item.sectionId.toString() === section._id.toString()) })) };
 }
 
+export async function productionPlanFreshness(request: Request, planId: string) {
+  const plan: any = await ProductionPlan.findOne({ _id: planId, deletedAt: null }).lean();
+  if (!plan) throw new ApiError(404, 'PRODUCTION_PLAN_NOT_FOUND');
+  assertSalon(request, plan.salonId);
+  const source = await productionSource(plan.eventId.toString());
+  return { current: plan.sourceFingerprint === source.sourceFingerprint, currentFingerprint: plan.sourceFingerprint, nextFingerprint: source.sourceFingerprint };
+}
+
 export async function refreshPlanStatus(planId: string) {
   const items: any[] = await ProductionItem.find({ productionPlanId: planId, deletedAt: null, status: { $ne: 'cancelled' } }).select('status').lean();
   let status = 'pending';
@@ -133,14 +274,15 @@ export async function refreshPlanStatus(planId: string) {
   else if (items.length && items.every((item) => item.status === 'checked')) status = 'checked';
   else if (items.length && items.every((item) => ['ready', 'checked'].includes(item.status))) status = 'ready';
   else if (items.some((item) => item.status !== 'pending')) status = 'in_progress';
+  const plan: any = await ProductionPlan.findById(planId).select('startedAt completedAt').lean();
   const update: Record<string, unknown> = { status };
-  if (status === 'in_progress') update.startedAt = new Date();
-  if (status === 'checked') update.completedAt = new Date();
+  if (status === 'in_progress' && !plan?.startedAt) update.startedAt = new Date();
+  if (status === 'checked' && !plan?.completedAt) update.completedAt = new Date();
   await ProductionPlan.updateOne({ _id: planId }, update);
   return status;
 }
 
-export async function consolidatedProduction(request: Request, from: Date, to: Date, salonMatch: Record<string, unknown>) {
+export async function consolidatedProduction(_request: Request, from: Date, to: Date, salonMatch: Record<string, unknown>) {
   const plans: any[] = await ProductionPlan.find({ deletedAt: null, isCurrent: true, ...salonMatch, eventDate: { $gte: from, $lt: to }, status: { $nin: ['cancelled'] } }).select('_id').lean();
   const planIds = plans.map((plan) => plan._id);
   const rows: any[] = await ProductionItem.aggregate([

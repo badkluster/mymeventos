@@ -41,6 +41,13 @@ type CatalogPublication = TicketPublication & {
   availableCount?: number;
   hasActivePromotion?: boolean;
 };
+type MockPaymentOrder = {
+  publicId: string;
+  buyer: { name: string; email: string };
+  lines: Array<{ ticketTypeId: string; name: string; quantity: number }>;
+  totalAmount: number;
+  status: string;
+};
 const ticketPrice = (type: TicketType) => type.currentPrice ?? type.price ?? 0;
 const ThemeIcon = ({
   children,
@@ -195,23 +202,18 @@ export function PublicTickets({
   publication?: TicketPublication;
   preview?: boolean;
 }) {
-  const [publication, setPublication] = useState<TicketPublication | undefined>(
-    providedPublication,
-  );
+  const [loadedPublication, setLoadedPublication] = useState<TicketPublication>();
+  const publication = providedPublication ?? loadedPublication;
   const [error, setError] = useState("");
   useEffect(() => {
-    if (providedPublication) {
-      setPublication(providedPublication);
-      return;
-    }
-    if (!slug) return;
+    if (providedPublication || !slug) return;
     void api
       .get<{
         publication: TicketPublication;
         types: TicketPublication["ticketTypes"];
       }>(`/public/tickets/${slug}`)
       .then((data) =>
-        setPublication({ ...data.publication, ticketTypes: data.types }),
+        setLoadedPublication({ ...data.publication, ticketTypes: data.types }),
       )
       .catch((cause: Error) => setError(cause.message));
   }, [slug, providedPublication]);
@@ -462,7 +464,7 @@ export function PublicTickets({
                   className="rounded-2xl border border-zinc-100 p-4"
                   style={{
                     borderLeftColor:
-                      (type as any).color || appearance.secondary,
+                      type.color || appearance.secondary,
                     borderLeftWidth: 4,
                   }}
                 >
@@ -563,18 +565,6 @@ export function TicketCheckout({ slug }: { slug: string }) {
       )
       .catch((cause: Error) => setError(cause.message));
   }, [slug]);
-  useEffect(() => {
-    if (!publication) return;
-    const validIds = new Set((publication.ticketTypes ?? []).map((type) => type._id));
-    setQuantities((current) => {
-      const filtered = Object.fromEntries(
-        Object.entries(current).filter(([ticketTypeId]) => validIds.has(ticketTypeId)),
-      );
-      return Object.keys(filtered).length === Object.keys(current).length
-        ? current
-        : filtered;
-    });
-  }, [publication]);
   const count = (publication?.ticketTypes ?? []).reduce(
     (sum, type) => sum + (quantities[type._id] ?? 0),
     0,
@@ -747,7 +737,7 @@ export function TicketCheckout({ slug }: { slug: string }) {
   );
 }
 export function MockTicketPayment({ orderCode }: { orderCode: string }) {
-  const [order, setOrder] = useState<any>();
+  const [order, setOrder] = useState<MockPaymentOrder>();
   const [message, setMessage] = useState("");
   const [approved, setApproved] = useState(false);
   const returnUrl =
@@ -756,7 +746,7 @@ export function MockTicketPayment({ orderCode }: { orderCode: string }) {
       : null;
   const load = () =>
     api
-      .get<{ order: any }>(`/public/tickets/mock-payment/${orderCode}`)
+      .get<{ order: MockPaymentOrder }>(`/public/tickets/mock-payment/${orderCode}`)
       .then((data) => setOrder(data.order))
       .catch((error) => setMessage(error.message));
   useEffect(() => {
@@ -764,7 +754,7 @@ export function MockTicketPayment({ orderCode }: { orderCode: string }) {
   }, [orderCode]);
   const action = async (value: "approve" | "pending" | "reject" | "cancel") => {
     try {
-      const result = await api.post<{ order: any }>(
+      const result = await api.post<{ order: MockPaymentOrder }>(
         `/public/tickets/mock-payment/${orderCode}`,
         { action: value },
       );
@@ -798,7 +788,7 @@ export function MockTicketPayment({ orderCode }: { orderCode: string }) {
           {order.buyer.name} · {order.buyer.email}
         </p>
         <div className="mt-5 space-y-2 rounded-xl bg-zinc-50 p-4">
-          {order.lines.map((line: any) => (
+          {order.lines.map((line) => (
             <p key={line.ticketTypeId}>
               {line.quantity} × {line.name}
             </p>

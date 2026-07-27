@@ -174,7 +174,7 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
 
       {block.type === 'heading' || block.type === 'text' ? (
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Texto</span><VariablePicker onInsert={insertInto('text', block.data.text)} /></div>
+          <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Texto</span><VariablePicker onInsert={insertInto('text', block.data.text ?? '')} /></div>
           <Textarea rows={4} value={block.data.text ?? ''} onChange={(e) => onChangeData('text', e.target.value)} />
           <div className="grid grid-cols-2 gap-2">
             <Input type="number" placeholder="Tamaño" value={block.data.fontSize ?? ''} onChange={(e) => onChangeData('fontSize', Number(e.target.value))} />
@@ -195,7 +195,7 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
       {block.type === 'button' ? (
         <div className="space-y-1.5">
           <Input placeholder="Texto del botón" value={block.data.label ?? ''} onChange={(e) => onChangeData('label', e.target.value)} />
-          <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Enlace</span><VariablePicker onInsert={insertInto('url', block.data.url)} /></div>
+          <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Enlace</span><VariablePicker onInsert={insertInto('url', block.data.url ?? '')} /></div>
           <Input value={block.data.url ?? ''} onChange={(e) => onChangeData('url', e.target.value)} />
           <div className="grid grid-cols-2 gap-2">
             <ColorMini label="Fondo" value={block.data.backgroundColor ?? '#18181B'} onChange={(v) => onChangeData('backgroundColor', v)} />

@@ -33,14 +33,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const currentModule = moduleForPath(pathname);
   const blocked = Boolean(currentModule && !userCanAccess(user, currentModule.permissions));
   const isActive = (href: string) => href === '/admin' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-  const configSubmenuPaths = new Set(['/admin/salons', '/admin/users', '/admin/attendance', '/admin/landing']);
-  const configSubmenuOrder = new Map([['/admin/salons', 0], ['/admin/users', 1], ['/admin/attendance', 2], ['/admin/landing', 3]]);
+  // Staff is a filtered view of Usuarios; imports remain available as an
+  // administrative tool without restoring the redundant Staff navigation.
+  const configSubmenuPaths = new Set(['/admin/salons', '/admin/users', '/admin/attendance', '/admin/landing', '/admin/imports']);
+  const configSubmenuOrder = new Map([['/admin/salons', 0], ['/admin/users', 1], ['/admin/attendance', 2], ['/admin/landing', 3], ['/admin/imports', 4]]);
   const hiddenNavigationPaths = new Set(['/admin/settings']);
   const configSubitems = items
     .filter((item) => configSubmenuPaths.has(item.href))
     .sort((a, b) => (configSubmenuOrder.get(a.href) ?? 99) - (configSubmenuOrder.get(b.href) ?? 99));
-  const controlSubmenuPaths = new Set(['/admin/reports', '/admin/production', '/admin/expenses', '/admin/analytics', '/admin/imports', '/admin/suppliers']);
-  const controlSubmenuOrder = new Map([['/admin/reports', 0], ['/admin/production', 1], ['/admin/expenses', 2], ['/admin/analytics', 3], ['/admin/imports', 4], ['/admin/suppliers', 5]]);
+  const controlSubmenuPaths = new Set(['/admin/reports', '/admin/analytics']);
+  const controlSubmenuOrder = new Map([['/admin/reports', 0], ['/admin/analytics', 1]]);
   const controlSubitems = items
     .filter((item) => controlSubmenuPaths.has(item.href))
     .sort((a, b) => (controlSubmenuOrder.get(a.href) ?? 99) - (controlSubmenuOrder.get(b.href) ?? 99));
@@ -54,7 +56,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const controlMenu = controlSubitems.length ? <div className="pt-2">
     <button type="button" aria-expanded={showControlSubmenu} onClick={() => setControlOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${controlActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
       <ChartNoAxesCombined className="h-4 w-4" />
-      <span className="flex-1">Administración y control</span>
+      <span className="flex-1">Reportes y análisis</span>
       <ChevronDown className={`h-4 w-4 transition-transform ${showControlSubmenu ? 'rotate-180' : ''}`} />
     </button>
     {showControlSubmenu ? <div className="mt-1 space-y-1 border-l border-border/70 pl-3">
@@ -112,7 +114,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           {configSubitems.length ? <div className="pt-2">
             <button type="button" aria-expanded={showConfigSubmenu} onClick={() => setSettingsOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${configActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
               <Settings className="h-4 w-4" />
-              <span className="flex-1">Configuración</span>
+              <span className="flex-1">Configuración y herramientas</span>
               <ChevronDown className={`h-4 w-4 transition-transform ${showConfigSubmenu ? 'rotate-180' : ''}`} />
             </button>
             {showConfigSubmenu ? <div className="mt-1 space-y-1 border-l border-border/70 pl-3">

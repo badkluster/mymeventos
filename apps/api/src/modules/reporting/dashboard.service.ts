@@ -1,7 +1,7 @@
 import type { Request } from 'express';
 import { Permission } from '@mym/shared';
 import { CalendarItem, Contract, Event, EventStaffAssignment, Lead, Payment, Quote } from '../crm/crm.models';
-import { Expense } from '../operations/operations.models';
+import { Expense, ExpenseCategory } from '../operations/operations.models';
 import { ProductionPlan } from '../production/production.models';
 import { Salon } from '../salons/salon.model';
 import { userHasPermission } from '../../middlewares/auth';
@@ -45,6 +45,25 @@ function metric(definition: MetricDefinition, value: number, previousValue: numb
   return { ...definition, value, previousValue, changePercentage: changePercentage(value, previousValue), available: true };
 }
 
+async function categoryBreakdown(query: Record<string, unknown>) {
+  const raw = await Expense.aggregate([
+    { $match: query },
+    { $group: { _id: { categoryId: '$categoryId', legacy: '$category' }, value: { $sum: '$amount' } } },
+    { $sort: { value: -1 } },
+  ]);
+  const ids = raw.map((item: any) => item._id?.categoryId).filter(Boolean);
+  const categories = await ExpenseCategory.find({ _id: { $in: ids }, deletedAt: null }).select('name').lean();
+  const names = new Map(categories.map((item: any) => [item._id.toString(), item.name]));
+  return raw.map((item: any) => {
+    const id = item._id?.categoryId?.toString?.();
+    return {
+      id: id || item._id?.legacy || 'uncategorized',
+      label: id ? names.get(id) || 'Categoría no disponible' : item._id?.legacy || 'Sin categoría',
+      value: Number(item.value || 0),
+    };
+  });
+}
+
 export async function dashboardSummary(request: Request) {
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
@@ -56,7 +75,7 @@ export async function dashboardSummary(request: Request) {
   const pendingLeadStatuses = ['new', 'contacted', 'follow_up', 'quote_sent', 'negotiation'];
 
   const [
-    leadsNew, leadsNewPrevious, leadsPending, leadsPendingPrevious,
+    leadsNew, leadsNewPrevious, leadsPending,
     quotesSent, quotesSentPrevious, quotesAccepted, quotesAcceptedPrevious,
     sentQuotesAccepted, sentQuotesAcceptedPrevious,
     eventsConfirmed, eventsConfirmedPrevious, eventsUpcoming,
@@ -64,12 +83,11 @@ export async function dashboardSummary(request: Request) {
     collected, collectedPrevious, overdue,
     expensesPaid, expensesPaidPrevious,
     productionEvents, previousProductionEvents,
-    funnel, eventsBySalonRaw, eventsByType, leadsBySource, expensesByCategory,
+    funnel, eventsBySalonRaw, eventsByType, leadsBySource,
   ] = await Promise.all([
     Lead.countDocuments(current('createdAt')),
     Lead.countDocuments(previous('createdAt')),
-    Lead.countDocuments({ ...current('createdAt'), status: { $in: pendingLeadStatuses } }),
-    Lead.countDocuments({ ...previous('createdAt'), status: { $in: pendingLeadStatuses } }),
+    Lead.countDocuments({ deletedAt: null, ...salon, status: { $in: pendingLeadStatuses } }),
     Quote.countDocuments(current('sentAt')),
     Quote.countDocuments(previous('sentAt')),
     Quote.countDocuments(current('acceptedAt')),
@@ -79,8 +97,8 @@ export async function dashboardSummary(request: Request) {
     Event.countDocuments({ ...current('eventDate'), status: 'confirmed' }),
     Event.countDocuments({ ...previous('eventDate'), status: 'confirmed' }),
     Event.countDocuments({ ...activeEventQuery(), ...salon, eventDate: { $gte: now, $lt: upcomingUntil } }),
-    sum(Contract, { ...current('createdAt'), status: { $nin: ['cancelled', 'superseded'] } }, 'totalAmount'),
-    sum(Contract, { ...previous('createdAt'), status: { $nin: ['cancelled', 'superseded'] } }, 'totalAmount'),
+    sum(Contract, { ...current('approvedAt'), status: 'approved' }, 'totalAmount'),
+    sum(Contract, { ...previous('approvedAt'), status: 'approved' }, 'totalAmount'),
     collectedAmount(current('paidAt')),
     collectedAmount(previous('paidAt')),
     sum(Payment, { deletedAt: null, ...salon, status: 'pending', affectsContractBalance: true, dueDate: { $lt: now } }, 'amount'),
@@ -92,18 +110,18 @@ export async function dashboardSummary(request: Request) {
       Lead.countDocuments(current('createdAt')),
       Quote.countDocuments(current('createdAt')),
       Quote.countDocuments(current('acceptedAt')),
-      Contract.countDocuments({ ...current('createdAt'), status: { $nin: ['cancelled', 'superseded'] } }),
-      Event.countDocuments({ ...current('createdAt'), status: 'confirmed' }),
+      Contract.countDocuments({ ...current('approvedAt'), status: 'approved' }),
+      Event.countDocuments({ ...current('eventDate'), status: 'confirmed' }),
     ]),
     Event.aggregate([{ $match: { ...current('eventDate'), status: { $nin: ['cancelled', 'lost'] } } }, { $group: { _id: '$salonId', value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
     Event.aggregate([{ $match: { ...current('eventDate'), status: { $nin: ['cancelled', 'lost'] } } }, { $group: { _id: { $ifNull: ['$eventType', 'other'] }, value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
     Lead.aggregate([{ $match: current('createdAt') }, { $group: { _id: { $ifNull: ['$source', 'other'] }, value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
-    Expense.aggregate([{ $match: { ...current('paidAt'), status: 'paid' } }, { $group: { _id: { $ifNull: ['$category', 'OTHER'] }, value: { $sum: '$amount' } } }, { $sort: { value: -1 } }]),
   ]);
 
-  const [currentPlans, previousPlans] = await Promise.all([
+  const [currentPlans, previousPlans, expensesByCategory] = await Promise.all([
     ProductionPlan.find({ deletedAt: null, isCurrent: true, eventId: { $in: productionEvents.map((event: any) => event._id) } }).select('eventId status').lean(),
     ProductionPlan.find({ deletedAt: null, isCurrent: true, eventId: { $in: previousProductionEvents.map((event: any) => event._id) } }).select('eventId status').lean(),
+    categoryBreakdown({ ...current('paidAt'), status: 'paid' }),
   ]);
   const currentPlanMap = new Map(currentPlans.map((plan: any) => [plan.eventId.toString(), plan.status]));
   const previousPlanMap = new Map(previousPlans.map((plan: any) => [plan.eventId.toString(), plan.status]));
@@ -112,7 +130,7 @@ export async function dashboardSummary(request: Request) {
   const previousPendingProduction = previousProductionEvents.filter((event: any) => !['checked', 'closed'].includes(previousPlanMap.get(event._id.toString()) ?? '')).length;
   const values: Record<string, [number, number]> = {
     'leads.new': [leadsNew, leadsNewPrevious],
-    'leads.pending': [leadsPending, leadsPendingPrevious],
+    'leads.pending': [leadsPending, 0],
     'quotes.sent': [quotesSent, quotesSentPrevious],
     'quotes.accepted': [quotesAccepted, quotesAcceptedPrevious],
     'quotes.acceptanceRate': [quotesSent ? (sentQuotesAccepted / quotesSent) * 100 : 0, quotesSentPrevious ? (sentQuotesAcceptedPrevious / quotesSentPrevious) * 100 : 0],
@@ -144,17 +162,17 @@ export async function dashboardSummary(request: Request) {
     },
     metrics,
     funnel: [
-      { id: 'leads', label: 'Leads', value: funnel[0] },
-      { id: 'quotes', label: 'Presupuestos', value: funnel[1] },
-      { id: 'acceptedQuotes', label: 'Aceptados', value: funnel[2] },
-      { id: 'contracts', label: 'Contratos', value: funnel[3] },
+      { id: 'leads', label: 'Leads creados', value: funnel[0] },
+      { id: 'quotes', label: 'Presupuestos creados', value: funnel[1] },
+      { id: 'acceptedQuotes', label: 'Presupuestos aceptados', value: funnel[2] },
+      { id: 'contracts', label: 'Contratos aprobados', value: funnel[3] },
       { id: 'confirmedEvents', label: 'Eventos confirmados', value: funnel[4] },
     ],
     breakdowns: {
       eventsBySalon: eventsBySalonRaw.map((item: any) => ({ id: item._id?.toString() ?? 'without-salon', label: item._id ? salonNames.get(item._id.toString()) ?? 'Salón no disponible' : 'Sin salón', value: item.value })),
       eventsByType: eventsByType.map((item: any) => ({ id: item._id, label: item._id, value: item.value })),
       leadsBySource: leadsBySource.map((item: any) => ({ id: item._id, label: item._id, value: item.value })),
-      expensesByCategory: financialVisible ? expensesByCategory.map((item: any) => ({ id: item._id, label: item._id, value: item.value })) : [],
+      expensesByCategory: financialVisible ? expensesByCategory : [],
     },
   };
 }

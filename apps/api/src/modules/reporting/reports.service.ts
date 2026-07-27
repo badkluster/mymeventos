@@ -2,7 +2,7 @@ import type { Request } from 'express';
 import { Permission } from '@mym/shared';
 import { ApiError } from '../../middlewares/errorHandler';
 import { userHasPermission } from '../../middlewares/auth';
-import { Expense } from '../operations/operations.models';
+import { Expense, ExpenseCategory } from '../operations/operations.models';
 import { Contract, Event, EventStaffAssignment, Lead, Payment, Quote } from '../crm/crm.models';
 import { parseReportPeriod, periodMatch, resolveReportScope } from './report-filter';
 import { ProductionPlan } from '../production/production.models';
@@ -67,7 +67,7 @@ export const reportDefinitions: ReportDefinition[] = [
     ],
   },
   {
-    key: 'expenses', group: 'Finanzas', title: 'Gastos', description: 'Costos pagados por categoría, salón y evento.', permission: Permission.REPORTS_EXPENSES_READ,
+    key: 'expenses', group: 'Finanzas', title: 'Gastos', description: 'Costos por fecha efectiva, categoría, salón y evento.', permission: Permission.REPORTS_EXPENSES_READ,
     columns: [
       { key: 'date', label: 'Fecha', format: 'date' }, { key: 'description', label: 'Concepto' }, { key: 'category', label: 'Categoría', format: 'status' },
       { key: 'salon', label: 'Salón' }, { key: 'event', label: 'Evento' }, { key: 'supplier', label: 'Proveedor' },
@@ -100,12 +100,13 @@ function sort(request: Request, allowed: string[], fallback: string) {
   return { [sortBy]: sortOrder as 1 | -1 };
 }
 
-function commonMeta(definition: ReportDefinition, request: Request, totalItems: number, page: number, limit: number) {
+function commonMeta(definition: ReportDefinition, request: Request, totalItems: number, page: number, limit: number, attribution?: string) {
   const period = parseReportPeriod(request.query);
   return {
     report: { key: definition.key, title: definition.title, description: definition.description },
     period: { from: period.fromDate, to: period.toDate, previousFrom: period.previousFromDate, previousTo: period.previousToDate },
     filters: Object.fromEntries(Object.entries(request.query).filter(([, value]) => typeof value === 'string' && value)),
+    attribution,
     generatedAt: new Date().toISOString(),
     page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)),
     hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1,
@@ -117,6 +118,10 @@ function ensureReportAccess(request: Request, key: string) {
   if (!definition) throw new ApiError(404, 'REPORT_NOT_FOUND', 'El reporte solicitado no existe.');
   if (!userHasPermission(request.user!, definition.permission)) throw new ApiError(403, 'FORBIDDEN');
   return definition;
+}
+
+function range(period: ReturnType<typeof parseReportPeriod>) {
+  return { $gte: period.from, $lt: period.toExclusive };
 }
 
 async function leadsReport(request: Request, definition: ReportDefinition, exportAll: boolean) {
@@ -139,7 +144,7 @@ async function leadsReport(request: Request, definition: ReportDefinition, expor
     Lead.aggregate([{ $match: query }, { $group: { _id: '$status', value: { $sum: 1 } } }]),
     Lead.aggregate([{ $match: query }, { $group: { _id: '$source', value: { $sum: 1 } } }]),
   ]);
-  const converted = groupedStatus.find((item: any) => ['converted', 'won'].includes(item._id))?.value ?? groupedStatus.filter((item: any) => ['converted', 'won'].includes(item._id)).reduce((sum: number, item: any) => sum + item.value, 0);
+  const converted = groupedStatus.filter((item: any) => ['converted', 'won'].includes(item._id)).reduce((sum: number, item: any) => sum + item.value, 0);
   return {
     columns: definition.columns,
     rows: documents.map((item: any) => ({
@@ -154,7 +159,7 @@ async function leadsReport(request: Request, definition: ReportDefinition, expor
       { id: 'conversion', label: 'Conversión', value: totalItems ? (converted / totalItems) * 100 : 0, format: 'percentage' },
     ],
     breakdowns: { status: groupedStatus, source: groupedSource },
-    meta: commonMeta(definition, request, totalItems, page, limit),
+    meta: commonMeta(definition, request, totalItems, page, limit, 'createdAt'),
   };
 }
 
@@ -190,7 +195,7 @@ async function quotesReport(request: Request, definition: ReportDefinition, expo
       { id: 'rate', label: 'Tasa de aceptación', value: aggregate.sent ? ((aggregate.accepted ?? 0) / aggregate.sent) * 100 : 0, format: 'percentage' },
     ],
     breakdowns: { status: groupedStatus },
-    meta: commonMeta(definition, request, totalItems, page, limit),
+    meta: commonMeta(definition, request, totalItems, page, limit, 'createdAt'),
   };
 }
 
@@ -212,7 +217,7 @@ async function eventsReport(request: Request, definition: ReportDefinition, expo
   const eventIds = documents.map((item: any) => item._id);
   const [contracts, payments, staff, productionPlans] = await Promise.all([
     Contract.find({ deletedAt: null, eventId: { $in: eventIds }, status: { $nin: ['cancelled', 'superseded'] } }).select('eventId status paidAmount').lean(),
-    Payment.aggregate([{ $match: { deletedAt: null, eventId: { $in: eventIds }, affectsContractBalance: true } }, { $group: { _id: '$eventId', paid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } }, overdue: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'pending'] }, { $lt: ['$dueDate', new Date()] }] }, '$amount', 0] } } } }]),
+    Payment.aggregate([{ $match: { deletedAt: null, eventId: { $in: eventIds }, affectsContractBalance: true } }, { $group: { _id: '$eventId', paid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, { $cond: [{ $eq: ['$type', 'refund'] }, { $multiply: ['$amount', -1] }, '$amount'] }, 0] } }, overdue: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'pending'] }, { $lt: ['$dueDate', new Date()] }] }, '$amount', 0] } } } }]),
     EventStaffAssignment.aggregate([{ $match: { deletedAt: null, eventId: { $in: eventIds }, status: { $nin: ['cancelled', 'no_show'] } } }, { $group: { _id: '$eventId', value: { $sum: 1 } } }]),
     ProductionPlan.find({ deletedAt: null, isCurrent: true, eventId: { $in: eventIds } }).select('eventId status').lean(),
   ]);
@@ -233,7 +238,7 @@ async function eventsReport(request: Request, definition: ReportDefinition, expo
       { id: 'guests', label: 'Invitados en página', value: documents.reduce((sum: number, item: any) => sum + Number(item.guestCount ?? 0), 0), format: 'number', partial: totalItems > documents.length },
     ],
     breakdowns: { status: groupedStatus, salon: groupedSalon },
-    meta: commonMeta(definition, request, totalItems, page, limit),
+    meta: commonMeta(definition, request, totalItems, page, limit, 'eventDate'),
   };
 }
 
@@ -241,12 +246,13 @@ async function contractsReport(request: Request, definition: ReportDefinition, e
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
   const { page, limit, skip } = pagination(request, exportAll);
-  const query: any = { deletedAt: null, ...scope.match(), ...periodMatch(period, 'createdAt') };
+  const attribution = request.query.attribution === 'approved' ? 'approvedAt' : 'createdAt';
+  const query: any = { deletedAt: null, ...scope.match(), ...periodMatch(period, attribution) };
   if (request.query.status) query.status = String(request.query.status);
   const search = String(request.query.search || '').trim();
   if (search) query.contractNumber = new RegExp(escapeRegex(search), 'i');
   const [documents, totalItems, totals, groupedStatus] = await Promise.all([
-    Contract.find(query).populate('salonId', 'name').populate('customerId', 'fullName').populate('eventId', 'eventName eventType eventDate').sort(sort(request, ['createdAt', 'approvedAt', 'totalAmount', 'balanceAmount', 'status'], 'createdAt')).skip(skip).limit(limit).lean(),
+    Contract.find(query).populate('salonId', 'name').populate('customerId', 'fullName').populate('eventId', 'eventName eventType eventDate').sort(sort(request, ['createdAt', 'approvedAt', 'totalAmount', 'balanceAmount', 'status'], attribution)).skip(skip).limit(limit).lean(),
     Contract.countDocuments(query),
     Contract.aggregate([{ $match: query }, { $group: { _id: null, total: { $sum: '$totalAmount' }, paid: { $sum: '$paidAmount' }, balance: { $sum: '$balanceAmount' } } }]),
     Contract.aggregate([{ $match: query }, { $group: { _id: '$status', value: { $sum: 1 } } }]),
@@ -269,7 +275,7 @@ async function contractsReport(request: Request, definition: ReportDefinition, e
       { id: 'paid', label: 'Total cobrado', value: aggregate.paid ?? 0, format: 'currency' }, { id: 'balance', label: 'Saldo pendiente', value: aggregate.balance ?? 0, format: 'currency' },
     ],
     breakdowns: { status: groupedStatus },
-    meta: commonMeta(definition, request, totalItems, page, limit),
+    meta: commonMeta(definition, request, totalItems, page, limit, attribution),
   };
 }
 
@@ -277,14 +283,22 @@ async function paymentsReport(request: Request, definition: ReportDefinition, ex
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
   const { page, limit, skip } = pagination(request, exportAll);
-  const query: any = { deletedAt: null, ...scope.match(), ...periodMatch(period, request.query.attribution === 'due' ? 'dueDate' : 'createdAt') };
+  const attribution = ['created', 'paid', 'due'].includes(String(request.query.attribution)) ? String(request.query.attribution) : 'effective';
+  const query: any = { deletedAt: null, ...scope.match() };
+  const conditions: any[] = [];
+  if (attribution === 'created') conditions.push({ createdAt: range(period) });
+  else if (attribution === 'paid') conditions.push({ paidAt: range(period) });
+  else if (attribution === 'due') conditions.push({ dueDate: range(period) });
+  else conditions.push({ $or: [{ status: 'paid', paidAt: range(period) }, { status: { $ne: 'paid' }, dueDate: range(period) }] });
   if (request.query.status) query.status = String(request.query.status);
   if (request.query.method) query.method = String(request.query.method);
   if (request.query.type) query.type = String(request.query.type);
   const search = String(request.query.search || '').trim();
-  if (search) query.$or = [{ paymentNumber: new RegExp(escapeRegex(search), 'i') }, { reference: new RegExp(escapeRegex(search), 'i') }];
+  if (search) conditions.push({ $or: [{ paymentNumber: new RegExp(escapeRegex(search), 'i') }, { reference: new RegExp(escapeRegex(search), 'i') }] });
+  if (conditions.length) query.$and = conditions;
+  const fallbackSort = attribution === 'due' ? 'dueDate' : attribution === 'created' ? 'createdAt' : 'paidAt';
   const [documents, totalItems, totals, groupedStatus, groupedMethod] = await Promise.all([
-    Payment.find(query).populate('salonId', 'name').populate('customerId', 'fullName').populate('eventId', 'eventName eventType').sort(sort(request, ['createdAt', 'paidAt', 'dueDate', 'amount', 'status'], 'createdAt')).skip(skip).limit(limit).lean(),
+    Payment.find(query).populate('salonId', 'name').populate('customerId', 'fullName').populate('eventId', 'eventName eventType').sort(sort(request, ['createdAt', 'paidAt', 'dueDate', 'amount', 'status'], fallbackSort)).skip(skip).limit(limit).lean(),
     Payment.countDocuments(query),
     Payment.aggregate([{ $match: query }, { $group: { _id: null, paid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, { $cond: [{ $eq: ['$type', 'refund'] }, { $multiply: ['$amount', -1] }, '$amount'] }, 0] } }, pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] } }, overdue: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'pending'] }, { $lt: ['$dueDate', new Date()] }] }, '$amount', 0] } } } }]),
     Payment.aggregate([{ $match: query }, { $group: { _id: '$status', value: { $sum: 1 } } }]),
@@ -293,13 +307,13 @@ async function paymentsReport(request: Request, definition: ReportDefinition, ex
   const aggregate = totals[0] ?? {};
   return {
     columns: definition.columns,
-    rows: documents.map((item: any) => ({ id: item._id.toString(), href: `/admin/payments/${item._id}`, date: item.paidAt || item.createdAt, number: item.paymentNumber, customer: entityName(item.customerId), event: entityName(item.eventId, 'Sin evento'), salon: entityName(item.salonId, 'Sin salón'), type: item.type, method: item.method || 'not_set', status: item.status, dueDate: item.dueDate, amount: item.amount ?? 0, receipt: item.receiptNumber || (item.receiptPdfSecureUrl ? 'Disponible' : 'Pendiente') })),
+    rows: documents.map((item: any) => ({ id: item._id.toString(), href: `/admin/payments/${item._id}`, date: attribution === 'due' ? item.dueDate : attribution === 'created' ? item.createdAt : item.paidAt || item.dueDate || item.createdAt, number: item.paymentNumber, customer: entityName(item.customerId), event: entityName(item.eventId, 'Sin evento'), salon: entityName(item.salonId, 'Sin salón'), type: item.type, method: item.method || 'not_set', status: item.status, dueDate: item.dueDate, amount: item.amount ?? 0, receipt: item.receiptNumber || (item.receiptPdfSecureUrl ? 'Disponible' : 'Pendiente') })),
     summary: [
       { id: 'count', label: 'Movimientos', value: totalItems, format: 'number' }, { id: 'paid', label: 'Cobrado neto', value: aggregate.paid ?? 0, format: 'currency' },
       { id: 'pending', label: 'Pendiente', value: aggregate.pending ?? 0, format: 'currency' }, { id: 'overdue', label: 'Vencido', value: aggregate.overdue ?? 0, format: 'currency' },
     ],
     breakdowns: { status: groupedStatus, method: groupedMethod },
-    meta: commonMeta(definition, request, totalItems, page, limit),
+    meta: commonMeta(definition, request, totalItems, page, limit, attribution),
   };
 }
 
@@ -307,25 +321,36 @@ async function expensesReport(request: Request, definition: ReportDefinition, ex
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
   const { page, limit, skip } = pagination(request, exportAll);
-  const query: any = { deletedAt: null, ...scope.match(), ...periodMatch(period, 'createdAt') };
+  const attribution = ['created', 'paid', 'date'].includes(String(request.query.attribution)) ? String(request.query.attribution) : 'date';
+  const attributionField = attribution === 'created' ? 'createdAt' : attribution === 'paid' ? 'paidAt' : 'date';
+  const query: any = { deletedAt: null, ...scope.match(), ...periodMatch(period, attributionField) };
   if (request.query.status) query.status = String(request.query.status);
-  if (request.query.category) query.category = String(request.query.category);
-  const [documents, totalItems, totals, categories] = await Promise.all([
-    Expense.find(query).populate('salonId', 'name').populate('eventId', 'eventName eventType').populate('supplierId', 'name companyName').sort(sort(request, ['createdAt', 'paidAt', 'amount', 'status'], 'createdAt')).skip(skip).limit(limit).lean(),
+  if (request.query.categoryId) query.categoryId = String(request.query.categoryId);
+  const search = String(request.query.search || '').trim();
+  if (search) query.description = new RegExp(escapeRegex(search), 'i');
+  const [documents, totalItems, totals, rawCategories] = await Promise.all([
+    Expense.find(query).populate('salonId', 'name').populate('eventId', 'eventName eventType').populate('supplierId', 'name companyName').populate('categoryId', 'name code').sort(sort(request, ['date', 'createdAt', 'paidAt', 'amount', 'status'], attributionField)).skip(skip).limit(limit).lean(),
     Expense.countDocuments(query),
     Expense.aggregate([{ $match: query }, { $group: { _id: null, total: { $sum: '$amount' }, paid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } } } }]),
-    Expense.aggregate([{ $match: query }, { $group: { _id: '$category', value: { $sum: '$amount' } } }]),
+    Expense.aggregate([{ $match: query }, { $group: { _id: { categoryId: '$categoryId', legacy: '$category' }, value: { $sum: '$amount' } } }, { $sort: { value: -1 } }]),
   ]);
+  const categoryIds = rawCategories.map((item: any) => item._id?.categoryId).filter(Boolean);
+  const categoryDocuments = await ExpenseCategory.find({ _id: { $in: categoryIds }, deletedAt: null }).select('name code').lean();
+  const categoryNames = new Map(categoryDocuments.map((item: any) => [item._id.toString(), item.name]));
+  const categories = rawCategories.map((item: any) => {
+    const categoryId = item._id?.categoryId?.toString?.();
+    return { _id: categoryId || item._id?.legacy || 'uncategorized', label: categoryId ? categoryNames.get(categoryId) || 'Categoría no disponible' : item._id?.legacy || 'Sin categoría', value: item.value };
+  });
   const aggregate = totals[0] ?? {};
   return {
     columns: definition.columns,
-    rows: documents.map((item: any) => ({ id: item._id.toString(), date: item.paidAt || item.createdAt, description: item.description || item.notes || 'Gasto', category: item.category || 'OTHER', salon: entityName(item.salonId, 'Sin salón'), event: entityName(item.eventId, 'Sin evento'), supplier: entityName(item.supplierId, 'Sin proveedor'), status: item.status, amount: item.amount ?? 0 })),
+    rows: documents.map((item: any) => ({ id: item._id.toString(), date: item.date || item.paidAt || item.createdAt, description: item.description || item.notes || 'Gasto', category: item.categoryId?.name || item.category || 'Sin categoría', salon: entityName(item.salonId, 'Sin salón'), event: entityName(item.eventId, 'Sin evento'), supplier: entityName(item.supplierId, 'Sin proveedor'), status: item.status, amount: item.amount ?? 0 })),
     summary: [
       { id: 'count', label: 'Gastos', value: totalItems, format: 'number' }, { id: 'total', label: 'Total registrado', value: aggregate.total ?? 0, format: 'currency' },
       { id: 'paid', label: 'Total pagado', value: aggregate.paid ?? 0, format: 'currency' },
     ],
     breakdowns: { category: categories },
-    meta: commonMeta(definition, request, totalItems, page, limit),
+    meta: commonMeta(definition, request, totalItems, page, limit, attribution),
   };
 }
 

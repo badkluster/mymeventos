@@ -72,8 +72,11 @@ export function TicketOrderPortal({ orderCode }: { orderCode: string }) {
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token");
     if (!token) {
-      setError("El enlace de acceso es inválido o está incompleto.");
-      return;
+      const timer = window.setTimeout(
+        () => setError("El enlace de acceso es inválido o está incompleto."),
+        0,
+      );
+      return () => window.clearTimeout(timer);
     }
     const load = () => api.get<Portal>(`/public/ticket-orders/${orderCode}?token=${encodeURIComponent(token)}`).then(setData).catch((cause: Error) => setError(cause.message));
     void load();

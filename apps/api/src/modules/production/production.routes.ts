@@ -10,7 +10,7 @@ import { writeAuditLog } from '../audit/audit.service';
 import { CatalogItem } from '../operations/operations.models';
 import { Event } from '../crm/crm.models';
 import { parseReportPeriod, resolveReportScope } from '../reporting/report-filter';
-import { consolidatedProduction, generateProductionPlan, normalizeProductName, productionPlanDetail, refreshPlanStatus } from './production.service';
+import { consolidatedProduction, generateProductionPlan, normalizeProductName, productionPlanDetail, productionPlanFreshness, refreshPlanStatus } from './production.service';
 import { ProductionItem, ProductionPlan, ProductionRule, ProductionSection } from './production.models';
 
 const router = Router();
@@ -49,7 +49,7 @@ router.get('/plans', requirePermission(Permission.PRODUCTION_VIEW), asyncHandler
   const eventIds = search ? (await Event.find({ deletedAt: null, $or: [{ eventName: { $regex: search, $options: 'i' } }, { eventType: { $regex: search, $options: 'i' } }] }).select('_id').lean()).map((event: any) => event._id) : undefined;
   if (eventIds) query.eventId = { $in: eventIds };
   const [plans, totalItems, statusSummary] = await Promise.all([
-    ProductionPlan.find(query).populate('eventId', 'eventName eventType eventDate startTime guestCount').populate('salonId', 'name').populate('customerId', 'fullName').sort({ eventDate: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+    ProductionPlan.find(query).populate('eventId', 'eventName eventType eventDate startTime guestCount updatedAt').populate('salonId', 'name').populate('customerId', 'fullName').sort({ eventDate: 1 }).skip((page - 1) * limit).limit(limit).lean(),
     ProductionPlan.countDocuments(query),
     ProductionPlan.aggregate([{ $match: query }, { $group: { _id: '$status', value: { $sum: 1 } } }]),
   ]);
@@ -73,9 +73,20 @@ router.get('/candidates', requirePermission(Permission.PRODUCTION_GENERATE), asy
   return sendSuccess(response, { items });
 }));
 
-router.post('/plans/generate', requirePermission(Permission.PRODUCTION_GENERATE), validateRequest(z.object({ body: z.object({ eventId: objectId }), params: z.object({}), query: z.object({}) })), asyncHandler(async (request, response) => {
-  const result = await generateProductionPlan(request, request.body.eventId);
-  return sendSuccess(response, result, result.created ? 201 : 200, result.created ? 'Producción generada.' : 'El evento ya tenía una producción vigente.');
+router.post('/plans/generate', requirePermission(Permission.PRODUCTION_GENERATE), validateRequest(z.object({
+  body: z.object({ eventId: objectId, regenerate: z.boolean().optional(), reason: z.string().trim().optional().or(z.literal('')) }), params: z.object({}), query: z.object({}),
+})), asyncHandler(async (request, response) => {
+  if (request.body.regenerate) {
+    const existing: any = await ProductionPlan.findOne({ eventId: request.body.eventId, isCurrent: true, deletedAt: null }).lean();
+    if (existing?.status === 'closed' && !userHasPermission(request.user!, Permission.PRODUCTION_REOPEN)) throw new ApiError(403, 'FORBIDDEN');
+  }
+  const result = await generateProductionPlan(request, request.body.eventId, { regenerate: request.body.regenerate, reason: request.body.reason });
+  const message = result.requiresRegeneration ? 'La fuente del evento cambió. Revisá y confirmá la regeneración.' : result.regenerated ? 'Producción regenerada en una nueva versión.' : result.created ? 'Producción generada.' : 'La producción vigente está actualizada.';
+  return sendSuccess(response, result, result.created ? 201 : 200, message);
+}));
+
+router.get('/plans/:id/freshness', requirePermission(Permission.PRODUCTION_VIEW), validateRequest(z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) })), asyncHandler(async (request, response) => {
+  return sendSuccess(response, await productionPlanFreshness(request, request.params.id));
 }));
 
 router.get('/plans/:id', requirePermission(Permission.PRODUCTION_VIEW), validateRequest(z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) })), asyncHandler(async (request, response) => {
@@ -101,7 +112,7 @@ router.post('/plans/:id/items', requirePermission(Permission.PRODUCTION_CREATE),
       productionPlanId: plan._id, sectionId: section._id, productId: product?._id, normalizedProductName: normalizeProductName(name), productNameSnapshot: name,
       category: request.body.category || product?.category, plannedQuantity: request.body.plannedQuantity, unit: request.body.unit || product?.unitOfMeasure,
       responsibleId: request.body.responsibleId || undefined, dueAt: request.body.dueAt || plan.eventDate, observations: request.body.observations,
-      sourceType: 'manual', isManual: true, order: plan.sections.reduce((sum: number, current: any) => sum + current.items.length, 0),
+      sourceType: 'manual', sourceId: `manual:${Date.now()}`, isManual: true, order: plan.sections.reduce((sum: number, current: any) => sum + current.items.length, 0),
       transitions: [{ fromStatus: '', toStatus: 'pending', changedAt: new Date(), changedBy: request.user!.id, reason: 'Alta manual' }],
       createdBy: request.user!.id, updatedBy: request.user!.id,
     });
@@ -182,7 +193,7 @@ router.get('/rules', requirePermission(Permission.PRODUCTION_RULES_MANAGE), asyn
   const query: any = { deletedAt: null, ...scope.match() };
   if (request.query.active === 'true') query.isActive = true;
   if (request.query.active === 'false') query.isActive = false;
-  const items = await ProductionRule.find(query).populate('productId', 'name unitOfMeasure category').populate('salonId', 'name').sort({ name: 1 }).lean();
+  const items = await ProductionRule.find(query).populate('productId', 'name unitOfMeasure category').populate('packageId', 'name').populate('serviceId', 'name').populate('salonId', 'name').sort({ name: 1 }).lean();
   return sendSuccess(response, { items });
 }));
 router.post('/rules', requirePermission(Permission.PRODUCTION_RULES_MANAGE), validateRequest(z.object({ body: ruleBody, params: z.object({}), query: z.object({}) })), asyncHandler(async (request, response) => {
