@@ -96,6 +96,9 @@ async function resolveSalon(value: string, cache: ResolveCache) {
     return salon;
   });
 }
+function addDays(value: string, days: number) {
+  const parsed = new Date(`${value}T00:00:00.000Z`); parsed.setUTCDate(parsed.getUTCDate() + days); return parsed.toISOString().slice(0, 10);
+}
 async function resolveEvent(value: string, salonId: string | undefined, cache: ResolveCache) {
   return cached(cache, `event:${salonId || ''}:${value}`, async () => {
     if (objectIdPattern.test(value)) {
@@ -106,8 +109,8 @@ async function resolveEvent(value: string, salonId: string | undefined, cache: R
     const [name, date] = value.split('|').map((part) => part.trim());
     const query: any = { eventName: new RegExp(`^${escapeRegex(name)}$`, 'i'), deletedAt: null, ...(salonId ? { salonId } : {}) };
     if (date) {
-      const from = new Date(`${date}T00:00:00.000Z`); const to = new Date(`${date}T23:59:59.999Z`);
-      if (!Number.isNaN(from.getTime())) query.eventDate = { $gte: from, $lte: to };
+      const from = new Date(`${date}T03:00:00.000Z`); const to = new Date(`${addDays(date, 1)}T03:00:00.000Z`);
+      if (!Number.isNaN(from.getTime())) query.eventDate = { $gte: from, $lt: to };
     }
     return uniqueByReference(Event, query, `el evento “${value}”`);
   });
@@ -161,6 +164,10 @@ async function resolveReferences(request: any, row: Record<string, string>, type
   if (row.customerId) resolved.customerId = (await resolveCustomer(row.customerId, cache))._id.toString();
   if (row.supplierId) resolved.supplierId = (await resolveSupplier(row.supplierId, cache))._id.toString();
   if (row.responsibleId) resolved.responsibleId = (await resolveUser(row.responsibleId, cache))._id.toString();
+  if (row.categoryCode) {
+    const category = await cached(cache, `category:${row.categoryCode}`, () => ExpenseCategory.findOne({ code: row.categoryCode.toUpperCase(), deletedAt: null, isActive: true }).lean());
+    if (!category) throw new Error(`No existe la categoría ${row.categoryCode}.`);
+  }
   if (type === 'contracts' && resolved.eventDocument) {
     if (resolved.eventDocument.customerId?.toString() !== resolved.customerId) throw new Error('El cliente indicado no coincide con el cliente del evento.');
     if (resolved.eventDocument.salonId?.toString() !== resolved.salonId) throw new Error('El salón indicado no coincide con el salón del evento.');
@@ -197,7 +204,6 @@ async function executeExpense(request: any, job: any, row: any, rowNumber: numbe
   if (!canAccessSalon(request.user, row.salonId)) throw new Error('Sin acceso al salón.');
   if (row.eventId && !(await Event.exists({ _id: row.eventId, salonId: row.salonId, deletedAt: null }))) throw new Error('El evento no existe o pertenece a otro salón.');
   const category: any = row.categoryCode ? await ExpenseCategory.findOne({ code: row.categoryCode.toUpperCase(), deletedAt: null, isActive: true }).lean() : null;
-  if (row.categoryCode && !category) throw new Error(`No existe la categoría ${row.categoryCode}.`);
   const sourceId = row.externalId || `${job.fileHash}:${rowNumber}`;
   const amount = Number(row.finalAmount || 0) + Number(row.additionalAmount || 0) + Number(row.taxAmount || 0);
   const result = await Expense.updateOne({ sourceType: 'import', sourceId, deletedAt: null }, { $setOnInsert: { date: new Date(row.date), description: row.description, salonId: row.salonId, ...refs(row), categoryId: category?._id, category: 'OTHER', initialEstimatedAmount: Number(row.initialEstimatedAmount || 0), finalAmount: Number(row.finalAmount || 0), additionalAmount: Number(row.additionalAmount || 0), taxAmount: Number(row.taxAmount || 0), amount, currency: 'ARS', status: ['paid', 'pending', 'cancelled'].includes(row.status) ? row.status : 'pending', paymentMethod: row.paymentMethod || undefined, paidAt: row.status === 'paid' ? new Date(row.date) : undefined, notes: row.notes, sourceType: 'import', sourceId, createdBy: request.user.id, updatedBy: request.user.id } }, { upsert: true });
@@ -229,8 +235,11 @@ router.use(requireAuth);
 router.get('/template/:type', requirePermission(Permission.IMPORTS_CREATE), asyncHandler(async (request, response) => {
   const type = String(request.params.type); if (!templates[type]) throw new ApiError(404, 'IMPORT_TYPE_NOT_FOUND');
   const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet('Importación'); sheet.addRow(templates[type]);
-  sheet.getRow(1).font = { bold: true }; sheet.views = [{ state: 'frozen', ySplit: 2 }];
-  const help = templates[type].map((field) => templateHelp[type]?.[field] || ''); sheet.addRow(help); sheet.getRow(2).font = { italic: true }; sheet.getRow(2).height = 28;
+  sheet.getRow(1).font = { bold: true }; sheet.views = [{ state: 'frozen', ySplit: 1 }];
+  templates[type].forEach((field, index) => {
+    const help = templateHelp[type]?.[field];
+    if (help) sheet.getCell(1, index + 1).note = help;
+  });
   sheet.columns.forEach((column) => { column.width = 24; });
   const buffer = await workbook.xlsx.writeBuffer(); response.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); response.setHeader('Content-Disposition', `attachment; filename="plantilla-${type}.xlsx"`); return response.send(Buffer.from(buffer));
 }));
