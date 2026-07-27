@@ -81,6 +81,7 @@ async function request<T>(path: string, init?: RequestInit, retried = false): Pr
 export const api = {
   get: <T>(path: string): Promise<T> => request<T>(path),
   post: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined }),
+  postForm: <T>(path: string, body: FormData): Promise<T> => request<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string): Promise<T> => request<T>(path, { method: 'DELETE' })
 };

@@ -1,26 +1,30 @@
-// Design tokens for the M&M Eventos staff app. Deliberately small and flat (no theming
-// engine) — a single light brand theme, matching the backoffice's zinc/emerald palette.
-
 export const colors = {
-  background: '#F7F7F8',
+  background: '#F3F6FC',
+  backgroundDark: '#071426',
+  backgroundDeep: '#030A15',
   surface: '#FFFFFF',
-  surfaceMuted: '#F1F1F3',
-  border: '#E4E4E7',
-  text: '#0B0B0F',
-  textMuted: '#6B7280',
-  textSubtle: '#9CA3AF',
-  primary: '#0B0B0F',
+  surfaceMuted: '#EAF0FA',
+  surfaceStrong: '#DCE8F8',
+  border: '#D9E3F1',
+  text: '#101B32',
+  textMuted: '#60708A',
+  textSubtle: '#92A0B5',
+  primary: '#0B1F3A',
+  primarySoft: '#173D6C',
   primaryText: '#FFFFFF',
-  accent: '#D4AF37',
+  accent: '#22D3EE',
+  accentSoft: '#CFF7FC',
+  violet: '#7C5CFC',
+  violetSoft: '#E7E1FF',
   success: '#059669',
-  successBg: '#D1FAE5',
-  warning: '#B45309',
-  warningBg: '#FEF3C7',
-  danger: '#DC2626',
-  dangerBg: '#FEE2E2',
+  successBg: '#D3F8E8',
+  warning: '#B86509',
+  warningBg: '#FFF0C9',
+  danger: '#D72F5C',
+  dangerBg: '#FFE1E9',
   info: '#2563EB',
-  infoBg: '#DBEAFE',
-  overlay: 'rgba(11,11,15,0.55)'
+  infoBg: '#DCEBFF',
+  overlay: 'rgba(3,10,21,0.66)'
 } as const;
 
 export const spacing = {
@@ -42,8 +46,9 @@ export const radii = {
 } as const;
 
 export const typography = {
-  h1: { fontSize: 28, fontWeight: '700' as const, letterSpacing: -0.3 },
-  h2: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.2 },
+  display: { fontSize: 34, fontWeight: '800' as const, letterSpacing: -1.1 },
+  h1: { fontSize: 28, fontWeight: '800' as const, letterSpacing: -0.55 },
+  h2: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.35 },
   h3: { fontSize: 18, fontWeight: '600' as const },
   body: { fontSize: 15, fontWeight: '400' as const },
   bodyStrong: { fontSize: 15, fontWeight: '600' as const },
@@ -53,11 +58,18 @@ export const typography = {
 
 export const shadow = {
   card: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2
+    shadowColor: '#0B1F3A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.09,
+    shadowRadius: 20,
+    elevation: 4
+  },
+  glow: {
+    shadowColor: '#22D3EE',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    elevation: 7
   }
 } as const;
 

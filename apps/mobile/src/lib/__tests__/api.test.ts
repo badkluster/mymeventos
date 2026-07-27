@@ -35,6 +35,20 @@ describe('mobile api client', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer access-1');
   });
 
+  it('sends multipart uploads without converting the form to JSON', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(jsonResponse(201, { success: true, data: { asset: { url: 'https://cdn.example/avatar.jpg' } } }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const form = new FormData();
+    form.append('context', 'users');
+
+    await api.postForm('/uploads', form);
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.body).toBe(form);
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer access-1');
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+  });
+
   it('refreshes the session once and retries on a 401 UNAUTHENTICATED, then succeeds', async () => {
     const fetchMock = jest.fn()
       .mockResolvedValueOnce(jsonResponse(401, { success: false, error: { code: 'UNAUTHENTICATED', message: 'expired' } }))

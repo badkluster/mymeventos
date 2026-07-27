@@ -21,6 +21,6 @@ export function StatusBadge({ label, tone = 'neutral' }: { label: string; tone?:
 }
 
 const styles = StyleSheet.create({
-  badge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radii.pill, alignSelf: 'flex-start' },
-  label: { ...typography.caption, fontWeight: '700' }
+  badge: { paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: radii.pill, alignSelf: 'flex-start' },
+  label: { ...typography.caption, fontWeight: '700', letterSpacing: 0.25 }
 });

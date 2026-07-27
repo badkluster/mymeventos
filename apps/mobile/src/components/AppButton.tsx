@@ -1,5 +1,6 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
-import { colors, radii, spacing, typography } from '../theme/tokens';
+import { useRef } from 'react';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
+import { colors, radii, shadow, spacing, typography } from '../theme/tokens';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
@@ -16,36 +17,38 @@ export function AppButton({
   testID?: string;
 }) {
   const isDisabled = disabled || loading;
+  const pressScale = useRef(new Animated.Value(1)).current;
+  const animatePress = (toValue: number) => {
+    Animated.spring(pressScale, { toValue, speed: 34, bounciness: 3, useNativeDriver: true }).start();
+  };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled, busy: loading }}
-      testID={testID}
-      onPress={isDisabled ? undefined : onPress}
-      style={({ pressed }) => [
-        styles.base,
-        variantStyles[variant],
-        fullWidth && styles.fullWidth,
-        isDisabled && styles.disabled,
-        pressed && !isDisabled && styles.pressed
-      ]}
-    >
-      {loading ? (
-        <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? colors.primaryText : colors.text} />
-      ) : (
-        <View style={styles.content}>
-          {icon}
-          <Text style={[styles.label, labelStyles[variant]]}>{title}</Text>
-        </View>
-      )}
-    </Pressable>
+    <Animated.View style={[fullWidth && styles.fullWidth, { transform: [{ scale: pressScale }] }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isDisabled, busy: loading }}
+        testID={testID}
+        onPress={isDisabled ? undefined : onPress}
+        onPressIn={() => !isDisabled && animatePress(0.975)}
+        onPressOut={() => animatePress(1)}
+        style={[styles.base, variantStyles[variant], isDisabled && styles.disabled]}
+      >
+        {loading ? (
+          <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? colors.primaryText : colors.text} />
+        ) : (
+          <View style={styles.content}>
+            {icon}
+            <Text style={[styles.label, labelStyles[variant]]}>{title}</Text>
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 52,
-    borderRadius: radii.md,
+    minHeight: 54,
+    borderRadius: radii.lg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
@@ -54,14 +57,13 @@ const styles = StyleSheet.create({
   fullWidth: { width: '100%' },
   content: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   label: { ...typography.bodyStrong },
-  disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] }
+  disabled: { opacity: 0.5 }
 });
 
 const variantStyles = StyleSheet.create({
-  primary: { backgroundColor: colors.primary },
+  primary: { backgroundColor: colors.primary, ...shadow.card },
   secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  danger: { backgroundColor: colors.danger },
+  danger: { backgroundColor: colors.danger, ...shadow.card },
   ghost: { backgroundColor: 'transparent' }
 });
 

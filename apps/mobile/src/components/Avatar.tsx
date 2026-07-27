@@ -1,5 +1,5 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors, typography } from '../theme/tokens';
+import { colors, shadow, typography } from '../theme/tokens';
 
 function initials(name?: string): string {
   if (!name) return 'MM';
@@ -18,7 +18,7 @@ export function Avatar({ uri, name, size = 48 }: { uri?: string; name?: string; 
 }
 
 const styles = StyleSheet.create({
-  image: { backgroundColor: colors.surfaceMuted },
-  fallback: { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  image: { backgroundColor: colors.surfaceMuted, borderWidth: 2, borderColor: colors.accentSoft, ...shadow.card },
+  fallback: { backgroundColor: colors.primarySoft, borderWidth: 2, borderColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center', ...shadow.card },
   initials: { color: colors.primaryText }
 });

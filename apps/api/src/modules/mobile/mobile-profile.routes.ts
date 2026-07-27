@@ -18,6 +18,12 @@ const router = Router();
 const devicePushRouter = Router();
 
 const optionalText = z.string().trim().optional().or(z.literal(''));
+const optionalDate = z.string().trim().optional().refine((value) => {
+  if (!value) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T12:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, 'Fecha inválida. Usá el formato AAAA-MM-DD.');
 const profileSchema = z.object({
   body: z.object({
     firstName: z.string().trim().min(1),
@@ -25,7 +31,11 @@ const profileSchema = z.object({
     email: z.string().trim().email().optional().or(z.literal('')),
     phone: optionalText,
     documentType: optionalText,
-    documentNumber: optionalText
+    documentNumber: optionalText,
+    birthDate: optionalDate,
+    address: optionalText,
+    emergencyContactName: optionalText,
+    emergencyContactPhone: optionalText
   }),
   params: z.object({}), query: z.object({})
 });
@@ -46,18 +56,32 @@ router.patch('/', requirePermission(Permission.PROFILE_UPDATE_SELF), validateReq
     const exists = await User.exists({ _id: { $ne: request.user!.id }, normalizedEmail: email, deletedAt: null });
     if (exists) throw new ApiError(409, 'EMAIL_ALREADY_EXISTS');
   }
-  const update = {
+  const set: Record<string, unknown> = {
     firstName: request.body.firstName,
     lastName: request.body.lastName,
     fullName: buildUserFullName(request.body.firstName, request.body.lastName),
     email, normalizedEmail: email,
-    phone: request.body.phone || undefined,
-    normalizedPhone: normalizeUserPhone(request.body.phone || undefined),
-    documentType: request.body.documentType || undefined,
-    documentNumber: request.body.documentNumber || undefined,
     updatedBy: request.user!.id
   };
-  const user = await User.findOneAndUpdate({ _id: request.user!.id, deletedAt: null }, update, { new: true, runValidators: true }).lean();
+  const unset: Record<string, 1> = {};
+  const setOptionalText = (field: string, value?: string) => {
+    if (value) set[field] = value;
+    else unset[field] = 1;
+  };
+  setOptionalText('phone', request.body.phone);
+  setOptionalText('normalizedPhone', normalizeUserPhone(request.body.phone || undefined));
+  setOptionalText('documentType', request.body.documentType);
+  setOptionalText('documentNumber', request.body.documentNumber);
+  setOptionalText('address', request.body.address);
+  setOptionalText('emergencyContactName', request.body.emergencyContactName);
+  setOptionalText('emergencyContactPhone', request.body.emergencyContactPhone);
+  if (request.body.birthDate) set.birthDate = new Date(`${request.body.birthDate}T12:00:00.000Z`);
+  else unset.birthDate = 1;
+  const user = await User.findOneAndUpdate(
+    { _id: request.user!.id, deletedAt: null },
+    { $set: set, ...(Object.keys(unset).length ? { $unset: unset } : {}) },
+    { new: true, runValidators: true },
+  ).lean();
   await writeAuditLog(request, 'MOBILE_PROFILE_UPDATE', 'User', request.user!.id);
   return sendSuccess(response, { user: sanitizeUser(user) }, 200, 'Perfil actualizado correctamente.');
 }));

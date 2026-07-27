@@ -5,6 +5,10 @@ export interface SessionUser {
   phone?: string;
   documentType?: string;
   documentNumber?: string;
+  birthDate?: string;
+  address?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
   avatarUrl?: string;
   firstName: string;
   lastName: string;
@@ -13,7 +17,17 @@ export interface SessionUser {
   active?: boolean;
   salonIds?: string[];
   primarySalonId?: string;
-  staffProfile?: { staffCode?: string; staffSubroles?: string[]; employmentStatus?: string };
+  staffProfile?: {
+    staffCode?: string;
+    staffSubroles?: string[];
+    employmentStatus?: string;
+    documentType?: string;
+    documentNumber?: string;
+    birthDate?: string;
+    address?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+  };
   attendanceConfig?: { enabled?: boolean; canUseMobileApp?: boolean; requiresGeolocation?: boolean };
 }
 

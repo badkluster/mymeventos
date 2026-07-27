@@ -28,16 +28,16 @@ const styles = StyleSheet.create({
   container: { gap: spacing.xs },
   label: { ...typography.small, color: colors.textMuted, fontWeight: '600' },
   input: {
-    minHeight: 52,
-    borderRadius: radii.md,
+    minHeight: 54,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FBFDFF',
     paddingHorizontal: spacing.md,
     color: colors.text,
     fontSize: 16
   },
-  inputFocused: { borderColor: colors.text },
+  inputFocused: { borderColor: colors.accent, borderWidth: 1.5, backgroundColor: colors.surface },
   inputError: { borderColor: colors.danger },
   error: { ...typography.small, color: colors.danger },
   hint: { ...typography.small, color: colors.textSubtle }

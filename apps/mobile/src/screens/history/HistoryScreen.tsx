@@ -1,16 +1,17 @@
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppButton } from '../../components/AppButton';
+import { AmbientBackdrop } from '../../components/AmbientBackdrop';
+import { AnimatedEntrance } from '../../components/AnimatedEntrance';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { HistoryItem } from '../../components/HistoryItem';
 import { LoadingState } from '../../components/LoadingState';
-import { ScreenHeader } from '../../components/ScreenHeader';
 import { api, ApiClientError } from '../../lib/api';
-import { colors, spacing } from '../../theme/tokens';
+import { colors, radii, shadow, spacing, typography } from '../../theme/tokens';
 import type { HistoryResponse, WorkSession } from '../../types/attendance';
 import type { HistoryStackParamList } from '../../navigation/types';
 
@@ -45,13 +46,24 @@ export function HistoryScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
-      <View style={styles.headerRow}>
-        <ScreenHeader title="Historial" description="Tus jornadas registradas." />
-      </View>
-      <View style={styles.actions}>
-        <AppButton title="Incidencias" variant="secondary" fullWidth={false} onPress={() => navigation.navigate('Incidents')} />
-        <AppButton title="Correcciones" variant="secondary" fullWidth={false} onPress={() => navigation.navigate('Adjustments')} />
-      </View>
+      <AmbientBackdrop />
+      <AnimatedEntrance distance={22}>
+        <View style={styles.hero}>
+          <View style={styles.heroGlow} />
+          <Text style={styles.eyebrow}>TU ACTIVIDAD</Text>
+          <Text style={styles.title}>Historial de{`\n`}jornadas</Text>
+          <View style={styles.heroSummary}>
+            <Text style={styles.summaryValue}>{total}</Text>
+            <Text style={styles.summaryLabel}>registros disponibles</Text>
+          </View>
+        </View>
+      </AnimatedEntrance>
+      <AnimatedEntrance delay={100} distance={14}>
+        <View style={styles.actions}>
+          <AppButton title="Incidencias" variant="secondary" fullWidth={false} onPress={() => navigation.navigate('Incidents')} />
+          <AppButton title="Correcciones" variant="secondary" fullWidth={false} onPress={() => navigation.navigate('Adjustments')} />
+        </View>
+      </AnimatedEntrance>
       {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => void load(1)} /> : (
         <FlatList
           data={items}
@@ -78,7 +90,13 @@ export function HistoryScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: spacing.xl },
-  headerRow: { marginBottom: 0 },
+  hero: { overflow: 'hidden', backgroundColor: colors.backgroundDark, borderRadius: radii.xl, padding: spacing.xl, gap: spacing.sm, marginBottom: spacing.lg, ...shadow.card },
+  heroGlow: { position: 'absolute', backgroundColor: 'rgba(124,92,252,0.35)', width: 170, height: 170, borderRadius: 100, right: -65, top: -72 },
+  eyebrow: { ...typography.caption, color: colors.accent, fontWeight: '700', letterSpacing: 1.2 },
+  title: { ...typography.h1, color: colors.primaryText, lineHeight: 31 },
+  heroSummary: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginTop: spacing.sm },
+  summaryValue: { fontSize: 30, lineHeight: 34, fontWeight: '800', color: colors.accent, fontVariant: ['tabular-nums'] },
+  summaryLabel: { ...typography.small, color: '#B6C7DD' },
   actions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   list: { paddingBottom: spacing.xxl }
 });
