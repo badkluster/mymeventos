@@ -19,7 +19,6 @@ export function sampleVariableContext(overrides: Partial<MarketingVariableContex
     promotionValidUntil: '31/12/2026',
     discountValue: '20%',
     buttonUrl: 'https://mymeventos.example.com/contacto',
-    unsubscribeUrl: 'https://mymeventos.example.com/marketing/unsubscribe/preview-token',
     companyName: 'M&M Eventos',
     companyLogoUrl: '',
     ...overrides

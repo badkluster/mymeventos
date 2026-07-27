@@ -30,7 +30,6 @@ const environmentSchema = z.object({
   MARKETING_EMAIL_PROVIDER: z.enum(['mock', 'resend']).default('mock'),
   RESEND_API_KEY: z.string().optional(), RESEND_WEBHOOK_SECRET: z.string().optional(),
   MARKETING_FROM_EMAIL: z.string().optional(), MARKETING_FROM_NAME: z.string().optional(), MARKETING_REPLY_TO: z.string().optional(),
-  MARKETING_PUBLIC_URL: z.string().optional(),
   MARKETING_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(25),
   MARKETING_SEND_RATE_LIMIT: z.coerce.number().int().positive().max(500).default(10),
   MARKETING_CRON_SECRET: z.string().optional(),

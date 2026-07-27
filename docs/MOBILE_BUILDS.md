@@ -78,7 +78,7 @@ Cambios relevantes de la migración (más allá del bump de versiones, resuelto 
 
 Fast-follows documentados pero **no** hechos en esta migración (deliberado, para no mezclar dos superficies de breaking changes en el mismo cambio): React Navigation quedó en v6 (sus peer ranges siguen satisfechos por las versiones que dejó `expo install --fix`; v6 ya no recibe soporte activo, evaluar v7 aparte).
 
-**QA manual pendiente de ejecutar por el usuario en el emulador** (no automatizable, ver `docs/MOBILE_QA.md` §6): arranque de la app en Expo Go sobre `Medium_Phone_2`, login, desbloqueo biométrico, fichaje geolocalizado de entrada/salida, drenaje de la cola offline, selector de avatar, y recorrido de las pantallas de schedule/historial/notificaciones/incidencias/correcciones (atención a los insets de safe-area por el edge-to-edge obligatorio en Android desde SDK 53+).
+**QA manual pendiente de ejecutar por el usuario en el emulador** (no automatizable, ver `docs/MOBILE_QA.md` §6): arranque de la app en Expo Go sobre `Medium_Phone_2`, login, desbloqueo biométrico, fichaje geolocalizado de entrada/salida, drenaje de la cola offline, selector de avatar, e historial/incidencias/correcciones (atención a los insets de safe-area por el edge-to-edge obligatorio en Android desde SDK 53+). Turnos y Avisos no forman parte del QA actual porque no se exponen en navegación.
 
 ## 5. Lo que falta antes de un build real (EAS)
 
@@ -92,7 +92,7 @@ No se creó ningún proyecto EAS ni `eas.json` — requiere una cuenta/organizac
 
 ## 6. Push notifications: preparado, no conectado
 
-`MobileDevice.pushToken` existe en el modelo y `POST /api/mobile/devices/push-token` lo persiste — pero **nada en el backend envía notificaciones push todavía** (ni Expo Push API ni FCM/APNs directo). La bandeja de avisos in-app (`/notifications`, reutilizando el módulo existente) sí funciona en tiempo real al abrir la pantalla. Conectar push real requeriría:
+`MobileDevice.pushToken` existe en el modelo y `POST /api/mobile/devices/push-token` lo persiste — pero **nada en el backend envía notificaciones push todavía** (ni Expo Push API ni FCM/APNs directo). La bandeja in-app (`/notifications`, reutilizando el módulo existente) se conserva, pero no está expuesta en la navegación actual. Conectar push real requeriría:
 - Agregar `expo-notifications` al cliente (pedir permiso, obtener el Expo push token, enviarlo a `POST /mobile/devices/push-token` — el endpoint ya lo acepta).
 - Un servicio en el backend que llame a la Expo Push API (`https://exp.host/--/api/v2/push/send`) cuando se cree una `Notification` con `recipientUserIds` que tengan `MobileDevice.pushToken` activo.
 

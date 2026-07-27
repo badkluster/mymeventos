@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, ChevronLeft, CreditCard, Download, Eye, Mail, MessageCircle, Plus, RefreshCw, RotateCcw, Save, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, Download, Eye, Mail, MessageCircle, Plus, RefreshCw, Save, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
-import { contractAddendumStatusLabels, contractStatusLabels, displayLabel, paymentMethodLabels, paymentStatusLabels, paymentTypeLabels } from '@/lib/display-labels';
+import { contractAddendumStatusLabels, contractStatusLabels, displayLabel } from '@/lib/display-labels';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
-import type { Contract, ContractAddendum, Payment, PaymentSummary } from '@/features/quotes/types';
+import type { Contract, ContractAddendum } from '@/features/quotes/types';
         //
 
 const money = (value?: unknown) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(value ?? 0));
@@ -18,7 +18,6 @@ const statusTone: Record<string, string> = { draft: 'bg-zinc-100 text-zinc-700',
 
 function entityId(value: unknown) { return typeof value === 'string' ? value : (value as { _id?: string } | undefined)?._id ?? ''; }
 const emptyAddendum = { title: '', description: '', itemName: '', itemType: 'extra_service', quantity: 1, unitPrice: 0, discountAmount: 0 };
-const emptyPayment = { type: 'deposit', method: 'cash', status: 'paid', amount: 0, dueDate: '', reference: '', notes: '' };
 
 export default function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const searchParams = useSearchParams();
@@ -32,9 +31,6 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   const [observations, setObservations] = useState('');
   const [clausesText, setClausesText] = useState('');
   const [newAddendum, setNewAddendum] = useState(emptyAddendum);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [paymentSummary, setPaymentSummary] = useState<PaymentSummary>({ paidAmount: 0, refundedAmount: 0, pendingAmount: 0, securityDepositAmount: 0, overdueAmount: 0 });
-  const [newPayment, setNewPayment] = useState(emptyPayment);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
 
@@ -45,11 +41,8 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
         api.get<{ contract: Contract }>(`/contracts/${contractId}`),
         api.get<{ items: ContractAddendum[] }>(`/contracts/${contractId}/addendums`)
       ]);
-      const paymentsResponse = await api.get<{ items: Payment[]; summary: PaymentSummary }>(`/contracts/${contractId}/payments`);
       setContract(contractResponse.contract);
       setAddendums(addendumsResponse.items ?? []);
-      setPayments(paymentsResponse.items ?? []);
-      setPaymentSummary(paymentsResponse.summary ?? { paidAmount: 0, refundedAmount: 0, pendingAmount: 0, securityDepositAmount: 0, overdueAmount: 0 });
       setObservations(contractResponse.contract.observations ?? '');
       setClausesText((contractResponse.contract.legalTermsSnapshot?.clauses ?? []).map((clause) => `${clause.title ?? 'Cláusula'}\n${clause.text ?? ''}`).join('\n\n---\n\n'));
     } catch (error) {
@@ -132,33 +125,6 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
       setSaving(false);
     }
   };
-  const createNewPayment = async () => {
-    if (!newPayment.amount || Number(newPayment.amount) <= 0) return showToast({ message: 'Indicá un importe válido.', variant: 'error' });
-    setSaving(true);
-    try {
-      await api.post(`/contracts/${id}/payments`, { ...newPayment, amount: Number(newPayment.amount), dueDate: newPayment.dueDate || undefined });
-      setNewPayment(emptyPayment);
-      await load(id);
-      showToast({ message: 'Pago registrado correctamente.', variant: 'success' });
-    } catch (error) {
-      showToast({ message: error instanceof Error ? error.message : 'No se pudo registrar el pago.', variant: 'error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-  const paymentAction = async (payment: Payment, path: string, message: string) => {
-    setSaving(true);
-    try {
-      await api.post(`/payments/${payment._id}/${path}`, path === 'mark-paid' ? { method: payment.method || 'other' } : {});
-      await load(id);
-      showToast({ message, variant: 'success' });
-    } catch (error) {
-      showToast({ message: error instanceof Error ? error.message : 'No se pudo actualizar el pago.', variant: 'error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading || !contract) return <div className="grid min-h-56 place-items-center rounded-2xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">Cargando contrato...</div>;
   const eventId = entityId(contract.eventId);
   const customerId = entityId(contract.customerId);

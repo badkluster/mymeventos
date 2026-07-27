@@ -13,7 +13,7 @@ import { displayLabel, marketingCampaignStatusLabels } from '@/lib/display-label
 
 type Campaign = {
   _id: string; name: string; status: string; totalRecipients: number; sentCount: number; deliveredCount: number;
-  failedCount: number; unsubscribedCount: number; startedAt?: string; completedAt?: string;
+  failedCount: number; startedAt?: string; completedAt?: string;
 };
 
 const HISTORY_STATUSES = ['sending', 'paused', 'completed', 'completed_with_errors', 'cancelled', 'failed'];
@@ -50,8 +50,8 @@ export default function MarketingHistoryPage() {
       <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
         {loading ? <p className="p-8 text-sm text-zinc-500">Cargando historial...</p> : (
           <div className="overflow-x-auto">
-            <table className="min-w-[880px] w-full text-sm">
-              <thead className="border-b bg-zinc-50/80 text-zinc-500"><tr>{['Campaña', 'Estado', 'Inicio', 'Fin', 'Enviados', 'Entregados', 'Fallidos', 'Bajas'].map((h) => <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase">{h}</th>)}</tr></thead>
+            <table className="min-w-[780px] w-full text-sm">
+              <thead className="border-b bg-zinc-50/80 text-zinc-500"><tr>{['Campaña', 'Estado', 'Inicio', 'Fin', 'Enviados', 'Entregados', 'Fallidos'].map((h) => <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-zinc-100">
                 {items.map((item) => (
                   <tr key={item._id} className="hover:bg-amber-50/35">
@@ -62,7 +62,6 @@ export default function MarketingHistoryPage() {
                     <td className="px-5 py-3">{item.sentCount}/{item.totalRecipients}</td>
                     <td className="px-5 py-3">{item.deliveredCount}</td>
                     <td className="px-5 py-3">{item.failedCount}</td>
-                    <td className="px-5 py-3">{item.unsubscribedCount}</td>
                   </tr>
                 ))}
               </tbody>

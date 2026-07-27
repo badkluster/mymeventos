@@ -6,7 +6,7 @@ import { ApiError } from '../../middlewares/errorHandler';
 export function normalizeUserInput(input: Record<string, any>): Record<string, any> {
   const output = { ...input };
   if (output.username) output.username = String(output.username).trim().toLowerCase();
-  if (output.email) {
+  if (output.email !== undefined) {
     output.email = normalizeUserEmail(output.email);
     output.normalizedEmail = output.email;
   }

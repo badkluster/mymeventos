@@ -24,7 +24,6 @@ export type EmailBlockData = {
   showAddress?: boolean;
   showPhone?: boolean;
   showWhatsApp?: boolean;
-  showUnsubscribe?: boolean;
 };
 
 export type EmailBlock = {
@@ -75,7 +74,7 @@ function blockData(type: EmailBlockType): EmailBlockData {
     case 'promotion': return { showCode: true, showButton: true };
     case 'social': return { instagramUrl: '', facebookUrl: '', whatsappUrl: '' };
     case 'contact': return { showAddress: true, showPhone: true, showWhatsApp: true };
-    case 'footer': return { text: '{{companyName}} — {{salonAddress}}', showUnsubscribe: true };
+    case 'footer': return { text: '{{companyName}} — {{salonAddress}}' };
     default: return {};
   }
 }

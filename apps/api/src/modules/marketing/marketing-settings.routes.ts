@@ -26,8 +26,7 @@ const settingsBody = z.object({
   senderEmail: z.string().email().optional().or(z.literal('')),
   replyToEmail: z.string().email().optional().or(z.literal('')),
   legalFooterText: z.string().max(2000).optional(),
-  defaultImageUrl: z.string().url().optional().or(z.literal('')),
-  publicUrl: z.string().url().optional().or(z.literal(''))
+  defaultImageUrl: z.string().url().optional().or(z.literal(''))
 });
 
 router.get('/', requirePermission(Permission.MARKETING_SETTINGS_READ), asyncHandler(async (_request, response) => {

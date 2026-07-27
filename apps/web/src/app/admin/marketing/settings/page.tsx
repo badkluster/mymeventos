@@ -1,17 +1,16 @@
 'use client';
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import { FormEvent, useEffect, useState } from 'react';
 import { Button, Input, PageHeader, Textarea } from '@/components/ui/primitives';
 import { MarketingTabs } from '@/components/admin/marketing-tabs';
+import { CloudinaryUpload, type UploadedAsset } from '@/components/cloudinary-upload';
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
 
 type MarketingSettings = {
   companyName?: string; logoUrl?: string; logoAlternativeUrl?: string; primaryColor?: string; secondaryColor?: string;
   buttonColor?: string; backgroundColor?: string; fontFamily?: string; senderName?: string; senderEmail?: string;
-  replyToEmail?: string; legalFooterText?: string; defaultImageUrl?: string; publicUrl?: string;
+  replyToEmail?: string; legalFooterText?: string; defaultImageUrl?: string;
 };
 
 const empty: MarketingSettings = {};
@@ -45,18 +44,19 @@ export default function MarketingSettingsPage() {
     <section className="space-y-6">
       <PageHeader title="Marketing" description="Identidad institucional reutilizada por todas las campañas de email." />
       <MarketingTabs />
-      <PageHeader title="Configuración" description="Logo, colores, remitente y pie institucional para las campañas de email." />
+      <PageHeader title="Configuración" description="Adjuntá los logos e imágenes institucionales, y definí los colores, remitente y pie de las campañas." />
 
       {loading ? <p className="text-sm text-zinc-500">Cargando configuración...</p> : (
         <form onSubmit={save} className="space-y-6">
           <fieldset className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm md:grid-cols-2">
             <legend className="mb-1 text-sm font-semibold text-zinc-800 md:col-span-2">Identidad</legend>
             <Input placeholder="Nombre comercial" value={form.companyName ?? ''} onChange={(e) => setForm((c) => ({ ...c, companyName: e.target.value }))} />
-            <Input placeholder="Sitio público (para enlaces de baja)" value={form.publicUrl ?? ''} onChange={(e) => setForm((c) => ({ ...c, publicUrl: e.target.value }))} />
-            <Input placeholder="Logo principal (URL)" value={form.logoUrl ?? ''} onChange={(e) => setForm((c) => ({ ...c, logoUrl: e.target.value }))} />
-            <Input placeholder="Logo alternativo (URL)" value={form.logoAlternativeUrl ?? ''} onChange={(e) => setForm((c) => ({ ...c, logoAlternativeUrl: e.target.value }))} />
-            <Input placeholder="Imagen por defecto (URL)" value={form.defaultImageUrl ?? ''} onChange={(e) => setForm((c) => ({ ...c, defaultImageUrl: e.target.value }))} />
             <Input placeholder="Tipografía segura (ej. Arial, Helvetica, sans-serif)" value={form.fontFamily ?? ''} onChange={(e) => setForm((c) => ({ ...c, fontFamily: e.target.value }))} />
+            <div className="grid gap-3 md:col-span-2 md:grid-cols-3">
+              <BrandImageField label="Logo principal" description="Identidad principal de los emails." value={form.logoUrl} onChange={(logoUrl) => setForm((current) => ({ ...current, logoUrl }))} />
+              <BrandImageField label="Logo alternativo" description="Versión secundaria para diseños que la necesiten." value={form.logoAlternativeUrl} onChange={(logoAlternativeUrl) => setForm((current) => ({ ...current, logoAlternativeUrl }))} />
+              <BrandImageField label="Imagen por defecto" description="Imagen de respaldo para los diseños de email." value={form.defaultImageUrl} onChange={(defaultImageUrl) => setForm((current) => ({ ...current, defaultImageUrl }))} />
+            </div>
           </fieldset>
 
           <fieldset className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm md:grid-cols-4">
@@ -83,6 +83,25 @@ export default function MarketingSettingsPage() {
         </form>
       )}
     </section>
+  );
+}
+
+function BrandImageField({ label, description, value, onChange }: { label: string; description: string; value?: string; onChange: (value: string) => void }) {
+  function useUploadedAsset(asset: UploadedAsset) {
+    onChange(asset.secureUrl || asset.url);
+  }
+
+  return (
+    <article className="space-y-3 rounded-xl border border-zinc-200 p-3">
+      <div><p className="text-sm font-medium text-zinc-800">{label}</p><p className="mt-0.5 text-xs text-zinc-500">{description}</p></div>
+      <CloudinaryUpload context="marketing" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,.heic,.heif" label={value ? 'Reemplazar archivo' : 'Adjuntar archivo'} onUploaded={useUploadedAsset} />
+      {value ? (
+        <>
+          <div role="img" aria-label={label} className="h-24 rounded-lg border border-zinc-200 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${value})` }} />
+          <Button type="button" variant="secondary" className="w-full" onClick={() => onChange('')}>Quitar de la configuración</Button>
+        </>
+      ) : <p className="rounded-lg bg-zinc-50 px-3 py-5 text-center text-xs text-zinc-500">Todavía no hay un archivo adjunto.</p>}
+    </article>
   );
 }
 

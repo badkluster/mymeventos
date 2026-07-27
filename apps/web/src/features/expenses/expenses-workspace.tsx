@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
+import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Permission } from '@mym/shared';
 import { useSession } from '@/components/session-provider';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';

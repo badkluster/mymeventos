@@ -68,9 +68,9 @@ Esto corre gratis en el plan Hobby y garantiza que, aunque GitHub Actions esté 
 
 `POST /api/marketing/webhooks/:provider` (sin sesión, protegido por firma). Eventos manejados: `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained`. Deduplicados por `(provider, providerEventId)` en `MarketingWebhookEvent`, igual que el webhook de Mercado Pago en Entradas Digitales. Configuración paso a paso en `docs/MARKETING_EMAIL_PROVIDER.md`.
 
-## 6. Baja de comunicaciones
+## 6. Comunicaciones directas a leads y clientes
 
-`GET/POST /api/public/marketing/unsubscribe/:token` (rate-limited, sin sesión). El token vive en `MarketingRecipient.unsubscribeToken` (UUID aleatorio generado al preparar destinatarios, no predecible). Confirmar la baja: crea/activa una fila en `MarketingUnsubscribe` por email normalizado, marca el destinatario como `unsubscribed` y excluye ese email de **toda campaña futura** (ver `resolveAudienceContacts`), sin importar la fuente original.
+Las campañas se dirigen únicamente a leads, clientes o contactos cargados manualmente; no funcionan como newsletter. Por eso no se generan enlaces ni endpoints públicos de baja, y la segmentación no excluye contactos por bajas históricas. Los registros de baja previos se conservan solo como historial y no se eliminan automáticamente.
 
 ## 7. Diagnóstico de errores
 

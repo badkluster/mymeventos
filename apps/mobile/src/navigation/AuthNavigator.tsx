@@ -6,12 +6,12 @@ import type { AuthStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
-export function AuthNavigator() {
+export function AuthNavigator({ passwordResetToken }: { passwordResetToken?: string }) {
   return (
-    <Stack.Navigator screenOptions={{ headerShadowVisible: false }}>
+    <Stack.Navigator key={passwordResetToken ?? 'default'} initialRouteName={passwordResetToken ? 'ResetPassword' : 'Login'} screenOptions={{ headerShadowVisible: false }}>
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Recuperar contraseña' }} />
-      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Restablecer contraseña' }} />
+      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} initialParams={passwordResetToken ? { token: passwordResetToken } : undefined} options={{ title: 'Restablecer contraseña' }} />
     </Stack.Navigator>
   );
 }

@@ -1,10 +1,8 @@
 'use client';
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, BadgePercent, Megaphone, Plus, Users2 } from 'lucide-react';
+import { AlertTriangle, Megaphone, Plus, Users2 } from 'lucide-react';
 import { Button, PageHeader } from '@/components/ui/primitives';
 import { MarketingTabs } from '@/components/admin/marketing-tabs';
 import { useToast } from '@/components/ui/toast-provider';
@@ -14,10 +12,9 @@ import { displayLabel, marketingCampaignStatusLabels } from '@/lib/display-label
 type Dashboard = {
   activeCampaigns: number; scheduledCampaigns: number; sentThisMonth: number; emailsSentThisMonth: number;
   deliveryRate: number | null; openRate: number | null; clickRate: number | null; failedEmails: number;
-  campaignsWithErrors: number; activeUnsubscribes: number; activePromotions: number; reachableLeads: number; reachableCustomers: number;
+  campaignsWithErrors: number; reachableLeads: number; reachableCustomers: number;
   recentCampaigns: Array<{ _id: string; name: string; status: string; sentCount: number; totalRecipients: number; completedAt?: string; createdAt: string }>;
   upcomingCampaigns: Array<{ _id: string; name: string; scheduledAt?: string; estimatedRecipients: number }>;
-  expiringPromotions: Array<{ _id: string; name: string; validUntil: string }>;
   recentErrors: Array<{ _id: string; campaignId: string; errorMessage?: string; createdAt: string }>;
   mostUsedTemplates: Array<{ templateId: string; name: string; uses: number }>;
 };
@@ -38,7 +35,7 @@ export default function MarketingDashboardPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader title="Marketing" description="Resumen de campañas, promociones y audiencias alcanzables." action={<Link href="/admin/marketing/campaigns/new"><Button><Plus className="mr-2 h-4 w-4" />Nueva campaña</Button></Link>} />
+      <PageHeader title="Marketing" description="Resumen de campañas y audiencias alcanzables." action={<Link href="/admin/marketing/campaigns/new"><Button><Plus className="mr-2 h-4 w-4" />Nueva campaña</Button></Link>} />
       <MarketingTabs />
 
       {loading || !data ? <p className="text-sm text-zinc-500">Cargando resumen...</p> : (
@@ -52,8 +49,6 @@ export default function MarketingDashboardPage() {
             <StatCard label="Tasa de apertura" value={pctLabel(data.openRate)} />
             <StatCard label="Tasa de clic" value={pctLabel(data.clickRate)} />
             <StatCard label="Emails fallidos" value={data.failedEmails} />
-            <StatCard label="Bajas activas" value={data.activeUnsubscribes} />
-            <StatCard label="Promociones activas" value={data.activePromotions} icon={BadgePercent} />
             <StatCard label="Leads alcanzables" value={data.reachableLeads} icon={Users2} />
             <StatCard label="Clientes alcanzables" value={data.reachableCustomers} icon={Users2} />
           </div>
@@ -73,15 +68,6 @@ export default function MarketingDashboardPage() {
                 <Link key={c._id} href={`/admin/marketing/campaigns/${c._id}`} className="flex items-center justify-between rounded-xl px-3 py-2 text-sm hover:bg-zinc-50">
                   <span className="font-medium text-zinc-900">{c.name}</span>
                   <span className="text-xs text-zinc-500">{c.scheduledAt ? new Date(c.scheduledAt).toLocaleString('es-AR') : ''} · {c.estimatedRecipients} dest.</span>
-                </Link>
-              ))}
-            </Panel>
-
-            <Panel title="Promociones próximas a vencer" icon={BadgePercent} empty={!data.expiringPromotions.length} emptyText="No hay promociones por vencer en los próximos 14 días.">
-              {data.expiringPromotions.map((p) => (
-                <Link key={p._id} href="/admin/marketing/promotions" className="flex items-center justify-between rounded-xl px-3 py-2 text-sm hover:bg-zinc-50">
-                  <span className="font-medium text-zinc-900">{p.name}</span>
-                  <span className="text-xs text-zinc-500">Vence {new Date(p.validUntil).toLocaleDateString('es-AR')}</span>
                 </Link>
               ))}
             </Panel>

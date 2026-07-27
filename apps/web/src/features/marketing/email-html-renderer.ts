@@ -72,7 +72,7 @@ function renderBlock(block: EmailBlock, settings: EmailContent['settings']): str
       return cell(`<p style="margin:0;font-family:${settings.fontFamily};font-size:12px;color:#71717A;">${lines}</p>`, block);
     }
     case 'footer':
-      return cell(`<p style="margin:0 0 6px;font-family:${settings.fontFamily};font-size:12px;color:#A1A1AA;">${nl2br(block.data.text || '')}</p>${block.data.showUnsubscribe ? '<p style="margin:0;font-family:' + settings.fontFamily + ';font-size:12px;"><a href="{{unsubscribeUrl}}" style="color:#A1A1AA;">Dejar de recibir estas comunicaciones</a></p>' : ''}`, block);
+      return cell(`<p style="margin:0;font-family:${settings.fontFamily};font-size:12px;color:#A1A1AA;">${nl2br(block.data.text || '')}</p>`, block);
     default:
       return '';
   }
@@ -100,7 +100,7 @@ export function renderEmailContentToText(content: EmailContent): string {
         case 'columns': return `${block.data.leftText || ''}\n${block.data.rightText || ''}\n`;
         case 'promotion': return '{{promotionTitle}}\n{{promotionDescription}}\nCódigo: {{promotionCode}}\n{{buttonUrl}}\n';
         case 'contact': return '{{salonAddress}}\n{{salonPhone}}\n';
-        case 'footer': return `${block.data.text || ''}${block.data.showUnsubscribe ? '\nDejar de recibir estas comunicaciones: {{unsubscribeUrl}}' : ''}\n`;
+        case 'footer': return `${block.data.text || ''}\n`;
         default: return '';
       }
     })

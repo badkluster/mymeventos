@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Download, Pencil, RotateCcw, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Pencil, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import { Button, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
@@ -33,6 +33,8 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
   const [page, setPage] = useState(1);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadCampaign = useCallback(async (campaignId: string) => {
     try { const response = await api.get<{ campaign: Campaign }>(`/marketing/campaigns/${campaignId}`); setCampaign(response.campaign); }
@@ -64,6 +66,18 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
     try { await api.post(`/marketing/campaigns/${id}/cancel`, { reason: cancelReason }); setCancelOpen(false); await loadCampaign(id); showToast({ message: 'Campaña cancelada.', variant: 'success' }); }
     catch (error) { showToast({ message: error instanceof Error ? error.message : 'No se pudo cancelar.', variant: 'error' }); }
   }
+  async function removeCampaign() {
+    setDeleting(true);
+    try {
+      await api.delete(`/marketing/campaigns/${id}`);
+      showToast({ message: 'Campaña eliminada.', variant: 'success' });
+      router.push('/admin/marketing/campaigns');
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : 'No se pudo eliminar la campaña.', variant: 'error' });
+    } finally {
+      setDeleting(false);
+    }
+  }
   function exportCsv() {
     window.open(`${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/marketing/campaigns/${id}/export`, '_blank');
   }
@@ -83,6 +97,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
         action={<div className="flex flex-wrap gap-2">
           {campaign.status === 'draft' ? <Button variant="secondary" onClick={() => router.push(`/admin/marketing/campaigns/${id}/edit`)}><Pencil className="mr-2 h-4 w-4" />Editar</Button> : null}
           {['draft', 'scheduled', 'preparing', 'sending', 'paused'].includes(campaign.status) ? <Button variant="danger" onClick={() => setCancelOpen(true)}><XCircle className="mr-2 h-4 w-4" />Cancelar</Button> : null}
+          {['draft', 'cancelled', 'failed'].includes(campaign.status) ? <Button variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button> : null}
           {campaign.failedCount > 0 ? <Button variant="secondary" onClick={() => void retryFailed()}><RotateCcw className="mr-2 h-4 w-4" />Reintentar fallidos</Button> : null}
           <Button variant="secondary" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Exportar CSV</Button>
         </div>}
@@ -145,6 +160,13 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
           <p className="text-sm text-zinc-600">Los destinatarios pendientes no recibirán la campaña.</p>
           <Textarea placeholder="Motivo (opcional)" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
           <footer className="flex justify-end gap-2 border-t pt-4"><Button variant="secondary" onClick={() => setCancelOpen(false)}>Volver</Button><Button variant="danger" onClick={() => void cancel()}>Confirmar cancelación</Button></footer>
+        </div>
+      </Modal>
+
+      <Modal open={deleteOpen} title="Eliminar campaña" description="La campaña se ocultará del listado, pero se conservará el registro de auditoría." onClose={() => setDeleteOpen(false)}>
+        <div className="space-y-4 p-6">
+          <p className="text-sm text-zinc-700">¿Querés eliminar esta campaña?</p>
+          <footer className="flex justify-end gap-2 border-t pt-4"><Button variant="secondary" disabled={deleting} onClick={() => setDeleteOpen(false)}>Cancelar</Button><Button variant="danger" disabled={deleting} onClick={() => void removeCampaign()}>{deleting ? 'Eliminando...' : 'Eliminar campaña'}</Button></footer>
         </div>
       </Modal>
     </section>

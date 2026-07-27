@@ -1,6 +1,5 @@
 import { Types } from 'mongoose';
 import { Customer, Event, Lead, Quote } from '../crm/crm.models';
-import { MarketingUnsubscribe } from './marketing.models';
 
 // A conservative cap on how many candidate documents we ever pull server-side
 // before applying event-aggregate filters or building a sample. Real audience
@@ -252,7 +251,6 @@ export type AudienceResolution = {
   totalMatched: number;
   duplicatesRemoved: number;
   invalidEmailExcluded: number;
-  unsubscribedExcluded: number;
   manuallyExcluded: number;
 };
 
@@ -317,18 +315,11 @@ export async function resolveAudienceContacts(input: {
     deduped.push(contact);
   }
 
-  const unsubscribedDocs = deduped.length
-    ? await MarketingUnsubscribe.find({ normalizedEmail: { $in: [...seenEmails] }, isActive: true }).select('normalizedEmail').lean()
-    : [];
-  const unsubscribedSet = new Set(unsubscribedDocs.map((doc: any) => doc.normalizedEmail));
-  const finalContacts = deduped.filter((contact) => !unsubscribedSet.has(contact.email.trim().toLowerCase()));
-
   return {
-    contacts: finalContacts,
+    contacts: deduped,
     totalMatched: totalMatchedRaw,
     duplicatesRemoved,
     invalidEmailExcluded,
-    unsubscribedExcluded: unsubscribedSet.size,
     manuallyExcluded
   };
 }

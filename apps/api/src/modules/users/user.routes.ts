@@ -112,8 +112,8 @@ const baseFields = z.object({
   attendanceConfig: attendanceConfigSchema.optional(),
   preferences: preferencesSchema.optional()
 });
-const createSchema = z.object({ body: baseFields.extend({ username: z.string().trim().min(3), password: z.string().min(8).max(256), firstName: z.string().trim().min(1), lastName: z.string().trim().min(1) }), params: z.object({}), query: z.object({}) });
-const updateSchema = z.object({ body: baseFields.omit({ username: true, email: true, password: true }).partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'), params: z.object({ id: objectId }), query: z.object({}) });
+const createSchema = z.object({ body: baseFields.extend({ username: z.string().trim().min(3), email: z.string().trim().email(), password: z.string().min(8).max(256), firstName: z.string().trim().min(1), lastName: z.string().trim().min(1) }), params: z.object({}), query: z.object({}) });
+const updateSchema = z.object({ body: baseFields.omit({ username: true, password: true }).partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'), params: z.object({ id: objectId }), query: z.object({}) });
 const rolesPatchSchema = z.object({ body: z.object({ roles: z.array(roleSchema).min(1), primaryRole: roleSchema.optional() }), params: z.object({ id: objectId }), query: z.object({}) });
 const permissionsPatchSchema = z.object({ body: z.object({ permissionOverrides: z.array(permissionSchema).default([]), permissionDeniedOverrides: z.array(permissionSchema).default([]) }), params: z.object({ id: objectId }), query: z.object({}) });
 const salonsPatchSchema = z.object({ body: z.object({ salonIds: z.array(objectId).default([]), primarySalonId: objectId.optional().or(z.literal('')) }), params: z.object({ id: objectId }), query: z.object({}) });
@@ -192,6 +192,7 @@ router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(cre
   const input = normalizeUserInput({ ...request.body, roles, attendanceConfig, canAccessBackoffice, mustChangePassword: canAccessBackoffice ? request.body.mustChangePassword ?? true : false });
   validatePrimarySalonFields({ ...input, salonIds: input.salonIds ?? [], managedSalonIds: input.managedSalonIds ?? [] });
   if (await User.exists({ username: input.username })) throw new ApiError(409, 'USERNAME_ALREADY_EXISTS');
+  if (await User.exists({ normalizedEmail: input.normalizedEmail })) throw new ApiError(409, 'EMAIL_ALREADY_EXISTS');
   const { password, ...userInput } = input;
   const user = await User.create({ ...userInput, passwordHash: await hashPassword(password), createdBy: request.user!.id, updatedBy: request.user!.id });
   if (input.managedSalonIds?.length) await syncUserManagedSalons(user._id.toString(), input.managedSalonIds, request.user!.id);
@@ -208,6 +209,10 @@ router.patch('/:id', requirePermission(Permission.USERS_UPDATE), validateRequest
   const merged = { ...current, ...input, salonIds: input.salonIds ?? current.salonIds ?? [], managedSalonIds: input.managedSalonIds ?? current.managedSalonIds ?? [] };
   if (request.body.firstName !== undefined || request.body.lastName !== undefined) input.fullName = buildUserFullName(input.firstName ?? current.firstName, input.lastName ?? current.lastName);
   validatePrimarySalonFields(merged);
+  if (input.normalizedEmail && input.normalizedEmail !== current.normalizedEmail) {
+    const exists = await User.exists({ _id: { $ne: request.params.id }, normalizedEmail: input.normalizedEmail });
+    if (exists) throw new ApiError(409, 'EMAIL_ALREADY_EXISTS');
+  }
   if (input.managedSalonIds) await syncUserManagedSalons(request.params.id, input.managedSalonIds, request.user!.id);
   const user: any = await User.findOneAndUpdate({ _id: request.params.id, deletedAt: null }, { ...input, updatedBy: request.user!.id }, { new: true, runValidators: true }).select('-passwordHash -passwordResetTokenHash');
   await writeAuditLog(request, 'USER_UPDATE', 'User', request.params.id, { roleOrPermissionChanged: Boolean(request.body.roles || request.body.permissionOverrides || request.body.permissionDeniedOverrides) });

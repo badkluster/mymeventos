@@ -9,6 +9,7 @@ import { TableActionButton } from '@/components/admin/table-action-button';
 import { MarketingTabs } from '@/components/admin/marketing-tabs';
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
+import { displayLabel, leadStatusLabels } from '@/lib/display-labels';
 
 type LeadAudienceFilters = {
   statuses?: string[]; salonIds?: string[]; eventType?: string; tags?: string[];
@@ -25,7 +26,7 @@ type Audience = {
   salonId?: string; isDynamic: boolean; estimatedCount: number; lastCalculatedAt?: string;
 };
 type Salon = { _id: string; name: string };
-type Estimate = { estimatedCount: number; totalMatched: number; duplicatesRemoved: number; invalidEmailExcluded: number; unsubscribedExcluded: number; manuallyExcluded: number };
+type Estimate = { estimatedCount: number; totalMatched: number; duplicatesRemoved: number; invalidEmailExcluded: number; manuallyExcluded: number };
 type Sample = Estimate & { sample: Array<{ sourceType: string; email: string; fullName?: string; firstName?: string; lastName?: string }> };
 
 const LEAD_STATUSES = ['new', 'contacted', 'follow_up', 'quote_sent', 'negotiation', 'won', 'lost', 'converted'];
@@ -215,7 +216,7 @@ export default function MarketingAudiencesPage() {
               <legend className="mb-1 text-sm font-semibold text-zinc-800 md:col-span-2">Filtros de leads</legend>
               <label className="text-sm text-zinc-700 md:col-span-2">Estados
                 <Select multiple className="mt-1.5 min-h-24" value={form.leadStatuses} onChange={(e) => setForm((c) => ({ ...c, leadStatuses: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>
-                  {LEAD_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                  {LEAD_STATUSES.map((status) => <option key={status} value={status}>{displayLabel(leadStatusLabels, status)}</option>)}
                 </Select>
               </label>
               <Input placeholder="Tipo de evento" value={form.leadEventType} onChange={(e) => setForm((c) => ({ ...c, leadEventType: e.target.value }))} />
@@ -263,7 +264,7 @@ export default function MarketingAudiencesPage() {
           {estimate ? (
             <div className="rounded-xl bg-zinc-50 p-4 text-sm">
               <p className="font-semibold text-zinc-900">{estimate.estimatedCount} destinatarios estimados</p>
-              <p className="mt-1 text-xs text-zinc-500">{estimate.totalMatched} coincidencias totales · {estimate.duplicatesRemoved} duplicados eliminados · {estimate.invalidEmailExcluded} emails inválidos excluidos · {estimate.unsubscribedExcluded} bajas excluidas</p>
+              <p className="mt-1 text-xs text-zinc-500">{estimate.totalMatched} coincidencias totales · {estimate.duplicatesRemoved} duplicados eliminados · {estimate.invalidEmailExcluded} emails inválidos excluidos · {estimate.manuallyExcluded} exclusiones manuales</p>
               {sample?.sample?.length ? (
                 <ul className="mt-3 space-y-1 text-xs text-zinc-600">
                   {sample.sample.map((contact, index) => <li key={index}>{contact.fullName || [contact.firstName, contact.lastName].filter(Boolean).join(' ') || 'Sin nombre'} — {contact.email} ({contact.sourceType})</li>)}

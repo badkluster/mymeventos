@@ -4,7 +4,6 @@ import {
   Camera,
   CheckCircle2,
   Keyboard,
-  ScanLine,
   XCircle,
 } from "lucide-react";
 import { api } from "@/lib/api";

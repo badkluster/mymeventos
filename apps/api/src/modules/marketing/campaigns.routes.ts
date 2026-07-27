@@ -52,7 +52,6 @@ const campaignBody = z.object({
   trackingEnabled: z.boolean().optional(),
   openTrackingEnabled: z.boolean().optional(),
   clickTrackingEnabled: z.boolean().optional(),
-  unsubscribeEnabled: z.boolean().optional(),
   batchSize: z.coerce.number().int().min(1).max(500).optional(),
   sendRateLimit: z.coerce.number().int().min(1).max(500).optional(),
   tags: z.array(z.string().max(60)).optional(),
@@ -138,6 +137,7 @@ router.patch('/:id', requirePermission(Permission.CAMPAIGNS_UPDATE), validateReq
 router.delete('/:id', requirePermission(Permission.CAMPAIGNS_DELETE), validateRequest(schema(z.unknown(), { id })), asyncHandler(async (request, response) => {
   const campaign = await MarketingCampaign.findOne({ _id: request.params.id, deletedAt: null });
   if (!campaign) throw new ApiError(404, 'MARKETING_CAMPAIGN_NOT_FOUND');
+  assertSalonReadable(request.user!, campaign);
   if (!['draft', 'cancelled', 'failed'].includes(campaign.status)) throw new ApiError(409, 'MARKETING_CAMPAIGN_NOT_EDITABLE');
   campaign.deletedAt = new Date();
   campaign.deletedBy = request.user!.id as any;
@@ -169,7 +169,7 @@ router.post('/:id/estimate', requirePermission(Permission.CAMPAIGNS_READ), valid
   if (!campaign) throw new ApiError(404, 'MARKETING_CAMPAIGN_NOT_FOUND');
   assertSalonReadable(request.user!, campaign);
   const audience = campaign.audienceId as any;
-  if (!audience) return sendSuccess(response, { estimatedCount: 0, totalMatched: 0, duplicatesRemoved: 0, invalidEmailExcluded: 0, unsubscribedExcluded: 0, manuallyExcluded: 0 });
+  if (!audience) return sendSuccess(response, { estimatedCount: 0, totalMatched: 0, duplicatesRemoved: 0, invalidEmailExcluded: 0, manuallyExcluded: 0 });
   const resolution = await resolveAudienceContacts({
     sourceTypes: audience.sourceTypes,
     filters: audience.filters,
@@ -183,7 +183,6 @@ router.post('/:id/estimate', requirePermission(Permission.CAMPAIGNS_READ), valid
     totalMatched: resolution.totalMatched,
     duplicatesRemoved: resolution.duplicatesRemoved,
     invalidEmailExcluded: resolution.invalidEmailExcluded,
-    unsubscribedExcluded: resolution.unsubscribedExcluded,
     manuallyExcluded: resolution.manuallyExcluded
   });
 }));

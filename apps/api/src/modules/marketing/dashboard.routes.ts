@@ -4,7 +4,7 @@ import { requireAuth, requirePermission, accessibleSalonIds } from '../../middle
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
 import { Lead, Customer } from '../crm/crm.models';
-import { MarketingCampaign, MarketingSendLog, MarketingTemplate, MarketingUnsubscribe, Promotion } from './marketing.models';
+import { MarketingCampaign, MarketingSendLog, MarketingTemplate } from './marketing.models';
 
 const router = Router();
 router.use(requireAuth);
@@ -25,15 +25,12 @@ router.get('/dashboard', requirePermission(Permission.CAMPAIGNS_READ), asyncHand
     sentThisMonth,
     aggregateThisMonth,
     failedRecent,
-    activePromotions,
-    expiringPromotions,
     recentCampaigns,
     upcomingCampaigns,
     recentErrors,
     templateUsage,
     reachableLeads,
-    reachableCustomers,
-    activeUnsubscribes
+    reachableCustomers
   ] = await Promise.all([
     MarketingCampaign.countDocuments({ ...campaignScopeMatch, status: { $in: ['preparing', 'sending'] } }),
     MarketingCampaign.countDocuments({ ...campaignScopeMatch, status: 'scheduled' }),
@@ -43,8 +40,6 @@ router.get('/dashboard', requirePermission(Permission.CAMPAIGNS_READ), asyncHand
       { $group: { _id: null, sent: { $sum: '$sentCount' }, delivered: { $sum: '$deliveredCount' }, failed: { $sum: '$failedCount' }, opened: { $sum: '$openedCount' }, clicked: { $sum: '$clickedCount' } } }
     ]),
     MarketingCampaign.countDocuments({ ...campaignScopeMatch, status: 'completed_with_errors' }),
-    Promotion.countDocuments({ isActive: true, archivedAt: null, $or: [{ validUntil: null }, { validUntil: { $gte: new Date() } }] }),
-    Promotion.find({ isActive: true, archivedAt: null, validUntil: { $gte: new Date(), $lte: new Date(Date.now() + 14 * 86_400_000) } }).select('name validUntil').sort({ validUntil: 1 }).limit(5).lean(),
     MarketingCampaign.find(campaignScopeMatch).sort({ createdAt: -1 }).limit(5).select('name status sentCount totalRecipients createdAt completedAt').lean(),
     MarketingCampaign.find({ ...campaignScopeMatch, status: 'scheduled' }).sort({ scheduledAt: 1 }).limit(5).select('name scheduledAt totalRecipients estimatedRecipients').lean(),
     MarketingSendLog.find({ status: 'failed' }).sort({ createdAt: -1 }).limit(5).select('campaignId errorMessage createdAt').lean(),
@@ -55,8 +50,7 @@ router.get('/dashboard', requirePermission(Permission.CAMPAIGNS_READ), asyncHand
       { $limit: 5 }
     ]),
     Lead.countDocuments({ deletedAt: null, email: { $regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }, ...(salonScope ? { $or: [{ salonId: { $in: salonScope } }, { salonIds: { $in: salonScope } }] } : {}) }),
-    Customer.countDocuments({ deletedAt: null, email: { $regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }, ...(salonScope ? { salonIds: { $in: salonScope } } : {}) }),
-    MarketingUnsubscribe.countDocuments({ isActive: true })
+    Customer.countDocuments({ deletedAt: null, email: { $regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }, ...(salonScope ? { salonIds: { $in: salonScope } } : {}) })
   ]);
 
   const templateIds = templateUsage.map((row: any) => row._id).filter(Boolean);
@@ -75,13 +69,10 @@ router.get('/dashboard', requirePermission(Permission.CAMPAIGNS_READ), asyncHand
     clickRate: providerSupportsTracking && totals.delivered > 0 ? totals.clicked / totals.delivered : null,
     failedEmails: totals.failed,
     campaignsWithErrors: failedRecent,
-    activeUnsubscribes,
-    activePromotions,
     reachableLeads,
     reachableCustomers,
     recentCampaigns,
     upcomingCampaigns,
-    expiringPromotions,
     recentErrors,
     mostUsedTemplates: templateUsage.map((row: any) => ({ templateId: row._id, name: templateNameById.get(String(row._id)) ?? 'Plantilla eliminada', uses: row.count }))
   });

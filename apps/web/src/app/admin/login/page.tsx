@@ -21,7 +21,7 @@ export default function LoginPage() {
     const username = String(values.get('username') ?? '');
     const password = String(values.get('password') ?? '');
     if (!username || !password) {
-      setError('Completá usuario y contraseña.');
+      setError('Completá usuario o email y contraseña.');
       return;
     }
     setLoading(true);
@@ -129,14 +129,14 @@ export default function LoginPage() {
             ) : null}
 
             <label className="grid gap-2 text-sm font-medium text-zinc-200">
-              Usuario
+              Usuario o email
               <span className="group flex items-center gap-3 rounded-xl border border-white/12 bg-black/35 px-3 py-3 transition focus-within:border-[#dbe1e8]/80 focus-within:bg-black/55">
                 <UserRound className="h-4 w-4 shrink-0 text-zinc-500 transition group-focus-within:text-[#dbe1e8]" />
                 <input
                   name="username"
                   className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
                   autoComplete="username"
-                  placeholder="usuario"
+                  placeholder="usuario o correo@ejemplo.com"
                 />
               </span>
             </label>

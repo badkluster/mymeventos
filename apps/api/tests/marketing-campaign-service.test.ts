@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
   recipientFind: vi.fn(),
   recipientInsertMany: vi.fn(),
   recipientCountDocuments: vi.fn(),
-  resolveAudienceContacts: vi.fn()
+  resolveAudienceContacts: vi.fn(),
+  getMarketingSettings: vi.fn()
 }));
 
 vi.mock('../src/modules/marketing/marketing.models', () => ({
@@ -19,10 +20,10 @@ vi.mock('../src/modules/marketing/marketing.models', () => ({
   MarketingSendLog: { create: vi.fn() }
 }));
 vi.mock('../src/modules/marketing/marketing-audience.service', () => ({ resolveAudienceContacts: mocks.resolveAudienceContacts }));
-vi.mock('../src/modules/marketing/marketing-settings.service', () => ({ getOrCreateMarketingSettings: vi.fn().mockResolvedValue({ senderName: 'M&M Eventos', senderEmail: 'no-reply@mym.test', companyName: 'M&M Eventos' }) }));
+vi.mock('../src/modules/marketing/marketing-settings.service', () => ({ getOrCreateMarketingSettings: mocks.getMarketingSettings }));
 vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { findOne: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }) } }));
 
-import { prepareCampaignRecipients } from '../src/modules/marketing/marketing-campaign.service';
+import { prepareCampaignRecipients, renderRecipientEmail } from '../src/modules/marketing/marketing-campaign.service';
 
 function chain(result: unknown) {
   return { select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(result) }) };
@@ -37,8 +38,9 @@ describe('prepareCampaignRecipients idempotency', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.campaignFindOne.mockResolvedValue({ _id: 'campaign-1', excludedRecipientEmails: [], audienceSnapshot: null, save: vi.fn().mockResolvedValue(undefined) });
-    mocks.resolveAudienceContacts.mockResolvedValue({ contacts, totalMatched: 2, duplicatesRemoved: 0, invalidEmailExcluded: 0, unsubscribedExcluded: 0, manuallyExcluded: 0 });
+    mocks.resolveAudienceContacts.mockResolvedValue({ contacts, totalMatched: 2, duplicatesRemoved: 0, invalidEmailExcluded: 0, manuallyExcluded: 0 });
     mocks.recipientInsertMany.mockResolvedValue(contacts);
+    mocks.getMarketingSettings.mockResolvedValue({ senderName: 'M&M Eventos', senderEmail: 'no-reply@mym.test', companyName: 'M&M Eventos' });
   });
 
   it('inserts every newly-matched contact the first time it prepares recipients', async () => {
@@ -50,6 +52,7 @@ describe('prepareCampaignRecipients idempotency', () => {
     expect(result.inserted).toBe(2);
     expect(mocks.recipientInsertMany).toHaveBeenCalledTimes(1);
     expect(mocks.recipientInsertMany.mock.calls[0][0]).toHaveLength(2);
+    expect(mocks.recipientInsertMany.mock.calls[0][0][0]).not.toHaveProperty('unsubscribeToken');
   });
 
   it('does not re-insert contacts that were already prepared in an earlier call', async () => {
@@ -79,5 +82,15 @@ describe('prepareCampaignRecipients idempotency', () => {
     mocks.recipientInsertMany.mockRejectedValue(Object.assign(new Error('duplicate key'), { code: 11000 }));
 
     await expect(prepareCampaignRecipients('campaign-1')).resolves.toMatchObject({ inserted: 2 });
+  });
+
+  it('removes legacy unsubscribe markup before rendering an email', async () => {
+    const rendered = await renderRecipientEmail(
+      { name: 'Campaña', renderedHtml: '<p>Contenido</p><p><a href="{{unsubscribeUrl}}">Dejar de recibir estas comunicaciones</a></p>', renderedText: 'Contenido\nDejar de recibir estas comunicaciones: {{unsubscribeUrl}}' },
+      { email: 'ana@mail.com', firstName: 'Ana' }
+    );
+
+    expect(rendered.html).not.toContain('unsubscribe');
+    expect(rendered.text).not.toContain('baja');
   });
 });

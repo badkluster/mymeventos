@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import { Types } from 'mongoose';
 import { env } from '../../config/env';
 import { Salon } from '../salons/salon.model';
@@ -12,10 +11,6 @@ import { sampleVariableContext } from './marketing-sample-context';
 const CAMPAIGN_LOCK_MS = 2 * 60_000;
 const RECIPIENT_LOCK_MS = 2 * 60_000;
 const MAX_RECIPIENT_ATTEMPTS = 3;
-
-function publicBaseUrl(): string {
-  return env.MARKETING_PUBLIC_URL ?? env.CORS_ORIGIN ?? 'http://localhost:3000';
-}
 
 export async function buildSenderIdentity(campaign: any) {
   const settings = await getOrCreateMarketingSettings();
@@ -116,8 +111,7 @@ export async function prepareCampaignRecipients(campaignId: string): Promise<{ i
       lastName: contact.lastName,
       fullName: contact.fullName ?? [contact.firstName, contact.lastName].filter(Boolean).join(' '),
       salonId: contact.salonId,
-      status: 'pending' as const,
-      unsubscribeToken: randomUUID()
+      status: 'pending' as const
     }));
 
   if (toInsert.length) {
@@ -149,17 +143,24 @@ function buildRecipientContext(campaign: any, recipient: any, base: MarketingVar
     promotionCode: promotion?.code || base.promotionCode,
     promotionValidUntil: promotion?.validUntil ? new Date(promotion.validUntil).toLocaleDateString('es-AR') : base.promotionValidUntil,
     discountValue: promotion ? (promotion.discountType === 'percentage' ? `${promotion.discountValue}%` : String(promotion.discountValue ?? '')) : base.discountValue,
-    buttonUrl: promotion?.buttonUrl || base.buttonUrl,
-    unsubscribeUrl: `${publicBaseUrl()}/marketing/unsubscribe/${recipient.unsubscribeToken}`
+    buttonUrl: promotion?.buttonUrl || base.buttonUrl
   };
+}
+
+function removeLegacyUnsubscribeContent(content: string): string {
+  return content
+    .replace(/<p\b[^>]*>\s*<a\b[^>]*href=(["'])\{\{unsubscribeUrl\}\}\1[^>]*>[\s\S]*?<\/a>\s*<\/p>/gi, '')
+    .replace(/\s*Dejar de recibir estas comunicaciones:\s*\{\{unsubscribeUrl\}\}/gi, '');
 }
 
 export async function renderRecipientEmail(campaign: any, recipient: any) {
   const settingsAndCompany = await companyAndSalonContext(campaign.salonId, undefined);
   const context = buildRecipientContext(campaign, recipient, settingsAndCompany as MarketingVariableContext);
   const subject = renderMarketingVariables(campaign.subject ?? '', context).rendered;
-  const html = renderMarketingVariables(campaign.renderedHtml ?? '', context, { escapeValues: false }).rendered;
-  const text = renderMarketingVariables(campaign.renderedText ?? htmlToText(campaign.renderedHtml ?? ''), context, { escapeValues: false }).rendered;
+  const sourceHtml = removeLegacyUnsubscribeContent(campaign.renderedHtml ?? '');
+  const sourceText = removeLegacyUnsubscribeContent(campaign.renderedText ?? htmlToText(sourceHtml));
+  const html = renderMarketingVariables(sourceHtml, context, { escapeValues: false }).rendered;
+  const text = renderMarketingVariables(sourceText, context, { escapeValues: false }).rendered;
   return { subject, html, text };
 }
 
@@ -176,8 +177,10 @@ export async function sendTestEmails(input: { campaignId: string; testEmails: st
   const companyAndSalon = await companyAndSalonContext((campaign as any).salonId, sender.settings);
   const context: MarketingVariableContext = { ...sampleVariableContext(), ...companyAndSalon };
   const subject = `[PRUEBA] ${renderMarketingVariables((campaign as any).subject ?? '', context).rendered}`;
-  const html = renderMarketingVariables((campaign as any).renderedHtml ?? '', context, { escapeValues: false }).rendered;
-  const text = renderMarketingVariables((campaign as any).renderedText ?? htmlToText((campaign as any).renderedHtml ?? ''), context, { escapeValues: false }).rendered;
+  const sourceHtml = removeLegacyUnsubscribeContent((campaign as any).renderedHtml ?? '');
+  const sourceText = removeLegacyUnsubscribeContent((campaign as any).renderedText ?? htmlToText(sourceHtml));
+  const html = renderMarketingVariables(sourceHtml, context, { escapeValues: false }).rendered;
+  const text = renderMarketingVariables(sourceText, context, { escapeValues: false }).rendered;
 
   const provider = getMarketingEmailProvider();
   const results = await provider.sendBatch(

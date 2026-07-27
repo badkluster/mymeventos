@@ -20,7 +20,6 @@ import uploadRoutes from '../modules/uploads/uploads.routes';
 import invitationRoutes, { publicInvitationRoutes } from '../modules/invitations/invitation.routes';
 import { ticketRoutes, publicTicketRoutes } from '../modules/tickets/ticket.routes';
 import marketingRoutes from '../modules/marketing/marketing.routes';
-import publicMarketingUnsubscribeRoutes from '../modules/marketing/unsubscribe.routes';
 import { publicRateLimit } from '../middlewares/publicRateLimit';
 import mobileAuthRoutes from '../modules/mobile/mobile-auth.routes';
 import mobileProfileRoutes, { mobileDevicePushRoutes } from '../modules/mobile/mobile-profile.routes';
@@ -75,7 +74,6 @@ router.use('/mobile/payroll', mobilePayrollRoutes);
 router.use('/public/analytics', publicRateLimit({ windowMs: 60_000, max: 120 }), publicAnalyticsRoutes);
 router.use('/public/invitations', publicRateLimit({ windowMs: 60_000, max: 30 }), publicInvitationRoutes);
 router.use('/public', publicRateLimit({ windowMs: 60_000, max: 40 }), publicTicketRoutes);
-router.use('/public/marketing/unsubscribe', publicRateLimit({ windowMs: 60_000, max: 20 }), publicMarketingUnsubscribeRoutes);
 router.use('/public', publicRoutes);
 
 export default router;

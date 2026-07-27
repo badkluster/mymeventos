@@ -4,8 +4,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Copy, Megaphone, Plus, Search } from 'lucide-react';
-import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
+import { ChevronLeft, ChevronRight, Copy, Megaphone, Plus, Search, Trash2 } from 'lucide-react';
+import { Button, Input, Modal, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { MarketingTabs } from '@/components/admin/marketing-tabs';
 import { useToast } from '@/components/ui/toast-provider';
@@ -28,6 +28,8 @@ export default function MarketingCampaignsPage() {
   const [meta, setMeta] = useState<Meta>({ page: 1, limit: 20, totalItems: 0, totalPages: 1 });
   const [filters, setFilters] = useState({ search: '', status: '', page: 1 });
   const [loading, setLoading] = useState(true);
+  const [campaignToDelete, setCampaignToDelete] = useState<Campaign>();
+  const [deleting, setDeleting] = useState(false);
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(filters.page), limit: '20' });
@@ -47,6 +49,21 @@ export default function MarketingCampaignsPage() {
   async function duplicate(campaign: Campaign) {
     try { const response = await api.post<{ campaign: Campaign }>(`/marketing/campaigns/${campaign._id}/duplicate`, {}); router.push(`/admin/marketing/campaigns/${response.campaign._id}/edit`); }
     catch (error) { showToast({ message: error instanceof Error ? error.message : 'No se pudo duplicar la campaña.', variant: 'error' }); }
+  }
+
+  async function removeCampaign() {
+    if (!campaignToDelete) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/marketing/campaigns/${campaignToDelete._id}`);
+      setCampaignToDelete(undefined);
+      await load();
+      showToast({ message: 'Campaña eliminada.', variant: 'success' });
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : 'No se pudo eliminar la campaña.', variant: 'error' });
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -80,6 +97,7 @@ export default function MarketingCampaignsPage() {
                     <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}><div className="flex justify-end">
                       {item.status === 'draft' ? <TableActionButton icon={Copy} label="Editar" onClick={() => router.push(`/admin/marketing/campaigns/${item._id}/edit`)} /> : null}
                       <TableActionButton icon={Copy} label="Duplicar" onClick={() => void duplicate(item)} />
+                      {['draft', 'cancelled', 'failed'].includes(item.status) ? <TableActionButton icon={Trash2} label="Eliminar" onClick={() => setCampaignToDelete(item)} /> : null}
                     </div></td>
                   </tr>
                 ))}
@@ -97,6 +115,16 @@ export default function MarketingCampaignsPage() {
           </div>
         </footer>
       </article>
+
+      <Modal open={Boolean(campaignToDelete)} onClose={() => setCampaignToDelete(undefined)} title="Eliminar campaña" description="La campaña se ocultará del listado, pero se conservará el registro de auditoría.">
+        <div className="space-y-4 p-6">
+          <p className="text-sm text-zinc-700">¿Querés eliminar la campaña <strong>{campaignToDelete?.name}</strong>?</p>
+          <footer className="flex justify-end gap-3 border-t border-zinc-100 pt-4">
+            <Button variant="secondary" disabled={deleting} onClick={() => setCampaignToDelete(undefined)}>Cancelar</Button>
+            <Button variant="danger" disabled={deleting} onClick={() => void removeCampaign()}>{deleting ? 'Eliminando...' : 'Eliminar campaña'}</Button>
+          </footer>
+        </div>
+      </Modal>
     </section>
   );
 }

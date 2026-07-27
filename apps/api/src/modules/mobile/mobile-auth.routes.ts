@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { Permission, StaffEmploymentStatus } from '@mym/shared';
-import { User } from '../users/user.model';
+import { User, normalizeUserEmail } from '../users/user.model';
 import { sanitizeUser } from '../users/user.service';
 import { RefreshToken } from '../auth/refreshToken.model';
 import { MobileDevice } from './mobileDevice.model';
@@ -106,7 +106,8 @@ async function upsertDevice(userId: string, device: z.infer<typeof deviceFields>
 }
 
 router.post('/login', validateRequest(loginSchema), asyncHandler(async (request, response) => {
-  const user: any = await User.findOne({ username: request.body.username.toLowerCase(), deletedAt: null }).select('+passwordHash');
+  const identifier = normalizeUserEmail(request.body.username) ?? request.body.username.trim().toLowerCase();
+  const user: any = await User.findOne({ deletedAt: null, $or: [{ username: identifier }, { normalizedEmail: identifier }] }).select('+passwordHash');
   const credentialsValid = user?.passwordHash ? await verifyPassword(request.body.password, user.passwordHash) : false;
   const locked = Boolean(user?.lockedUntil && user.lockedUntil > new Date());
   if (!user || !credentialsValid || locked) {
@@ -161,14 +162,14 @@ router.get('/session', requireAuth, asyncHandler(async (request, response) => {
 }));
 
 router.post('/forgot-password', validateRequest(forgotSchema), asyncHandler(async (request, response) => {
-  const identifier = request.body.username.toLowerCase().trim();
+  const identifier = normalizeUserEmail(request.body.username) ?? request.body.username.toLowerCase().trim();
   const user: any = await User.findOne({ deletedAt: null, $or: [{ username: identifier }, { normalizedEmail: identifier }] });
-  if (user && isMobileEligible(user)) {
+  if (user?.email && isMobileEligible(user)) {
     const rawToken = crypto.randomBytes(32).toString('hex');
     await User.updateOne({ _id: user._id }, { passwordResetTokenHash: hashToken(rawToken), passwordResetExpiresAt: new Date(Date.now() + 30 * 60_000) });
     const deepLink = `${env.MOBILE_DEEP_LINK_SCHEME}://reset-password?token=${rawToken}`;
     await sendEmail({
-      to: user.email || user.username,
+      to: user.email,
       subject: 'Restablecer contraseña — M&M Eventos',
       text: `Usá este código en la app para restablecer tu contraseña: ${rawToken}\n\nSi tenés la app instalada, también podés abrir este enlace: ${deepLink}\n\nEste código vence en 30 minutos. Si no lo solicitaste, ignorá este mensaje.`
     });

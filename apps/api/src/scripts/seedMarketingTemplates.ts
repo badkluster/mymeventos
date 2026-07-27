@@ -11,7 +11,7 @@ function block(type: string, data: Record<string, any>, overrides: Partial<Block
   return { id: `${type}-${Math.random().toString(36).slice(2, 8)}`, type, enabled: true, paddingY: type === 'divider' || type === 'spacer' ? 0 : 16, paddingX: 24, align: type === 'button' || type === 'logo' ? 'center' : 'left', data, ...overrides };
 }
 function contactBlock() { return block('contact', { showAddress: true, showPhone: true, showWhatsApp: true }); }
-function footerBlock(text: string) { return block('footer', { text, showUnsubscribe: true }); }
+function footerBlock(text: string) { return block('footer', { text }); }
 function logoBlock() { return block('logo', { url: '{{companyLogoUrl}}', width: 160, link: '{{buttonUrl}}' }); }
 
 function renderBlocksToHtml(blocks: Block[]): string {
@@ -29,7 +29,7 @@ function renderBlocksToHtml(blocks: Block[]): string {
       case 'spacer': return `<tr><td style="height:${b.data.height ?? 24}px;font-size:0;">&nbsp;</td></tr>`;
       case 'promotion': return row(`<table role="presentation" width="100%" style="border:1px solid #E4E4E7;border-radius:12px;"><tr><td style="padding:20px;font-family:${settings.fontFamily};"><p style="margin:0 0 8px;font-size:20px;font-weight:700;">{{promotionTitle}}</p><p style="margin:0 0 12px;font-size:14px;color:#3F3F46;">{{promotionDescription}}</p><p style="margin:0 0 12px;font-size:13px;color:#71717A;">Código: <strong>{{promotionCode}}</strong> · Válido hasta {{promotionValidUntil}}</p><a href="{{buttonUrl}}" style="display:inline-block;padding:10px 22px;background-color:#18181B;color:#FFFFFF;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">Quiero aprovecharla</a></td></tr></table>`, b);
       case 'contact': return row(`<p style="margin:0;font-size:12px;color:#71717A;font-family:${settings.fontFamily};">{{salonAddress}}<br />{{salonPhone}}<br />WhatsApp: {{salonWhatsApp}}</p>`, b);
-      case 'footer': return row(`<p style="margin:0 0 6px;font-size:12px;color:#A1A1AA;font-family:${settings.fontFamily};">${nl2br(b.data.text)}</p><p style="margin:0;font-size:12px;"><a href="{{unsubscribeUrl}}" style="color:#A1A1AA;">Dejar de recibir estas comunicaciones</a></p>`, b);
+      case 'footer': return row(`<p style="margin:0;font-size:12px;color:#A1A1AA;font-family:${settings.fontFamily};">${nl2br(b.data.text)}</p>`, b);
       default: return '';
     }
   }).join('');
@@ -41,7 +41,7 @@ function renderBlocksToText(blocks: Block[]): string {
     if (b.type === 'button') return `${b.data.label}: ${b.data.url}\n`;
     if (b.type === 'promotion') return '{{promotionTitle}}\n{{promotionDescription}}\nCódigo: {{promotionCode}}\n{{buttonUrl}}\n';
     if (b.type === 'contact') return '{{salonAddress}}\n{{salonPhone}}\n';
-    if (b.type === 'footer') return `${b.data.text}\nDejar de recibir estas comunicaciones: {{unsubscribeUrl}}\n`;
+    if (b.type === 'footer') return `${b.data.text}\n`;
     return '';
   }).filter(Boolean).join('\n');
 }

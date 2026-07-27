@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronLeft, ChevronRight, Mail, Save, Send } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Mail, Save, Send } from 'lucide-react';
 import { Button, Input, PageHeader, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
@@ -14,15 +14,14 @@ import { emptyEmailContent, type EmailContent } from '@/features/marketing/email
 
 type Campaign = {
   _id: string; name: string; internalDescription?: string; status: string; subject?: string; preheader?: string;
-  senderName?: string; replyTo?: string; templateId?: string; promotionId?: string; audienceId?: string; salonId?: string;
+  senderName?: string; replyTo?: string; templateId?: string; audienceId?: string; salonId?: string;
   excludedRecipientEmails?: string[]; contentJson?: EmailContent; renderedHtml?: string; scheduledAt?: string; timezone?: string;
-  trackingEnabled?: boolean; unsubscribeEnabled?: boolean; tags?: string[];
+  trackingEnabled?: boolean; tags?: string[];
 };
 type Audience = { _id: string; name: string; estimatedCount: number };
 type Template = { _id: string; name: string; subject?: string; preheader?: string; contentJson?: EmailContent };
-type Promotion = { _id: string; name: string; publicTitle?: string };
 type Salon = { _id: string; name: string };
-type Estimate = { estimatedCount: number; totalMatched: number; duplicatesRemoved: number; invalidEmailExcluded: number; unsubscribedExcluded: number; manuallyExcluded: number };
+type Estimate = { estimatedCount: number; totalMatched: number; duplicatesRemoved: number; invalidEmailExcluded: number; manuallyExcluded: number };
 
 const STEPS = ['Información general', 'Audiencia', 'Diseño', 'Configuración de envío', 'Revisión'];
 
@@ -37,13 +36,11 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
 
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [salons, setSalons] = useState<Salon[]>([]);
 
   const [name, setName] = useState('');
   const [internalDescription, setInternalDescription] = useState('');
   const [salonId, setSalonId] = useState('');
-  const [promotionId, setPromotionId] = useState('');
   const [audienceId, setAudienceId] = useState('');
   const [excludedText, setExcludedText] = useState('');
   const [subject, setSubject] = useState('');
@@ -64,8 +61,7 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
     void Promise.all([
       api.get<{ salons: Salon[] }>('/salons').then((r) => setSalons(r.salons)).catch(() => undefined),
       api.get<{ items: Audience[] }>('/marketing/audiences?limit=100').then((r) => setAudiences(r.items)).catch(() => undefined),
-      api.get<{ items: Template[] }>('/marketing/templates?limit=100&isActive=true').then((r) => setTemplates(r.items)).catch(() => undefined),
-      api.get<{ items: Promotion[] }>('/marketing/promotions?limit=100&status=active').then((r) => setPromotions(r.items)).catch(() => undefined)
+      api.get<{ items: Template[] }>('/marketing/templates?limit=100&isActive=true').then((r) => setTemplates(r.items)).catch(() => undefined)
     ]);
   }, []);
 
@@ -77,7 +73,7 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
           const c = response.campaign;
           setCampaign(c);
           setName(c.name); setInternalDescription(c.internalDescription ?? ''); setSalonId(c.salonId ?? '');
-          setPromotionId(c.promotionId ?? ''); setAudienceId(c.audienceId ?? ''); setExcludedText((c.excludedRecipientEmails ?? []).join('\n'));
+          setAudienceId(c.audienceId ?? ''); setExcludedText((c.excludedRecipientEmails ?? []).join('\n'));
           setSubject(c.subject ?? ''); setPreheader(c.preheader ?? ''); setContent(c.contentJson ?? emptyEmailContent());
           setSenderName(c.senderName ?? ''); setReplyTo(c.replyTo ?? '');
           if (c.scheduledAt) { setSendMode('schedule'); setScheduledAtLocal(new Date(c.scheduledAt).toISOString().slice(0, 16)); }
@@ -92,7 +88,7 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
     setSaving(true);
     try {
       const payload = {
-        name, internalDescription, salonId: salonId || '', promotionId: promotionId || '', audienceId: audienceId || '',
+        name, internalDescription, salonId: salonId || '', audienceId: audienceId || '',
         excludedRecipientEmails: excludedText.split('\n').map((v) => v.trim()).filter(Boolean),
         subject, preheader, contentJson: contentRef.current,
         renderedHtml: renderEmailContentToHtml(contentRef.current), renderedText: renderEmailContentToText(contentRef.current),
@@ -106,7 +102,7 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
       showToast({ message: error instanceof Error ? error.message : 'No se pudo guardar la campaña.', variant: 'error' });
       return null;
     } finally { setSaving(false); }
-  }, [id, name, internalDescription, salonId, promotionId, audienceId, excludedText, subject, preheader, senderName, replyTo, showToast]);
+  }, [id, name, internalDescription, salonId, audienceId, excludedText, subject, preheader, senderName, replyTo, showToast]);
 
   async function goToStep(nextStep: number) {
     const saved = await persist();
@@ -160,7 +156,6 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
 
   const previewHtml = useMemo(() => renderPreviewSample(renderEmailContentToHtml(content)), [content]);
   const selectedAudience = audiences.find((a) => a._id === audienceId);
-  const selectedPromotion = promotions.find((p) => p._id === promotionId);
 
   if (loading) return <p className="p-6 text-sm text-zinc-500">Cargando campaña...</p>;
   const editable = campaign ? ['draft', 'scheduled'].includes(campaign.status) : true;
@@ -190,10 +185,6 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
               {salons.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
             </Select>
             <Textarea className="md:col-span-2" placeholder="Descripción interna" value={internalDescription} onChange={(e) => setInternalDescription(e.target.value)} />
-            <Select value={promotionId} onChange={(e) => setPromotionId(e.target.value)}>
-              <option value="">Sin promoción asociada</option>
-              {promotions.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
-            </Select>
           </div>
         ) : null}
 
@@ -210,7 +201,7 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
               <Textarea className="mt-1.5" rows={3} value={excludedText} onChange={(e) => setExcludedText(e.target.value)} />
             </label>
             <Button type="button" variant="secondary" onClick={() => void runEstimate()}>Consultar estimación</Button>
-            {estimate ? <div className="rounded-xl bg-zinc-50 p-4 text-sm"><p className="font-semibold">{estimate.estimatedCount} destinatarios estimados</p><p className="mt-1 text-xs text-zinc-500">{estimate.duplicatesRemoved} duplicados · {estimate.invalidEmailExcluded} emails inválidos · {estimate.unsubscribedExcluded} bajas excluidas · {estimate.manuallyExcluded} exclusiones manuales</p></div> : null}
+            {estimate ? <div className="rounded-xl bg-zinc-50 p-4 text-sm"><p className="font-semibold">{estimate.estimatedCount} destinatarios estimados</p><p className="mt-1 text-xs text-zinc-500">{estimate.duplicatesRemoved} duplicados · {estimate.invalidEmailExcluded} emails inválidos · {estimate.manuallyExcluded} exclusiones manuales</p></div> : null}
           </div>
         ) : null}
 
@@ -251,7 +242,6 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
               <p><span className="font-semibold">Asunto:</span> {subject || 'Sin definir'}</p>
               <p><span className="font-semibold">Remitente:</span> {senderName || 'Configuración institucional'}</p>
               <p><span className="font-semibold">Audiencia:</span> {selectedAudience?.name ?? 'Sin seleccionar'}</p>
-              <p><span className="font-semibold">Promoción:</span> {selectedPromotion?.name ?? 'Ninguna'}</p>
               <p><span className="font-semibold">Envío:</span> {sendMode === 'now' ? 'Inmediato' : scheduledAtLocal ? new Date(scheduledAtLocal).toLocaleString('es-AR') : 'Sin programar'}</p>
               <p><span className="font-semibold">Destinatarios estimados:</span> {estimate?.estimatedCount ?? campaign?.excludedRecipientEmails?.length ?? '—'}</p>
             </div>

@@ -85,7 +85,6 @@ router.post('/estimate', requirePermission(Permission.MARKETING_AUDIENCES_READ),
     totalMatched: resolution.totalMatched,
     duplicatesRemoved: resolution.duplicatesRemoved,
     invalidEmailExcluded: resolution.invalidEmailExcluded,
-    unsubscribedExcluded: resolution.unsubscribedExcluded,
     manuallyExcluded: resolution.manuallyExcluded
   });
 }));
@@ -99,7 +98,6 @@ router.post('/preview', requirePermission(Permission.MARKETING_AUDIENCES_READ), 
     totalMatched: resolution.totalMatched,
     duplicatesRemoved: resolution.duplicatesRemoved,
     invalidEmailExcluded: resolution.invalidEmailExcluded,
-    unsubscribedExcluded: resolution.unsubscribedExcluded,
     manuallyExcluded: resolution.manuallyExcluded
   });
 }));

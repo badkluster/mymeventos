@@ -6,8 +6,7 @@ const mocks = vi.hoisted(() => ({
   customerFind: vi.fn(),
   customerCountDocuments: vi.fn(),
   quoteDistinct: vi.fn(),
-  eventAggregate: vi.fn(),
-  unsubscribeFind: vi.fn()
+  eventAggregate: vi.fn()
 }));
 
 function chain(result: unknown) {
@@ -25,10 +24,6 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   Event: { aggregate: mocks.eventAggregate },
   Quote: { distinct: mocks.quoteDistinct }
 }));
-vi.mock('../src/modules/marketing/marketing.models', () => ({
-  MarketingUnsubscribe: { find: mocks.unsubscribeFind }
-}));
-
 import { resolveAudienceContacts } from '../src/modules/marketing/marketing-audience.service';
 
 const adminScope = { isAdmin: true, salonIds: [] as string[] };
@@ -38,7 +33,6 @@ describe('marketing audience segmentation', () => {
     vi.resetAllMocks();
     mocks.leadCountDocuments.mockResolvedValue(0);
     mocks.customerCountDocuments.mockResolvedValue(0);
-    mocks.unsubscribeFind.mockReturnValue({ select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue([]) }) });
   });
 
   it('deduplicates the same email seen through both the lead and the customer source', async () => {
@@ -58,16 +52,6 @@ describe('marketing audience segmentation', () => {
 
     expect(result.contacts.map((c) => c.email)).toEqual(['valid@mail.com']);
     expect(result.invalidEmailExcluded).toBe(1);
-  });
-
-  it('excludes any contact already present in the unsubscribe list, regardless of how it entered the audience', async () => {
-    mocks.leadFind.mockReturnValue(chain([{ _id: 'lead-1', email: 'baja@mail.com' }]));
-    mocks.unsubscribeFind.mockReturnValue({ select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue([{ normalizedEmail: 'baja@mail.com' }]) }) });
-
-    const result = await resolveAudienceContacts({ sourceTypes: ['lead'], scope: adminScope });
-
-    expect(result.contacts).toHaveLength(0);
-    expect(result.unsubscribedExcluded).toBe(1);
   });
 
   it('honors explicit per-contact exclusions and extra excluded emails from the campaign', async () => {

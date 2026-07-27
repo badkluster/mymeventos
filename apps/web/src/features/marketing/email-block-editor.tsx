@@ -248,7 +248,6 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
       {block.type === 'footer' ? (
         <div className="space-y-1.5">
           <Textarea rows={2} value={block.data.text ?? ''} onChange={(e) => onChangeData('text', e.target.value)} />
-          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={block.data.showUnsubscribe ?? true} onChange={(e) => onChangeData('showUnsubscribe', e.target.checked)} />Incluir enlace de baja</label>
         </div>
       ) : null}
 

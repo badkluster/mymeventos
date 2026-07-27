@@ -3,8 +3,10 @@ import { Role, StaffEmploymentStatus, StaffSubrole } from '@mym/shared';
 import { User } from '../src/modules/users/user.model';
 
 function baseUser(overrides: Record<string, unknown> = {}) {
+  const handle = `user-${Math.random().toString(36).slice(2)}`;
   return new User({
-    username: `user-${Math.random().toString(36).slice(2)}`,
+    username: handle,
+    email: `${handle}@example.com`,
     firstName: 'Demo',
     lastName: 'User',
     roles: [Role.STAFF],
@@ -13,6 +15,14 @@ function baseUser(overrides: Record<string, unknown> = {}) {
 }
 
 describe('User staff model', () => {
+  it('requires an email address and normalizes it', async () => {
+    const user = baseUser({ email: '  DEMO@EXAMPLE.COM ' });
+    await expect(user.validate()).resolves.toBeUndefined();
+    expect(user.email).toBe('demo@example.com');
+    expect(user.normalizedEmail).toBe('demo@example.com');
+    await expect(baseUser({ email: undefined }).validate()).rejects.toThrow('email is required.');
+  });
+
   it('accepts only valid main roles', async () => {
     await expect(baseUser({ roles: [Role.ADMIN] }).validate()).resolves.toBeUndefined();
     await expect(baseUser({ roles: ['INVALID_ROLE'] }).validate()).rejects.toThrow();

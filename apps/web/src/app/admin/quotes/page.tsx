@@ -1,6 +1,4 @@
 'use client';
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -102,23 +100,25 @@ export default function QuotesPage() {
   }, [activeTab, filters, setNotice]);
 
   // La pantalla necesita sincronizar el listado con filtros, pestaña y paginación.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   useEffect(() => {
     const timer = window.setTimeout(() => setFilters((current) => ({ ...current, page: 1, query: searchInput.trim() })), 350);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
   useEffect(() => {
-    if (searchParams?.get('create') === '1') {
-      setInitialCustomerId('');
-      setFormQuote(undefined);
-      setFormRequest(undefined);
-      setIsFormOpen(true);
-      return;
-    }
-    const customerId = searchParams?.get('customerId');
-    if (!customerId || !customers.some((customer) => customer._id === customerId)) return;
     const timer = window.setTimeout(() => {
+      if (searchParams?.get('create') === '1') {
+        setInitialCustomerId('');
+        setFormQuote(undefined);
+        setFormRequest(undefined);
+        setIsFormOpen(true);
+        return;
+      }
+      const customerId = searchParams?.get('customerId');
+      if (!customerId || !customers.some((customer) => customer._id === customerId)) return;
       setInitialCustomerId(customerId);
       setFormQuote(undefined);
       setFormRequest(undefined);

@@ -1,7 +1,5 @@
 'use client';
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, Pencil, Plus, Search, Archive, BadgePercent } from 'lucide-react';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
@@ -64,7 +62,10 @@ export default function MarketingPromotionsPage() {
     } finally { setLoading(false); }
   }, [query, showToast]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   useEffect(() => { void api.get<{ salons: Salon[] }>('/salons').then((response) => setSalons(response.salons)).catch(() => undefined); }, []);
 
   function open(promotion?: Promotion) {
@@ -117,11 +118,6 @@ export default function MarketingPromotionsPage() {
     try { await api.post(`/marketing/promotions/${promotion._id}/archive`, {}); await load(); showToast({ message: 'Promoción archivada.', variant: 'success' }); }
     catch (error) { showToast({ message: error instanceof Error ? error.message : 'No se pudo archivar la promoción.', variant: 'error' }); }
   }
-  async function toggleActive(promotion: Promotion) {
-    try { await api.patch(`/marketing/promotions/${promotion._id}`, { isActive: !promotion.isActive }); await load(); }
-    catch (error) { showToast({ message: error instanceof Error ? error.message : 'No se pudo actualizar la promoción.', variant: 'error' }); }
-  }
-
   return (
     <section className="space-y-6">
       <PageHeader title="Marketing" description="Promociones comerciales vinculables a campañas de email." />

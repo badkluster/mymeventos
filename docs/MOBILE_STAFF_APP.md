@@ -4,12 +4,12 @@
 
 ## 1. Qué es y qué no es
 
-Canal principal de acceso para personal operativo (`Role.STAFF`, y cualquier otro rol al que un admin le otorgue el permiso `mobile.access`): fichaje de entrada/salida con geolocalización, historial, turnos, incidencias, correcciones, perfil y seguridad. **No** es un panel administrativo — el backoffice web sigue siendo el único canal para gestión (`/admin/attendance`, `/admin/users`, `/admin/salons`).
+Canal principal de acceso para personal operativo (`Role.STAFF`, y cualquier otro rol al que un admin le otorgue el permiso `mobile.access`): fichaje de entrada/salida con geolocalización, historial, incidencias, correcciones, perfil y seguridad. Turnos y Avisos se conservan implementados pero no se exponen en esta versión, a la espera de un acuerdo comercial. **No** es un panel administrativo — el backoffice web sigue siendo el único canal para gestión (`/admin/attendance`, `/admin/users`, `/admin/salons`).
 
 No duplica ningún sistema existente:
 - **No hay `EmployeeProfile` nuevo.** El "perfil laboral" es `User.staffProfile` + `User.attendanceConfig` (ya existían en el modelo `User`, ver `apps/api/src/modules/users/user.model.ts`), editables desde `/admin/users/[id]` (pestañas "Empleado"/"Asistencia", ya existentes antes de esta tarea).
-- **No hay un segundo sistema de turnos.** Los turnos se leen de `EventStaffAssignment` (`apps/api/src/modules/crm/crm.models.ts`), el join Event↔Staff que ya existía.
-- **No hay un segundo sistema de notificaciones.** La bandeja de avisos de la app consume directamente `GET/PATCH /api/notifications` (el mismo módulo que usa el backoffice web), habilitado por el soporte Bearer agregado a `requireAuth`.
+- **No hay un segundo sistema de turnos.** Si se reactiva el alcance, los turnos se leerán de `EventStaffAssignment` (`apps/api/src/modules/crm/crm.models.ts`), el join Event↔Staff que ya existía.
+- **No hay un segundo sistema de notificaciones.** Si se reactiva el alcance, la bandeja de avisos usará directamente `GET/PATCH /api/notifications` (el mismo módulo que usa el backoffice web), habilitado por el soporte Bearer agregado a `requireAuth`.
 - **No hay un segundo sistema de subida de archivos.** El avatar se sube por el endpoint genérico `POST /api/uploads` (contexto `users`, ya abierto a cualquier usuario autenticado) y solo se persiste la URL vía `POST /api/mobile/me/avatar`.
 
 ## 2. Arquitectura
@@ -36,7 +36,7 @@ apps/mobile/
     state/
       authStore.ts             — zustand: sesión, login, biometría, logout(-all)
       attendanceStore.ts       — zustand: estado de jornada, check-in/out, cola offline
-    navigation/                — Auth stack + 5 tabs (Home/Historial/Turnos/Avisos/Perfil), cada uno con su propio stack
+    navigation/                — Auth stack + 3 tabs activas (Home/Historial/Perfil); stacks de Turnos/Avisos preservados, sin entrada de runtime
     screens/                  — ver §3
 ```
 
@@ -44,7 +44,7 @@ Backend nuevo, sin tocar el auth/permite web existente (ver `docs/MOBILE_AUTHENT
 - `apps/api/src/modules/mobile/` — auth móvil, perfil propio, dispositivos.
 - `apps/api/src/modules/attendance/` — modelos (`WorkSession`, `TimePunch`, `AttendanceIncident`, `AttendanceAdjustmentRequest`), servicio de negocio, rutas propias (`/api/mobile/attendance/*`, `/api/mobile/schedule`) y rutas admin (`/api/attendance/*`).
 
-## 3. Pantallas implementadas (todas conectadas a la API real, ninguna es placeholder)
+## 3. Pantallas activas y flujos diferidos
 
 | Pantalla | Ruta de navegación | Conecta con |
 |---|---|---|
@@ -58,8 +58,8 @@ Backend nuevo, sin tocar el auth/permite web existente (ver `docs/MOBILE_AUTHENT
 | Detalle de jornada | `HistoryTab > WorkSessionDetail` | `GET /mobile/attendance/sessions/:id` |
 | Incidencias (lista + alta) | `HistoryTab > Incidents/NewIncident` | `GET/POST /mobile/attendance/incidents` |
 | Correcciones (lista + alta) | `HistoryTab > Adjustments/NewAdjustment` | `GET/POST /mobile/attendance/adjustments` |
-| Turnos | `ScheduleTab > Schedule` | `GET /mobile/schedule` (lee `EventStaffAssignment`) |
-| Notificaciones | `NotificationsTab > Notifications` | `GET/PATCH /notifications` (módulo existente, reutilizado) |
+| Turnos (diferido) | Sin ruta activa; `ScheduleNavigator` preservado | `GET /mobile/schedule` (lee `EventStaffAssignment`) |
+| Notificaciones (diferido) | Sin ruta activa; `NotificationsNavigator` preservado | `GET/PATCH /notifications` (módulo existente, reutilizado) |
 | Perfil | `ProfileTab > Profile` | `GET /mobile/me`, avatar vía `/uploads` + `POST /mobile/me/avatar` |
 | Editar perfil | `ProfileTab > EditProfile` | `PATCH /mobile/me` |
 | Cambiar contraseña | `ProfileTab > ChangePassword` | `POST /mobile/auth/change-password` |
@@ -79,9 +79,9 @@ Backend nuevo, sin tocar el auth/permite web existente (ver `docs/MOBILE_AUTHENT
 
 - **Sin listener de conectividad en segundo plano.** Se chequea conectividad en los puntos de interacción explícitos (fichar, refrescar pantallas) con `expo-network`, no con un listener persistente tipo NetInfo. Documentado, no oculto.
 - **Sin selector nativo de fecha/hora** en "Solicitar corrección": se usan campos de texto con formato guiado (`AAAA-MM-DD`, `HH:MM`) para no sumar una dependencia nativa adicional (`@react-native-community/datetimepicker`) en esta primera versión. Fácil de reemplazar después.
-- **Notificaciones push:** no implementadas (no hay infraestructura de push tokens/Expo Notifications configurada). El endpoint `POST /api/mobile/devices/push-token` existe y persiste el token en `MobileDevice.pushToken`, pero **nada lo envía todavía** — ver `docs/MOBILE_BUILDS.md`. La bandeja en-app (`/notifications`) sí es real.
+- **Notificaciones push:** no implementadas (no hay infraestructura de push tokens/Expo Notifications configurada). El endpoint `POST /api/mobile/devices/push-token` existe y persiste el token en `MobileDevice.pushToken`, pero **nada lo envía todavía** — ver `docs/MOBILE_BUILDS.md`. La bandeja in-app queda preservada, pero no está expuesta en la navegación actual.
 - **Validación de entradas por QR:** explícitamente fuera de esta app (permiso y módulo aparte, ver `docs/MOBILE_AUTHENTICATION.md`), tal como pide la tarea.
-- **Turnos:** si un usuario no tiene ninguna `EventStaffAssignment`, la pantalla muestra un estado vacío real (no hay datos falsos ni turnos inventados).
+- **Turnos y Avisos:** sus pantallas y llamadas API quedan preservadas sin exponer hasta que se acuerde favorablemente el alcance con el cliente. Si se reactiva Turnos, su estado vacío usa `EventStaffAssignment` real, sin datos inventados.
 - **Íconos:** la UI usa emoji/Unicode en vez de una librería de iconos (`lucide-react-native` + `react-native-svg`) para no sumar dependencias nativas extra en esta primera versión.
 
 ## 6. Cómo correrla en desarrollo

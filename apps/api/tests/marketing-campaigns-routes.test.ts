@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { Role } from '@mym/shared';
+import { Permission, Role } from '@mym/shared';
 import { generateAccessToken } from '../src/utils/tokens';
 
 const mocks = vi.hoisted(() => ({
@@ -74,6 +74,31 @@ describe('marketing campaign routes — permissions and salon scope', () => {
     const response = await request(app).get(`/api/marketing/campaigns/${campaignId}`).set('Cookie', salonManagerCookie);
 
     expect(response.status).toBe(200);
+  });
+
+  it('does not let a SALON_MANAGER delete a campaign outside their salon scope', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: salonManagerId, roles: [Role.SALON_MANAGER], permissionOverrides: [Permission.CAMPAIGNS_DELETE], salonIds: [ownSalonId], active: true }));
+    const campaign: any = { _id: campaignId, status: 'draft', salonId: otherSalonId, save: vi.fn() };
+    mocks.campaignFindOne.mockResolvedValue(campaign);
+
+    const response = await request(app).delete(`/api/marketing/campaigns/${campaignId}`).set('Cookie', salonManagerCookie);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('SALON_SCOPE_FORBIDDEN');
+    expect(campaign.save).not.toHaveBeenCalled();
+  });
+
+  it('soft-deletes a draft campaign for an authorized user', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+    const campaign: any = { _id: campaignId, status: 'draft', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.campaignFindOne.mockResolvedValue(campaign);
+
+    const response = await request(app).delete(`/api/marketing/campaigns/${campaignId}`).set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(campaign.deletedAt).toBeInstanceOf(Date);
+    expect(campaign.deletedBy).toBe(adminId);
+    expect(campaign.save).toHaveBeenCalledOnce();
   });
 
   it('refuses to schedule a campaign for a date in the past', async () => {

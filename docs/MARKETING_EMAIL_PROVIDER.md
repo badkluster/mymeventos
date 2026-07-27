@@ -17,7 +17,6 @@ RESEND_WEBHOOK_SECRET=              # secreto "whsec_..." del endpoint de webhoo
 MARKETING_FROM_EMAIL=               # email remitente por defecto si MarketingSettings no tiene uno cargado
 MARKETING_FROM_NAME=                # nombre remitente por defecto
 MARKETING_REPLY_TO=                 # reply-to por defecto
-MARKETING_PUBLIC_URL=               # base pública usada para armar el enlace de baja ({{unsubscribeUrl}})
 MARKETING_BATCH_SIZE=25             # emails procesados por tick de cron (tope defensivo: 500)
 MARKETING_SEND_RATE_LIMIT=10        # reservado para ajustar velocidad de envío
 MARKETING_CRON_SECRET=              # secreto compartido para /api/marketing/process
@@ -32,7 +31,6 @@ Sin `RESEND_API_KEY` (o con `MARKETING_EMAIL_PROVIDER=mock`), el sistema usa `Mo
 3. En el panel de Resend, configurar un webhook hacia `https://<dominio>/api/marketing/webhooks/resend` suscripto a los eventos: `email.delivered`, `email.bounced`, `email.complained`, `email.opened`, `email.clicked`.
 4. Copiar el "Signing secret" (`whsec_...`) que Resend genera para ese webhook y cargarlo como `RESEND_WEBHOOK_SECRET`.
 5. Setear `MARKETING_EMAIL_PROVIDER=resend`.
-6. Confirmar que `MARKETING_PUBLIC_URL` apunte al dominio público real (se usa para el enlace `{{unsubscribeUrl}}`).
 
 ## Verificación de firma (sin SDK)
 

@@ -400,7 +400,7 @@ export default function SalonDetailPage() {
       setLandingMedia((current) => ({ ...current, galleryImageUrlsText: galleryImageUrls.join('\n') }));
       if (removedMedia?.publicId) {
         try {
-          await api.delete(`/uploads?context=salons&publicId=${encodeURIComponent(removedMedia.publicId)}&resourceType=${removedMedia.resourceType}`);
+          await api.delete(`/uploads?context=salons&salonId=${encodeURIComponent(salonId)}&publicId=${encodeURIComponent(removedMedia.publicId)}&resourceType=${removedMedia.resourceType}`);
         } catch (error) {
           setNotice(errorMessage(error, 'El archivo se quitó del salón, pero no se pudo eliminar de Cloudinary.'));
         }

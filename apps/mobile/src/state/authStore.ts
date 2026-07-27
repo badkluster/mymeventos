@@ -18,6 +18,7 @@ interface AuthState {
   login: (input: { username: string; password: string }) => Promise<void>;
   unlockWithBiometrics: () => Promise<boolean>;
   fallbackToPassword: () => void;
+  beginPasswordReset: () => Promise<void>;
   logout: () => Promise<void>;
   logoutAllDevices: () => Promise<void>;
   refreshSessionUser: () => Promise<void>;
@@ -85,6 +86,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   fallbackToPassword: () => set({ status: 'signedOut' }),
+
+  beginPasswordReset: async () => {
+    try { await clearTokens(); } catch { /* The reset flow must still be available if local storage is unavailable. */ }
+    set({ status: 'signedOut', user: null, justLoggedIn: false, error: null });
+  },
 
   logout: async () => {
     const tokens = await loadTokens();

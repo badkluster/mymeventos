@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import { env } from '../config/env';
-import { dropLegacyUniqueEmailIndex } from '../modules/users/user.model';
 import { dropLegacyInvitationEventIdIndex } from '../modules/invitations/invitation.models';
 import { dropLegacyTicketTypeSaleIndex } from '../modules/tickets/ticket.models';
 
@@ -16,7 +15,6 @@ export async function connectDatabase(): Promise<void> {
   mongoose.connection.once('connected', () => console.info(`MongoDB connected: ${mongoose.connection.host}`));
   connectionPromise = mongoose.connect(env.MONGODB_URI, { maxPoolSize: 10 });
   await connectionPromise;
-  await dropLegacyUniqueEmailIndex();
   await dropLegacyInvitationEventIdIndex();
   await dropLegacyTicketTypeSaleIndex();
 }

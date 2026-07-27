@@ -41,7 +41,6 @@ const marketingSettingsSchema = new Schema(
       default: 'M&M Eventos. Recibiste este correo porque nos dejaste tus datos de contacto.'
     },
     defaultImageUrl: String,
-    publicUrl: String,
     ...auditBase
   },
   { timestamps: true }

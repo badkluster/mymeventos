@@ -135,7 +135,6 @@ export const MARKETING_DYNAMIC_VARIABLES = [
   'promotionValidUntil',
   'discountValue',
   'buttonUrl',
-  'unsubscribeUrl',
   'companyName',
   'companyLogoUrl'
 ] as const;

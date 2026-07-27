@@ -2,13 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Megaphone, FileStack, BadgePercent, Users2, History, Settings } from 'lucide-react';
+import { LayoutDashboard, Megaphone, FileStack, Users2, History, Settings } from 'lucide-react';
 
 const tabs = [
   { href: '/admin/marketing', label: 'Resumen', icon: LayoutDashboard },
   { href: '/admin/marketing/campaigns', label: 'Campañas', icon: Megaphone },
   { href: '/admin/marketing/templates', label: 'Plantillas', icon: FileStack },
-  { href: '/admin/marketing/promotions', label: 'Promociones', icon: BadgePercent },
   { href: '/admin/marketing/audiences', label: 'Audiencias', icon: Users2 },
   { href: '/admin/marketing/history', label: 'Historial de envíos', icon: History },
   { href: '/admin/marketing/settings', label: 'Configuración', icon: Settings }

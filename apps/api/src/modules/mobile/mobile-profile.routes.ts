@@ -28,7 +28,7 @@ const profileSchema = z.object({
   body: z.object({
     firstName: z.string().trim().min(1),
     lastName: z.string().trim().min(1),
-    email: z.string().trim().email().optional().or(z.literal('')),
+    email: z.string().trim().email(),
     phone: optionalText,
     documentType: optionalText,
     documentNumber: optionalText,
@@ -51,11 +51,11 @@ router.get('/', requirePermission(Permission.PROFILE_VIEW_SELF), asyncHandler(as
 }));
 
 router.patch('/', requirePermission(Permission.PROFILE_UPDATE_SELF), validateRequest(profileSchema), asyncHandler(async (request, response) => {
-  const email = normalizeUserEmail(request.body.email || undefined);
+  const email = normalizeUserEmail(request.body.email);
   const currentUser: any = await User.findOne({ _id: request.user!.id, deletedAt: null }).lean();
   const currentEmail = normalizeUserEmail(currentUser?.email ?? currentUser?.normalizedEmail);
   if (email && email !== currentEmail) {
-    const exists = await User.exists({ _id: { $ne: request.user!.id }, normalizedEmail: email, deletedAt: null });
+    const exists = await User.exists({ _id: { $ne: request.user!.id }, normalizedEmail: email });
     if (exists) throw new ApiError(409, 'EMAIL_ALREADY_EXISTS');
   }
   const set: Record<string, unknown> = {

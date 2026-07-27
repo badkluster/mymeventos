@@ -12,9 +12,13 @@ describe('Spanish API messages', () => {
 
   it('returns a Spanish message for invalid login credentials', async () => {
     userMocks.findOne.mockReturnValue({ select: vi.fn().mockResolvedValue(null) });
-    const response = await request(app).post('/api/auth/login').send({ username: 'admin', password: 'invalid-password' });
+    const response = await request(app).post('/api/auth/login').send({ username: 'ADMIN@EXAMPLE.COM', password: 'invalid-password' });
     expect(response.status).toBe(401);
     expect(response.body.error).toMatchObject({ code: 'INVALID_CREDENTIALS', message: 'Usuario o contraseña inválidos.' });
+    expect(userMocks.findOne).toHaveBeenCalledWith({
+      deletedAt: null,
+      $or: [{ username: 'admin@example.com' }, { normalizedEmail: 'admin@example.com' }]
+    });
   });
 
   it('returns a Spanish message for unauthenticated current-user requests', async () => {

@@ -78,6 +78,6 @@ Motivo y detalle completo de la migración en `docs/MOBILE_BUILDS.md` §4.1 (res
 5. Fichaje de salida; confirmar que se ve en el historial.
 6. Cola offline: modo avión → fichar → desactivar modo avión → confirmar que drena.
 7. Cambiar avatar (permiso de fotos + selección) — valida el cambio de `MediaTypeOptions` → `mediaTypes: ['images']`.
-8. Recorrer schedule/historial/notificaciones/incidencias/correcciones — atención a los insets de safe-area por el edge-to-edge obligatorio en Android desde SDK 53+.
+8. Recorrer historial/incidencias/correcciones/perfil — atención a los insets de safe-area por el edge-to-edge obligatorio en Android desde SDK 53+. Turnos y Avisos no se prueban en esta etapa: están conservados pero fuera de navegación hasta que se apruebe ese alcance.
 
 Actualizar esta sección con el resultado una vez ejecutado.

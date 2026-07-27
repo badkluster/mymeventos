@@ -70,9 +70,13 @@ describe('mobile auth routes', () => {
       })
     });
 
-    const response = await request(app).post('/api/mobile/auth/login').send({ username: 'waiter1', password: 'secret123', device });
+    const response = await request(app).post('/api/mobile/auth/login').send({ username: 'WAITER@EXAMPLE.COM', password: 'secret123', device });
 
     expect(response.status).toBe(200);
+    expect(mocks.userFindOne).toHaveBeenCalledWith({
+      deletedAt: null,
+      $or: [{ username: 'waiter@example.com' }, { normalizedEmail: 'waiter@example.com' }]
+    });
     expect(typeof response.body.data.accessToken).toBe('string');
     expect(typeof response.body.data.refreshToken).toBe('string');
     expect(mocks.mobileDeviceFindOneAndUpdate).toHaveBeenCalledWith(

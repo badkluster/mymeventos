@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChefHat, ChevronLeft, ChevronRight, Eye, LoaderCircle, Plus, Search } from 'lucide-react';
+import { ChefHat, ChevronLeft, ChevronRight, Eye, LoaderCircle, Plus, Search } from 'lucide-react';
 import { Permission } from '@mym/shared';
 import { useSession } from '@/components/session-provider';
 import { Button, Input, Modal, PageHeader, Select } from '@/components/ui/primitives';

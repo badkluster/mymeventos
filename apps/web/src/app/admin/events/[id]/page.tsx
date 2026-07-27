@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { CalendarPlus, ChevronLeft, CreditCard, Download, Eye, FileText, Mail, MessageCircle, Plus, Printer, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { displayLabel, eventStaffStatusLabels, eventStatusLabels, paymentMethodLabels, paymentStatusLabels, paymentTypeLabels, quoteStatusLabels, staffSubroleLabels } from '@/lib/display-labels';
+import { displayLabel, eventStaffStatusLabels, eventStatusLabels, paymentMethodLabels, paymentTypeLabels, quoteStatusLabels, staffSubroleLabels } from '@/lib/display-labels';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
-import { cleanMenuSections, cleanStringList, MenuSectionsEditor, StringListEditor, type MenuSectionValue } from '@/components/admin/structured-list-editors';
+import { cleanMenuSections, cleanStringList, MenuSectionsEditor, type MenuSectionValue } from '@/components/admin/structured-list-editors';
 import { EventBasicsEditor, EventCommercialEditor, EventOperationsWorkspace, EventSuppliersEditor, EventTasksEditor, eventOperationalSummary, normalizeResourcePlan } from '@/features/events/event-operations';
 import type { Contract, Event, EventExpense, EventExpenseSummary, EventSupplierAssignment, Payment, PaymentSummary, Quote } from '@/features/quotes/types';
 
