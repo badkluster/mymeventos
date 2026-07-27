@@ -4,7 +4,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, type Variants } from 'framer-motion';
 import { ArrowRight, Baby, BriefcaseBusiness, CakeSlice, CalendarDays, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Crown, ExternalLink, Gift, GlassWater, GraduationCap, Heart, LogIn, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
@@ -482,7 +482,7 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
       });
 
       return <motion.div key="salon-detail-overlay" className="fixed inset-0 z-50 overflow-y-auto bg-black/82 px-4 py-5 backdrop-blur-md md:px-8" role="dialog" aria-modal="true" aria-label={`Detalle de ${titleForSalon(salon)}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.article ref={panelRef as React.RefObject<HTMLElement>} key="salon-detail-panel" className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-[#c8cdd3]/25 bg-[#080807] text-white shadow-2xl" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} onClick={(event) => event.stopPropagation()}>
+      <motion.article ref={panelRef as React.RefObject<HTMLElement>} key="salon-detail-panel" className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-[#c8cdd3]/25 bg-[#080807] text-white shadow-2xl" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }} onClick={(event: MouseEvent<HTMLElement>) => event.stopPropagation()}>
         <div className="relative h-[46vh] min-h-80 overflow-hidden bg-[#111113]">
           <button type="button" onClick={() => media.length && setLightboxIndex(Math.min(selectedIndex, Math.max(media.length - 1, 0)))} className="block h-full w-full text-left" aria-label={`Abrir galería de ${titleForSalon(salon)}`}>
             {selectedMedia?.resourceType === 'video' ? <video src={selectedSource} className="h-full w-full object-cover" controls playsInline /> : <img src={cloudinaryImageUrl(selectedSource, 1400)} alt={selectedMedia?.altText || selectedMedia?.title || titleForSalon(salon)} loading="lazy" decoding="async" className="h-full w-full object-cover" />}
