@@ -152,7 +152,6 @@ Consolidado desde `.env.example`, `apps/api/src/config/env.ts` y usos directos d
 | `RESET_ADMIN_USERNAME`, `RESET_ADMIN_PASSWORD` | Script `reset:admin-password` (mínimo 12 caracteres, bloqueado en producción) |
 | `NEXT_PUBLIC_API_URL` | Base URL que usa `apps/web` para llamar a la API (`/api` en producción, `http://localhost:3001/api` en desarrollo) |
 | `MOBILE_ACCESS_TOKEN_TTL`, `MOBILE_REFRESH_TOKEN_TTL` | TTL de los tokens Bearer de la app móvil (`30m`/`30d` por defecto — más largos que los de cookie web) |
-| `MOBILE_OFFLINE_PUNCH_MAX_AGE_MINUTES` | Antigüedad máxima aceptada para una marcación offline antes de forzar la hora del servidor y marcarla para revisión (`720` = 12h por defecto) |
 | `MOBILE_DEEP_LINK_SCHEME` | Scheme usado para construir el link de recuperación de contraseña enviado por email (debe coincidir con `apps/mobile/app.json#scheme`) |
 | `ATTENDANCE_DEFAULT_TIMEZONE`, `ATTENDANCE_DEFAULT_LOCATION_ACCURACY_METERS`, `ATTENDANCE_DEFAULT_GEOFENCE_RADIUS_METERS` | Defaults de la configuración global de asistencia (editable desde `/admin/attendance` → Configuración, persistida en `SystemSetting`) |
 | `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_DEEP_LINK_SCHEME` (en `apps/mobile/.env`) | Config del cliente Expo — sin secretos, se embeben en el bundle JS |

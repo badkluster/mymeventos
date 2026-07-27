@@ -48,7 +48,6 @@ const reviewAdjustmentSchema = z.object({ body: z.object({ decision: z.enum(['ap
 const settingsSchema = z.object({
   body: z.object({
     timezone: z.string().trim().optional(),
-    offlinePunchMaxAgeMinutes: z.coerce.number().int().positive().optional(),
     minLocationAccuracyMeters: z.coerce.number().positive().optional(),
     defaultGeofenceRadiusMeters: z.coerce.number().positive().optional(),
     lateToleranceMinutes: z.coerce.number().int().min(0).optional(),

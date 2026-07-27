@@ -38,7 +38,5 @@ export type ProfileStackParamList = {
 export type AppTabParamList = {
   HomeTab: NavigatorScreenParams<HomeStackParamList>;
   HistoryTab: NavigatorScreenParams<HistoryStackParamList>;
-  ScheduleTab: NavigatorScreenParams<ScheduleStackParamList>;
-  NotificationsTab: NavigatorScreenParams<NotificationsStackParamList>;
   ProfileTab: NavigatorScreenParams<ProfileStackParamList>;
 };

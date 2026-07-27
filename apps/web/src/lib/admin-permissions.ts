@@ -1,6 +1,6 @@
 import { hasAnyPermission, Permission, type Role } from '@mym/shared';
 import type { ComponentType } from 'react';
-import { Activity, Bell, Building2, CalendarClock, CalendarDays, ChartNoAxesCombined, ChefHat, ClipboardList, Clock3, CreditCard, FileInput, FileText, Globe2, LayoutDashboard, Mail, Megaphone, ReceiptText, Settings, Ticket, Truck, UserRound, Users, UserRoundCog, WalletCards } from 'lucide-react';
+import { Activity, Bell, Building2, CalendarClock, CalendarDays, ChartNoAxesCombined, ChefHat, ClipboardList, Clock3, CreditCard, FileInput, FileText, Globe2, LayoutDashboard, Mail, Megaphone, ReceiptText, Settings, Ticket, Truck, UserRound, Users, WalletCards } from 'lucide-react';
 import type { SessionUser } from './auth';
 
 export type AdminModule = { href: string; label: string; title: string; description: string; icon: ComponentType<{ className?: string }>; permissions: Permission[] };
@@ -26,8 +26,7 @@ export const adminModules: AdminModule[] = [
   { href: '/admin/landing', label: 'Landing', title: 'Landing pública', description: 'Hero, promociones, galería, testimonios, preguntas frecuentes y bloques comerciales.', icon: Globe2, permissions: [Permission.LANDING_READ] },
   { href: '/admin/notifications', label: 'Notificaciones', title: 'Notificaciones', description: 'Avisos operativos, pendientes y accesos rápidos del backoffice.', icon: Bell, permissions: [] },
   { href: '/admin/salons', label: 'Salones', title: 'Salones', description: 'Salones, paquetes y reglas comerciales.', icon: Building2, permissions: [Permission.SALONS_READ] },
-  { href: '/admin/users', label: 'Usuarios', title: 'Usuarios', description: 'Usuarios activos del backoffice.', icon: Users, permissions: [Permission.USERS_READ] },
-  { href: '/admin/staff', label: 'Staff', title: 'Staff', description: 'Empleados operativos, horarios y asignaciones a eventos.', icon: UserRoundCog, permissions: [Permission.USERS_READ] },
+  { href: '/admin/users', label: 'Usuarios', title: 'Usuarios y equipo', description: 'Personas, roles, operación, horarios y capacidades de asistencia.', icon: Users, permissions: [Permission.USERS_READ] },
   { href: '/admin/attendance', label: 'Asistencia', title: 'Asistencia y app móvil', description: 'Jornadas activas, historial, incidencias, correcciones y configuración de fichaje móvil.', icon: Clock3, permissions: [Permission.ATTENDANCE_READ] },
   { href: '/admin/settings', label: 'Configuración', title: 'Configuración', description: 'Parámetros operativos del sistema.', icon: Settings, permissions: [Permission.SETTINGS_READ] }
 ];

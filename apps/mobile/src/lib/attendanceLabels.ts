@@ -32,14 +32,6 @@ export const attendanceAdjustmentStatusLabels: Record<string, string> = {
   cancelled: 'Cancelada'
 };
 
-export const locationValidationLabels: Record<string, string> = {
-  inside_allowed_area: 'Dentro del área permitida',
-  outside_allowed_area: 'Fuera del área permitida',
-  not_configured: 'Salón sin geocerca configurada',
-  location_unavailable: 'Sin ubicación disponible',
-  under_review: 'Ubicación en revisión'
-};
-
 export function formatMinutes(minutes?: number): string {
   if (minutes === undefined || minutes === null) return 'Sin calcular';
   const hours = Math.floor(minutes / 60);

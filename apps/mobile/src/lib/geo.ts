@@ -1,4 +1,4 @@
-import { Linking, Platform } from 'react-native';
+import { Linking } from 'react-native';
 import * as Location from 'expo-location';
 
 export type LocationPermissionStatus = 'granted' | 'denied' | 'undetermined';
@@ -45,15 +45,4 @@ export async function captureLocation(): Promise<{ location?: CapturedLocation; 
 
 export function openDeviceSettings(): void {
   void Linking.openSettings();
-}
-
-// Opens the device's map app (or a browser fallback) centered on a punch's coordinates —
-// used by "Ver en el mapa" on the work session detail screen. No embedded map library is
-// used here (no API key/dependency needed), consistent with how the web backoffice does it.
-export function openLocationInMaps(location: { latitude: number; longitude: number }): void {
-  const query = `${location.latitude},${location.longitude}`;
-  const url = Platform.OS === 'ios' ? `maps:0,0?q=${query}` : `geo:0,0?q=${query}`;
-  void Linking.canOpenURL(url).then((supported) => {
-    void Linking.openURL(supported ? url : `https://www.google.com/maps/search/?api=1&query=${query}`);
-  });
 }

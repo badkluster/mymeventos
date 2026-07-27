@@ -309,7 +309,6 @@ export default function AttendancePage() {
 
     {tab === 'settings' && canManageSettings && settings && <div className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-3">
       <FilterField label="Zona horaria"><Input value={settings.timezone} onChange={(event) => setSettings((current) => current && { ...current, timezone: event.target.value })} /></FilterField>
-      <FilterField label="Antigüedad máx. offline (minutos)"><Input type="number" min={1} value={settings.offlinePunchMaxAgeMinutes} onChange={(event) => setSettings((current) => current && { ...current, offlinePunchMaxAgeMinutes: Number(event.target.value) })} /></FilterField>
       <FilterField label="Precisión mínima de ubicación (m)"><Input type="number" min={1} value={settings.minLocationAccuracyMeters} onChange={(event) => setSettings((current) => current && { ...current, minLocationAccuracyMeters: Number(event.target.value) })} /></FilterField>
       <FilterField label="Radio de geocerca por defecto (m)"><Input type="number" min={10} value={settings.defaultGeofenceRadiusMeters} onChange={(event) => setSettings((current) => current && { ...current, defaultGeofenceRadiusMeters: Number(event.target.value) })} /></FilterField>
       <FilterField label="Tolerancia de llegada (minutos)"><Input type="number" min={0} value={settings.lateToleranceMinutes} onChange={(event) => setSettings((current) => current && { ...current, lateToleranceMinutes: Number(event.target.value) })} /></FilterField>
@@ -325,23 +324,24 @@ export default function AttendancePage() {
         {loadingDetail ? <p className="text-sm text-zinc-500">Cargando…</p> : detailSession && <>
           <dl className="grid gap-3 text-sm sm:grid-cols-2"><Metric label="Estado" value={workSessionStatusLabels[detailSession.status]} /><Metric label="Horas trabajadas" value={formatMinutes(detailSession.workedMinutes)} /><Metric label="Inicio" value={formatDateTime(detailSession.startedAt)} /><Metric label="Fin" value={formatDateTime(detailSession.endedAt)} /></dl>
           {detailSession.closeReason ? <section className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5"><h3 className="text-sm font-semibold text-amber-950">Cierre administrativo</h3><p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">{detailSession.closeReason}</p></section> : null}
-          <div><h3 className="text-sm font-semibold text-zinc-900">Marcaciones</h3><div className="mt-2 space-y-2">{detailPunches.map((punch) => <div key={punch._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">
+          <div><h3 className="text-sm font-semibold text-zinc-900">Registros de horario</h3><div className="mt-2 space-y-2">{detailPunches.map((punch) => <div key={punch._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">
             <div className="flex items-center justify-between"><span className="font-medium text-zinc-900">{punch.type === 'check_in' ? 'Entrada' : punch.type === 'check_out' ? 'Salida' : punch.type}</span><span className="text-zinc-500">{formatDateTime(punch.effectiveAt)}</span></div>
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-zinc-400">{locationValidationLabels[punch.locationValidationStatus ?? ''] ?? 'Sin ubicación'}{typeof punch.salonDistanceMeters === 'number' ? ` · ${Math.round(punch.salonDistanceMeters)} m del salón` : ''}</span>
-              {punch.location ? <button type="button" onClick={() => setMapPunch(punch)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50"><MapPin className="h-3.5 w-3.5" />Ver en el mapa</button> : null}
-            </div>
-          </div>)}{!detailPunches.length && <p className="text-sm text-zinc-500">Sin marcaciones registradas.</p>}</div></div>
+             <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+               <span className="text-xs text-zinc-400">{locationValidationLabels[punch.locationValidationStatus ?? ''] ?? 'Sin ubicación'}{typeof punch.salonDistanceMeters === 'number' ? ` · ${Math.round(punch.salonDistanceMeters)} m del salón` : ''}</span>
+               {punch.location ? <button type="button" onClick={() => setMapPunch(punch)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50"><MapPin className="h-3.5 w-3.5" />Ver en el mapa</button> : null}
+             </div>
+             <PunchTechnicalDetails punch={punch} />
+           </div>)}{!detailPunches.length && <p className="text-sm text-zinc-500">Sin registros de horario.</p>}</div></div>
           {Boolean(detailIncidents.length) && <div><h3 className="text-sm font-semibold text-zinc-900">Incidencias</h3><div className="mt-2 space-y-2">{detailIncidents.map((incident) => <div key={incident._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">{attendanceIncidentTypeLabels[incident.type] ?? incident.type} · {attendanceIncidentStatusLabels[incident.status]}</div>)}</div></div>}
           {Boolean(detailAdjustments.length) && <div><h3 className="text-sm font-semibold text-zinc-900">Correcciones solicitadas</h3><div className="mt-2 space-y-2">{detailAdjustments.map((adjustment) => <div key={adjustment._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">{adjustment.reason} · {attendanceAdjustmentStatusLabels[adjustment.status]}</div>)}</div></div>}
         </>}
       </div>
     </Modal>
 
-    <Modal open={Boolean(mapPunch?.location)} onClose={() => setMapPunch(null)} title="Ubicación de la marcación" description={mapPunch ? `${mapPunch.type === 'check_in' ? 'Entrada' : mapPunch.type === 'check_out' ? 'Salida' : 'Marcación'} · ${formatDateTime(mapPunch.effectiveAt)}` : ''} wide>
+    <Modal open={Boolean(mapPunch?.location)} onClose={() => setMapPunch(null)} title="Ubicación del registro de horario" description={mapPunch ? `${mapPunch.type === 'check_in' ? 'Entrada' : mapPunch.type === 'check_out' ? 'Salida' : 'Registro de horario'} · ${formatDateTime(mapPunch.effectiveAt)}` : ''} wide>
       {mapPunch?.location ? <div className="space-y-4 p-5 sm:p-6">
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100">
-          <iframe title="Mapa de ubicación de marcación" src={`https://www.google.com/maps?q=${encodeURIComponent(`${mapPunch.location.latitude},${mapPunch.location.longitude}`)}&z=17&output=embed`} className="h-[48vh] min-h-80 w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+          <iframe title="Mapa de ubicación del registro de horario" src={`https://www.google.com/maps?q=${encodeURIComponent(`${mapPunch.location.latitude},${mapPunch.location.longitude}`)}&z=17&output=embed`} className="h-[48vh] min-h-80 w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
         </div>
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-zinc-600"><span>Latitud: <strong className="font-medium text-zinc-900">{mapPunch.location.latitude.toFixed(6)}</strong></span><span>Longitud: <strong className="font-medium text-zinc-900">{mapPunch.location.longitude.toFixed(6)}</strong></span>{typeof mapPunch.location.accuracy === 'number' ? <span>Precisión: <strong className="font-medium text-zinc-900">{Math.round(mapPunch.location.accuracy)} m</strong></span> : null}</div>
       </div> : null}
@@ -375,4 +375,47 @@ function FilterField({ label, children }: { label: string; children: React.React
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-xs uppercase tracking-wide text-zinc-400">{label}</dt><dd className="mt-1 font-medium text-zinc-800">{value}</dd></div>;
+}
+
+function technicalValue(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  return String(value);
+}
+
+function PunchTechnicalDetails({ punch }: { punch: TimePunch }) {
+  const device = punch.device;
+  const network = punch.network;
+  const entries = [
+    ['Hora oficial del servidor', formatDateTime(punch.serverReceivedAt)],
+    ['IP vista por el servidor', punch.publicIp],
+    ['IP reportada por el dispositivo', network?.reportedIp],
+    ['Conexión reportada', network?.connectionType],
+    ['Conexión activa', network?.isConnected],
+    ['Internet disponible', network?.isInternetReachable],
+    ['Modo avión', network?.airplaneMode],
+    ['Plataforma', device?.platform],
+    ['Dispositivo físico', device?.isPhysicalDevice],
+    ['Tipo de equipo', device?.deviceType],
+    ['Marca / fabricante', [device?.brand, device?.manufacturer].filter(Boolean).join(' · ')],
+    ['Modelo', [device?.deviceModel, device?.modelId].filter(Boolean).join(' · ')],
+    ['Nombre configurado', device?.deviceName],
+    ['Sistema operativo', [device?.osName, device?.osVersion].filter(Boolean).join(' · ')],
+    ['Build de sistema', device?.osBuildId],
+    ['Build interno de sistema', device?.osInternalBuildId],
+    ['Huella de build Android', device?.osBuildFingerprint],
+    ['API Android', device?.platformApiLevel],
+    ['Diseño / producto del equipo', [device?.designName, device?.productName].filter(Boolean).join(' / ')],
+    ['Clase estimada del equipo', device?.deviceYearClass],
+    ['App / build', [device?.appVersion, device?.appBuildVersion].filter(Boolean).join(' · ')],
+    ['Identificador de app', device?.applicationId],
+    ['Identificador de instalación', device?.installationId],
+    ['App instalada', device?.appInstalledAt ? formatDateTime(device.appInstalledAt) : undefined],
+    ['Última actualización de la app', device?.appLastUpdatedAt ? formatDateTime(device.appLastUpdatedAt) : undefined],
+    ['Indicador root / jailbreak', device?.rooted],
+    ['Desvío del reloj del teléfono', typeof punch.clockSkewMs === 'number' ? `${Math.round(punch.clockSkewMs / 1000)} s` : undefined]
+  ].map(([label, value]) => ({ label, value: technicalValue(value) })).filter((entry): entry is { label: string; value: string } => Boolean(entry.value));
+
+  if (!entries.length) return null;
+  return <details className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"><summary className="cursor-pointer text-xs font-semibold text-zinc-700">Datos técnicos del dispositivo y red</summary><p className="mt-2 text-xs text-zinc-500">La IP del servidor y la hora oficial son datos de servidor. El resto es informado por el dispositivo y sirve como evidencia técnica, no como prueba única.</p><dl className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-2">{entries.map((entry) => <div key={entry.label}><dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">{entry.label}</dt><dd className="mt-0.5 break-all text-xs text-zinc-800">{entry.value}</dd></div>)}</dl></details>;
 }

@@ -36,7 +36,6 @@ Del lado del backend (`.env.example` raíz), nuevas variables agregadas por esta
 ```
 MOBILE_ACCESS_TOKEN_TTL=30m
 MOBILE_REFRESH_TOKEN_TTL=30d
-MOBILE_OFFLINE_PUNCH_MAX_AGE_MINUTES=720
 MOBILE_DEEP_LINK_SCHEME=mymeventos
 ATTENDANCE_DEFAULT_TIMEZONE=America/Argentina/Buenos_Aires
 ATTENDANCE_DEFAULT_LOCATION_ACCURACY_METERS=50
@@ -50,6 +49,14 @@ pnpm --filter @mym/mobile start          # abre el Metro bundler / Expo Dev Tool
 pnpm --filter @mym/mobile start -- --android
 pnpm --filter @mym/mobile start -- --ios
 ```
+
+En Windows, para abrir siempre el emulador antes de Expo Go, usar:
+
+```bash
+pnpm dev:mobile:android
+```
+
+El comando inicia el AVD `Medium_Phone_2`, espera a que Android termine de arrancar y recién después ejecuta `expo start --android`. Se puede usar otro AVD con `MYM_ANDROID_AVD`; el tiempo máximo predeterminado es 240 segundos y se ajusta con `MYM_ANDROID_EMULATOR_TIMEOUT_SECONDS`.
 
 Requiere Expo Go (SDK 57) o un development build propio para los módulos nativos usados (`expo-secure-store`, `expo-location`, `expo-local-authentication`, `expo-image-picker`, `expo-application`, `expo-device`, `expo-network`, `expo-crypto`, `expo-splash-screen`) — todos son plugins de Expo estándar, compatibles con Expo Go sin config plugin adicional salvo los ya declarados en `app.json`.
 

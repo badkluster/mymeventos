@@ -4,7 +4,7 @@ import { api, ApiClientError } from '../lib/api';
 import { captureLocation, type LocationPermissionStatus } from '../lib/geo';
 import { getDeviceInfo } from '../lib/device';
 import { isOnline } from '../lib/network';
-import { enqueuePunch, getQueue, removeFromQueue, type QueuedPunch } from '../lib/offlineQueue';
+import { getQueue, removeFromQueue, type QueuedPunch } from '../lib/offlineQueue';
 import type { AttendanceStatusResponse, WorkSession } from '../types/attendance';
 
 interface ClockResult { session: WorkSession; }
@@ -30,7 +30,8 @@ async function loadPendingQueue(): Promise<QueuedPunch[]> {
 }
 
 async function submitClockAction(kind: 'check-in' | 'check-out', requestId: string, notes: string | undefined, salonId: string | undefined, eventId: string | undefined) {
-  const device = await getDeviceInfo();
+  const deviceInfo = await getDeviceInfo();
+  const { network, ...device } = deviceInfo;
   const { location, permissionStatus } = await captureLocation();
   const online = await isOnline();
   const clientOccurredAt = new Date().toISOString();
@@ -39,6 +40,7 @@ async function submitClockAction(kind: 'check-in' | 'check-out', requestId: stri
     clientOccurredAt,
     networkStatus: online ? 'online' : 'offline_sync',
     device,
+    network,
     notes,
     ...(location ? { location, locationPermissionStatus: permissionStatus } : { locationPermissionStatus: permissionStatus }),
     ...(kind === 'check-in' ? { salonId, eventId } : {})
@@ -74,19 +76,16 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
     try {
       const { payload, online } = await submitClockAction('check-in', requestId, notes, salonId, eventId);
       if (!online) {
-        await enqueuePunch({ requestId, kind: 'check-in', payload });
-        set({ acting: false, pendingQueue: await loadPendingQueue() });
-        return { queued: true };
+        set({ acting: false });
+        throw new ApiClientError('ATTENDANCE_ONLINE_REQUIRED', 'Necesitás conexión a internet para iniciar la jornada. La fecha y hora se toman del servidor.');
       }
       const result = await api.post<ClockResult>('/mobile/attendance/check-in', payload);
       set({ activeSession: result.session, acting: false, elapsedMinutes: 0 });
       return { requiresReview: result.session.requiresReview };
     } catch (error) {
       if (error instanceof ApiClientError && error.code === 'NETWORK_ERROR') {
-        const { payload } = await submitClockAction('check-in', requestId, notes, salonId, eventId);
-        await enqueuePunch({ requestId, kind: 'check-in', payload: { ...payload, networkStatus: 'offline_sync' } });
-        set({ acting: false, pendingQueue: await loadPendingQueue() });
-        return { queued: true };
+        set({ acting: false });
+        throw new ApiClientError('ATTENDANCE_ONLINE_REQUIRED', 'Se perdió la conexión. Volvé a intentar para que el servidor registre la hora oficial.');
       }
       set({ acting: false, error: error instanceof ApiClientError ? error.message : 'No se pudo registrar la entrada.' });
       throw error;
@@ -99,19 +98,19 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
     try {
       const { payload, online } = await submitClockAction('check-out', requestId, input?.notes, undefined, undefined);
       if (!online) {
-        await enqueuePunch({ requestId, kind: 'check-out', payload });
-        set({ acting: false, pendingQueue: await loadPendingQueue() });
-        return { queued: true };
+        set({ acting: false });
+        throw new ApiClientError('ATTENDANCE_ONLINE_REQUIRED', 'Necesitás conexión a internet para finalizar la jornada. La fecha y hora se toman del servidor.');
       }
       const result = await api.post<ClockResult>('/mobile/attendance/check-out', payload);
-      set({ activeSession: result.session, acting: false });
+      // The server returns the completed (or under-review) session for audit
+      // purposes. It is no longer an active shift, so keeping it in this field
+      // would leave the home timer running after a successful check-out.
+      set({ activeSession: null, acting: false, elapsedMinutes: 0 });
       return { requiresReview: result.session.requiresReview };
     } catch (error) {
       if (error instanceof ApiClientError && error.code === 'NETWORK_ERROR') {
-        const { payload } = await submitClockAction('check-out', requestId, input?.notes, undefined, undefined);
-        await enqueuePunch({ requestId, kind: 'check-out', payload: { ...payload, networkStatus: 'offline_sync' } });
-        set({ acting: false, pendingQueue: await loadPendingQueue() });
-        return { queued: true };
+        set({ acting: false });
+        throw new ApiClientError('ATTENDANCE_ONLINE_REQUIRED', 'Se perdió la conexión. Volvé a intentar para que el servidor registre la hora oficial.');
       }
       set({ acting: false, error: error instanceof ApiClientError ? error.message : 'No se pudo registrar la salida.' });
       throw error;
@@ -130,7 +129,9 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
         const path = item.kind === 'check-in' ? '/mobile/attendance/check-in' : '/mobile/attendance/check-out';
         const result = await api.post<ClockResult>(path, item.payload);
         await removeFromQueue(item.requestId);
-        set({ activeSession: result.session });
+        set(item.kind === 'check-out'
+          ? { activeSession: null, elapsedMinutes: 0 }
+          : { activeSession: result.session, elapsedMinutes: 0 });
       } catch (error) {
         // A definitive rejection (not a network error) means retrying is pointless — drop it,
         // but a plain network error means we're still offline: stop draining and try again later.

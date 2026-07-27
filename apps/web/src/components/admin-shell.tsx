@@ -33,8 +33,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const currentModule = moduleForPath(pathname);
   const blocked = Boolean(currentModule && !userCanAccess(user, currentModule.permissions));
   const isActive = (href: string) => href === '/admin' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-  const configSubmenuPaths = new Set(['/admin/salons', '/admin/users', '/admin/staff', '/admin/attendance', '/admin/landing']);
-  const configSubmenuOrder = new Map([['/admin/salons', 0], ['/admin/users', 1], ['/admin/staff', 2], ['/admin/attendance', 3], ['/admin/landing', 4]]);
+  const configSubmenuPaths = new Set(['/admin/salons', '/admin/users', '/admin/attendance', '/admin/landing']);
+  const configSubmenuOrder = new Map([['/admin/salons', 0], ['/admin/users', 1], ['/admin/attendance', 2], ['/admin/landing', 3]]);
   const hiddenNavigationPaths = new Set(['/admin/settings']);
   const configSubitems = items
     .filter((item) => configSubmenuPaths.has(item.href))

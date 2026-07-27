@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Eye, Pencil, Plus, Search, ShieldCheck, Trash2, ToggleLeft, ToggleRight, UserCog, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { displayLabel, roleLabels } from '@/lib/display-labels';
@@ -11,13 +12,15 @@ import { TableActionButton } from '@/components/admin/table-action-button';
 import { UsersStaffTabs } from '@/components/admin/users-staff-tabs';
 import { useToast } from '@/components/ui/toast-provider';
 import { useSession } from '@/components/session-provider';
-import { Permission } from '@mym/shared';
+import { Permission, Role } from '@mym/shared';
 
 type Salon = { _id: string; name?: string; slug?: string; active?: boolean };
 type User = {
   _id: string; username?: string; email?: string; firstName?: string; lastName?: string; fullName?: string; phone?: string; documentType?: string; documentNumber?: string; roles?: string[];
   salonIds?: Array<string | Salon>; managedSalonIds?: Array<string | Salon>; primarySalonId?: string | Salon; primaryManagedSalonId?: string | Salon;
   permissionOverrides?: string[]; permissionDeniedOverrides?: string[]; canAccessBackoffice?: boolean; active?: boolean; lastLoginAt?: string; employeeProfile?: { position?: string };
+  staffProfile?: { staffCode?: string; staffSubroles?: string[]; employmentStatus?: string };
+  attendanceConfig?: { enabled?: boolean; canUseMobileApp?: boolean };
 };
 type ListResponse = { users?: User[]; items?: User[]; meta?: { page: number; totalPages: number; hasNextPage: boolean; hasPreviousPage: boolean }; roles?: string[]; permissions?: string[] };
 
@@ -28,6 +31,8 @@ const name = (user: User) => user.fullName || [user.firstName, user.lastName].fi
 const salonLabel = (items?: Array<string | Salon>) => items?.length ? items.map((item) => typeof item === 'string' ? item : item.name || item._id).join(', ') : 'Sin asignar';
 
 export default function UsersPage() {
+  const searchParams = useSearchParams();
+  const staffView = searchParams?.get('view') === 'staff';
   const { showToast } = useToast();
   const { user: sessionUser } = useSession();
   const isAdmin = sessionUser?.roles?.includes('ADMIN') ?? false;
@@ -39,11 +44,15 @@ export default function UsersPage() {
   const [roles, setRoles] = useState<string[]>(Object.keys(roleLabels));
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
-  const [filters, setFilters] = useState({ search: '', role: '', active: '', canAccessBackoffice: '', page: 1 });
+  const [filters, setFilters] = useState({ search: '', role: '', active: '', attendanceEnabled: '', canAccessBackoffice: '', page: 1 });
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<User | null>(null);
   const [modal, setModal] = useState<'create' | 'edit' | 'roles' | 'salons' | 'delete' | null>(null);
-  const query = useMemo(() => { const params = new URLSearchParams({ page: String(filters.page), limit: '20' }); Object.entries(filters).forEach(([key, value]) => { if (value && key !== 'page') params.set(key, String(value)); }); return params.toString(); }, [filters]);
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ page: String(filters.page), limit: '20' });
+    Object.entries({ ...filters, role: staffView ? Role.STAFF : filters.role }).forEach(([key, value]) => { if (value && key !== 'page') params.set(key, String(value)); });
+    return params.toString();
+  }, [filters, staffView]);
 
   const load = useCallback(async () => {
     try {
@@ -81,7 +90,7 @@ export default function UsersPage() {
     setSavingId(editing?._id ?? 'new');
     try {
       const editableBody = { firstName: form.firstName, lastName: form.lastName, phone: form.phone, documentType: form.documentType, documentNumber: form.documentNumber, salonIds: form.salonIds, managedSalonIds: form.managedSalonIds, primarySalonId: form.primarySalonId || undefined, primaryManagedSalonId: form.primaryManagedSalonId || undefined, canAccessBackoffice: form.canAccessBackoffice, active: form.active, employeeProfile: form.position ? { position: form.position, employmentStatus: 'active' } : undefined };
-      if (modal === 'create') await api.post('/users', { ...editableBody, username: form.username, email: form.email || undefined, password: form.password || undefined, roles: form.roles });
+      if (modal === 'create') await api.post('/users', { ...editableBody, username: form.username, email: form.email || undefined, password: form.password, roles: form.roles });
       if (modal === 'edit' && editing) await api.patch(`/users/${editing._id}`, editableBody);
       if (modal === 'roles' && editing) await api.patch(`/users/${editing._id}/roles`, { roles: form.roles, primaryRole: form.roles[0] });
       if (modal === 'salons' && editing) {
@@ -108,12 +117,13 @@ export default function UsersPage() {
   };
 
   return <section className="space-y-6">
-    <PageHeader title="Usuarios" description="ABM, roles, permisos, salones y staff operativo del backoffice." action={canCreate ? <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />Nuevo usuario</Button> : undefined} />
+    <PageHeader title={staffView ? 'Staff operativo' : 'Usuarios y equipo'} description={staffView ? 'La misma lista de usuarios, filtrada por el rol Staff. La ficha, la asistencia y la configuración son únicas.' : 'Una única ficha por persona: roles, operación, salones y asistencia configurable.'} action={canCreate ? <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" />{staffView ? 'Nuevo staff' : 'Nuevo usuario'}</Button> : undefined} />
     <UsersStaffTabs />
-    <div className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_200px_170px_190px_auto]">
+    <div className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm xl:grid-cols-[1fr_190px_150px_170px_190px_auto]">
       <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, page: 1, search: event.target.value }))} className="h-11 pl-10" placeholder="Buscar por usuario, nombre, email, teléfono..." /></div>
-      <Select value={filters.role} onChange={(event) => setFilters((current) => ({ ...current, page: 1, role: event.target.value }))}><option value="">Todos los roles</option>{roles.map((role) => <option key={role} value={role}>{displayLabel(roleLabels, role)}</option>)}</Select>
+      <Select value={staffView ? Role.STAFF : filters.role} disabled={staffView} onChange={(event) => setFilters((current) => ({ ...current, page: 1, role: event.target.value }))}><option value="">Todos los roles</option>{roles.map((role) => <option key={role} value={role}>{displayLabel(roleLabels, role)}</option>)}</Select>
       <Select value={filters.active} onChange={(event) => setFilters((current) => ({ ...current, page: 1, active: event.target.value }))}><option value="">Todos</option><option value="true">Activos</option><option value="false">Inactivos</option></Select>
+      <Select value={filters.attendanceEnabled} onChange={(event) => setFilters((current) => ({ ...current, page: 1, attendanceEnabled: event.target.value }))}><option value="">Asistencia</option><option value="true">Habilitada</option><option value="false">No habilitada</option></Select>
       <Select value={filters.canAccessBackoffice} onChange={(event) => setFilters((current) => ({ ...current, page: 1, canAccessBackoffice: event.target.value }))}><option value="">Acceso backoffice</option><option value="true">Con acceso</option><option value="false">Sin acceso</option></Select>
       <Button variant="secondary" onClick={() => setFilters((current) => ({ ...current, page: 1 }))}>Filtrar</Button>
     </div>
@@ -128,15 +138,16 @@ function toggle(list: string[], value: string) { return list.includes(value) ? l
 function UserModal({ modal, form, setForm, roles, salons, saving, editing, onClose, onSave, onDelete }: { modal: string | null; form: typeof emptyForm; setForm: Dispatch<SetStateAction<typeof emptyForm>>; roles: string[]; salons: Salon[]; saving: boolean; editing: User | null; onClose: () => void; onSave: () => void; onDelete: () => void }) {
   if (!modal) return null;
   if (modal === 'delete') return <Modal open title="Eliminar usuario" description={`Se eliminará lógicamente a ${editing ? name(editing) : 'este usuario'}.`} onClose={onClose}><div className="space-y-5 p-6"><p className="text-sm text-zinc-600">El usuario quedará inactivo y no podrá iniciar sesión. No se borran auditorías ni referencias históricas.</p><div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={onDelete}>Eliminar</Button></div></div></Modal>;
+  const canSubmit = Boolean(form.roles.length && (modal !== 'create' || (form.firstName.trim() && form.lastName.trim() && form.username.trim().length >= 3 && form.password.length >= 8)));
   return <Modal open title={modal === 'create' ? 'Nuevo usuario' : modal === 'roles' ? 'Asignar roles' : modal === 'salons' ? 'Asignar salones' : 'Editar usuario'} onClose={onClose}><div className="space-y-5 p-6">
-    {(modal === 'create' || modal === 'edit') && <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Nombre" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} /><Input placeholder="Apellido" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} /><Input placeholder="Usuario" value={form.username} disabled={modal === 'edit'} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} /><Input placeholder="Email" type="email" value={form.email} disabled={modal === 'edit'} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /><Input placeholder="Teléfono" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /><Select value={form.documentType} onChange={(event) => setForm((current) => ({ ...current, documentType: event.target.value }))}><option value="DNI">DNI</option><option value="CUIL">CUIL</option><option value="CUIT">CUIT</option><option value="PASAPORTE">Pasaporte</option><option value="OTRO">Otro</option></Select><Input placeholder="Número de documento" value={form.documentNumber} onChange={(event) => setForm((current) => ({ ...current, documentNumber: event.target.value }))} /><Input placeholder={modal === 'create' ? 'Password temporal opcional' : 'Cargo / posición'} type={modal === 'create' ? 'password' : 'text'} value={modal === 'create' ? form.password : form.position} onChange={(event) => setForm((current) => modal === 'create' ? ({ ...current, password: event.target.value }) : ({ ...current, position: event.target.value }))} /></div>}
+    {(modal === 'create' || modal === 'edit') && <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Nombre" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} /><Input placeholder="Apellido" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} /><Input placeholder="Usuario" value={form.username} disabled={modal === 'edit'} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} /><Input placeholder="Email" type="email" value={form.email} disabled={modal === 'edit'} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /><Input placeholder="Teléfono" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /><Select value={form.documentType} onChange={(event) => setForm((current) => ({ ...current, documentType: event.target.value }))}><option value="DNI">DNI</option><option value="CUIL">CUIL</option><option value="CUIT">CUIT</option><option value="PASAPORTE">Pasaporte</option><option value="OTRO">Otro</option></Select><Input placeholder="Número de documento" value={form.documentNumber} onChange={(event) => setForm((current) => ({ ...current, documentNumber: event.target.value }))} />{modal === 'create' ? <label className="md:col-span-2"><span className="mb-1.5 block text-sm font-medium text-zinc-700">Contraseña inicial</span><Input type="password" autoComplete="new-password" minLength={8} required placeholder="Mínimo 8 caracteres" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /><p className="mt-1.5 text-xs text-zinc-500">Es obligatoria y permite iniciar sesión. Un usuario Staff activo queda habilitado para entrar a la app móvil.</p></label> : <Input placeholder="Cargo / posición" value={form.position} onChange={(event) => setForm((current) => ({ ...current, position: event.target.value }))} />}</div>}
     {(modal === 'create' || modal === 'edit' || modal === 'roles') && <section><h3 className="text-sm font-semibold text-zinc-900">Roles</h3><div className="mt-3 grid gap-2 sm:grid-cols-2">{roles.map((role) => <label key={role} className="flex items-center gap-2 rounded-xl border border-zinc-100 px-3 py-2 text-sm"><input type="checkbox" checked={form.roles.includes(role)} onChange={() => setForm((current) => ({ ...current, roles: toggle(current.roles, role) }))} />{displayLabel(roleLabels, role)}</label>)}</div></section>}
     {(modal === 'create' || modal === 'edit' || modal === 'salons') && <section className="grid gap-5 md:grid-cols-2"><div><h3 className="text-sm font-semibold text-zinc-900">Salones con acceso</h3><div className="mt-3 space-y-2">{salons.map((salon) => <label key={salon._id} className="flex items-center gap-2 rounded-xl border border-zinc-100 px-3 py-2 text-sm"><input type="checkbox" checked={form.salonIds.includes(salon._id)} onChange={() => setForm((current) => ({ ...current, salonIds: toggle(current.salonIds, salon._id), primarySalonId: current.primarySalonId === salon._id ? '' : current.primarySalonId }))} />{salon.name}</label>)}</div><Select className="mt-3" value={form.primarySalonId} onChange={(event) => setForm((current) => ({ ...current, primarySalonId: event.target.value }))}><option value="">Salón principal</option>{salons.filter((salon) => form.salonIds.includes(salon._id)).map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></div><div><h3 className="text-sm font-semibold text-zinc-900">Salones a cargo</h3><div className="mt-3 space-y-2">{salons.map((salon) => <label key={salon._id} className="flex items-center gap-2 rounded-xl border border-zinc-100 px-3 py-2 text-sm"><input type="checkbox" checked={form.managedSalonIds.includes(salon._id)} onChange={() => setForm((current) => ({ ...current, managedSalonIds: toggle(current.managedSalonIds, salon._id), salonIds: current.salonIds.includes(salon._id) ? current.salonIds : [...current.salonIds, salon._id], primaryManagedSalonId: current.primaryManagedSalonId === salon._id ? '' : current.primaryManagedSalonId }))} />{salon.name}</label>)}</div><Select className="mt-3" value={form.primaryManagedSalonId} onChange={(event) => setForm((current) => ({ ...current, primaryManagedSalonId: event.target.value }))}><option value="">Salón principal a cargo</option>{salons.filter((salon) => form.managedSalonIds.includes(salon._id)).map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></div></section>}
     <div className="grid gap-2 sm:grid-cols-2">
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />Usuario activo</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.canAccessBackoffice} onChange={(event) => setForm((current) => ({ ...current, canAccessBackoffice: event.target.checked }))} />Acceso al backoffice</label>
     </div>
-    <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={saving || !form.roles.length} onClick={onSave}>Guardar</Button></div>
+    <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={saving || !canSubmit} onClick={onSave}>Guardar</Button></div>
   </div></Modal>;
 }
 function Empty() { return <div className="grid place-items-center px-6 py-16 text-center"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-100 text-zinc-500"><Users className="h-6 w-6" /></span><h2 className="mt-4 font-semibold text-zinc-900">No hay usuarios</h2><p className="mt-1 max-w-sm text-sm text-zinc-500">Los usuarios creados para operar el backoffice aparecerán en este listado.</p></div>; }

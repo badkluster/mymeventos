@@ -15,6 +15,7 @@
     "seed:digital-tickets": "ts-node src/scripts/seedDigitalTickets.ts",
     "seed:marketing-templates": "ts-node src/scripts/seedMarketingTemplates.ts",
     "seed:mobile-attendance": "ts-node src/scripts/seedMobileAttendance.ts",
+    "seed:staff-roster": "ts-node src/scripts/seedStaffRoster.ts",
     "clean:digital-tickets-demo": "ts-node src/scripts/cleanDigitalTicketsDemo.ts",
     "seed:salon-stock": "ts-node src/scripts/updateSalonStock.ts",
     "reset:admin-password": "ts-node src/scripts/resetAdminPassword.ts",

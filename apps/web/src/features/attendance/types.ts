@@ -24,6 +24,33 @@ export type WorkSession = {
 };
 
 export type PunchLocation = { latitude: number; longitude: number; accuracy?: number };
+export type PunchDevice = {
+  installationId?: string;
+  platform?: string;
+  isPhysicalDevice?: boolean;
+  deviceType?: string;
+  brand?: string;
+  manufacturer?: string;
+  deviceModel?: string;
+  modelId?: string;
+  deviceName?: string;
+  designName?: string;
+  productName?: string;
+  deviceYearClass?: number;
+  osName?: string;
+  osVersion?: string;
+  osBuildId?: string;
+  osInternalBuildId?: string;
+  osBuildFingerprint?: string;
+  platformApiLevel?: number;
+  appVersion?: string;
+  appBuildVersion?: string;
+  applicationId?: string;
+  rooted?: boolean;
+  appInstalledAt?: string;
+  appLastUpdatedAt?: string;
+};
+export type PunchNetwork = { connectionType?: string; isConnected?: boolean; isInternetReachable?: boolean; reportedIp?: string; airplaneMode?: boolean };
 
 export type TimePunch = {
   _id: string;
@@ -33,9 +60,13 @@ export type TimePunch = {
   serverReceivedAt?: string;
   source?: string;
   networkStatus?: string;
+  publicIp?: string;
+  device?: PunchDevice;
+  network?: PunchNetwork;
   location?: PunchLocation;
   locationValidationStatus?: string;
   salonDistanceMeters?: number;
+  clockSkewMs?: number;
   rejected?: boolean;
   rejectionReason?: string;
   notes?: string;
@@ -67,7 +98,6 @@ export type AttendanceAdjustmentRequest = {
 
 export type AttendanceSettings = {
   timezone: string;
-  offlinePunchMaxAgeMinutes: number;
   minLocationAccuracyMeters: number;
   defaultGeofenceRadiusMeters: number;
   lateToleranceMinutes: number;

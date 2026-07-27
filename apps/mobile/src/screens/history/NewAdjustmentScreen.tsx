@@ -55,7 +55,7 @@ export function NewAdjustmentScreen({ route, navigation }: Props) {
       <AppTextInput label="Hora de entrada correcta (HH:MM)" value={startTime} onChangeText={setStartTime} placeholder="21:00" />
       <AppTextInput label="Fecha de salida correcta (AAAA-MM-DD)" value={endDate} onChangeText={setEndDate} placeholder="2026-07-26" />
       <AppTextInput label="Hora de salida correcta (HH:MM)" value={endTime} onChangeText={setEndTime} placeholder="05:00" />
-      <AppTextInput label="Motivo" value={reason} onChangeText={setReason} multiline numberOfLines={4} style={styles.textarea} placeholder="Explicá qué pasó con la marcación" />
+      <AppTextInput label="Motivo" value={reason} onChangeText={setReason} multiline numberOfLines={4} style={styles.textarea} placeholder="Explicá qué pasó con el registro de horario" />
       <AppButton title="Enviar solicitud" onPress={() => void submit()} loading={loading} disabled={reason.trim().length < 3} />
     </ScrollView>
   );

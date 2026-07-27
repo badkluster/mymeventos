@@ -30,10 +30,36 @@ const geoPointSchema = new Schema({
 const punchDeviceSchema = new Schema({
   installationId: String,
   platform: String,
+  isPhysicalDevice: Boolean,
+  deviceType: String,
+  brand: String,
   osVersion: String,
+  osName: String,
+  osBuildId: String,
+  osInternalBuildId: String,
+  osBuildFingerprint: String,
+  platformApiLevel: Number,
   appVersion: String,
+  appBuildVersion: String,
+  applicationId: String,
   deviceModel: String,
-  manufacturer: String
+  modelId: String,
+  deviceName: String,
+  manufacturer: String,
+  designName: String,
+  productName: String,
+  deviceYearClass: Number,
+  rooted: Boolean,
+  appInstalledAt: Date,
+  appLastUpdatedAt: Date
+}, { _id: false });
+
+const punchNetworkSchema = new Schema({
+  connectionType: String,
+  isConnected: Boolean,
+  isInternetReachable: Boolean,
+  reportedIp: String,
+  airplaneMode: Boolean
 }, { _id: false });
 
 // Immutable log of a single clock action. Never updated by any route after creation
@@ -52,6 +78,7 @@ const timePunchSchema = new Schema({
   locationCapturedAt: Date,
   publicIp: String,
   device: punchDeviceSchema,
+  network: punchNetworkSchema,
   networkStatus: { type: String, enum: ['online', 'offline_sync'], default: 'online' },
   requestId: { type: String, required: true },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true },

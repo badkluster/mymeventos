@@ -53,7 +53,7 @@ export function ProductionDetail({ planId }: { planId: string }) {
   }, [planId, showToast]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    void api.get<{ items?: Staff[]; staff?: Staff[] }>('/staff?limit=100').then((result) => setStaff(result.items ?? result.staff ?? [])).catch(() => setStaff([]));
+    void api.get<{ items?: Staff[] }>('/users?active=true&limit=100').then((result) => setStaff(result.items ?? [])).catch(() => setStaff([]));
   }, []);
 
   const setStatus = async (item: Item, status: string) => {

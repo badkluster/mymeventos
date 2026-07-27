@@ -7,7 +7,6 @@ import { env } from '../../config/env';
 // on `Salon.attendanceLocationRule` (see salon.model.ts).
 export interface AttendanceSettings {
   timezone: string;
-  offlinePunchMaxAgeMinutes: number;
   minLocationAccuracyMeters: number;
   defaultGeofenceRadiusMeters: number;
   lateToleranceMinutes: number;
@@ -22,7 +21,6 @@ const SETTINGS_KEY = 'attendance.config';
 function defaults(): AttendanceSettings {
   return {
     timezone: env.ATTENDANCE_DEFAULT_TIMEZONE,
-    offlinePunchMaxAgeMinutes: env.MOBILE_OFFLINE_PUNCH_MAX_AGE_MINUTES,
     minLocationAccuracyMeters: env.ATTENDANCE_DEFAULT_LOCATION_ACCURACY_METERS,
     defaultGeofenceRadiusMeters: env.ATTENDANCE_DEFAULT_GEOFENCE_RADIUS_METERS,
     lateToleranceMinutes: 10,
@@ -35,7 +33,9 @@ function defaults(): AttendanceSettings {
 
 export async function getAttendanceSettings(): Promise<AttendanceSettings> {
   const stored: any = await SystemSetting.findOne({ key: SETTINGS_KEY }).lean();
-  return { ...defaults(), ...(stored?.value ?? {}) };
+  const storedValue = { ...(stored?.value ?? {}) };
+  delete storedValue.offlinePunchMaxAgeMinutes;
+  return { ...defaults(), ...storedValue };
 }
 
 export async function updateAttendanceSettings(partial: Partial<AttendanceSettings>, actorId: string): Promise<AttendanceSettings> {

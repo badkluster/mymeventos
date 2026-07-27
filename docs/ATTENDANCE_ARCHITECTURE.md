@@ -35,8 +35,8 @@ Editable desde el backoffice: `GET/PATCH /api/salons/:id/attendance-location-rul
 ## 4. Reloj: cliente vs. servidor
 
 `resolvePunchTiming()` (`attendance.service.ts`):
-- **Online:** `effectiveAt = serverReceivedAt` siempre. Si el reloj del dispositivo difiere de la hora del servidor por más de 5 minutos, la jornada queda `requiresReview: true` (posible manipulación o reloj desconfigurado — no se bloquea, se marca, tal como pide la tarea).
-- **Offline (`networkStatus: 'offline_sync'`):** se usa `clientOccurredAt` como `effectiveAt` **solo si** su antigüedad está dentro de `MOBILE_OFFLINE_PUNCH_MAX_AGE_MINUTES` (env, default 720 = 12 h); si es más viejo, se usa la hora del servidor y se marca para revisión. En ambos casos se conservan `clientOccurredAt`, `serverReceivedAt` y `clockSkewMs` en el `TimePunch` — nunca se descarta el dato original.
+- **Siempre:** `effectiveAt = serverReceivedAt`. La fecha y hora oficial nunca dependen del reloj del teléfono. `clientOccurredAt` se conserva sólo como evidencia técnica junto con `clockSkewMs`; una diferencia de más de 5 minutos deja la jornada marcada para revisión.
+- **Sin conexión:** no se aceptan marcaciones diferidas (`offline_sync`). Para iniciar o finalizar una jornada se requiere conexión con el servidor; así no se puede retrofechar ni diferir una ficha para alterar las horas trabajadas.
 
 ## 5. Máquina de estados de `WorkSession`
 
@@ -58,7 +58,7 @@ Editable desde el backoffice: `GET/PATCH /api/salons/:id/attendance-location-rul
 
 Se decidió **no** usar transacciones multi-documento porque no se puede asumir que el Mongo del entorno (local o el Atlas que use el equipo) corra como replica set. En su lugar:
 
-1. **`TimePunch.requestId` único.** Un reintento (doble tap, timeout+retry, replay de la cola offline) con el mismo `requestId` nunca crea un segundo documento — se detecta el existente y, si ya está vinculado a una `WorkSession`, se devuelve el mismo resultado (respuesta idempotente, no error).
+1. **`TimePunch.requestId` único.** Un reintento (doble tap o timeout+retry) con el mismo `requestId` nunca crea un segundo documento — se detecta el existente y, si ya está vinculado a una `WorkSession`, se devuelve el mismo resultado (respuesta idempotente, no error).
 2. **`WorkSession` con índice único parcial sobre jornada activa.** El check-in intenta crear el `TimePunch` primero (protegido por su propio índice único) y luego el `WorkSession`; si el índice parcial rechaza la creación (ya hay una activa), se marca el punch como `rejected: true` (queda como evidencia de auditoría, no se borra) y se responde `409 ATTENDANCE_ALREADY_ACTIVE`.
 3. El check-out usa `findOneAndUpdate({_id, status:'active'}, ...)` — si dos check-out concurrentes llegan, solo uno encuentra el documento en estado `active` y lo cierra; el otro recibe `409 ATTENDANCE_NO_ACTIVE_SESSION` de forma segura.
 
@@ -66,7 +66,7 @@ Verificado en vivo (no solo con mocks): doble check-in consecutivo → primer `2
 
 ## 7. Configuración global
 
-`apps/api/src/modules/attendance/attendance-settings.service.ts` guarda la configuración (zona horaria, tolerancias, radio de geocerca por defecto, antigüedad máxima offline, etc.) como una fila más de `SystemSetting` (`key: 'attendance.config'`) — se reutiliza el módulo de configuración clave/valor ya existente (`apps/api/src/modules/settings/`) en vez de crear una colección nueva. Editable en `/admin/attendance` → pestaña "Configuración" (requiere `Permission.ATTENDANCE_SETTINGS_MANAGE`).
+`apps/api/src/modules/attendance/attendance-settings.service.ts` guarda la configuración (zona horaria, tolerancias, radio de geocerca por defecto, etc.) como una fila más de `SystemSetting` (`key: 'attendance.config'`) — se reutiliza el módulo de configuración clave/valor ya existente (`apps/api/src/modules/settings/`) en vez de crear una colección nueva. Editable en `/admin/attendance` → pestaña "Configuración" (requiere `Permission.ATTENDANCE_SETTINGS_MANAGE`).
 
 ## 8. Integración futura con liquidaciones (contrato, no implementación)
 

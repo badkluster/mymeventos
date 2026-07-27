@@ -74,14 +74,14 @@ export function HomeScreen() {
         : await checkOut();
       setSheet(null);
       if (result.queued) {
-        showToast({ message: 'Sin conexión: la marcación quedó pendiente de sincronizar.', variant: 'info' });
+        showToast({ message: 'Sin conexión: el registro de horario quedó pendiente de sincronizar.', variant: 'info' });
       } else if (result.requiresReview) {
-        showToast({ message: 'Marcación registrada. Quedó señalada para revisión administrativa.', variant: 'info' });
+        showToast({ message: 'Registro de horario guardado. Quedó señalado para revisión administrativa.', variant: 'info' });
       } else {
         showToast({ message: sheet === 'check-in' ? 'Entrada registrada correctamente.' : 'Salida registrada correctamente.', variant: 'success' });
       }
     } catch (err) {
-      showToast({ message: err instanceof ApiClientError ? err.message : 'No se pudo completar la marcación.', variant: 'error' });
+      showToast({ message: err instanceof ApiClientError ? err.message : 'No se pudo completar el registro de horario.', variant: 'error' });
     }
   }
 

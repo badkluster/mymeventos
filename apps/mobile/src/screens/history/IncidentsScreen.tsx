@@ -41,7 +41,7 @@ export function IncidentsScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
-      <ScreenHeader title="Incidencias" description="Situaciones reportadas sobre tus marcaciones." />
+      <ScreenHeader title="Incidencias" description="Situaciones reportadas sobre tus registros de horario." />
       <AppButton title="Reportar incidencia" onPress={() => navigation.navigate('NewIncident')} />
       <View style={{ height: spacing.lg }} />
       {loading ? <LoadingState /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : (
@@ -60,7 +60,7 @@ export function IncidentsScreen({ navigation }: Props) {
               {item.resolution ? <Text style={styles.resolution}>Resolución: {item.resolution}</Text> : null}
             </AppCard>
           )}
-          ListEmptyComponent={<EmptyState title="Sin incidencias" description="Cuando reportes una situación sobre tus marcaciones la vas a ver acá." />}
+          ListEmptyComponent={<EmptyState title="Sin incidencias" description="Cuando reportes una situación sobre tus registros de horario la vas a ver acá." />}
         />
       )}
     </View>

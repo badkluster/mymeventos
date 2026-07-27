@@ -8,7 +8,14 @@ import { haversineDistanceMeters } from '../../utils/geo';
 import { getAttendanceSettings, type AttendanceSettings } from './attendance-settings.service';
 import { TimePunch, WorkSession, AttendanceIncident, AttendanceAdjustmentRequest } from './attendance.models';
 
-export interface PunchDeviceInput { installationId?: string; platform?: string; osVersion?: string; appVersion?: string; deviceModel?: string; manufacturer?: string; }
+export interface PunchDeviceInput {
+  installationId?: string; platform?: string; isPhysicalDevice?: boolean; deviceType?: string; brand?: string;
+  osVersion?: string; osName?: string; osBuildId?: string; osInternalBuildId?: string; osBuildFingerprint?: string; platformApiLevel?: number;
+  appVersion?: string; appBuildVersion?: string; applicationId?: string;
+  deviceModel?: string; modelId?: string; deviceName?: string; manufacturer?: string; designName?: string; productName?: string; deviceYearClass?: number;
+  rooted?: boolean; appInstalledAt?: Date; appLastUpdatedAt?: Date;
+}
+export interface PunchNetworkInput { connectionType?: string; isConnected?: boolean; isInternetReachable?: boolean; reportedIp?: string; airplaneMode?: boolean; }
 export interface PunchLocationInput { latitude: number; longitude: number; accuracy?: number; altitude?: number; heading?: number; speed?: number; }
 
 export interface ClockInput {
@@ -19,24 +26,20 @@ export interface ClockInput {
   locationPermissionStatus?: string;
   publicIp?: string;
   device?: PunchDeviceInput;
+  network?: PunchNetworkInput;
   notes?: string;
 }
 export interface CheckInInput extends ClockInput { salonId?: string; eventId?: string; }
 
 interface PunchTiming { effectiveAt: Date; serverReceivedAt: Date; requiresReview: boolean; clockSkewMs: number; }
 
-function resolvePunchTiming(clientOccurredAt: Date, networkStatus: string, settings: AttendanceSettings): PunchTiming {
+function resolvePunchTiming(clientOccurredAt: Date, networkStatus: string): PunchTiming {
   const serverReceivedAt = new Date();
   const clockSkewMs = serverReceivedAt.getTime() - clientOccurredAt.getTime();
-  if (networkStatus === 'offline_sync') {
-    const ageMinutes = clockSkewMs / 60_000;
-    const maxAge = settings.offlinePunchMaxAgeMinutes;
-    if (ageMinutes >= -2 && ageMinutes <= maxAge) {
-      return { effectiveAt: clientOccurredAt, serverReceivedAt, requiresReview: ageMinutes > maxAge / 2, clockSkewMs };
-    }
-    return { effectiveAt: serverReceivedAt, serverReceivedAt, requiresReview: true, clockSkewMs };
-  }
-  return { effectiveAt: serverReceivedAt, serverReceivedAt, requiresReview: Math.abs(clockSkewMs) > 5 * 60_000, clockSkewMs };
+  // The phone timestamp is audit-only. The server is the sole authority for
+  // the official punch time, preventing a modified device clock from changing
+  // worked hours. An offline-sync payload is never accepted (see checkIn/out).
+  return { effectiveAt: serverReceivedAt, serverReceivedAt, requiresReview: networkStatus !== 'online' || Math.abs(clockSkewMs) > 5 * 60_000, clockSkewMs };
 }
 
 interface LocationValidationResult {
@@ -105,13 +108,14 @@ export async function checkIn(userId: string, input: CheckInInput) {
     if (existing.rejected) throw new ApiError(409, existing.rejectionReason === 'ALREADY_ACTIVE' ? 'ATTENDANCE_ALREADY_ACTIVE' : 'ATTENDANCE_DUPLICATE_REQUEST');
   }
 
+  if (input.networkStatus !== 'online') throw new ApiError(422, 'ATTENDANCE_ONLINE_REQUIRED');
   const settings = await getAttendanceSettings();
   const user = await assertMobileEligible(userId);
   const salonId: string | undefined = input.salonId || user.attendanceConfig?.defaultWorkLocationSalonId?.toString() || user.primarySalonId?.toString();
 
   if (user.attendanceConfig?.requiresGeolocation && !input.location) throw new ApiError(422, 'ATTENDANCE_LOCATION_REQUIRED');
 
-  const timing = resolvePunchTiming(input.clientOccurredAt, input.networkStatus, settings);
+  const timing = resolvePunchTiming(input.clientOccurredAt, input.networkStatus);
   const locationResult = await validateLocation(salonId, input.location, settings);
   if (locationResult.blocked) throw new ApiError(403, 'ATTENDANCE_OUTSIDE_GEOFENCE');
   if (locationResult.requiresReason && !input.notes?.trim()) throw new ApiError(422, 'ATTENDANCE_REASON_REQUIRED_OUTSIDE_AREA');
@@ -122,8 +126,8 @@ export async function checkIn(userId: string, input: CheckInInput) {
       userId, type: TimePunchType.CHECK_IN, source: TimePunchSource.MOBILE,
       clientOccurredAt: input.clientOccurredAt, serverReceivedAt: timing.serverReceivedAt, effectiveAt: timing.effectiveAt,
       location: input.location, locationPermissionStatus: input.locationPermissionStatus,
-      locationCapturedAt: input.location ? input.clientOccurredAt : undefined,
-      publicIp: input.publicIp, device: input.device, networkStatus: input.networkStatus, requestId: input.requestId,
+      locationCapturedAt: input.location ? timing.serverReceivedAt : undefined,
+      publicIp: input.publicIp, device: input.device, network: input.network, networkStatus: input.networkStatus, requestId: input.requestId,
       salonId, salonDistanceMeters: locationResult.distanceMeters, locationValidationStatus: locationResult.status,
       clockSkewMs: timing.clockSkewMs, notes: input.notes, createdBy: userId
     });
@@ -168,16 +172,13 @@ export async function checkOut(userId: string, input: ClockInput) {
     if (session && session.status !== WorkSessionStatus.ACTIVE) return { session, punch: existing, idempotentReplay: true };
   }
 
+  if (input.networkStatus !== 'online') throw new ApiError(422, 'ATTENDANCE_ONLINE_REQUIRED');
   const settings = await getAttendanceSettings();
   await assertMobileEligible(userId);
   const activeSession: any = await WorkSession.findOne({ userId, status: WorkSessionStatus.ACTIVE });
   if (!activeSession) throw new ApiError(409, 'ATTENDANCE_NO_ACTIVE_SESSION');
 
-  const timing = resolvePunchTiming(input.clientOccurredAt, input.networkStatus, settings);
-  if (timing.effectiveAt.getTime() <= activeSession.startedAt.getTime()) {
-    timing.effectiveAt = new Date(activeSession.startedAt.getTime() + 60_000);
-    timing.requiresReview = true;
-  }
+  const timing = resolvePunchTiming(input.clientOccurredAt, input.networkStatus);
 
   const locationResult = await validateLocation(activeSession.salonId?.toString(), input.location, settings);
   if (locationResult.blocked) throw new ApiError(403, 'ATTENDANCE_OUTSIDE_GEOFENCE');
@@ -189,8 +190,8 @@ export async function checkOut(userId: string, input: ClockInput) {
       userId, workSessionId: activeSession._id, type: TimePunchType.CHECK_OUT, source: TimePunchSource.MOBILE,
       clientOccurredAt: input.clientOccurredAt, serverReceivedAt: timing.serverReceivedAt, effectiveAt: timing.effectiveAt,
       location: input.location, locationPermissionStatus: input.locationPermissionStatus,
-      locationCapturedAt: input.location ? input.clientOccurredAt : undefined,
-      publicIp: input.publicIp, device: input.device, networkStatus: input.networkStatus, requestId: input.requestId,
+      locationCapturedAt: input.location ? timing.serverReceivedAt : undefined,
+      publicIp: input.publicIp, device: input.device, network: input.network, networkStatus: input.networkStatus, requestId: input.requestId,
       salonId: activeSession.salonId, salonDistanceMeters: locationResult.distanceMeters, locationValidationStatus: locationResult.status,
       clockSkewMs: timing.clockSkewMs, notes: input.notes, createdBy: userId
     });
@@ -259,8 +260,12 @@ export async function getSessionDetail(requesterId: string, sessionId: string, i
   const session: any = await WorkSession.findById(sessionId).lean();
   if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
   if (!isAdmin && session.userId.toString() !== requesterId) throw new ApiError(403, 'FORBIDDEN');
+  // A worker only needs their entry/exit timestamps. Location, distance,
+  // validation outcome and technical evidence are reserved for backoffice.
+  const punchesQuery = TimePunch.find({ workSessionId: sessionId }).sort({ effectiveAt: 1 });
+  if (!isAdmin) punchesQuery.select('_id type effectiveAt');
   const [punches, incidents, adjustments] = await Promise.all([
-    TimePunch.find({ workSessionId: sessionId }).sort({ effectiveAt: 1 }).lean(),
+    punchesQuery.lean(),
     AttendanceIncident.find({ workSessionId: sessionId }).sort({ createdAt: -1 }).lean(),
     AttendanceAdjustmentRequest.find({ workSessionId: sessionId }).sort({ createdAt: -1 }).lean()
   ]);

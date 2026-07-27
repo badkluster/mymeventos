@@ -20,9 +20,6 @@ export interface TimePunch {
   _id: string;
   type: 'check_in' | 'check_out';
   effectiveAt: string;
-  location?: { latitude: number; longitude: number; accuracy?: number };
-  locationValidationStatus?: string;
-  salonDistanceMeters?: number;
 }
 
 export interface AttendanceStatusResponse {

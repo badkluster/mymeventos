@@ -25,10 +25,35 @@ const locationSchema = z.object({
 const deviceFields = z.object({
   installationId: z.string().trim().optional(),
   platform: z.string().trim().optional(),
+  isPhysicalDevice: z.boolean().optional(),
+  deviceType: z.string().trim().optional(),
+  brand: z.string().trim().optional(),
   osVersion: z.string().trim().optional(),
+  osName: z.string().trim().optional(),
+  osBuildId: z.string().trim().optional(),
+  osInternalBuildId: z.string().trim().optional(),
+  osBuildFingerprint: z.string().trim().optional(),
+  platformApiLevel: z.number().int().nonnegative().optional(),
   appVersion: z.string().trim().optional(),
+  appBuildVersion: z.string().trim().optional(),
+  applicationId: z.string().trim().optional(),
   deviceModel: z.string().trim().optional(),
-  manufacturer: z.string().trim().optional()
+  modelId: z.string().trim().optional(),
+  deviceName: z.string().trim().optional(),
+  manufacturer: z.string().trim().optional(),
+  designName: z.string().trim().optional(),
+  productName: z.string().trim().optional(),
+  deviceYearClass: z.number().int().positive().optional(),
+  rooted: z.boolean().optional(),
+  appInstalledAt: z.coerce.date().optional(),
+  appLastUpdatedAt: z.coerce.date().optional()
+});
+const networkFields = z.object({
+  connectionType: z.string().trim().optional(),
+  isConnected: z.boolean().optional(),
+  isInternetReachable: z.boolean().optional(),
+  reportedIp: z.string().trim().max(128).optional(),
+  airplaneMode: z.boolean().optional()
 });
 const clockBaseFields = {
   requestId: z.string().trim().min(8).max(128),
@@ -37,6 +62,7 @@ const clockBaseFields = {
   location: locationSchema.optional(),
   locationPermissionStatus: z.string().trim().optional(),
   device: deviceFields.optional(),
+  network: networkFields.optional(),
   notes: z.string().trim().max(500).optional()
 };
 const checkInSchema = z.object({ body: z.object({ ...clockBaseFields, salonId: ObjectIdSchema.optional(), eventId: ObjectIdSchema.optional() }), params: z.object({}), query: z.object({}) });

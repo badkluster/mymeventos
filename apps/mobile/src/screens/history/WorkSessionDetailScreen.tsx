@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -10,9 +10,8 @@ import { LoadingState } from '../../components/LoadingState';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api, ApiClientError } from '../../lib/api';
-import { openLocationInMaps } from '../../lib/geo';
 import { colors, spacing, typography } from '../../theme/tokens';
-import { formatMinutes, locationValidationLabels, workSessionStatusLabels } from '../../lib/attendanceLabels';
+import { formatMinutes, workSessionStatusLabels } from '../../lib/attendanceLabels';
 import type { SessionDetailResponse } from '../../types/attendance';
 import type { HistoryStackParamList } from '../../navigation/types';
 
@@ -61,23 +60,12 @@ export function WorkSessionDetailScreen({ route, navigation }: Props) {
       </AppCard>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Marcaciones</Text>
+        <Text style={styles.sectionTitle}>Registros de horario</Text>
         {punches.map((punch) => (
           <View key={punch._id} style={styles.punchRow}>
             <View style={styles.punchHeaderRow}>
               <Text style={styles.punchType}>{punch.type === 'check_in' ? 'Entrada' : 'Salida'}</Text>
               <Text style={styles.value}>{formatDateTime(punch.effectiveAt)}</Text>
-            </View>
-            <View style={styles.punchMetaRow}>
-              <Text style={styles.punchMeta}>
-                {locationValidationLabels[punch.locationValidationStatus ?? ''] ?? 'Sin ubicación'}
-                {typeof punch.salonDistanceMeters === 'number' ? ` · ${Math.round(punch.salonDistanceMeters)} m del salón` : ''}
-              </Text>
-              {punch.location ? (
-                <Pressable onPress={() => openLocationInMaps(punch.location!)} hitSlop={8}>
-                  <Text style={styles.mapLink}>Ver en el mapa</Text>
-                </Pressable>
-              ) : null}
             </View>
           </View>
         ))}
@@ -116,10 +104,7 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.h3, color: colors.text },
   punchRow: { paddingVertical: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 4 },
   punchHeaderRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  punchMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   punchType: { ...typography.body, color: colors.text },
-  punchMeta: { ...typography.caption, color: colors.textSubtle, flex: 1, marginRight: spacing.sm },
-  mapLink: { ...typography.small, color: colors.info, fontWeight: '600' },
   listText: { ...typography.small, color: colors.textMuted },
   actions: { gap: spacing.sm }
 });

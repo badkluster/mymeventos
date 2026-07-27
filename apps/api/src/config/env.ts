@@ -36,7 +36,6 @@ const environmentSchema = z.object({
   MARKETING_CRON_SECRET: z.string().optional(),
   MOBILE_ACCESS_TOKEN_TTL: z.string().default('30m'),
   MOBILE_REFRESH_TOKEN_TTL: z.string().default('30d'),
-  MOBILE_OFFLINE_PUNCH_MAX_AGE_MINUTES: z.coerce.number().int().positive().default(720),
   MOBILE_DEEP_LINK_SCHEME: z.string().default('mymeventos'),
   ATTENDANCE_DEFAULT_TIMEZONE: z.string().default('America/Argentina/Buenos_Aires'),
   ATTENDANCE_DEFAULT_LOCATION_ACCURACY_METERS: z.coerce.number().positive().default(50),

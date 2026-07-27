@@ -93,7 +93,7 @@ const preferencesSchema = z.object({ theme: optionalText, language: optionalText
 const baseFields = z.object({
   username: z.string().trim().min(3).optional(),
   email: z.string().trim().email().optional(),
-  password: z.string().min(8).optional(),
+  password: z.string().min(8).max(256).optional(),
   firstName: z.string().trim().min(1).optional(),
   lastName: z.string().trim().min(1).optional(),
   phone: optionalText,
@@ -122,7 +122,7 @@ const baseFields = z.object({
   attendanceConfig: attendanceConfigSchema.optional(),
   preferences: preferencesSchema.optional()
 });
-const createSchema = z.object({ body: baseFields.extend({ username: z.string().trim().min(3), firstName: z.string().trim().min(1), lastName: z.string().trim().min(1) }), params: z.object({}), query: z.object({}) });
+const createSchema = z.object({ body: baseFields.extend({ username: z.string().trim().min(3), password: z.string().min(8).max(256), firstName: z.string().trim().min(1), lastName: z.string().trim().min(1) }), params: z.object({}), query: z.object({}) });
 const updateSchema = z.object({ body: baseFields.omit({ username: true, email: true, password: true }).partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'), params: z.object({ id: objectId }), query: z.object({}) });
 const rolesPatchSchema = z.object({ body: z.object({ roles: z.array(roleSchema).min(1), primaryRole: roleSchema.optional() }), params: z.object({ id: objectId }), query: z.object({}) });
 const permissionsPatchSchema = z.object({ body: z.object({ permissionOverrides: z.array(permissionSchema).default([]), permissionDeniedOverrides: z.array(permissionSchema).default([]) }), params: z.object({ id: objectId }), query: z.object({}) });
@@ -134,7 +134,7 @@ const attendancePatchSchema = z.object({ body: attendanceConfigSchema, params: z
 const staffProfilePatchSchema = z.object({ body: staffProfileSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const workSchedulePatchSchema = z.object({ body: workScheduleSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const payrollProfilePatchSchema = z.object({ body: payrollProfileSchema, params: z.object({ id: objectId }), query: z.object({}) });
-const passwordResetSchema = z.object({ body: z.object({ password: z.string().min(8).optional() }).default({}), params: z.object({ id: objectId }), query: z.object({}) });
+const passwordResetSchema = z.object({ body: z.object({ password: z.string().min(8).max(256).optional() }).default({}), params: z.object({ id: objectId }), query: z.object({}) });
 const deviceParams = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, deviceId: objectId }), query: z.object({}) });
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
@@ -151,6 +151,9 @@ function buildQuery(request: Request): Record<string, unknown> {
   const canAccessBackoffice = queryValue(request.query.canAccessBackoffice);
   if (canAccessBackoffice === 'true') terms.push({ canAccessBackoffice: true });
   if (canAccessBackoffice === 'false') terms.push({ canAccessBackoffice: false });
+  const attendanceEnabled = queryValue(request.query.attendanceEnabled);
+  if (attendanceEnabled === 'true') terms.push({ 'attendanceConfig.enabled': true });
+  if (attendanceEnabled === 'false') terms.push({ 'attendanceConfig.enabled': { $ne: true } });
   const salonId = queryValue(request.query.salonId);
   if (salonId && objectId.safeParse(salonId).success) terms.push({ salonIds: salonId });
   const managedSalonId = queryValue(request.query.managedSalonId);
@@ -191,19 +194,19 @@ router.get('/', requirePermission(Permission.USERS_READ), asyncHandler(async (re
 router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
   const roles = request.body.roles?.length ? request.body.roles : [Role.STAFF];
   const canAccessBackoffice = request.body.canAccessBackoffice ?? roles.some((role: Role) => [Role.ADMIN, Role.MANAGER, Role.SALON_MANAGER].includes(role));
-  const temporaryPassword = canAccessBackoffice ? request.body.password ?? generateTemporaryPassword() : request.body.password;
-  // Staff are ready to clock in as soon as their account is created. The stricter
-  // controls (geolocation, network and manual adjustments) remain opt-in.
+  // A new Staff account must always be able to use the mobile app with the
+  // password supplied at creation. Stricter attendance controls remain opt-in.
   const attendanceConfig = roles.includes(Role.STAFF)
-    ? { enabled: true, canUseMobileApp: true, ...request.body.attendanceConfig }
+    ? { ...request.body.attendanceConfig, enabled: true, canUseMobileApp: true }
     : request.body.attendanceConfig;
   const input = normalizeUserInput({ ...request.body, roles, attendanceConfig, canAccessBackoffice, mustChangePassword: canAccessBackoffice ? request.body.mustChangePassword ?? true : false });
   validatePrimarySalonFields({ ...input, salonIds: input.salonIds ?? [], managedSalonIds: input.managedSalonIds ?? [] });
   if (await User.exists({ username: input.username })) throw new ApiError(409, 'USERNAME_ALREADY_EXISTS');
-  const user = await User.create({ ...input, passwordHash: temporaryPassword ? await hashPassword(temporaryPassword) : undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
+  const { password, ...userInput } = input;
+  const user = await User.create({ ...userInput, passwordHash: await hashPassword(password), createdBy: request.user!.id, updatedBy: request.user!.id });
   if (input.managedSalonIds?.length) await syncUserManagedSalons(user._id.toString(), input.managedSalonIds, request.user!.id);
   await writeAuditLog(request, 'USER_CREATE', 'User', user._id.toString());
-  return sendSuccess(response, { user: sanitizeUser(user), temporaryPassword: canAccessBackoffice && !request.body.password ? temporaryPassword : undefined }, 201, getApiMessage('USER_CREATED'));
+  return sendSuccess(response, { user: sanitizeUser(user) }, 201, getApiMessage('USER_CREATED'));
 }));
 
 router.get('/:id', requirePermission(Permission.USERS_READ), validateRequest(idParams), asyncHandler(async (request, response) => sendSuccess(response, { user: await getUserOrFail(request.params.id), roles: Object.values(Role), permissions: availablePermissions })));
@@ -305,10 +308,11 @@ router.post('/:id/reset-password', requireRole(Role.ADMIN), validateRequest(pass
   const temporaryPassword = request.body.password ?? generateTemporaryPassword();
   const user = await User.findOneAndUpdate(
     { _id: request.params.id, deletedAt: null },
-    { $set: { passwordHash: await hashPassword(temporaryPassword), mustChangePassword: true, failedLoginAttempts: 0, updatedBy: request.user!.id }, $unset: { lockedUntil: 1 } },
+    { $set: { passwordHash: await hashPassword(temporaryPassword), mustChangePassword: true, lastPasswordChangeAt: new Date(), failedLoginAttempts: 0, updatedBy: request.user!.id }, $unset: { lockedUntil: 1 } },
     { new: true, runValidators: true }
   ).select('-passwordHash -passwordResetTokenHash');
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND');
+  await RefreshToken.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: new Date() });
   await writeAuditLog(request, 'USER_PASSWORD_RESET', 'User', request.params.id);
   return sendSuccess(response, { user: sanitizeUser(user), temporaryPassword: request.body.password ? undefined : temporaryPassword }, 200, getApiMessage('USER_PASSWORD_RESET'));
 }));

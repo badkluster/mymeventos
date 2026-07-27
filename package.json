@@ -8,6 +8,7 @@
     "dev:web": "pnpm --filter @mym/web run dev",
     "dev:api": "pnpm --filter @mym/api run dev",
     "dev:mobile": "pnpm --filter @mym/mobile run start",
+    "dev:mobile:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-mobile-android.ps1",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",

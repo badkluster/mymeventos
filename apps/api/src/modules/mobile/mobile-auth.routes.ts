@@ -24,10 +24,29 @@ const router = Router();
 const deviceFields = z.object({
   installationId: z.string().trim().min(1),
   platform: z.enum(['ios', 'android', 'web']),
+  isPhysicalDevice: z.boolean().optional(),
+  deviceType: z.string().trim().optional(),
+  brand: z.string().trim().optional(),
   osVersion: z.string().trim().optional(),
+  osName: z.string().trim().optional(),
+  osBuildId: z.string().trim().optional(),
+  osInternalBuildId: z.string().trim().optional(),
+  osBuildFingerprint: z.string().trim().optional(),
+  platformApiLevel: z.number().int().nonnegative().optional(),
   appVersion: z.string().trim().optional(),
+  appBuildVersion: z.string().trim().optional(),
+  applicationId: z.string().trim().optional(),
   deviceModel: z.string().trim().optional(),
-  manufacturer: z.string().trim().optional()
+  modelId: z.string().trim().optional(),
+  deviceName: z.string().trim().optional(),
+  manufacturer: z.string().trim().optional(),
+  designName: z.string().trim().optional(),
+  productName: z.string().trim().optional(),
+  deviceYearClass: z.number().int().positive().optional(),
+  rooted: z.boolean().optional(),
+  appInstalledAt: z.coerce.date().optional(),
+  appLastUpdatedAt: z.coerce.date().optional(),
+  network: z.object({ connectionType: z.string().trim().optional(), reportedIp: z.string().trim().max(128).optional() }).optional()
 });
 
 const loginSchema = z.object({
@@ -66,13 +85,17 @@ async function issueMobileTokens(user: any, installationId: string | undefined, 
   return { accessToken, refreshToken, accessTokenExpiresIn: env.MOBILE_ACCESS_TOKEN_TTL };
 }
 
-async function upsertDevice(userId: string, device: z.infer<typeof deviceFields>, pushToken?: string) {
+async function upsertDevice(userId: string, device: z.infer<typeof deviceFields>, request: any, pushToken?: string) {
   return MobileDevice.findOneAndUpdate(
     { userId, installationId: device.installationId },
     {
       $set: {
-        platform: device.platform, osVersion: device.osVersion, appVersion: device.appVersion,
-        deviceModel: device.deviceModel, manufacturer: device.manufacturer,
+        platform: device.platform, isPhysicalDevice: device.isPhysicalDevice, deviceType: device.deviceType, brand: device.brand,
+        osVersion: device.osVersion, osName: device.osName, osBuildId: device.osBuildId, osInternalBuildId: device.osInternalBuildId, osBuildFingerprint: device.osBuildFingerprint, platformApiLevel: device.platformApiLevel,
+        appVersion: device.appVersion, appBuildVersion: device.appBuildVersion, applicationId: device.applicationId,
+        deviceModel: device.deviceModel, modelId: device.modelId, deviceName: device.deviceName, manufacturer: device.manufacturer, designName: device.designName, productName: device.productName,
+        deviceYearClass: device.deviceYearClass, rooted: device.rooted, appInstalledAt: device.appInstalledAt, appLastUpdatedAt: device.appLastUpdatedAt,
+        lastPublicIp: request.ip, lastReportedIp: device.network?.reportedIp, lastConnectionType: device.network?.connectionType, lastUserAgent: request.get('user-agent'),
         ...(pushToken ? { pushToken } : {}), lastLoginAt: new Date(), lastUsedAt: new Date(), isActive: true
       },
       $unset: { revokedAt: 1, revokedBy: 1 },
@@ -96,9 +119,12 @@ router.post('/login', validateRequest(loginSchema), asyncHandler(async (request,
     throw new ApiError(403, 'MOBILE_ACCESS_DENIED');
   }
   await User.updateOne({ _id: user._id }, { lastLoginAt: new Date(), failedLoginAttempts: 0, $unset: { lockedUntil: 1 } });
-  await upsertDevice(user._id.toString(), request.body.device, request.body.pushToken);
+  await upsertDevice(user._id.toString(), request.body.device, request, request.body.pushToken);
   const tokens = await issueMobileTokens(user, request.body.device.installationId, request);
-  await writeAuditLog(request, 'AUTH_MOBILE_LOGIN_SUCCESS', 'User', user._id.toString(), { installationId: request.body.device.installationId });
+  await writeAuditLog(request, 'AUTH_MOBILE_LOGIN_SUCCESS', 'User', user._id.toString(), {
+    channel: 'mobile', installationId: request.body.device.installationId, platform: request.body.device.platform,
+    appVersion: request.body.device.appVersion, deviceModel: request.body.device.deviceModel
+  }, user._id.toString());
   return sendSuccess(response, { ...tokens, user: sanitizeUser(user) });
 }));
 

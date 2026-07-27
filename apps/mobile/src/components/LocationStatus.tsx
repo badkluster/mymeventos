@@ -5,11 +5,11 @@ import { StatusBadge, type StatusTone } from './StatusBadge';
 export type LocationState = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'low_accuracy';
 
 const copy: Record<LocationState, { label: string; tone: StatusTone; description: string }> = {
-  idle: { label: 'Ubicación', tone: 'neutral', description: 'Se solicitará al confirmar la marcación.' },
+  idle: { label: 'Ubicación', tone: 'neutral', description: 'Se solicitará al confirmar el registro de horario.' },
   requesting: { label: 'Buscando ubicación…', tone: 'info', description: 'Esto puede tardar unos segundos.' },
   ready: { label: 'Ubicación lista', tone: 'ok', description: 'Vamos a validar que estés en el salón correspondiente.' },
   denied: { label: 'Permiso denegado', tone: 'bad', description: 'Activá el permiso de ubicación para poder fichar.' },
-  unavailable: { label: 'Ubicación no disponible', tone: 'warn', description: 'La marcación quedará registrada para revisión.' },
+  unavailable: { label: 'Ubicación no disponible', tone: 'warn', description: 'El registro de horario quedará para revisión.' },
   low_accuracy: { label: 'Precisión baja', tone: 'warn', description: 'Movete a un lugar más despejado e intentá de nuevo.' }
 };
 

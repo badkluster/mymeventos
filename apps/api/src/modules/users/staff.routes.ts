@@ -9,7 +9,7 @@ import { hashPassword } from '../../utils/password';
 import { ApiError } from '../../middlewares/errorHandler';
 import { EventStaffAssignment } from '../crm/crm.models';
 import { User } from './user.model';
-import { generateTemporaryPassword, normalizeUserInput, sanitizeUser, validatePrimarySalonFields } from './user.service';
+import { normalizeUserInput, sanitizeUser, validatePrimarySalonFields } from './user.service';
 import { payrollProfileSchema, staffProfileSchema, workScheduleSchema } from './user.routes';
 
 const router = Router();
@@ -20,7 +20,7 @@ const createStaffSchema = z.object({
   body: z.object({
     username: z.string().trim().min(3),
     email: z.string().trim().email().optional().or(z.literal('')),
-    password: z.string().min(8).optional(),
+    password: z.string().min(8).max(256),
     firstName: z.string().trim().min(1),
     lastName: z.string().trim().min(1),
     phone: optionalText,
@@ -75,7 +75,6 @@ router.get('/', requirePermission(Permission.USERS_READ), asyncHandler(async (re
 
 router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(createStaffSchema), asyncHandler(async (request, response) => {
   const canAccessBackoffice = request.body.canAccessBackoffice ?? false;
-  const temporaryPassword = canAccessBackoffice ? request.body.password ?? generateTemporaryPassword() : request.body.password;
   const input = normalizeUserInput({
     ...request.body,
     roles: [Role.STAFF],
@@ -85,8 +84,9 @@ router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(cre
     mustChangePassword: canAccessBackoffice
   });
   validatePrimarySalonFields({ ...input, salonIds: input.salonIds ?? [], managedSalonIds: [] });
-  const user = await User.create({ ...input, email: input.email || undefined, passwordHash: temporaryPassword ? await hashPassword(temporaryPassword) : undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
-  return sendSuccess(response, { staff: sanitizeUser(user), user: sanitizeUser(user), temporaryPassword: canAccessBackoffice && !request.body.password ? temporaryPassword : undefined }, 201);
+  const { password, ...staffInput } = input;
+  const user = await User.create({ ...staffInput, email: staffInput.email || undefined, passwordHash: await hashPassword(password), createdBy: request.user!.id, updatedBy: request.user!.id });
+  return sendSuccess(response, { staff: sanitizeUser(user), user: sanitizeUser(user) }, 201);
 }));
 
 router.get('/:id', requirePermission(Permission.USERS_READ), validateRequest(idParams), asyncHandler(async (request, response) => {
