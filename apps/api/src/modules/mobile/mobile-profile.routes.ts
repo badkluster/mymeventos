@@ -52,7 +52,9 @@ router.get('/', requirePermission(Permission.PROFILE_VIEW_SELF), asyncHandler(as
 
 router.patch('/', requirePermission(Permission.PROFILE_UPDATE_SELF), validateRequest(profileSchema), asyncHandler(async (request, response) => {
   const email = normalizeUserEmail(request.body.email || undefined);
-  if (email) {
+  const currentUser: any = await User.findOne({ _id: request.user!.id, deletedAt: null }).lean();
+  const currentEmail = normalizeUserEmail(currentUser?.email ?? currentUser?.normalizedEmail);
+  if (email && email !== currentEmail) {
     const exists = await User.exists({ _id: { $ne: request.user!.id }, normalizedEmail: email, deletedAt: null });
     if (exists) throw new ApiError(409, 'EMAIL_ALREADY_EXISTS');
   }
@@ -91,13 +93,13 @@ router.patch('/', requirePermission(Permission.PROFILE_UPDATE_SELF), validateReq
 // apps/api/src/modules/uploads/uploads.routes.ts. This endpoint only persists the
 // resulting URL onto the caller's own profile, mirroring the web's avatar flow exactly
 // (apps/web/src/app/admin/profile/page.tsx: upload first, then PATCH the URL).
-router.post('/avatar', requirePermission(Permission.PROFILE_AVATAR_UPDATE), validateRequest(avatarSchema), asyncHandler(async (request, response) => {
+router.post('/avatar', requirePermission(Permission.PROFILE_UPDATE_SELF), validateRequest(avatarSchema), asyncHandler(async (request, response) => {
   const user = await User.findOneAndUpdate({ _id: request.user!.id, deletedAt: null }, { avatarUrl: request.body.avatarUrl, updatedBy: request.user!.id }, { new: true }).lean();
   await writeAuditLog(request, 'MOBILE_AVATAR_UPDATE', 'User', request.user!.id);
   return sendSuccess(response, { user: sanitizeUser(user) });
 }));
 
-router.delete('/avatar', requirePermission(Permission.PROFILE_AVATAR_UPDATE), asyncHandler(async (request, response) => {
+router.delete('/avatar', requirePermission(Permission.PROFILE_UPDATE_SELF), asyncHandler(async (request, response) => {
   const user = await User.findOneAndUpdate({ _id: request.user!.id, deletedAt: null }, { $unset: { avatarUrl: 1 }, updatedBy: request.user!.id }, { new: true }).lean();
   await writeAuditLog(request, 'MOBILE_AVATAR_DELETE', 'User', request.user!.id);
   return sendSuccess(response, { user: sanitizeUser(user) });

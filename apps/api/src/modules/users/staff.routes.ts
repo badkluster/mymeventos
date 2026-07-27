@@ -10,7 +10,7 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { EventStaffAssignment } from '../crm/crm.models';
 import { User } from './user.model';
 import { normalizeUserInput, sanitizeUser, validatePrimarySalonFields } from './user.service';
-import { payrollProfileSchema, staffProfileSchema, workScheduleSchema } from './user.routes';
+import { staffProfileSchema, workScheduleSchema } from './user.routes';
 
 const router = Router();
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
@@ -31,8 +31,7 @@ const createStaffSchema = z.object({
     canAccessBackoffice: z.boolean().optional(),
     active: z.boolean().optional(),
     staffProfile: staffProfileSchema.optional(),
-    workSchedule: workScheduleSchema.optional(),
-    payrollProfile: payrollProfileSchema.optional()
+    workSchedule: workScheduleSchema.optional()
   }),
   params: z.object({}),
   query: z.object({})
@@ -70,7 +69,8 @@ router.get('/', requirePermission(Permission.USERS_READ), asyncHandler(async (re
     User.countDocuments(query),
     staffQuery(query).sort({ fullName: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
   ]);
-  return sendSuccess(response, { items: staff, staff, meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 }, staffSubroles: Object.values(StaffSubrole), employmentStatuses: Object.values(StaffEmploymentStatus) });
+  const sanitizedStaff = staff.map(sanitizeUser);
+  return sendSuccess(response, { items: sanitizedStaff, staff: sanitizedStaff, meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 }, staffSubroles: Object.values(StaffSubrole), employmentStatuses: Object.values(StaffEmploymentStatus) });
 }));
 
 router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(createStaffSchema), asyncHandler(async (request, response) => {
@@ -92,7 +92,8 @@ router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(cre
 router.get('/:id', requirePermission(Permission.USERS_READ), validateRequest(idParams), asyncHandler(async (request, response) => {
   const staff = await staffQuery({ _id: request.params.id, roles: Role.STAFF, deletedAt: null }).lean().then((items) => items[0]);
   if (!staff) throw new ApiError(404, 'STAFF_NOT_FOUND');
-  return sendSuccess(response, { staff, user: staff, staffSubroles: Object.values(StaffSubrole), employmentStatuses: Object.values(StaffEmploymentStatus) });
+  const sanitizedStaff = sanitizeUser(staff);
+  return sendSuccess(response, { staff: sanitizedStaff, user: sanitizedStaff, staffSubroles: Object.values(StaffSubrole), employmentStatuses: Object.values(StaffEmploymentStatus) });
 }));
 
 router.patch('/:id', requirePermission(Permission.USERS_UPDATE), validateRequest(updateStaffSchema), asyncHandler(async (request, response) => {

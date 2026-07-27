@@ -44,12 +44,20 @@ Editable desde el backoffice: `GET/PATCH /api/salons/:id/attendance-location-rul
         check-in
 (none) ────────────► active ───check-out (sin problemas)──► completed
                         │                                       
-                        ├──check-out (requiresReview)─────► under_review
+        ├──check-out (requiresReview)─────► under_review
                         │
                         ├──cierre administrativo──────────► incomplete
                         │
                         └──corrección aprobada────────────► adjusted
 ```
+
+Una jornada cerrada marcada para revisión se resuelve desde el Historial del
+backoffice. Un usuario con `attendance.manage` debe seleccionar el estado final
+(`completed`, `incomplete` o `cancelled`) y puede ingresar una nota. La decisión limpia
+`requiresReview`, guarda quién y cuándo la realizó, y se registra en `AuditLog` como
+`ATTENDANCE_SESSION_REVIEW`; no modifica las marcaciones originales. Esto también
+permite confirmar el estado definitivo de un cierre administrativo (`incomplete`)
+que quedó señalado para revisión.
 `cancelled` está en el enum compartido para uso futuro (p. ej. anular una jornada creada por error) pero **ningún endpoint la asigna todavía** — documentado, no fingido como implementado.
 
 `AttendanceClassification` (`on_time`/`late`/`absent`/`incomplete`/`justified`/`not_scheduled`/`under_review`) se calcula en `classifySession()`: si la jornada no tiene `assignmentId` (sin turno asignado) → `not_scheduled`; si el turno tiene `shiftStart` y el check-in llegó después de la tolerancia (`lateToleranceMinutes`, configurable) → `late`; si no → `on_time`. Deliberadamente simple — la tarea pide explícitamente **no** inventar reglas de presentismo/liquidación (sección 24/25 del prompt original); esto deja los datos listos para que un motor de liquidación futuro los consuma (`workedMinutes`, `payableMinutes`, `attendanceClassification`, `hasIncident`, ajustes aprobados), sin calcular nada económico.

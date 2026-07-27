@@ -166,4 +166,38 @@ describe('attendance.service', () => {
       expect(result.session.requiresReview).toBe(true);
     });
   });
+
+  describe('reviewSession', () => {
+    it('resolves a flagged closed session and clears its review marker', async () => {
+      const sessionId = new Types.ObjectId().toString();
+      const reviewed = { _id: sessionId, status: WorkSessionStatus.COMPLETED, requiresReview: false };
+      mocks.workSessionFindOneAndUpdate.mockResolvedValue(reviewed);
+
+      const result = await attendanceService.reviewSession(sessionId, userId, WorkSessionStatus.COMPLETED, 'Ubicación verificada por administración.');
+
+      expect(result).toBe(reviewed);
+      expect(mocks.workSessionFindOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: sessionId,
+          status: { $ne: WorkSessionStatus.ACTIVE },
+          $or: [{ requiresReview: true }, { status: WorkSessionStatus.UNDER_REVIEW }]
+        },
+        expect.objectContaining({
+          status: WorkSessionStatus.COMPLETED,
+          requiresReview: false,
+          reviewedBy: userId,
+          reviewNotes: 'Ubicación verificada por administración.'
+        }),
+        { new: true }
+      );
+    });
+
+    it('rejects a session that is no longer pending review', async () => {
+      mocks.workSessionFindOneAndUpdate.mockResolvedValue(null);
+
+      await expect(
+        attendanceService.reviewSession(new Types.ObjectId().toString(), userId, WorkSessionStatus.COMPLETED, 'Ya fue revisada.')
+      ).rejects.toMatchObject({ status: 409, code: 'ATTENDANCE_SESSION_NOT_REVIEWABLE' });
+    });
+  });
 });

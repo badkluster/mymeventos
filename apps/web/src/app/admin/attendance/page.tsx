@@ -3,6 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, ClipboardList, History, MapPin, Settings2, ShieldAlert, Square, UserRound } from 'lucide-react';
 import { Permission } from '@mym/shared';
 import { api } from '@/lib/api';
@@ -42,10 +43,13 @@ function sessionStatusTone(status: WorkSession['status']): 'ok' | 'warn' | 'bad'
 export default function AttendancePage() {
   const { showToast } = useToast();
   const { user: sessionUser } = useSession();
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams?.get('tab');
+  const requestedSessionId = searchParams?.get('sessionId');
   const canManage = userCanAccess(sessionUser, [Permission.ATTENDANCE_MANAGE]);
   const canManageSettings = userCanAccess(sessionUser, [Permission.ATTENDANCE_SETTINGS_MANAGE]);
 
-  const [tab, setTab] = useState<Tab>('active');
+  const [tab, setTab] = useState<Tab>(() => requestedTab === 'history' ? 'history' : 'active');
   const [loading, setLoading] = useState(false);
   const [salons, setSalons] = useState<SalonOption[]>([]);
 
@@ -74,6 +78,8 @@ export default function AttendancePage() {
 
   const [closeTarget, setCloseTarget] = useState<WorkSession | null>(null);
   const [closeReason, setCloseReason] = useState('');
+  const [sessionReviewTarget, setSessionReviewTarget] = useState<WorkSession | null>(null);
+  const [sessionReviewForm, setSessionReviewForm] = useState<{ status: 'completed' | 'incomplete' | 'cancelled'; reviewNotes: string }>({ status: 'completed', reviewNotes: '' });
   const [resolveTarget, setResolveTarget] = useState<AttendanceIncident | null>(null);
   const [resolveForm, setResolveForm] = useState({ status: 'resolved', resolution: '' });
   const [reviewTarget, setReviewTarget] = useState<AttendanceAdjustmentRequest | null>(null);
@@ -161,11 +167,12 @@ export default function AttendancePage() {
     if (tab === 'settings' && canManageSettings) void loadSettings();
   }, [tab, loadActive, loadHistory, loadIncidents, loadAdjustments, loadSettings, canManageSettings]);
 
-  async function openDetail(session: WorkSession) {
-    setDetailSession(session);
+  const openDetail = useCallback(async (session: WorkSession | string) => {
+    const sessionId = typeof session === 'string' ? session : session._id;
+    if (typeof session !== 'string') setDetailSession(session);
     setLoadingDetail(true);
     try {
-      const response = await api.get<{ session: WorkSession; punches: TimePunch[]; incidents: AttendanceIncident[]; adjustments: AttendanceAdjustmentRequest[] }>(`/attendance/sessions/${session._id}`);
+      const response = await api.get<{ session: WorkSession; punches: TimePunch[]; incidents: AttendanceIncident[]; adjustments: AttendanceAdjustmentRequest[] }>(`/attendance/sessions/${sessionId}`);
       setDetailSession(response.session);
       setDetailPunches(response.punches ?? []);
       setDetailIncidents(response.incidents ?? []);
@@ -176,7 +183,10 @@ export default function AttendancePage() {
     } finally {
       setLoadingDetail(false);
     }
-  }
+  }, [showToast]);
+
+  useEffect(() => { if (requestedTab === 'history') setTab('history'); }, [requestedTab]);
+  useEffect(() => { if (tab === 'history' && requestedSessionId) void openDetail(requestedSessionId); }, [openDetail, requestedSessionId, tab]);
 
   async function confirmClose() {
     if (!closeTarget || !closeReason.trim()) return;
@@ -189,6 +199,23 @@ export default function AttendancePage() {
       await loadActive();
     } catch (error) {
       showToast({ message: errorMessage(error, 'No se pudo cerrar la jornada.'), variant: 'error' });
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function confirmSessionReview() {
+    if (!sessionReviewTarget) return;
+    setActing(true);
+    try {
+      const reviewNotes = sessionReviewForm.reviewNotes.trim();
+      await api.post(`/attendance/sessions/${sessionReviewTarget._id}/review`, { status: sessionReviewForm.status, ...(reviewNotes ? { reviewNotes } : {}) });
+      showToast({ message: 'Jornada revisada correctamente.', variant: 'success' });
+      setSessionReviewTarget(null);
+      setSessionReviewForm({ status: 'completed', reviewNotes: '' });
+      await loadHistory();
+    } catch (error) {
+      showToast({ message: errorMessage(error, 'No se pudo revisar la jornada.'), variant: 'error' });
     } finally {
       setActing(false);
     }
@@ -287,7 +314,7 @@ export default function AttendancePage() {
             <td className="px-5 py-4 text-zinc-600">{formatDateTime(session.endedAt)}</td>
             <td className="px-5 py-4 font-semibold text-zinc-950">{formatMinutes(session.workedMinutes)}</td>
             <td className="px-5 py-4"><StatusBadge label={workSessionStatusLabels[session.status]} tone={sessionStatusTone(session.status)} /></td>
-            <td className="px-5 py-4 text-right"><Button variant="secondary" onClick={() => void openDetail(session)}>Ver detalle</Button></td>
+            <td className="px-5 py-4 text-right"><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => void openDetail(session)}>Ver detalle</Button>{canManage && session.status !== 'active' && (session.requiresReview || session.status === 'under_review') ? <Button onClick={() => { setSessionReviewTarget(session); setSessionReviewForm({ status: 'completed', reviewNotes: '' }); }}>Revisar estado</Button> : null}</div></td>
           </tr>)}</tbody>
         </table></div>
         {!loading && !historySessions.length && <div className="grid place-items-center px-6 py-14 text-center"><History className="h-9 w-9 text-zinc-400" /><p className="mt-3 text-sm text-zinc-500">No hay jornadas para los filtros seleccionados.</p></div>}
@@ -324,6 +351,7 @@ export default function AttendancePage() {
         {loadingDetail ? <p className="text-sm text-zinc-500">Cargando…</p> : detailSession && <>
           <dl className="grid gap-3 text-sm sm:grid-cols-2"><Metric label="Estado" value={workSessionStatusLabels[detailSession.status]} /><Metric label="Horas trabajadas" value={formatMinutes(detailSession.workedMinutes)} /><Metric label="Inicio" value={formatDateTime(detailSession.startedAt)} /><Metric label="Fin" value={formatDateTime(detailSession.endedAt)} /></dl>
           {detailSession.closeReason ? <section className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5"><h3 className="text-sm font-semibold text-amber-950">Cierre administrativo</h3><p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">{detailSession.closeReason}</p></section> : null}
+          {detailSession.reviewNotes ? <section className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5"><h3 className="text-sm font-semibold text-emerald-950">Revisión administrativa</h3><p className="mt-1 whitespace-pre-wrap text-sm text-emerald-900">{detailSession.reviewNotes}</p>{detailSession.reviewedAt ? <p className="mt-1 text-xs text-emerald-700">{formatDateTime(detailSession.reviewedAt)}</p> : null}</section> : null}
           <div><h3 className="text-sm font-semibold text-zinc-900">Registros de horario</h3><div className="mt-2 space-y-2">{detailPunches.map((punch) => <div key={punch._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">
             <div className="flex items-center justify-between"><span className="font-medium text-zinc-900">{punch.type === 'check_in' ? 'Entrada' : punch.type === 'check_out' ? 'Salida' : punch.type}</span><span className="text-zinc-500">{formatDateTime(punch.effectiveAt)}</span></div>
              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
@@ -332,9 +360,10 @@ export default function AttendancePage() {
              </div>
              <PunchTechnicalDetails punch={punch} />
            </div>)}{!detailPunches.length && <p className="text-sm text-zinc-500">Sin registros de horario.</p>}</div></div>
-          {Boolean(detailIncidents.length) && <div><h3 className="text-sm font-semibold text-zinc-900">Incidencias</h3><div className="mt-2 space-y-2">{detailIncidents.map((incident) => <div key={incident._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">{attendanceIncidentTypeLabels[incident.type] ?? incident.type} · {attendanceIncidentStatusLabels[incident.status]}</div>)}</div></div>}
-          {Boolean(detailAdjustments.length) && <div><h3 className="text-sm font-semibold text-zinc-900">Correcciones solicitadas</h3><div className="mt-2 space-y-2">{detailAdjustments.map((adjustment) => <div key={adjustment._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">{adjustment.reason} · {attendanceAdjustmentStatusLabels[adjustment.status]}</div>)}</div></div>}
-        </>}
+           {Boolean(detailIncidents.length) && <div><h3 className="text-sm font-semibold text-zinc-900">Incidencias</h3><div className="mt-2 space-y-2">{detailIncidents.map((incident) => <div key={incident._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">{attendanceIncidentTypeLabels[incident.type] ?? incident.type} · {attendanceIncidentStatusLabels[incident.status]}</div>)}</div></div>}
+           {Boolean(detailAdjustments.length) && <div><h3 className="text-sm font-semibold text-zinc-900">Correcciones solicitadas</h3><div className="mt-2 space-y-2">{detailAdjustments.map((adjustment) => <div key={adjustment._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">{adjustment.reason} · {attendanceAdjustmentStatusLabels[adjustment.status]}</div>)}</div></div>}
+           {canManage && detailSession.status !== 'active' && (detailSession.requiresReview || detailSession.status === 'under_review') ? <div className="flex justify-end border-t border-zinc-100 pt-4"><Button onClick={() => { setSessionReviewTarget(detailSession); setSessionReviewForm({ status: 'completed', reviewNotes: '' }); }}>Revisar estado de jornada</Button></div> : null}
+         </>}
       </div>
     </Modal>
 
@@ -349,6 +378,14 @@ export default function AttendancePage() {
 
     <Modal open={Boolean(closeTarget)} onClose={() => setCloseTarget(null)} title="Cerrar jornada administrativamente" description={closeTarget ? `${personName(closeTarget.userId)} · jornada iniciada el ${formatDateTime(closeTarget.startedAt)}` : ''}>
       <div className="space-y-4 p-6"><Textarea placeholder="Motivo del cierre administrativo" value={closeReason} onChange={(event) => setCloseReason(event.target.value)} /><footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setCloseTarget(null)}>Cancelar</Button><Button variant="danger" disabled={acting || !closeReason.trim()} onClick={() => void confirmClose()}>{acting ? 'Cerrando…' : 'Cerrar jornada'}</Button></footer></div>
+    </Modal>
+
+    <Modal open={Boolean(sessionReviewTarget)} onClose={() => setSessionReviewTarget(null)} title="Revisar estado de jornada" description={sessionReviewTarget ? `${personName(sessionReviewTarget.userId)} · ${formatDateTime(sessionReviewTarget.startedAt)}` : ''}>
+      <div className="space-y-4 p-6">
+        <FilterField label="Estado final"><Select value={sessionReviewForm.status} onChange={(event) => setSessionReviewForm((current) => ({ ...current, status: event.target.value as 'completed' | 'incomplete' | 'cancelled' }))}><option value="completed">Completada</option><option value="incomplete">Incompleta</option><option value="cancelled">Cancelada</option></Select></FilterField>
+        <Textarea placeholder="Motivo de la decisión (opcional)" value={sessionReviewForm.reviewNotes} onChange={(event) => setSessionReviewForm((current) => ({ ...current, reviewNotes: event.target.value }))} />
+        <footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setSessionReviewTarget(null)}>Cancelar</Button><Button disabled={acting} onClick={() => void confirmSessionReview()}>{acting ? 'Guardando…' : 'Confirmar revisión'}</Button></footer>
+      </div>
     </Modal>
 
     <Modal open={Boolean(resolveTarget)} onClose={() => setResolveTarget(null)} title="Revisar incidencia" description={resolveTarget ? personName(resolveTarget.userId) : ''}>

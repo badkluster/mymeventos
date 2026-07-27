@@ -15,24 +15,31 @@ router.post('/logout-all', requireAuth, asyncHandler(async (request, response) =
 router.get('/me', requireAuth, asyncHandler(async (request, response) => { const user = await User.findById(request.user!.id).lean(); return sendSuccess(response, { user: safeUser(user) }); }));
 router.patch('/profile', requireAuth, validateRequest(profileSchema), asyncHandler(async (request, response) => {
   const email = normalizeUserEmail(request.body.email || undefined);
-  if (email) {
+  const currentUser: any = await User.findOne({ _id: request.user!.id, deletedAt: null }).lean();
+  const currentEmail = normalizeUserEmail(currentUser?.email ?? currentUser?.normalizedEmail);
+  if (email && email !== currentEmail) {
     const exists = await User.exists({ _id: { $ne: request.user!.id }, normalizedEmail: email, deletedAt: null });
     if (exists) throw new ApiError(409, 'EMAIL_ALREADY_EXISTS');
   }
-  const update = {
+  const set: Record<string, unknown> = {
     firstName: request.body.firstName,
     lastName: request.body.lastName,
     fullName: buildUserFullName(request.body.firstName, request.body.lastName),
-    email,
-    normalizedEmail: email,
-    phone: request.body.phone || undefined,
-    normalizedPhone: normalizeUserPhone(request.body.phone || undefined),
-    documentType: request.body.documentType || undefined,
-    documentNumber: request.body.documentNumber || undefined,
-    avatarUrl: request.body.avatarUrl || undefined,
     updatedBy: request.user!.id
   };
-  const user = await User.findOneAndUpdate({ _id: request.user!.id, deletedAt: null }, update, { new: true, runValidators: true }).lean();
+  const unset: Record<string, 1> = {};
+  const setOptionalText = (field: string, value?: string) => {
+    if (value) set[field] = value;
+    else unset[field] = 1;
+  };
+  setOptionalText('email', email);
+  setOptionalText('normalizedEmail', email);
+  setOptionalText('phone', request.body.phone);
+  setOptionalText('normalizedPhone', normalizeUserPhone(request.body.phone || undefined));
+  setOptionalText('documentType', request.body.documentType);
+  setOptionalText('documentNumber', request.body.documentNumber);
+  setOptionalText('avatarUrl', request.body.avatarUrl);
+  const user = await User.findOneAndUpdate({ _id: request.user!.id, deletedAt: null }, { $set: set, ...(Object.keys(unset).length ? { $unset: unset } : {}) }, { new: true, runValidators: true }).lean();
   await writeAuditLog(request, 'AUTH_PROFILE_UPDATE', 'User', request.user!.id);
   return sendSuccess(response, { user: safeUser(user) }, 200, 'Perfil actualizado correctamente.');
 }));

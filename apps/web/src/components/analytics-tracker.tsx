@@ -39,6 +39,12 @@ function operatingSystem() {
   if (/Windows/.test(ua)) return 'Windows'; if (/Android/.test(ua)) return 'Android'; if (/iPhone|iPad/.test(ua)) return 'iOS'; if (/Mac OS/.test(ua)) return 'macOS'; if (/Linux/.test(ua)) return 'Linux';
   return 'Otro';
 }
+function analyticsElementId(target: HTMLElement) {
+  if (target.dataset.analyticsId) return target.dataset.analyticsId;
+  const description = target.getAttribute('aria-label') || target.textContent || target.getAttribute('title') || '';
+  const slug = description.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-AR').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90);
+  return slug ? `element-${slug}` : 'unidentified';
+}
 export function analyticsAttributionId() {
   if (typeof window === 'undefined') return '';
   return identifier(window.localStorage, attributionKey);
@@ -119,7 +125,7 @@ export function AnalyticsTracker() {
       const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-analytics-id],a,button') : null;
       if (!target) return;
       const sectionId = target.closest<HTMLElement>('[data-analytics-section]')?.dataset.analyticsSection;
-      const elementId = target.dataset.analyticsId || 'unidentified';
+      const elementId = analyticsElementId(target);
       const href = target instanceof HTMLAnchorElement ? target.href : '';
       let eventName: AnalyticsName = target.dataset.analyticsId ? 'cta_click' : 'click';
       if (/wa\.me|whatsapp/i.test(href) || /whatsapp/i.test(elementId)) eventName = 'whatsapp_click';

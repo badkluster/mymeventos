@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { Role } from '@mym/shared';
+import { Permission, Role } from '@mym/shared';
 
 const mocks = vi.hoisted(() => ({
   userFindOne: vi.fn(),
@@ -103,5 +103,59 @@ describe('mobile profile routes', () => {
 
     expect(response.status).toBe(400);
     expect(mocks.userFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('allows saving other profile fields when an unchanged legacy email is duplicated', async () => {
+    const token = generateAccessToken({ sub: userId, username: 'juanc' });
+    const userWithLegacyEmail = { ...authenticatedUser, email: 'juan@example.com', normalizedEmail: 'juan@example.com' };
+    mocks.userFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(userWithLegacyEmail) });
+    mocks.userExists.mockResolvedValue({ _id: 'another-user' });
+
+    const response = await request(app)
+      .patch('/api/mobile/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ firstName: 'Juan', lastName: 'Caballo', email: 'juan@example.com', phone: '2214205710' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.userExists).not.toHaveBeenCalled();
+    expect(mocks.userFindOneAndUpdate).toHaveBeenCalled();
+  });
+
+  it('explains when the user changes their email to one already used by someone else', async () => {
+    const token = generateAccessToken({ sub: userId, username: 'juanc' });
+    const currentUser = { ...authenticatedUser, email: 'juan@example.com', normalizedEmail: 'juan@example.com' };
+    mocks.userFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(currentUser) });
+    mocks.userExists.mockResolvedValue({ _id: 'another-user' });
+
+    const response = await request(app)
+      .patch('/api/mobile/me')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ firstName: 'Juan', lastName: 'Caballo', email: 'otro.usuario@example.com' });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toMatchObject({ code: 'EMAIL_ALREADY_EXISTS', message: 'El correo electrónico ya está asociado a otro usuario.' });
+    expect(mocks.userFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('lets a mobile user who can edit their profile update their own avatar', async () => {
+    const token = generateAccessToken({ sub: userId, username: 'juanc' });
+    const managerWithMobileProfileAccess = {
+      ...authenticatedUser,
+      roles: [Role.MANAGER],
+      permissionOverrides: [Permission.PROFILE_UPDATE_SELF]
+    };
+    mocks.userFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(managerWithMobileProfileAccess) });
+
+    const response = await request(app)
+      .post('/api/mobile/me/avatar')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ avatarUrl: 'https://res.cloudinary.com/mym/image/upload/avatar.jpg' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.userFindOneAndUpdate).toHaveBeenCalledWith(
+      { _id: userId, deletedAt: null },
+      expect.objectContaining({ avatarUrl: 'https://res.cloudinary.com/mym/image/upload/avatar.jpg', updatedBy: userId }),
+      expect.objectContaining({ new: true })
+    );
   });
 });

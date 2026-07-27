@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Bell, BriefcaseBusiness, Clock3, KeyRound, MapPin, Save, ShieldCheck, UserRound, UserRoundCog } from 'lucide-react';
 import { api } from '@/lib/api';
-import { displayLabel, payrollPaymentTypeLabels, roleLabels, staffSubroleLabels } from '@/lib/display-labels';
+import { displayLabel, roleLabels, staffSubroleLabels } from '@/lib/display-labels';
 import { userCanAccess } from '@/lib/admin-permissions';
 import { permissionAreas } from '@/lib/permission-areas';
 import { Button, Input, PageHeader, Select, Textarea } from '@/components/ui/primitives';
@@ -23,7 +23,6 @@ type User = {
   employeeProfile?: { employeeCode?: string; position?: string; department?: string; employmentStatus?: string; emergencyContactName?: string; emergencyContactPhone?: string; notes?: string };
   staffProfile?: { staffCode?: string; staffSubroles?: string[]; employmentStatus?: string; notes?: string };
   workSchedule?: { type?: string; weeklyAvailability?: Array<{ dayOfWeek: number; enabled?: boolean; startTime?: string; endTime?: string }>; notes?: string };
-  payrollProfile?: { paymentType?: string; eventRate?: number; hourlyRate?: number; monthlySalary?: number; currency?: string; paymentNotes?: string; active?: boolean };
   attendanceConfig?: { enabled?: boolean; canUseMobileApp?: boolean; requiresGeolocation?: boolean; requiresWifiOrIpValidation?: boolean; allowedIpAddresses?: string[]; allowManualAdjustment?: boolean; notes?: string };
 };
 type DetailResponse = { user: User; roles: string[]; permissions: string[] };
@@ -61,6 +60,7 @@ export default function UserDetailPage() {
   const isAdmin = sessionUser?.roles?.includes('ADMIN') ?? false;
   const canUpdate = userCanAccess(sessionUser, [Permission.USERS_UPDATE]);
   const canReadAttendance = userCanAccess(sessionUser, [Permission.ATTENDANCE_READ]);
+  const canManagePayrollProfiles = userCanAccess(sessionUser, [Permission.PAYROLL_MANAGE_PROFILES, Permission.PAYROLL_MANAGE]);
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<string[]>(Object.keys(roleLabels));
   const [permissions, setPermissions] = useState<string[]>(Object.values(Permission));
@@ -74,7 +74,7 @@ export default function UserDetailPage() {
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [notifications, setNotifications] = useState<Record<string, boolean>>({});
   const [employee, setEmployee] = useState({ employeeCode: '', position: '', department: '', employmentStatus: 'active', emergencyContactName: '', emergencyContactPhone: '', notes: '' });
-  const [operation, setOperation] = useState({ staffCode: '', staffSubroles: [] as string[], notes: '', scheduleType: 'EVENT_BASED', scheduleNotes: '', paymentType: 'PER_EVENT', eventRate: '', hourlyRate: '', monthlySalary: '', currency: 'ARS', paymentNotes: '' });
+  const [operation, setOperation] = useState({ staffCode: '', staffSubroles: [] as string[], notes: '', scheduleType: 'EVENT_BASED', scheduleNotes: '' });
   const [attendance, setAttendance] = useState({ enabled: false, canUseMobileApp: true, requiresGeolocation: false, requiresWifiOrIpValidation: false, allowedIpAddresses: '', allowManualAdjustment: false, notes: '' });
   const [attendanceOverview, setAttendanceOverview] = useState<AttendanceOverview | null>(null);
   const [attendanceOverviewLoading, setAttendanceOverviewLoading] = useState(false);
@@ -102,13 +102,7 @@ export default function UserDetailPage() {
       staffSubroles: response.user.staffProfile?.staffSubroles ?? [],
       notes: response.user.staffProfile?.notes ?? '',
       scheduleType: response.user.workSchedule?.type ?? 'EVENT_BASED',
-      scheduleNotes: response.user.workSchedule?.notes ?? '',
-      paymentType: response.user.payrollProfile?.paymentType ?? 'PER_EVENT',
-      eventRate: String(response.user.payrollProfile?.eventRate ?? ''),
-      hourlyRate: String(response.user.payrollProfile?.hourlyRate ?? ''),
-      monthlySalary: String(response.user.payrollProfile?.monthlySalary ?? ''),
-      currency: response.user.payrollProfile?.currency ?? 'ARS',
-      paymentNotes: response.user.payrollProfile?.paymentNotes ?? ''
+      scheduleNotes: response.user.workSchedule?.notes ?? ''
     });
     setAttendance({
       enabled: response.user.attendanceConfig?.enabled ?? false,
@@ -176,8 +170,7 @@ export default function UserDetailPage() {
       }
       if (section === 'operation') await Promise.all([
         api.patch(`/users/${userId}/staff-profile`, { staffCode: operation.staffCode, staffSubroles: operation.staffSubroles, employmentStatus: toStaffEmploymentStatus(employee.employmentStatus), notes: operation.notes }),
-        api.patch(`/users/${userId}/work-schedule`, { type: operation.scheduleType, weeklyAvailability: user?.workSchedule?.weeklyAvailability ?? [], notes: operation.scheduleNotes }),
-        api.patch(`/users/${userId}/payroll-profile`, { paymentType: operation.paymentType, eventRate: Number(operation.eventRate) || undefined, hourlyRate: Number(operation.hourlyRate) || undefined, monthlySalary: Number(operation.monthlySalary) || undefined, currency: operation.currency || 'ARS', paymentNotes: operation.paymentNotes, active: true })
+        api.patch(`/users/${userId}/work-schedule`, { type: operation.scheduleType, weeklyAvailability: user?.workSchedule?.weeklyAvailability ?? [], notes: operation.scheduleNotes })
       ]);
       if (section === 'attendance') await api.patch(`/users/${userId}/attendance-config`, { ...attendance, allowedIpAddresses: attendance.allowedIpAddresses.split('\n').map((item) => item.trim()).filter(Boolean) });
       await load();
@@ -265,7 +258,7 @@ export default function UserDetailPage() {
       <p className="-mt-2 text-sm text-zinc-500">Estas opciones aparecen porque tiene el rol Staff. El estado laboral se administra en la pestaña Empleado y se mantiene sincronizado.</p>
       <section className="space-y-3"><div><h3 className="text-sm font-semibold text-zinc-900">Perfil operativo</h3><p className="mt-1 text-sm text-zinc-500">Identificación y especialidades para asignaciones de eventos.</p></div><div className="grid gap-4 md:grid-cols-2"><FormField label="Código de staff"><Input value={operation.staffCode} onChange={(event) => setOperation((current) => ({ ...current, staffCode: event.target.value }))} /></FormField><FormField label="Notas operativas"><Input value={operation.notes} onChange={(event) => setOperation((current) => ({ ...current, notes: event.target.value }))} /></FormField></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{Object.values(StaffSubrole).map((subrole) => <Check key={subrole} label={displayLabel(staffSubroleLabels, subrole)} checked={operation.staffSubroles.includes(subrole)} onChange={() => setOperation((current) => ({ ...current, staffSubroles: toggle(current.staffSubroles, subrole) }))} />)}</div></section>
       <section className="border-t border-zinc-100 pt-5"><div><h3 className="text-sm font-semibold text-zinc-900">Horario</h3><p className="mt-1 text-sm text-zinc-500">La disponibilidad semanal se mantiene para una configuración posterior; esta ficha define la modalidad.</p></div><div className="mt-3 grid gap-4 md:grid-cols-2"><FormField label="Modalidad"><Select value={operation.scheduleType} onChange={(event) => setOperation((current) => ({ ...current, scheduleType: event.target.value }))}><option value="EVENT_BASED">Por evento</option><option value="FIXED">Fijo</option><option value="FLEXIBLE">Flexible</option></Select></FormField><FormField label="Notas de horario"><Input value={operation.scheduleNotes} onChange={(event) => setOperation((current) => ({ ...current, scheduleNotes: event.target.value }))} /></FormField></div></section>
-      <section className="border-t border-zinc-100 pt-5"><div><h3 className="text-sm font-semibold text-zinc-900">Liquidación</h3><p className="mt-1 text-sm text-zinc-500">Datos internos para la liquidación futura del staff.</p></div><div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-4"><FormField label="Forma de pago"><Select value={operation.paymentType} onChange={(event) => setOperation((current) => ({ ...current, paymentType: event.target.value }))}>{Object.entries(payrollPaymentTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></FormField><FormField label="Tarifa por evento"><Input type="number" min="0" value={operation.eventRate} onChange={(event) => setOperation((current) => ({ ...current, eventRate: event.target.value }))} /></FormField><FormField label="Tarifa por hora"><Input type="number" min="0" value={operation.hourlyRate} onChange={(event) => setOperation((current) => ({ ...current, hourlyRate: event.target.value }))} /></FormField><FormField label="Mensual"><Input type="number" min="0" value={operation.monthlySalary} onChange={(event) => setOperation((current) => ({ ...current, monthlySalary: event.target.value }))} /></FormField><FormField label="Moneda"><Input value={operation.currency} onChange={(event) => setOperation((current) => ({ ...current, currency: event.target.value }))} /></FormField><FormField label="Notas de liquidación"><Input value={operation.paymentNotes} onChange={(event) => setOperation((current) => ({ ...current, paymentNotes: event.target.value }))} /></FormField></div></section>
+      <section className="border-t border-zinc-100 pt-5"><div><h3 className="text-sm font-semibold text-zinc-900">Liquidación</h3><p className="mt-1 text-sm text-zinc-500">La modalidad de pago, importes y vigencias se administran únicamente desde Liquidación de Sueldos para que exista una sola fuente de verdad.</p></div>{canManagePayrollProfiles ? <Link href={`/admin/payroll?tab=profiles&employeeId=${encodeURIComponent(userId)}`} className="mt-3 inline-flex items-center rounded-xl border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-800 hover:border-zinc-500 hover:bg-zinc-50">Abrir configuración de liquidación</Link> : <p className="mt-3 text-sm text-zinc-500">Tu perfil no tiene permiso para modificar la configuración salarial.</p>}</section>
     </Panel>}
     {tab === 'attendance' && <div className="space-y-5">
       <Panel title="Resumen de asistencia">

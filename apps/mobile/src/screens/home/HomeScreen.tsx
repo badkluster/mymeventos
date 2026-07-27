@@ -20,8 +20,14 @@ import { useAuthStore } from '../../state/authStore';
 import { colors, radii, shadow, spacing, typography } from '../../theme/tokens';
 import type { SummaryResponse } from '../../types/attendance';
 
-function greeting(): string {
-  const hour = new Date().getHours();
+const ARGENTINA_TIME_ZONE = 'America/Argentina/Buenos_Aires';
+
+function greeting(now: Date): string {
+  const hour = Number(new Intl.DateTimeFormat('es-AR', {
+    hour: 'numeric',
+    hourCycle: 'h23',
+    timeZone: ARGENTINA_TIME_ZONE
+  }).format(now));
   if (hour < 12) return 'Buen día';
   if (hour < 20) return 'Buenas tardes';
   return 'Buenas noches';
@@ -96,9 +102,9 @@ export function HomeScreen() {
   const name = user?.firstName || user?.username || 'equipo';
   const salonLabel = todayAssignment?.salonId?.name;
   const eventLabel = todayAssignment?.eventId?.eventName;
-  const fullDate = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now);
-  const shortDate = new Intl.DateTimeFormat('es-AR', { weekday: 'short', day: '2-digit', month: 'short' }).format(now);
-  const clockTime = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
+  const fullDate = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: ARGENTINA_TIME_ZONE }).format(now);
+  const shortDate = new Intl.DateTimeFormat('es-AR', { weekday: 'short', day: '2-digit', month: 'short', timeZone: ARGENTINA_TIME_ZONE }).format(now);
+  const clockTime = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: ARGENTINA_TIME_ZONE }).format(now);
 
   return (
     <View style={styles.flex}>
@@ -115,7 +121,7 @@ export function HomeScreen() {
             <View style={styles.header}>
               <View style={styles.heroText}>
                 <Text style={styles.eyebrow}>REGISTRO DE HORARIO</Text>
-                <Text style={styles.greeting}>{greeting()},{`\n`}{name}</Text>
+                <Text style={styles.greeting}>{greeting(now)},{`\n`}{name}</Text>
                 <Text style={styles.date}>{fullDate}</Text>
               </View>
               <View style={styles.avatarShell}>

@@ -14,7 +14,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.mymeventos.staff",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Usamos tu ubicación únicamente al registrar tu entrada o salida, para validar que estás en el salón correspondiente.",
+        "NSLocationWhenInUseUsageDescription": "Usamos tu ubicación únicamente al registrar tu entrada o salida, para guardar el punto del fichaje.",
         "NSFaceIDUsageDescription": "Usá Face ID para desbloquear tu sesión de forma rápida y segura en este dispositivo."
       }
     },
@@ -38,7 +38,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Usamos tu ubicación únicamente al registrar tu entrada o salida, para validar que estás en el salón correspondiente."
+          "locationWhenInUsePermission": "Usamos tu ubicación únicamente al registrar tu entrada o salida, para guardar el punto del fichaje."
         }
       ],
       [

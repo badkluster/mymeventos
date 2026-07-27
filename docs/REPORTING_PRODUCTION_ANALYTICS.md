@@ -9,7 +9,6 @@ La solución mantiene a MongoDB como fuente de verdad y calcula los indicadores 
 - Producción: `/api/production`.
 - Gastos y rentabilidad: `/api/expenses`.
 - Analytics propio: recolección pública en `/api/public/analytics` y consultas administrativas en `/api/analytics`.
-- Importaciones controladas: `/api/imports`.
 
 Todos los períodos usan `America/Argentina/Buenos_Aires`. `from` y `to` son fechas `YYYY-MM-DD`, ambos días son inclusivos para el usuario y la API transforma el final a un límite exclusivo. El período máximo sin proceso diferido es de 370 días. La comparación del dashboard usa el período inmediatamente anterior de igual duración.
 
@@ -39,11 +38,11 @@ Las métricas financieras sólo son devueltas a usuarios con `dashboard.view_fin
 Los permisos están declarados en `packages/shared/src/constants/permissions.ts`.
 
 - `ADMIN`: acceso total.
-- `MANAGER`: dashboard, reportes, exportaciones, producción, gastos, rentabilidad, Analytics e importaciones según el preset.
+- `MANAGER`: dashboard, reportes, exportaciones, producción, gastos, rentabilidad y Analytics según el preset.
 - `SALON_MANAGER`: operación y producción limitada a sus salones; no recibe visibilidad financiera global.
 - `STAFF`: sin acceso a estos módulos salvo una excepción explícita.
 
-Las capacidades sensibles están separadas: ver/exportar reportes, ver finanzas, ver todos los salones, completar/reabrir producción, administrar reglas, borrar gastos, administrar Analytics y ejecutar importaciones.
+Las capacidades sensibles están separadas: ver/exportar reportes, ver finanzas, ver todos los salones, completar/reabrir producción, administrar reglas, borrar gastos y administrar Analytics.
 
 ## Producción
 
@@ -91,25 +90,11 @@ Controles implementados:
 
 Los mapas de interacción usan coordenadas normalizadas y versión de página. No dependen de una captura histórica que pueda quedar desalineada con el diseño actual.
 
-## Importaciones Excel
-
-Tipos soportados: contratos, producción y gastos. El flujo obligatorio es:
-
-1. descargar la plantilla;
-2. subir `.xlsx` de hasta 5 MB y 5.000 filas;
-3. mapear columnas;
-4. validar y revisar la vista previa;
-5. ejecutar con permiso separado.
-
-Cada trabajo conserva hash del archivo, mapeo, totales, estado y errores por fila. Contratos usan `importJobId + importRowIndex` para no duplicarse al reintentar. Las demás cargas usan referencias estables del trabajo y la fila, además de las restricciones únicas del dominio.
-
-Para migraciones históricas se recomienda crear trabajos separados por archivo y período, validar primero en un entorno de preproducción y conservar el archivo fuente fuera de la base. No se debe insertar directamente en colecciones porque se perderían validación, permisos y auditoría.
-
 ## Operación, índices y despliegue
 
 Los modelos agregan índices para rango/estado/salón, claves idempotentes, consultas de Analytics y TTL. Mongoose crea índices según la configuración del entorno; en producción se recomienda desplegarlos previamente con el procedimiento habitual de base de datos y verificar:
 
-- claves únicas de planes vigentes, filas importadas y eventos Analytics;
+- claves únicas de planes vigentes y eventos Analytics;
 - índices TTL sobre `expiresAt`;
 - índices compuestos de períodos y salón;
 - ausencia de duplicados previos antes de activar una restricción única.

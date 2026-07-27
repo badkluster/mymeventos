@@ -42,8 +42,7 @@ export const permissionLabels: Record<string,string>={
   'dashboard.view':'Dashboard: ver','dashboard.view_financial':'Dashboard: ver finanzas','dashboard.view_all_salons':'Dashboard: ver todos los salones',
   'production.view':'Producción: ver','production.create':'Producción: crear','production.update':'Producción: editar','production.complete':'Producción: completar','production.reopen':'Producción: reabrir','production.generate':'Producción: generar','production.export':'Producción: exportar','production.rules.manage':'Producción: administrar reglas',
   'expenses.view':'Gastos: ver','expenses.create':'Gastos: crear','expenses.update':'Gastos: editar','expenses.delete':'Gastos: eliminar','expenses.categories.manage':'Gastos: administrar categorías',
-  'analytics.view':'Analítica: ver','analytics.heatmap.view':'Heatmaps: ver','analytics.settings.manage':'Analítica: configurar','analytics.export':'Analítica: exportar',
-  'imports.create':'Importaciones: crear','imports.execute':'Importaciones: ejecutar','imports.view':'Importaciones: ver',
+  'analytics.view':'Analítica: ver','analytics.heatmap.view':'Analítica: ver interacciones','analytics.settings.manage':'Analítica: configurar privacidad','analytics.export':'Analítica: exportar',
   'settings.read':'Configuración: ver','settings.update':'Configuración: editar'
 };
 export {

@@ -135,8 +135,19 @@ export enum Permission {
   DIGITAL_TICKET_CHECKIN_REVERSE = 'digitalTicketCheckIn.reverse',
 
   // Payroll
+  // Legacy broad permissions are kept so existing persisted overrides remain valid.
   PAYROLL_READ = 'payroll.read',
   PAYROLL_MANAGE = 'payroll.manage',
+  PAYROLL_VIEW = 'payroll.view',
+  PAYROLL_MANAGE_PROFILES = 'payroll.manage_profiles',
+  PAYROLL_MANAGE_ATTENDANCE = 'payroll.manage_attendance',
+  PAYROLL_CREATE = 'payroll.create',
+  PAYROLL_CALCULATE = 'payroll.calculate',
+  PAYROLL_APPROVE = 'payroll.approve',
+  PAYROLL_PAY = 'payroll.pay',
+  PAYROLL_EXPORT = 'payroll.export',
+  PAYROLL_AUDIT = 'payroll.audit',
+  PAYROLL_SELF_READ = 'payroll.self.read',
 
   // Mobile staff app — access gate + self-service attendance/profile actions.
   // Deliberately NOT tied to Role.STAFF alone: any role can be granted mobile
@@ -198,12 +209,7 @@ export enum Permission {
   ANALYTICS_VIEW = 'analytics.view',
   ANALYTICS_HEATMAP_VIEW = 'analytics.heatmap.view',
   ANALYTICS_SETTINGS_MANAGE = 'analytics.settings.manage',
-  ANALYTICS_EXPORT = 'analytics.export',
-
-  // Controlled imports
-  IMPORTS_CREATE = 'imports.create',
-  IMPORTS_EXECUTE = 'imports.execute',
-  IMPORTS_VIEW = 'imports.view'
+  ANALYTICS_EXPORT = 'analytics.export'
 }
 
 import { Role } from './roles';
@@ -234,6 +240,9 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.MARKETING_SETTINGS_READ, Permission.MARKETING_SETTINGS_UPDATE,
     Permission.MARKETING_UNSUBSCRIBES_READ,
     Permission.PAYROLL_READ, Permission.PAYROLL_MANAGE,
+    Permission.PAYROLL_VIEW, Permission.PAYROLL_MANAGE_PROFILES, Permission.PAYROLL_MANAGE_ATTENDANCE,
+    Permission.PAYROLL_CREATE, Permission.PAYROLL_CALCULATE, Permission.PAYROLL_APPROVE, Permission.PAYROLL_PAY,
+    Permission.PAYROLL_EXPORT, Permission.PAYROLL_AUDIT,
     Permission.MOBILE_DEVICES_MANAGE,
     Permission.ATTENDANCE_READ, Permission.ATTENDANCE_MANAGE, Permission.ATTENDANCE_SETTINGS_MANAGE,
     Permission.REPORTS_READ, Permission.REPORTS_EXPORT,
@@ -242,8 +251,7 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.DASHBOARD_VIEW, Permission.DASHBOARD_FINANCIAL_VIEW, Permission.DASHBOARD_ALL_SALONS_VIEW,
     Permission.PRODUCTION_VIEW, Permission.PRODUCTION_CREATE, Permission.PRODUCTION_UPDATE, Permission.PRODUCTION_COMPLETE, Permission.PRODUCTION_REOPEN, Permission.PRODUCTION_GENERATE, Permission.PRODUCTION_EXPORT, Permission.PRODUCTION_RULES_MANAGE,
     Permission.EXPENSES_VIEW, Permission.EXPENSES_CREATE, Permission.EXPENSES_UPDATE, Permission.EXPENSES_DELETE, Permission.EXPENSE_CATEGORIES_MANAGE,
-    Permission.ANALYTICS_VIEW, Permission.ANALYTICS_HEATMAP_VIEW, Permission.ANALYTICS_SETTINGS_MANAGE, Permission.ANALYTICS_EXPORT,
-    Permission.IMPORTS_CREATE, Permission.IMPORTS_EXECUTE, Permission.IMPORTS_VIEW
+    Permission.ANALYTICS_VIEW, Permission.ANALYTICS_HEATMAP_VIEW, Permission.ANALYTICS_SETTINGS_MANAGE, Permission.ANALYTICS_EXPORT
   ],
   [Role.SALON_MANAGER]: [
     Permission.USERS_READ,
@@ -277,6 +285,7 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.ATTENDANCE_SCHEDULE_SELF,
     Permission.ATTENDANCE_INCIDENT_CREATE,
     Permission.ATTENDANCE_ADJUSTMENT_REQUEST,
+    Permission.PAYROLL_SELF_READ,
     Permission.PROFILE_VIEW_SELF,
     Permission.PROFILE_UPDATE_SELF,
     Permission.PROFILE_AVATAR_UPDATE,

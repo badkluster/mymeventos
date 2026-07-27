@@ -20,6 +20,8 @@ export type WorkSession = {
   hasIncident?: boolean;
   attendanceClassification?: string;
   closeReason?: string;
+  reviewNotes?: string;
+  reviewedAt?: string;
   notes?: string;
 };
 

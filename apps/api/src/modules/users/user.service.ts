@@ -20,6 +20,9 @@ export function sanitizeUser(user: any): Record<string, any> {
   const raw = user?.toObject ? user.toObject() : { ...user };
   delete raw.passwordHash;
   delete raw.passwordResetTokenHash;
+  // Compensation is versioned and administered exclusively by PayrollProfile.
+  // Keep the legacy field in Mongo only for backwards-compatible historical data.
+  delete raw.payrollProfile;
   return raw;
 }
 

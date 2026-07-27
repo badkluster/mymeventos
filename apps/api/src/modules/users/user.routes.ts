@@ -58,15 +58,6 @@ export const workScheduleSchema = z.object({
   }).refine((item) => !item.enabled || !item.startTime || !item.endTime || item.endTime > item.startTime, 'El horario de fin debe ser posterior al inicio.')).optional(),
   notes: optionalText
 }).partial();
-export const payrollProfileSchema = z.object({
-  paymentType: z.enum(['PER_EVENT', 'PER_HOUR', 'MONTHLY', 'OTHER']).optional(),
-  hourlyRate: z.coerce.number().min(0).optional(),
-  eventRate: z.coerce.number().min(0).optional(),
-  monthlySalary: z.coerce.number().min(0).optional(),
-  currency: optionalText,
-  paymentNotes: optionalText,
-  active: z.boolean().optional()
-}).partial();
 const employeeProfileSchema = z.object({
   employeeCode: optionalText,
   position: optionalText,
@@ -118,7 +109,6 @@ const baseFields = z.object({
   employeeProfile: employeeProfileSchema.optional(),
   staffProfile: staffProfileSchema.optional(),
   workSchedule: workScheduleSchema.optional(),
-  payrollProfile: payrollProfileSchema.optional(),
   attendanceConfig: attendanceConfigSchema.optional(),
   preferences: preferencesSchema.optional()
 });
@@ -133,7 +123,6 @@ const employeePatchSchema = z.object({ body: employeeProfileSchema, params: z.ob
 const attendancePatchSchema = z.object({ body: attendanceConfigSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const staffProfilePatchSchema = z.object({ body: staffProfileSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const workSchedulePatchSchema = z.object({ body: workScheduleSchema, params: z.object({ id: objectId }), query: z.object({}) });
-const payrollProfilePatchSchema = z.object({ body: payrollProfileSchema, params: z.object({ id: objectId }), query: z.object({}) });
 const passwordResetSchema = z.object({ body: z.object({ password: z.string().min(8).max(256).optional() }).default({}), params: z.object({ id: objectId }), query: z.object({}) });
 const deviceParams = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, deviceId: objectId }), query: z.object({}) });
 
@@ -173,7 +162,7 @@ const availablePermissions = Object.values(Permission).filter((permission) => !h
 async function getUserOrFail(id: string): Promise<any> {
   const user = await User.findOne({ _id: id, deletedAt: null }).select('-passwordHash -passwordResetTokenHash').populate('salonIds', 'name slug active').populate('managedSalonIds', 'name slug active').populate('primarySalonId', 'name slug active').populate('primaryManagedSalonId', 'name slug active').lean();
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND');
-  return user;
+  return sanitizeUser(user);
 }
 
 router.use(requireAuth);
@@ -188,7 +177,8 @@ router.get('/', requirePermission(Permission.USERS_READ), asyncHandler(async (re
     userQuery(query).sort({ [sortBy]: sortBy === 'fullName' || sortBy === 'email' || sortBy === 'username' ? 1 : -1 }).skip((page - 1) * limit).limit(limit).lean()
   ]);
   const meta = { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 };
-  return sendSuccess(response, { users, items: users, meta, roles: Object.values(Role), permissions: availablePermissions });
+  const sanitizedUsers = users.map(sanitizeUser);
+  return sendSuccess(response, { users: sanitizedUsers, items: sanitizedUsers, meta, roles: Object.values(Role), permissions: availablePermissions });
 }));
 
 router.post('/', requirePermission(Permission.USERS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
@@ -293,7 +283,6 @@ for (const [path, field, schema] of [
   ['employee-profile', 'employeeProfile', employeePatchSchema],
   ['staff-profile', 'staffProfile', staffProfilePatchSchema],
   ['work-schedule', 'workSchedule', workSchedulePatchSchema],
-  ['payroll-profile', 'payrollProfile', payrollProfilePatchSchema],
   ['attendance-config', 'attendanceConfig', attendancePatchSchema]
 ] as const) {
   router.patch(`/:id/${path}`, requirePermission(Permission.USERS_UPDATE), validateRequest(schema), asyncHandler(async (request, response) => {

@@ -119,11 +119,11 @@ adminRouter.get('/summary', asyncHandler(async (request, response) => {
       averageScrollDepth: scroll[0]?.average ?? 0,
     },
     funnel: [
-      { id: 'landing', label: 'Landing visitada', value: totals.sessions },
-      { id: 'salon', label: 'Sección salones', value: events.get('section_view') ?? 0 },
-      { id: 'cta', label: 'CTA seleccionado', value: events.get('cta_click') ?? 0 },
+      { id: 'landing', label: 'Visitas al sitio', value: totals.sessions },
+      { id: 'sections', label: 'Secciones vistas', value: events.get('section_view') ?? 0 },
+      { id: 'cta', label: 'Botones de acción', value: events.get('cta_click') ?? 0 },
       { id: 'formStart', label: 'Formulario iniciado', value: events.get('form_start') ?? 0 },
-      { id: 'lead', label: 'Lead creado', value: events.get('form_success') ?? 0 },
+      { id: 'lead', label: 'Consulta enviada', value: events.get('form_success') ?? 0 },
       { id: 'quote', label: 'Presupuesto creado', value: quotesCreated },
       { id: 'accepted', label: 'Presupuesto aceptado', value: quotesAccepted },
       { id: 'event', label: 'Evento confirmado', value: confirmedEvents },
@@ -144,17 +144,17 @@ adminRouter.get('/sections', asyncHandler(async (request, response) => {
 }));
 adminRouter.get('/heatmap', requirePermission(Permission.ANALYTICS_HEATMAP_VIEW), asyncHandler(async (request, response) => {
   const period = parseReportPeriod(request.query);
-  const match: any = { occurredAt: { $gte: period.from, $lt: period.toExclusive }, normalizedX: { $exists: true }, normalizedY: { $exists: true }, eventName: { $in: ['click', 'cta_click', 'whatsapp_click', 'phone_click', 'map_click', 'social_click'] } };
+  const match: any = { occurredAt: { $gte: period.from, $lt: period.toExclusive }, eventName: { $in: ['click', 'cta_click', 'whatsapp_click', 'phone_click', 'map_click', 'social_click'] } };
   if (request.query.pagePath) match.pagePath = String(request.query.pagePath);
   if (request.query.pageVersion) match.pageVersion = String(request.query.pageVersion);
   if (request.query.deviceType) match.deviceType = String(request.query.deviceType);
   if (request.query.source) match.utmSource = String(request.query.source);
-  const [points, ctas, versions] = await Promise.all([
-    AnalyticsEvent.aggregate([{ $match: match }, { $group: { _id: { x: { $floor: { $multiply: ['$normalizedX', 20] } }, y: { $floor: { $multiply: ['$normalizedY', 20] } }, sectionId: '$sectionId' }, value: { $sum: 1 } } }, { $sort: { value: -1 } }, { $limit: 500 }]),
+  const [sections, elements, versions] = await Promise.all([
+    AnalyticsEvent.aggregate([{ $match: match }, { $group: { _id: { $ifNull: ['$sectionId', 'unidentified'] }, value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
     AnalyticsEvent.aggregate([{ $match: match }, { $group: { _id: { $ifNull: ['$elementId', 'unidentified'] }, value: { $sum: 1 } } }, { $sort: { value: -1 } }, { $limit: 100 }]),
     AnalyticsEvent.distinct('pageVersion', { occurredAt: { $gte: period.from, $lt: period.toExclusive } }),
   ]);
-  return sendSuccess(response, { points: points.map((point) => ({ normalizedX: (point._id.x + 0.5) / 20, normalizedY: (point._id.y + 0.5) / 20, sectionId: point._id.sectionId, value: point.value })), ctas: ctas.map((item) => ({ elementId: item._id, value: item.value })), versions });
+  return sendSuccess(response, { sections: sections.map((item) => ({ id: item._id, value: item.value })), elements: elements.map((item) => ({ id: item._id, value: item.value })), versions });
 }));
 adminRouter.get('/settings', requirePermission(Permission.ANALYTICS_SETTINGS_MANAGE), asyncHandler(async (_request, response) => sendSuccess(response, { settings: await settings() })));
 adminRouter.patch('/settings', requirePermission(Permission.ANALYTICS_SETTINGS_MANAGE), validateRequest(z.object({ body: z.object({ enabled: z.boolean().optional(), consentRequired: z.boolean().optional(), retentionDays: z.coerce.number().int().min(7).max(730).optional(), collectClicks: z.boolean().optional(), collectSectionEngagement: z.boolean().optional() }).refine((body) => Object.keys(body).length > 0), params: z.object({}), query: z.object({}) })), asyncHandler(async (request, response) => {

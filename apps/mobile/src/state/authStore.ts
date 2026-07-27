@@ -36,20 +36,22 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   bootstrap: async () => {
     setUnauthorizedHandler(() => set({ status: 'signedOut', user: null }));
-    const [tokens, biometricEnabled] = await Promise.all([loadTokens(), isBiometricEnabled()]);
-    if (!tokens) {
-      set({ status: 'signedOut', biometricEnabled });
-      return;
-    }
-    if (biometricEnabled) {
-      set({ status: 'locked', biometricEnabled });
-      return;
-    }
+    let biometricEnabled = false;
     try {
+      const [tokens, storedBiometricEnabled] = await Promise.all([loadTokens(), isBiometricEnabled()]);
+      biometricEnabled = storedBiometricEnabled;
+      if (!tokens) {
+        set({ status: 'signedOut', biometricEnabled });
+        return;
+      }
+      if (biometricEnabled) {
+        set({ status: 'locked', biometricEnabled });
+        return;
+      }
       const { user } = await api.get<{ user: SessionUser }>('/mobile/auth/session');
       set({ status: 'signedIn', user, biometricEnabled });
     } catch {
-      await clearTokens();
+      try { await clearTokens(); } catch { /* A storage failure must not leave the app on the splash screen. */ }
       set({ status: 'signedOut', biometricEnabled });
     }
   },

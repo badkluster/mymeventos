@@ -95,6 +95,7 @@ export enum ExpenseStatus {
 
 export enum ExpenseSourceType {
   SUPPLIER_ASSIGNMENT = 'supplier_assignment',
+  PAYROLL = 'payroll',
   MANUAL = 'manual',
   PRODUCTION = 'production',
   IMPORT = 'import',

@@ -294,12 +294,9 @@ const contractSchema = new Schema({
   cancelledAt: Date,
   cancellationReason: String,
   pdfUrl: String, pdfSecureUrl: String, pdfPublicId: String, pdfGeneratedAt: Date,
-  importJobId: { type: Schema.Types.ObjectId, ref: 'ImportJob', index: true },
-  importRowNumber: Number,
   ...base
 }, { timestamps: true });
 contractSchema.index({ eventId: 1, deletedAt: 1 });
-contractSchema.index({ importJobId: 1, importRowNumber: 1 }, { unique: true, sparse: true });
 
 const contractAddendumSchema = new Schema({
   addendumNumber: { type: String, required: true, unique: true, index: true },

@@ -381,3 +381,24 @@ export async function adminCloseSession(sessionId: string, actorId: string, reas
   await session.save();
   return session;
 }
+
+export async function reviewSession(sessionId: string, actorId: string, status: WorkSessionStatus.COMPLETED | WorkSessionStatus.INCOMPLETE | WorkSessionStatus.CANCELLED, reviewNotes?: string) {
+  const session = await WorkSession.findOneAndUpdate(
+    {
+      _id: sessionId,
+      status: { $ne: WorkSessionStatus.ACTIVE },
+      $or: [{ requiresReview: true }, { status: WorkSessionStatus.UNDER_REVIEW }]
+    },
+    {
+      status,
+      requiresReview: false,
+      reviewedBy: actorId,
+      reviewedAt: new Date(),
+      reviewNotes,
+      updatedBy: actorId
+    },
+    { new: true }
+  );
+  if (!session) throw new ApiError(409, 'ATTENDANCE_SESSION_NOT_REVIEWABLE');
+  return session;
+}

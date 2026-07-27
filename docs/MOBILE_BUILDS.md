@@ -26,7 +26,7 @@ Estos identificadores (`com.mymeventos.staff`) son **provisorios** — hay que c
 `apps/mobile/.env.example` — todas con prefijo `EXPO_PUBLIC_*` (Expo las incluye en el bundle JS en tiempo de build; **no poner secretos acá**, esta app no maneja ningún secreto — toda autorización es usuario/contraseña + tokens Bearer emitidos por el backend):
 
 ```
-EXPO_PUBLIC_API_URL=http://localhost:3001/api      # usar la IP de LAN de tu máquina para probar en un dispositivo físico
+EXPO_PUBLIC_API_URL=http://localhost:3001/api      # en Android físico, usar la IP de LAN de tu máquina
 EXPO_PUBLIC_APP_ENV=development
 EXPO_PUBLIC_DEEP_LINK_SCHEME=mymeventos            # debe coincidir con app.json#scheme y con MOBILE_DEEP_LINK_SCHEME del backend
 ```
@@ -57,6 +57,8 @@ pnpm dev:mobile:android
 ```
 
 El comando inicia el AVD `Medium_Phone_2`, espera a que Android termine de arrancar y recién después ejecuta `expo start --android`. Se puede usar otro AVD con `MYM_ANDROID_AVD`; el tiempo máximo predeterminado es 240 segundos y se ajusta con `MYM_ANDROID_EMULATOR_TIMEOUT_SECONDS`.
+
+Además configura automáticamente `adb reverse tcp:3001 tcp:3001`, por lo que el valor local de `EXPO_PUBLIC_API_URL` funciona desde el emulador. El backend debe estar iniciado en el puerto 3001 (por ejemplo, con `pnpm dev:api`). Para un dispositivo Android físico no existe esa redirección: usar la IP de LAN de la máquina en `apps/mobile/.env`.
 
 Requiere Expo Go (SDK 57) o un development build propio para los módulos nativos usados (`expo-secure-store`, `expo-location`, `expo-local-authentication`, `expo-image-picker`, `expo-application`, `expo-device`, `expo-network`, `expo-crypto`, `expo-splash-screen`) — todos son plugins de Expo estándar, compatibles con Expo Go sin config plugin adicional salvo los ya declarados en `app.json`.
 

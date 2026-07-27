@@ -20,6 +20,11 @@ function scopeFilter(request: Request): Record<string, unknown> {
   return { salonId: { $in: accessibleSalonIds(request.user!) } };
 }
 
+async function assertSessionInScope(request: Request, sessionId: string): Promise<void> {
+  const session = await WorkSession.exists({ _id: sessionId, ...scopeFilter(request) });
+  if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
+}
+
 const listSessionsSchema = z.object({
   body: z.unknown().optional(), params: z.object({}),
   query: z.object({
@@ -35,6 +40,13 @@ const listSessionsSchema = z.object({
   })
 });
 const closeSessionSchema = z.object({ body: z.object({ reason: z.string().trim().min(3).max(500) }), params: z.object({ id: ObjectIdSchema }), query: z.object({}) });
+const reviewSessionSchema = z.object({
+  body: z.object({
+    status: z.enum([WorkSessionStatus.COMPLETED, WorkSessionStatus.INCOMPLETE, WorkSessionStatus.CANCELLED]),
+    reviewNotes: z.string().trim().max(1000).optional()
+  }),
+  params: z.object({ id: ObjectIdSchema }), query: z.object({})
+});
 const listIncidentsSchema = z.object({
   body: z.unknown().optional(), params: z.object({}),
   query: z.object({ status: z.nativeEnum(AttendanceIncidentStatus).optional(), userId: ObjectIdSchema.optional(), page: z.coerce.number().int().positive().default(1), limit: z.coerce.number().int().positive().max(200).default(50) })
@@ -92,13 +104,22 @@ router.get('/sessions', requirePermission(Permission.ATTENDANCE_READ), validateR
 }));
 
 router.get('/sessions/:id', requirePermission(Permission.ATTENDANCE_READ), validateRequest(idParams), asyncHandler(async (request, response) => {
+  await assertSessionInScope(request, request.params.id);
   return sendSuccess(response, await attendanceService.getSessionDetail(request.user!.id, request.params.id, true));
 }));
 
 router.post('/sessions/:id/close', requirePermission(Permission.ATTENDANCE_MANAGE), validateRequest(closeSessionSchema), asyncHandler(async (request, response) => {
+  await assertSessionInScope(request, request.params.id);
   const session = await attendanceService.adminCloseSession(request.params.id, request.user!.id, request.body.reason);
   await writeAuditLog(request, 'ATTENDANCE_SESSION_ADMIN_CLOSE', 'WorkSession', session._id.toString(), { reason: request.body.reason });
   return sendSuccess(response, { session }, 200, getApiMessage('ATTENDANCE_SESSION_CLOSED'));
+}));
+
+router.post('/sessions/:id/review', requirePermission(Permission.ATTENDANCE_MANAGE), validateRequest(reviewSessionSchema), asyncHandler(async (request, response) => {
+  await assertSessionInScope(request, request.params.id);
+  const session = await attendanceService.reviewSession(request.params.id, request.user!.id, request.body.status, request.body.reviewNotes);
+  await writeAuditLog(request, 'ATTENDANCE_SESSION_REVIEW', 'WorkSession', session._id.toString(), { status: request.body.status, reviewNotes: request.body.reviewNotes });
+  return sendSuccess(response, { session }, 200, getApiMessage('ATTENDANCE_SESSION_REVIEWED'));
 }));
 
 router.get('/incidents', requirePermission(Permission.ATTENDANCE_READ), validateRequest(listIncidentsSchema), asyncHandler(async (request, response) => {

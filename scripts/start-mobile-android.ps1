@@ -80,6 +80,14 @@ Write-Host "Emulador listo ($serial). Abriendo Expo Go..."
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repositoryRoot
 try {
+  # Android's localhost points at the emulator itself. Make the API running on the
+  # development machine reachable through the URL used by the mobile app.
+  & $adbPath -s $serial reverse tcp:3001 tcp:3001 | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw 'No se pudo redirigir el puerto 3001 de la API hacia el emulador.'
+  }
+  Write-Host 'API local disponible en el emulador mediante http://localhost:3001/api.'
+
   $metroListener = Get-NetTCPConnection -State Listen -LocalPort 8081 -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($metroListener) {
     $metroProcess = Get-Process -Id $metroListener.OwningProcess -ErrorAction SilentlyContinue

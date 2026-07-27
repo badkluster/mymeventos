@@ -5,12 +5,12 @@ import { StatusBadge, type StatusTone } from './StatusBadge';
 export type LocationState = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'low_accuracy';
 
 const copy: Record<LocationState, { label: string; tone: StatusTone; description: string }> = {
-  idle: { label: 'Ubicación', tone: 'neutral', description: 'Se solicitará al confirmar el registro de horario.' },
+  idle: { label: 'Ubicación', tone: 'neutral', description: 'Se solicitará para registrar el punto del fichaje.' },
   requesting: { label: 'Buscando ubicación…', tone: 'info', description: 'Esto puede tardar unos segundos.' },
-  ready: { label: 'Ubicación lista', tone: 'ok', description: 'Vamos a validar que estés en el salón correspondiente.' },
-  denied: { label: 'Permiso denegado', tone: 'bad', description: 'Activá el permiso de ubicación para poder fichar.' },
-  unavailable: { label: 'Ubicación no disponible', tone: 'warn', description: 'El registro de horario quedará para revisión.' },
-  low_accuracy: { label: 'Precisión baja', tone: 'warn', description: 'Movete a un lugar más despejado e intentá de nuevo.' }
+  ready: { label: 'Ubicación lista', tone: 'ok', description: 'Este punto se registrará junto con el fichaje.' },
+  denied: { label: 'Permiso denegado', tone: 'bad', description: 'Activá el permiso de ubicación para registrar el punto del fichaje.' },
+  unavailable: { label: 'Ubicación no disponible', tone: 'warn', description: 'No se pudo registrar la ubicación; el fichaje quedará para revisión.' },
+  low_accuracy: { label: 'Precisión baja', tone: 'warn', description: 'El punto se registrará con menor precisión.' }
 };
 
 export function LocationStatus({ state, onOpenSettings }: { state: LocationState; onOpenSettings?: () => void }) {

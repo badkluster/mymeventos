@@ -13,12 +13,12 @@ Módulo nuevo en el menú (submenú "Configuración", junto a Staff — ver §4)
 | Pestaña | Qué muestra | Acciones | Permiso de acción |
 |---|---|---|---|
 | **Activos** | Jornadas en curso ahora mismo (empleado, salón, tiempo transcurrido, si está marcada para revisión) | Ver detalle; **cerrar administrativamente** (motivo obligatorio, auditado) | `Permission.ATTENDANCE_MANAGE` |
-| **Historial** | Todas las jornadas, filtrables por estado/salón/rango de fechas/"solo para revisión" | Ver detalle (marcaciones, incidencias, correcciones de esa jornada) | `Permission.ATTENDANCE_READ` |
+| **Historial** | Todas las jornadas, filtrables por estado/salón/rango de fechas/"solo para revisión" | Ver detalle; resolver una jornada marcada para revisión como completada, incompleta o cancelada, con nota opcional | `Permission.ATTENDANCE_READ` / `Permission.ATTENDANCE_MANAGE` para revisar |
 | **Incidencias** | Reportadas por el personal, filtrables por estado | Marcar resuelta/en revisión/rechazada + notas | `Permission.ATTENDANCE_MANAGE` |
 | **Correcciones** | Solicitudes de ajuste de horario, filtrables por estado | Aprobar (ajusta la jornada y la marca `adjusted`, conservando el registro original) o rechazar, con notas | `Permission.ATTENDANCE_MANAGE` |
 | **Configuración** | Zona horaria, tolerancias de llegada/salida, radio de geocerca por defecto, antigüedad máxima de marcaciones offline, jornada máxima, si se permiten incidencias | Editar | `Permission.ATTENDANCE_SETTINGS_MANAGE` (pestaña oculta sin este permiso) |
 
-Todas las acciones administrativas quedan en `AuditLog` (`ATTENDANCE_SESSION_ADMIN_CLOSE`, `ATTENDANCE_INCIDENT_RESOLVE`, `ATTENDANCE_ADJUSTMENT_REVIEW`, `ATTENDANCE_SETTINGS_UPDATE`) con el actor, la fecha y (para cierre/resolución) el motivo — no hay ninguna modificación silenciosa.
+Todas las acciones administrativas quedan en `AuditLog` (`ATTENDANCE_SESSION_ADMIN_CLOSE`, `ATTENDANCE_SESSION_REVIEW`, `ATTENDANCE_INCIDENT_RESOLVE`, `ATTENDANCE_ADJUSTMENT_REVIEW`, `ATTENDANCE_SETTINGS_UPDATE`) con el actor, la fecha y el motivo cuando corresponde — no hay ninguna modificación silenciosa.
 
 ## 3. Gestión de dispositivos de un usuario
 

@@ -4,7 +4,6 @@ import { Permission, Role, RolePresets, hasPermission } from '../src';
 describe('managerial module permissions', () => {
   it('keeps ADMIN unrestricted and STAFF outside the backoffice modules', () => {
     expect(hasPermission(Role.ADMIN, Permission.ANALYTICS_SETTINGS_MANAGE)).toBe(true);
-    expect(hasPermission(Role.ADMIN, Permission.IMPORTS_EXECUTE)).toBe(true);
     expect(RolePresets[Role.STAFF]).not.toContain(Permission.DASHBOARD_VIEW);
     expect(RolePresets[Role.STAFF]).not.toContain(Permission.REPORTS_READ);
     expect(RolePresets[Role.STAFF]).not.toContain(Permission.EXPENSES_VIEW);

@@ -1,5 +1,5 @@
-import { AnalyticsHeatmap } from '@/features/analytics/analytics-heatmap';
+import { AnalyticsInteractions } from '@/features/analytics/analytics-interactions';
 
 export default function AnalyticsHeatmapPage() {
-  return <AnalyticsHeatmap />;
+  return <AnalyticsInteractions />;
 }

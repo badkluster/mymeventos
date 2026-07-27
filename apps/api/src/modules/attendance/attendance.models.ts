@@ -119,6 +119,22 @@ const workSessionSchema = new Schema({
   breakMinutes: { type: Number, default: 0 },
   payableMinutes: Number,
 
+  // Payroll consumes the existing derived session rather than duplicating it in
+  // another attendance collection. A session must be explicitly approved before
+  // it can be reserved by a settlement.
+  payrollApprovalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+  approvedMinutes: Number,
+  payrollApprovedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  payrollApprovedAt: Date,
+  payrollRejectedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  payrollRejectedAt: Date,
+  payrollRejectionReason: String,
+  payrollManualAdjustmentReason: String,
+  payrollOriginalValues: Schema.Types.Mixed,
+  // Atomic reservation prevents the same approved session being included in two
+  // settlements even on Mongo deployments without transactions.
+  payrollSettlementId: { type: Schema.Types.ObjectId, ref: 'PayrollSettlement', index: true },
+
   attendanceClassification: { type: String, enum: Object.values(AttendanceClassification) },
 
   hasIncident: { type: Boolean, default: false },
@@ -126,6 +142,9 @@ const workSessionSchema = new Schema({
 
   closedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   closeReason: String,
+  reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  reviewedAt: Date,
+  reviewNotes: String,
   notes: String,
 
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -139,6 +158,7 @@ workSessionSchema.index({ userId: 1, startedAt: -1 });
 workSessionSchema.index({ salonId: 1, startedAt: -1 });
 workSessionSchema.index({ eventId: 1, startedAt: -1 });
 workSessionSchema.index({ requiresReview: 1, createdAt: -1 });
+workSessionSchema.index({ payrollApprovalStatus: 1, payrollSettlementId: 1, startedAt: -1 });
 
 const attendanceIncidentSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
