@@ -43,6 +43,12 @@ async function ensureDefaultCategories() {
   )));
 }
 
+async function assertCategory(categoryId?: string) {
+  if (!categoryId) return;
+  const exists = await ExpenseCategory.exists({ _id: categoryId, deletedAt: null, isActive: true });
+  if (!exists) throw new ApiError(422, 'EXPENSE_CATEGORY_INVALID', 'La categoría seleccionada no existe o está inactiva.');
+}
+
 function expensePayload(body: any, userId: string) {
   const computed = Number(body.finalAmount || body.amount || 0) + Number(body.additionalAmount || 0) + Number(body.taxAmount || 0);
   return {
@@ -96,13 +102,14 @@ router.get('/', requirePermission(Permission.EXPENSES_VIEW), asyncHandler(async 
 
 router.post('/', requirePermission(Permission.EXPENSES_CREATE), validateRequest(z.object({ body: expenseBody, params: z.object({}), query: z.object({}) })), asyncHandler(async (request, response) => {
   if (!canAccessSalon(request.user!, request.body.salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  await assertCategory(request.body.categoryId);
   if (request.body.eventId) {
     const event = await Event.findOne({ _id: request.body.eventId, salonId: request.body.salonId, deletedAt: null }).lean();
     if (!event) throw new ApiError(409, 'EXPENSE_EVENT_SALON_MISMATCH', 'El evento no pertenece al salón seleccionado.');
   }
   const expense = await Expense.create({ ...expensePayload(request.body, request.user!.id), createdBy: request.user!.id });
   if (expense.eventId) await ExpenseAllocation.create({ expenseId: expense._id, eventId: expense.eventId, salonId: expense.salonId, amount: expense.amount, percentage: 100, allocationType: 'DIRECT', createdBy: request.user!.id, updatedBy: request.user!.id });
-  await writeAuditLog(request, 'EXPENSE_CREATE', 'Expense', expense._id.toString(), { amount: expense.amount, salonId: expense.salonId, eventId: expense.eventId });
+  await writeAuditLog(request, 'EXPENSE_CREATE', 'Expense', expense._id.toString(), { amount: expense.amount, salonId: expense.salonId, eventId: expense.eventId, categoryId: expense.categoryId });
   return sendSuccess(response, { expense }, 201);
 }));
 
@@ -110,13 +117,14 @@ router.patch('/:id', requirePermission(Permission.EXPENSES_UPDATE), validateRequ
   const before: any = await Expense.findOne({ _id: request.params.id, deletedAt: null }).lean();
   if (!before) throw new ApiError(404, 'EXPENSE_NOT_FOUND');
   if (!canAccessSalon(request.user!, String(request.body.salonId || before.salonId))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  if (request.body.categoryId !== undefined) await assertCategory(request.body.categoryId || undefined);
   const merged = { ...before, ...request.body };
   const amount = Number(merged.finalAmount || merged.amount || 0) + Number(merged.additionalAmount || 0) + Number(merged.taxAmount || 0);
   const update = { ...request.body, supplierId: request.body.supplierId || undefined, categoryId: request.body.categoryId || undefined, eventId: request.body.eventId || undefined, productionPlanId: request.body.productionPlanId || undefined, amount, paidAt: merged.status === ExpenseStatus.PAID ? merged.paidAt || merged.date : undefined, updatedBy: request.user!.id };
   const expense: any = await Expense.findByIdAndUpdate(before._id, update, { new: true, runValidators: true });
   await ExpenseAllocation.deleteMany({ expenseId: expense._id });
   if (expense.eventId) await ExpenseAllocation.create({ expenseId: expense._id, eventId: expense.eventId, salonId: expense.salonId, amount: expense.amount, percentage: 100, allocationType: 'DIRECT', createdBy: request.user!.id, updatedBy: request.user!.id });
-  await writeAuditLog(request, 'EXPENSE_UPDATE', 'Expense', expense._id.toString(), { before: { amount: before.amount, status: before.status, eventId: before.eventId }, after: update });
+  await writeAuditLog(request, 'EXPENSE_UPDATE', 'Expense', expense._id.toString(), { before: { amount: before.amount, status: before.status, eventId: before.eventId, categoryId: before.categoryId }, after: update });
   return sendSuccess(response, { expense });
 }));
 
@@ -133,12 +141,13 @@ router.delete('/:id', requirePermission(Permission.EXPENSES_DELETE), validateReq
 router.get('/profitability/events', requirePermission(Permission.REPORTS_PROFITABILITY_READ), asyncHandler(async (request, response) => {
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
+  const now = new Date();
   const events: any[] = await Event.find({ deletedAt: null, ...scope.match(), eventDate: { $gte: period.from, $lt: period.toExclusive }, status: { $nin: ['cancelled', 'lost'] } }).populate('salonId', 'name').populate('customerId', 'fullName').sort({ eventDate: 1 }).lean();
   const eventIds = events.map((event) => event._id);
   const [contracts, payments, expenses] = await Promise.all([
     Contract.aggregate([{ $match: { deletedAt: null, eventId: { $in: eventIds }, status: { $nin: ['cancelled', 'superseded'] } } }, { $group: { _id: '$eventId', contracted: { $sum: '$totalAmount' } } }]),
     Payment.aggregate([{ $match: { deletedAt: null, eventId: { $in: eventIds }, status: 'paid', affectsContractBalance: true } }, { $group: { _id: '$eventId', collected: { $sum: { $cond: [{ $eq: ['$type', 'refund'] }, { $multiply: ['$amount', -1] }, '$amount'] } } } }]),
-    Expense.aggregate([{ $match: { deletedAt: null, eventId: { $in: eventIds }, status: { $ne: 'cancelled' } } }, { $group: { _id: '$eventId', estimatedCost: { $sum: '$initialEstimatedAmount' }, actualCost: { $sum: '$amount' }, expenseCount: { $sum: 1 } } }]),
+    Expense.aggregate([{ $match: { deletedAt: null, eventId: { $in: eventIds }, status: { $ne: 'cancelled' } } }, { $group: { _id: '$eventId', estimatedCost: { $sum: '$initialEstimatedAmount' }, actualCost: { $sum: '$amount' }, paidCost: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } }, expenseCount: { $sum: 1 }, pendingExpenseCount: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } } } }]),
   ]);
   const contractsMap = new Map(contracts.map((item: any) => [item._id.toString(), item]));
   const paymentsMap = new Map(payments.map((item: any) => [item._id.toString(), item]));
@@ -146,13 +155,38 @@ router.get('/profitability/events', requirePermission(Permission.REPORTS_PROFITA
   const rows = events.map((event) => {
     const id = event._id.toString(); const income: any = contractsMap.get(id); const collected: any = paymentsMap.get(id); const cost: any = expensesMap.get(id);
     const contractedRevenue = Number(income?.contracted ?? 0); const collectedRevenue = Number(collected?.collected ?? 0);
-    const estimatedCost = Number(cost?.estimatedCost ?? 0); const actualCost = Number(cost?.actualCost ?? 0);
-    const estimatedMargin = contractedRevenue - estimatedCost; const actualMargin = collectedRevenue - actualCost;
-    return { id, href: `/admin/events/${id}`, eventName: event.eventName || event.eventType || 'Evento', eventDate: event.eventDate, customer: event.customerId?.fullName || 'Sin cliente', salon: event.salonId?.name || 'Sin salón', guests: Number(event.guestCount ?? 0), contractedRevenue, collectedRevenue, estimatedCost, actualCost, estimatedMargin, actualMargin, marginPercentage: collectedRevenue ? (actualMargin / collectedRevenue) * 100 : null, costPerGuest: event.guestCount ? actualCost / event.guestCount : null, revenuePerGuest: event.guestCount ? contractedRevenue / event.guestCount : null, costDeviation: actualCost - estimatedCost, complete: Number(cost?.expenseCount ?? 0) > 0 };
+    const estimatedCost = Number(cost?.estimatedCost ?? 0); const actualCost = Number(cost?.actualCost ?? 0); const paidCost = Number(cost?.paidCost ?? 0);
+    const estimatedMargin = contractedRevenue - estimatedCost;
+    const economicMargin = contractedRevenue - actualCost;
+    const cashResult = collectedRevenue - paidCost;
+    const expenseCount = Number(cost?.expenseCount ?? 0);
+    const pendingExpenseCount = Number(cost?.pendingExpenseCount ?? 0);
+    const eventFinished = Boolean(event.eventDate && new Date(event.eventDate) < now);
+    const costStatus = !expenseCount ? 'no_expenses' : pendingExpenseCount ? 'pending' : eventFinished ? 'complete' : 'preliminary';
+    return {
+      id, href: `/admin/events/${id}`, eventName: event.eventName || event.eventType || 'Evento', eventDate: event.eventDate,
+      customer: event.customerId?.fullName || 'Sin cliente', salon: event.salonId?.name || 'Sin salón', guests: Number(event.guestCount ?? 0),
+      contractedRevenue, collectedRevenue, estimatedCost, actualCost, paidCost, estimatedMargin, economicMargin, actualMargin: economicMargin, cashResult,
+      marginPercentage: contractedRevenue ? (economicMargin / contractedRevenue) * 100 : null,
+      costPerGuest: event.guestCount ? actualCost / event.guestCount : null,
+      revenuePerGuest: event.guestCount ? contractedRevenue / event.guestCount : null,
+      costDeviation: actualCost - estimatedCost, expenseCount, pendingExpenseCount, costStatus, complete: costStatus === 'complete',
+    };
   });
   return sendSuccess(response, {
     items: rows,
-    summary: rows.reduce((result, row) => ({ contractedRevenue: result.contractedRevenue + row.contractedRevenue, collectedRevenue: result.collectedRevenue + row.collectedRevenue, estimatedCost: result.estimatedCost + row.estimatedCost, actualCost: result.actualCost + row.actualCost, estimatedMargin: result.estimatedMargin + row.estimatedMargin, actualMargin: result.actualMargin + row.actualMargin, incompleteEvents: result.incompleteEvents + (row.complete ? 0 : 1) }), { contractedRevenue: 0, collectedRevenue: 0, estimatedCost: 0, actualCost: 0, estimatedMargin: 0, actualMargin: 0, incompleteEvents: 0 }),
+    summary: rows.reduce((result, row) => ({
+      contractedRevenue: result.contractedRevenue + row.contractedRevenue,
+      collectedRevenue: result.collectedRevenue + row.collectedRevenue,
+      estimatedCost: result.estimatedCost + row.estimatedCost,
+      actualCost: result.actualCost + row.actualCost,
+      paidCost: result.paidCost + row.paidCost,
+      estimatedMargin: result.estimatedMargin + row.estimatedMargin,
+      economicMargin: result.economicMargin + row.economicMargin,
+      actualMargin: result.actualMargin + row.economicMargin,
+      cashResult: result.cashResult + row.cashResult,
+      incompleteEvents: result.incompleteEvents + (row.complete ? 0 : 1),
+    }), { contractedRevenue: 0, collectedRevenue: 0, estimatedCost: 0, actualCost: 0, paidCost: 0, estimatedMargin: 0, economicMargin: 0, actualMargin: 0, cashResult: 0, incompleteEvents: 0 }),
     period: { from: period.fromDate, to: period.toDate },
   });
 }));
