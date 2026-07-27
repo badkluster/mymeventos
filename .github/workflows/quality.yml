@@ -36,13 +36,34 @@ jobs:
         run: pnpm --filter @mym/shared run build
 
       - name: Typecheck API
-        run: pnpm --filter @mym/api run typecheck
+        run: |
+          set -o pipefail
+          pnpm --filter @mym/api run typecheck 2>&1 | tee api-typecheck.log
 
       - name: Test API
-        run: pnpm --filter @mym/api run test
+        run: |
+          set -o pipefail
+          pnpm --filter @mym/api run test 2>&1 | tee api-tests.log
 
       - name: Typecheck web
-        run: pnpm --filter @mym/web run typecheck
+        run: |
+          set -o pipefail
+          pnpm --filter @mym/web run typecheck 2>&1 | tee web-typecheck.log
 
       - name: Build web
-        run: pnpm --filter @mym/web run build
+        run: |
+          set -o pipefail
+          pnpm --filter @mym/web run build 2>&1 | tee web-build.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-diagnostics
+          path: |
+            api-typecheck.log
+            api-tests.log
+            web-typecheck.log
+            web-build.log
+          if-no-files-found: ignore
+          retention-days: 7
