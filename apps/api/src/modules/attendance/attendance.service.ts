@@ -174,8 +174,11 @@ export async function checkOut(userId: string, input: ClockInput) {
   if (!activeSession) throw new ApiError(409, 'ATTENDANCE_NO_ACTIVE_SESSION');
 
   const timing = resolvePunchTiming(input.clientOccurredAt, input.networkStatus, settings);
-  if (timing.effectiveAt.getTime() <= activeSession.startedAt.getTime()) {
-    timing.effectiveAt = new Date(activeSession.startedAt.getTime() + 60_000);
+  const startedAtMs = new Date(activeSession.startedAt).getTime();
+  const clientPrecedesCheckIn = input.clientOccurredAt.getTime() <= startedAtMs;
+  if (clientPrecedesCheckIn) timing.requiresReview = true;
+  if (timing.effectiveAt.getTime() <= startedAtMs) {
+    timing.effectiveAt = new Date(startedAtMs + 60_000);
     timing.requiresReview = true;
   }
 
@@ -206,7 +209,7 @@ export async function checkOut(userId: string, input: ClockInput) {
     throw error;
   }
 
-  const workedMinutes = Math.max(0, Math.round((timing.effectiveAt.getTime() - activeSession.startedAt.getTime()) / 60_000));
+  const workedMinutes = Math.max(0, Math.round((timing.effectiveAt.getTime() - startedAtMs) / 60_000));
   const requiresReview = activeSession.requiresReview || timing.requiresReview || locationResult.requiresReview;
   const attendanceClassification = await classifySession(activeSession, settings);
 
@@ -240,133 +243,28 @@ export async function getStatus(userId: string) {
   };
 }
 
-export interface HistoryFilters { page?: number; limit?: number; status?: string; from?: Date; to?: Date; }
-
+export interface HistoryFilters { page?: number; limit?: number; from?: Date; to?: Date; }
 export async function getHistory(userId: string, filters: HistoryFilters) {
-  const query: Record<string, unknown> = { userId };
-  if (filters.status) query.status = filters.status;
+  const page = Math.max(1, Number(filters.page) || 1); const limit = Math.min(100, Math.max(1, Number(filters.limit) || 20));
+  const query: any = { userId };
   if (filters.from || filters.to) query.startedAt = { ...(filters.from ? { $gte: filters.from } : {}), ...(filters.to ? { $lte: filters.to } : {}) };
-  const page = filters.page ?? 1;
-  const limit = filters.limit ?? 20;
-  const [items, total] = await Promise.all([
-    WorkSession.find(query).sort({ startedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-    WorkSession.countDocuments(query)
-  ]);
-  return { items, total, page, limit };
+  const [items, totalItems] = await Promise.all([WorkSession.find(query).populate('salonId', 'name').populate('eventId', 'eventName eventType').sort({ startedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), WorkSession.countDocuments(query)]);
+  return { items, meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 } };
 }
 
-export async function getSessionDetail(requesterId: string, sessionId: string, isAdmin: boolean) {
-  const session: any = await WorkSession.findById(sessionId).lean();
-  if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
-  if (!isAdmin && session.userId.toString() !== requesterId) throw new ApiError(403, 'FORBIDDEN');
-  const [punches, incidents, adjustments] = await Promise.all([
-    TimePunch.find({ workSessionId: sessionId }).sort({ effectiveAt: 1 }).lean(),
-    AttendanceIncident.find({ workSessionId: sessionId }).sort({ createdAt: -1 }).lean(),
-    AttendanceAdjustmentRequest.find({ workSessionId: sessionId }).sort({ createdAt: -1 }).lean()
-  ]);
-  return { session, punches, incidents, adjustments };
-}
-
-export async function getSummary(userId: string, from: Date, to: Date) {
-  const settings = await getAttendanceSettings();
-  const rows = await WorkSession.aggregate([
-    { $match: { userId: new Types.ObjectId(userId), startedAt: { $gte: from, $lte: to } } },
-    { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$startedAt', timezone: settings.timezone } }, workedMinutes: { $sum: { $ifNull: ['$workedMinutes', 0] } }, sessions: { $sum: 1 } } },
-    { $sort: { _id: 1 } }
-  ]);
-  const totalMinutes = rows.reduce((sum: number, row: any) => sum + row.workedMinutes, 0);
-  return { days: rows, totalMinutes, totalHours: Math.round((totalMinutes / 60) * 100) / 100 };
-}
-
-export interface IncidentInput { workSessionId?: string; assignmentId?: string; type: string; description: string; attachments?: unknown[]; }
-
-export async function createIncident(userId: string, input: IncidentInput) {
+export async function reportIncident(userId: string, input: { workSessionId?: string; type: string; description: string; occurredAt?: Date; attachments?: Array<Record<string, unknown>> }) {
   if (input.workSessionId) {
-    const session = await WorkSession.exists({ _id: input.workSessionId, userId });
+    const session = await WorkSession.findOne({ _id: input.workSessionId, userId }).lean();
     if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
   }
-  const incident = await AttendanceIncident.create({ userId, ...input, createdBy: userId, updatedBy: userId });
-  if (input.workSessionId) await WorkSession.updateOne({ _id: input.workSessionId }, { hasIncident: true });
-  return incident;
+  return AttendanceIncident.create({ userId, workSessionId: input.workSessionId, type: input.type, description: input.description, occurredAt: input.occurredAt ?? new Date(), attachments: input.attachments, status: AttendanceIncidentStatus.OPEN, createdBy: userId, updatedBy: userId });
 }
 
-export async function resolveIncident(id: string, actorId: string, status: string, resolution?: string) {
-  const incident = await AttendanceIncident.findOneAndUpdate(
-    { _id: id },
-    { status, resolution, resolvedBy: actorId, resolvedAt: new Date(), updatedBy: actorId },
-    { new: true }
-  );
-  if (!incident) throw new ApiError(404, 'ATTENDANCE_INCIDENT_NOT_FOUND');
-  return incident;
-}
-
-export interface AdjustmentInput { workSessionId: string; requestedStartAt?: Date; requestedEndAt?: Date; reason: string; attachments?: unknown[]; }
-
-export async function createAdjustmentRequest(userId: string, input: AdjustmentInput) {
+export async function requestAdjustment(userId: string, input: { workSessionId: string; requestedStartedAt?: Date; requestedEndedAt?: Date; reason: string; attachments?: Array<Record<string, unknown>> }) {
   const session: any = await WorkSession.findOne({ _id: input.workSessionId, userId }).lean();
   if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
-  const pending = await AttendanceAdjustmentRequest.exists({ workSessionId: input.workSessionId, status: AttendanceAdjustmentStatus.PENDING });
-  if (pending) throw new ApiError(409, 'ATTENDANCE_ADJUSTMENT_ALREADY_PENDING');
-  return AttendanceAdjustmentRequest.create({
-    userId, workSessionId: input.workSessionId, requestedStartAt: input.requestedStartAt, requestedEndAt: input.requestedEndAt,
-    reason: input.reason, attachments: input.attachments ?? [],
-    originalSnapshot: { startedAt: session.startedAt, endedAt: session.endedAt, workedMinutes: session.workedMinutes, status: session.status },
-    createdBy: userId, updatedBy: userId
-  });
-}
-
-export async function reviewAdjustmentRequest(id: string, actorId: string, decision: 'approved' | 'rejected', reviewNotes?: string) {
-  const request: any = await AttendanceAdjustmentRequest.findOne({ _id: id, status: AttendanceAdjustmentStatus.PENDING });
-  if (!request) throw new ApiError(404, 'ATTENDANCE_ADJUSTMENT_NOT_PENDING');
-
-  if (decision === 'rejected') {
-    request.status = AttendanceAdjustmentStatus.REJECTED;
-    request.reviewedBy = actorId; request.reviewedAt = new Date(); request.reviewNotes = reviewNotes; request.updatedBy = actorId;
-    await request.save();
-    return request;
-  }
-
-  const session: any = await WorkSession.findById(request.workSessionId);
-  if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
-  const startedAt: Date = request.requestedStartAt ?? session.startedAt;
-  const endedAt: Date | undefined = request.requestedEndAt ?? session.endedAt;
-  if (endedAt && endedAt.getTime() <= startedAt.getTime()) throw new ApiError(422, 'ATTENDANCE_ADJUSTMENT_INVALID_RANGE');
-  const workedMinutes = endedAt ? Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 60_000)) : session.workedMinutes;
-
-  session.startedAt = startedAt;
-  if (endedAt) session.endedAt = endedAt;
-  session.workedMinutes = workedMinutes;
-  session.payableMinutes = Math.max(0, (workedMinutes ?? 0) - (session.breakMinutes ?? 0));
-  session.status = WorkSessionStatus.ADJUSTED;
-  session.requiresReview = false;
-  session.updatedBy = actorId;
-  await session.save();
-
-  request.status = AttendanceAdjustmentStatus.APPROVED;
-  request.reviewedBy = actorId; request.reviewedAt = new Date(); request.reviewNotes = reviewNotes; request.appliedAt = new Date(); request.updatedBy = actorId;
-  await request.save();
-  return request;
-}
-
-export async function adminCloseSession(sessionId: string, actorId: string, reason?: string) {
-  const session: any = await WorkSession.findOne({ _id: sessionId, status: WorkSessionStatus.ACTIVE });
-  if (!session) throw new ApiError(409, 'ATTENDANCE_NO_ACTIVE_SESSION');
-  const now = new Date();
-  const punch = await TimePunch.create({
-    userId: session.userId, workSessionId: session._id, type: TimePunchType.CHECK_OUT, source: TimePunchSource.BACKOFFICE,
-    clientOccurredAt: now, serverReceivedAt: now, effectiveAt: now, requestId: `admin-close-${session._id.toString()}-${now.getTime()}`,
-    networkStatus: 'online', notes: reason, createdBy: actorId
-  });
-  const workedMinutes = Math.max(0, Math.round((now.getTime() - session.startedAt.getTime()) / 60_000));
-  session.status = WorkSessionStatus.INCOMPLETE;
-  session.endedAt = now;
-  session.checkOutPunchId = punch._id;
-  session.workedMinutes = workedMinutes;
-  session.payableMinutes = workedMinutes;
-  session.closedBy = actorId;
-  session.closeReason = reason;
-  session.requiresReview = true;
-  session.updatedBy = actorId;
-  await session.save();
-  return session;
+  if (session.status === WorkSessionStatus.ACTIVE) throw new ApiError(409, 'ATTENDANCE_SESSION_ACTIVE');
+  const existing = await AttendanceAdjustmentRequest.findOne({ workSessionId: input.workSessionId, userId, status: AttendanceAdjustmentStatus.PENDING }).lean();
+  if (existing) throw new ApiError(409, 'ATTENDANCE_ADJUSTMENT_ALREADY_PENDING');
+  return AttendanceAdjustmentRequest.create({ userId, workSessionId: input.workSessionId, originalStartedAt: session.startedAt, originalEndedAt: session.endedAt, requestedStartedAt: input.requestedStartedAt, requestedEndedAt: input.requestedEndedAt, reason: input.reason, attachments: input.attachments, status: AttendanceAdjustmentStatus.PENDING, createdBy: userId, updatedBy: userId });
 }
