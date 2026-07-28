@@ -235,40 +235,42 @@ function normalizeMapQuery(value: string, salon: Salon) {
 }
 
 // Reveal content once it has genuinely scrolled into view, with motion pronounced enough to read as a deliberate entrance.
-const viewport = { once: true, amount: 0.22, margin: '0px 0px -80px 0px' } as const;
+// Tall sections on mobile must begin their reveal as soon as they enter the viewport.
+// Requiring a large visible fraction leaves an empty, opaque area before their content appears.
+const viewport = { once: true, amount: 0.01, margin: '0px 0px -24px 0px' } as const;
 const smoothEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
-const softSpring = { type: 'spring', stiffness: 320, damping: 34, mass: 0.8 } as const;
+const softSpring = { type: 'spring', stiffness: 380, damping: 36, mass: 0.7 } as const;
 const sectionVariants: Variants = {
   hidden: { opacity: 0, y: 32 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: smoothEase, when: 'beforeChildren', staggerChildren: 0.07 } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: smoothEase, when: 'beforeChildren', staggerChildren: 0.045 } },
 };
 // Same reveal, but children start together with the section instead of waiting for it to finish first.
 // Needed for sections whose content (partially) animates via its own state rather than variant propagation,
 // so that content doesn't visually resolve before the section's own title/selectors do.
 const sectionVariantsSync: Variants = {
   hidden: { opacity: 0, y: 32 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: smoothEase, staggerChildren: 0.07 } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: smoothEase, staggerChildren: 0.045 } },
 };
 const listVariants: Variants = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } },
+  visible: { transition: { staggerChildren: 0.05 } },
 };
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 26 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: smoothEase } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.36, ease: smoothEase } },
 };
 const titleVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: smoothEase } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.36, ease: smoothEase } },
 };
 const imageRevealVariants: Variants = {
   hidden: { opacity: 0, scale: 1.05 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.65, ease: smoothEase } },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.45, ease: smoothEase } },
 };
 const ctaFocusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8cdd3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]';
 
 const numberPop = (index: number): Variants => ({ hidden: { scale: 0.9 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.03 } } });
-const underlineGrow = (delayBase: number, index: number, delayStep: number): Variants => ({ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.42, delay: delayBase + index * delayStep, ease: smoothEase } } });
+const underlineGrow = (delayBase: number, index: number, delayStep: number): Variants => ({ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.3, delay: delayBase + index * delayStep, ease: smoothEase } } });
 const iconPop = (index: number): Variants => ({ hidden: { scale: 0.92, rotate: -4 }, visible: { scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.025 } } });
 const badgePop = (index: number): Variants => ({ hidden: { scale: 0.92 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.02 } } });
 const starPop = (index: number, starIndex: number): Variants => ({ hidden: { opacity: 0, scale: 0.75, rotate: -8 }, visible: { opacity: 1, scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.04 + starIndex * 0.025 } } });

@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, CalendarDays, Home, LockKeyhole, ShieldCheck, Sparkles, UserRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Eye, EyeOff, Home, LockKeyhole, ShieldCheck, Sparkles, UserRound } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { login } from '@/lib/auth';
 import { brandAssets } from '@/lib/brand-assets';
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -141,19 +142,23 @@ export default function LoginPage() {
               </span>
             </label>
 
-            <label className="grid gap-2 text-sm font-medium text-zinc-200">
-              Contraseña
+            <div className="grid gap-2 text-sm font-medium text-zinc-200">
+              <label htmlFor="login-password">Contraseña</label>
               <span className="group flex items-center gap-3 rounded-xl border border-white/12 bg-black/35 px-3 py-3 transition focus-within:border-[#dbe1e8]/80 focus-within:bg-black/55">
                 <LockKeyhole className="h-4 w-4 shrink-0 text-zinc-500 transition group-focus-within:text-[#dbe1e8]" />
                 <input
+                  id="login-password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
                   autoComplete="current-password"
                   placeholder="contraseña"
                 />
+                <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={showPassword} title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dbe1e8]/80">
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </span>
-            </label>
+            </div>
 
             <button
               disabled={loading}
