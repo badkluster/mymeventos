@@ -116,6 +116,15 @@ export default function MarketingAudiencesPage() {
     setForm((c) => ({ ...c, sourceTypes: c.sourceTypes.includes(type) ? c.sourceTypes.filter((t) => t !== type) : [...c.sourceTypes, type] }));
   }
 
+  function toggleLeadStatus(status: string) {
+    setForm((current) => ({
+      ...current,
+      leadStatuses: current.leadStatuses.includes(status)
+        ? current.leadStatuses.filter((selectedStatus) => selectedStatus !== status)
+        : [...current.leadStatuses, status]
+    }));
+  }
+
   async function runEstimate() {
     setEstimating(true);
     try {
@@ -214,11 +223,18 @@ export default function MarketingAudiencesPage() {
           {form.sourceTypes.includes('lead') ? (
             <fieldset className="grid gap-3 rounded-xl border border-zinc-200 p-4 md:grid-cols-2">
               <legend className="mb-1 text-sm font-semibold text-zinc-800 md:col-span-2">Filtros de leads</legend>
-              <label className="text-sm text-zinc-700 md:col-span-2">Estados
-                <Select multiple className="mt-1.5 min-h-24" value={form.leadStatuses} onChange={(e) => setForm((c) => ({ ...c, leadStatuses: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>
-                  {LEAD_STATUSES.map((status) => <option key={status} value={status}>{displayLabel(leadStatusLabels, status)}</option>)}
-                </Select>
-              </label>
+              <fieldset className="md:col-span-2">
+                <legend className="text-sm text-zinc-700">Estados</legend>
+                <p className="mt-1 text-xs text-zinc-500">Marcá uno o más estados. Si no marcás ninguno, se incluirán todos.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {LEAD_STATUSES.map((status) => (
+                    <label key={status} className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-50">
+                      <input type="checkbox" checked={form.leadStatuses.includes(status)} onChange={() => toggleLeadStatus(status)} />
+                      {displayLabel(leadStatusLabels, status)}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               <Input placeholder="Tipo de evento" value={form.leadEventType} onChange={(e) => setForm((c) => ({ ...c, leadEventType: e.target.value }))} />
               <Input placeholder="Etiquetas separadas por coma" value={form.leadTags} onChange={(e) => setForm((c) => ({ ...c, leadTags: e.target.value }))} />
               <Input placeholder="Invitados mínimo" value={form.leadGuestMin} onChange={(e) => setForm((c) => ({ ...c, leadGuestMin: e.target.value }))} />

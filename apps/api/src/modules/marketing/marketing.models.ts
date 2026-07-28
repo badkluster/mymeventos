@@ -209,7 +209,6 @@ const marketingCampaignSchema = new Schema(
     clickTrackingEnabled: { type: Boolean, default: true },
     unsubscribeEnabled: { type: Boolean, default: true },
     batchSize: Number,
-    sendRateLimit: Number,
     tags: { type: [String], default: [] },
 
     // Batch-processing coordination (Mongo-based lock, see marketing-campaign.service.ts).

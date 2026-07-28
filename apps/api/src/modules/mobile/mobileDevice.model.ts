@@ -34,7 +34,6 @@ const mobileDeviceSchema = new Schema({
   lastReportedIp: String,
   lastConnectionType: String,
   lastUserAgent: String,
-  pushToken: String,
   biometricEnabled: { type: Boolean, default: false },
   lastLoginAt: Date,
   lastUsedAt: Date,

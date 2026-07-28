@@ -1,0 +1,31 @@
+name: Financial reminders
+
+# GitHub Actions provides the cadence without requiring a paid Vercel Cron plan.
+# The endpoint owns idempotency and may safely be called again after a timeout.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: financial-reminders-cron
+  cancel-in-progress: false
+
+jobs:
+  process-financial-reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Process financial reminders
+        env:
+          FINANCIAL_REMINDERS_APP_BASE_URL: ${{ secrets.FINANCIAL_REMINDERS_APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 45 --retry 2 --retry-all-errors \
+            --request POST "${FINANCIAL_REMINDERS_APP_BASE_URL%/}/api/internal/calendar-tick" \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --header "Content-Type: application/json" \
+            --data '{"maxTicks":1}'

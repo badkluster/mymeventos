@@ -1,0 +1,30 @@
+name: Ticket automation
+
+# GitHub Actions is the sole scheduler for this idempotent endpoint.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: ticket-automation-cron
+  cancel-in-progress: false
+
+jobs:
+  process-ticket-automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Process expired reservations and pending ticket automation
+        env:
+          TICKET_AUTOMATION_APP_BASE_URL: ${{ secrets.TICKET_AUTOMATION_APP_BASE_URL }}
+          TICKET_AUTOMATION_CRON_SECRET: ${{ secrets.TICKET_AUTOMATION_CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 45 --retry 2 --retry-all-errors \
+            --request POST "${TICKET_AUTOMATION_APP_BASE_URL%/}/api/tickets/process" \
+            --header "Authorization: Bearer ${TICKET_AUTOMATION_CRON_SECRET}" \
+            --header "Content-Type: application/json" \
+            --data '{"maxTicks":1}'

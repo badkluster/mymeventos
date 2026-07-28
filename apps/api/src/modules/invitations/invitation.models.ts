@@ -12,6 +12,9 @@ const baseFields = {
 
 const digitalInvitationSchema = new Schema({
   ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  // The invitation takes a one-time copy of event data; this optional link only
+  // makes it discoverable from that event afterwards.
+  linkedEventId: { type: Schema.Types.ObjectId, ref: 'Event', index: true },
   title: { type: String, required: true, trim: true },
   honoreeName: { type: String, trim: true },
   eventDate: Date,
@@ -46,6 +49,7 @@ const digitalInvitationSchema = new Schema({
   ...baseFields
 }, { timestamps: true });
 digitalInvitationSchema.index({ ownerId: 1, status: 1, deletedAt: 1 });
+digitalInvitationSchema.index({ linkedEventId: 1, deletedAt: 1 }, { unique: true, partialFilterExpression: { linkedEventId: { $type: 'objectId' } } });
 
 const invitationTemplateSchema = new Schema({
   ownerId: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },

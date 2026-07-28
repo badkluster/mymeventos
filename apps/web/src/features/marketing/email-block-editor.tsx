@@ -16,11 +16,15 @@ import {
 import { renderEmailContentToHtml } from './email-html-renderer';
 import { renderPreviewSample } from './email-preview-sample';
 
-type Props = { content: EmailContent; onChange: (content: EmailContent) => void };
+type Props = {
+  content: EmailContent;
+  onChange: (content: EmailContent) => void;
+  previewContext?: Record<string, string>;
+};
 
 function withOrder(blocks: EmailBlock[]): EmailBlock[] { return blocks; }
 
-export function EmailBlockEditor({ content, onChange }: Props) {
+export function EmailBlockEditor({ content, onChange, previewContext }: Props) {
   const [selectedId, setSelectedId] = useState<string | undefined>(content.blocks[0]?.id);
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [panel, setPanel] = useState<'sections' | 'design' | 'preview'>('sections');
@@ -66,7 +70,7 @@ export function EmailBlockEditor({ content, onChange }: Props) {
     updateBlocks(next);
   }
 
-  const previewHtml = renderPreviewSample(renderEmailContentToHtml(content));
+  const previewHtml = renderPreviewSample(renderEmailContentToHtml(content), previewContext);
 
   return (
     <div className="space-y-3">
@@ -83,7 +87,7 @@ export function EmailBlockEditor({ content, onChange }: Props) {
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase text-zinc-500">Secciones</p>
             <div className="relative">
-              <Button type="button" variant="secondary" onClick={() => setAddMenuOpen((c) => !c)} className="h-8 px-2 text-xs"><Plus className="h-3.5 w-3.5" /></Button>
+              <Button type="button" variant="secondary" onClick={() => setAddMenuOpen((c) => !c)} className="h-8 px-2 text-xs" aria-label="Agregar sección" title="Agregar sección"><Plus className="h-3.5 w-3.5" /></Button>
               {addMenuOpen ? (
                 <div className="absolute right-0 z-10 mt-1 w-48 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg">
                   {AVAILABLE_EMAIL_BLOCKS.map((type) => (
@@ -98,11 +102,11 @@ export function EmailBlockEditor({ content, onChange }: Props) {
               <div className="flex items-center justify-between">
                 <span className={`font-medium ${block.enabled ? 'text-zinc-900' : 'text-zinc-400 line-through'}`}>{EMAIL_BLOCK_LABELS[block.type]}</span>
                 <div className="flex items-center gap-0.5">
-                  <button type="button" title="Subir" onClick={(e) => { e.stopPropagation(); moveBlock(block.id, -1); }} disabled={index === 0} className="rounded p-1 hover:bg-zinc-200 disabled:opacity-30"><ChevronUp className="h-3 w-3" /></button>
-                  <button type="button" title="Bajar" onClick={(e) => { e.stopPropagation(); moveBlock(block.id, 1); }} disabled={index === blocks.length - 1} className="rounded p-1 hover:bg-zinc-200 disabled:opacity-30"><ChevronDown className="h-3 w-3" /></button>
-                  <button type="button" title={block.enabled ? 'Ocultar' : 'Mostrar'} onClick={(e) => { e.stopPropagation(); patchBlock(block.id, { enabled: !block.enabled }); }} className="rounded p-1 hover:bg-zinc-200">{block.enabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}</button>
-                  <button type="button" title="Duplicar" onClick={(e) => { e.stopPropagation(); duplicateBlock(block.id); }} className="rounded p-1 hover:bg-zinc-200"><Copy className="h-3 w-3" /></button>
-                  <button type="button" title="Eliminar" onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }} className="rounded p-1 hover:bg-red-100 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
+                  <button type="button" aria-label="Subir sección" title="Subir sección" onClick={(e) => { e.stopPropagation(); moveBlock(block.id, -1); }} disabled={index === 0} className="rounded p-1 hover:bg-zinc-200 disabled:opacity-30"><ChevronUp className="h-3 w-3" /></button>
+                  <button type="button" aria-label="Bajar sección" title="Bajar sección" onClick={(e) => { e.stopPropagation(); moveBlock(block.id, 1); }} disabled={index === blocks.length - 1} className="rounded p-1 hover:bg-zinc-200 disabled:opacity-30"><ChevronDown className="h-3 w-3" /></button>
+                  <button type="button" aria-label={block.enabled ? 'Ocultar sección' : 'Mostrar sección'} title={block.enabled ? 'Ocultar sección' : 'Mostrar sección'} onClick={(e) => { e.stopPropagation(); patchBlock(block.id, { enabled: !block.enabled }); }} className="rounded p-1 hover:bg-zinc-200">{block.enabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}</button>
+                  <button type="button" aria-label="Duplicar sección" title="Duplicar sección" onClick={(e) => { e.stopPropagation(); duplicateBlock(block.id); }} className="rounded p-1 hover:bg-zinc-200"><Copy className="h-3 w-3" /></button>
+                  <button type="button" aria-label="Eliminar sección" title="Eliminar sección" onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }} className="rounded p-1 hover:bg-red-100 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
                 </div>
               </div>
             </div>
@@ -149,15 +153,54 @@ function ColorMini({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
+const DYNAMIC_FIELD_LABELS: Record<string, { label: string; description: string }> = {
+  firstName: { label: 'Nombre', description: 'de la persona que recibe el email' },
+  lastName: { label: 'Apellido', description: 'de la persona que recibe el email' },
+  fullName: { label: 'Nombre completo', description: 'de la persona que recibe el email' },
+  email: { label: 'Email', description: 'de la persona que recibe el email' },
+  salonName: { label: 'Nombre del salón', description: 'seleccionado para la campaña' },
+  salonAddress: { label: 'Dirección del salón', description: 'seleccionado para la campaña' },
+  salonPhone: { label: 'Teléfono del salón', description: 'seleccionado para la campaña' },
+  salonWhatsApp: { label: 'WhatsApp del salón', description: 'seleccionado para la campaña' },
+  campaignName: { label: 'Nombre de la campaña', description: 'de uso interno' },
+  promotionTitle: { label: 'Título de la promoción', description: 'vinculada a la campaña' },
+  promotionDescription: { label: 'Descripción de la promoción', description: 'vinculada a la campaña' },
+  promotionCode: { label: 'Código de descuento', description: 'de la promoción vinculada' },
+  promotionValidUntil: { label: 'Vigencia de la promoción', description: 'de la promoción vinculada' },
+  discountValue: { label: 'Valor del descuento', description: 'de la promoción vinculada' },
+  buttonUrl: { label: 'Enlace de la promoción', description: 'de la promoción vinculada' },
+  companyName: { label: 'Nombre de la empresa', description: 'de Configuración de marketing' },
+  companyLogoUrl: { label: 'Logo de la empresa', description: 'de Configuración de marketing' },
+  legalFooterText: { label: 'Pie institucional', description: 'de Configuración de marketing' }
+};
+
+function presentDynamicTokens(value: string): string {
+  return value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (token, name: string) => {
+    const label = DYNAMIC_FIELD_LABELS[name]?.label;
+    return label ? `[[${label}]]` : token;
+  });
+}
+
+function storeDynamicTokens(value: string): string {
+  let stored = value;
+  for (const [name, field] of Object.entries(DYNAMIC_FIELD_LABELS)) {
+    stored = stored.split(`[[${field.label}]]`).join(`{{${name}}}`);
+  }
+  return stored;
+}
+
 function VariablePicker({ onInsert }: { onInsert: (token: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative inline-block">
-      <button type="button" onClick={() => setOpen((c) => !c)} className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-200"><Variable className="h-3 w-3" />Variable</button>
+      <button type="button" onClick={() => setOpen((c) => !c)} className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-200"><Variable className="h-3 w-3" />Agregar dato</button>
       {open ? (
-        <div className="absolute left-0 z-20 mt-1 max-h-56 w-52 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg">
+        <div className="absolute left-0 z-20 mt-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg">
           {MARKETING_DYNAMIC_VARIABLES.map((name) => (
-            <button key={name} type="button" onClick={() => { onInsert(`{{${name}}}`); setOpen(false); }} className="block w-full rounded-lg px-2 py-1 text-left font-mono text-[11px] hover:bg-zinc-100">{`{{${name}}}`}</button>
+            <button key={name} type="button" onClick={() => { onInsert(`{{${name}}}`); setOpen(false); }} className="block w-full rounded-lg px-2 py-1.5 text-left hover:bg-zinc-100">
+              <span className="block text-xs font-medium text-zinc-800">{DYNAMIC_FIELD_LABELS[name]?.label ?? name}</span>
+              <span className="block text-[11px] text-zinc-500">{DYNAMIC_FIELD_LABELS[name]?.description}</span>
+            </button>
           ))}
         </div>
       ) : null}
@@ -175,7 +218,8 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
       {block.type === 'heading' || block.type === 'text' ? (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Texto</span><VariablePicker onInsert={insertInto('text', block.data.text ?? '')} /></div>
-          <Textarea rows={4} value={block.data.text ?? ''} onChange={(e) => onChangeData('text', e.target.value)} />
+          <Textarea rows={4} value={presentDynamicTokens(block.data.text ?? '')} onChange={(e) => onChangeData('text', storeDynamicTokens(e.target.value))} />
+          <p className="text-[11px] leading-4 text-zinc-500">Los datos agregados se completan automáticamente para cada destinatario. No hace falta escribir códigos.</p>
           <div className="grid grid-cols-2 gap-2">
             <Input type="number" placeholder="Tamaño" value={block.data.fontSize ?? ''} onChange={(e) => onChangeData('fontSize', Number(e.target.value))} />
             <ColorMini label="Color" value={block.data.color ?? '#18181B'} onChange={(v) => onChangeData('color', v)} />
@@ -185,10 +229,12 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
 
       {block.type === 'image' || block.type === 'logo' ? (
         <div className="space-y-1.5">
-          <CloudinaryUpload context="general" accept="image/*" label="Subir imagen" onUploaded={(asset: UploadedAsset) => onChangeData('url', asset.secureUrl || asset.url)} />
-          <Input placeholder="URL de la imagen" value={block.data.url ?? ''} onChange={(e) => onChangeData('url', e.target.value)} />
+          {block.type === 'logo' ? <p className="rounded-lg bg-zinc-50 p-2 text-[11px] leading-4 text-zinc-600">{block.data.url === '{{companyLogoUrl}}' ? 'Está usando el logo de la Configuración de marketing.' : 'Esta campaña usa un logo propio.'}</p> : null}
+          <CloudinaryUpload context={block.type === 'logo' ? 'marketing' : 'general'} accept="image/*" label={block.type === 'logo' ? 'Usar otro logo en esta campaña' : 'Subir imagen'} onUploaded={(asset: UploadedAsset) => onChangeData('url', asset.secureUrl || asset.url)} />
+          {block.type === 'image' || block.data.url !== '{{companyLogoUrl}}' ? <Input placeholder={block.type === 'logo' ? 'URL de un logo alternativo (opcional)' : 'URL de la imagen'} value={block.data.url ?? ''} onChange={(e) => onChangeData('url', e.target.value)} /> : null}
+          {block.type === 'logo' && block.data.url !== '{{companyLogoUrl}}' ? <Button type="button" variant="secondary" className="w-full text-xs" onClick={() => onChangeData('url', '{{companyLogoUrl}}')}>Volver al logo configurado</Button> : null}
           {block.type === 'image' ? <Input placeholder="Texto alternativo" value={block.data.alt ?? ''} onChange={(e) => onChangeData('alt', e.target.value)} /> : null}
-          <Input placeholder="Enlace al hacer clic" value={block.data.link ?? ''} onChange={(e) => onChangeData('link', e.target.value)} />
+          <Input placeholder="Enlace al hacer clic" value={presentDynamicTokens(block.data.link ?? '')} onChange={(e) => onChangeData('link', storeDynamicTokens(e.target.value))} />
         </div>
       ) : null}
 
@@ -196,7 +242,7 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
         <div className="space-y-1.5">
           <Input placeholder="Texto del botón" value={block.data.label ?? ''} onChange={(e) => onChangeData('label', e.target.value)} />
           <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Enlace</span><VariablePicker onInsert={insertInto('url', block.data.url ?? '')} /></div>
-          <Input value={block.data.url ?? ''} onChange={(e) => onChangeData('url', e.target.value)} />
+          <Input value={presentDynamicTokens(block.data.url ?? '')} onChange={(e) => onChangeData('url', storeDynamicTokens(e.target.value))} />
           <div className="grid grid-cols-2 gap-2">
             <ColorMini label="Fondo" value={block.data.backgroundColor ?? '#18181B'} onChange={(v) => onChangeData('backgroundColor', v)} />
             <ColorMini label="Texto" value={block.data.textColor ?? '#FFFFFF'} onChange={(v) => onChangeData('textColor', v)} />
@@ -216,8 +262,8 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
 
       {block.type === 'columns' ? (
         <div className="space-y-1.5">
-          <Textarea rows={3} placeholder="Columna izquierda" value={block.data.leftText ?? ''} onChange={(e) => onChangeData('leftText', e.target.value)} />
-          <Textarea rows={3} placeholder="Columna derecha" value={block.data.rightText ?? ''} onChange={(e) => onChangeData('rightText', e.target.value)} />
+          <Textarea rows={3} placeholder="Columna izquierda" value={presentDynamicTokens(block.data.leftText ?? '')} onChange={(e) => onChangeData('leftText', storeDynamicTokens(e.target.value))} />
+          <Textarea rows={3} placeholder="Columna derecha" value={presentDynamicTokens(block.data.rightText ?? '')} onChange={(e) => onChangeData('rightText', storeDynamicTokens(e.target.value))} />
         </div>
       ) : null}
 
@@ -239,6 +285,7 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
 
       {block.type === 'contact' ? (
         <div className="space-y-1.5">
+          <p className="rounded-lg bg-zinc-50 p-2 text-[11px] leading-4 text-zinc-600">Estos datos se toman del salón elegido en “Información general”. La vista previa muestra esos datos reales.</p>
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={block.data.showAddress ?? true} onChange={(e) => onChangeData('showAddress', e.target.checked)} />Dirección del salón</label>
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={block.data.showPhone ?? true} onChange={(e) => onChangeData('showPhone', e.target.checked)} />Teléfono</label>
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={block.data.showWhatsApp ?? true} onChange={(e) => onChangeData('showWhatsApp', e.target.checked)} />WhatsApp</label>
@@ -247,7 +294,10 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
 
       {block.type === 'footer' ? (
         <div className="space-y-1.5">
-          <Textarea rows={2} value={block.data.text ?? ''} onChange={(e) => onChangeData('text', e.target.value)} />
+          <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Texto del pie</span><VariablePicker onInsert={insertInto('text', block.data.text ?? '')} /></div>
+          <p className="text-[11px] leading-4 text-zinc-500">Podés incluir el texto institucional, el nombre de la empresa o del salón automáticamente.</p>
+          <Button type="button" variant="secondary" className="w-full text-xs" onClick={() => onChangeData('text', '{{legalFooterText}}')}>Usar el pie institucional configurado</Button>
+          <Textarea rows={2} value={presentDynamicTokens(block.data.text ?? '')} onChange={(e) => onChangeData('text', storeDynamicTokens(e.target.value))} />
         </div>
       ) : null}
 

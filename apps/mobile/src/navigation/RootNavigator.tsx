@@ -3,7 +3,7 @@ import { Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { isBiometricSupported } from '../lib/biometrics';
 import { isBiometricEnabled } from '../lib/secureStorage';
-import { getPasswordResetTokenFromUrl } from '../lib/deepLink';
+import { getPasswordResetFromUrl, type PasswordResetDeepLink } from '../lib/deepLink';
 import { useAuthStore } from '../state/authStore';
 import { AuthNavigator } from './AuthNavigator';
 import { AppNavigator } from './AppNavigator';
@@ -17,7 +17,7 @@ export function RootNavigator() {
   const bootstrap = useAuthStore((state) => state.bootstrap);
   const beginPasswordReset = useAuthStore((state) => state.beginPasswordReset);
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
-  const [passwordResetToken, setPasswordResetToken] = useState<string>();
+  const [passwordReset, setPasswordReset] = useState<PasswordResetDeepLink>();
   const [checkingInitialDeepLink, setCheckingInitialDeepLink] = useState(true);
 
   useEffect(() => { void bootstrap(); }, [bootstrap]);
@@ -25,9 +25,9 @@ export function RootNavigator() {
   useEffect(() => {
     let active = true;
     const handleUrl = (url: string) => {
-      const token = getPasswordResetTokenFromUrl(url);
-      if (!token) return;
-      setPasswordResetToken(token);
+      const params = getPasswordResetFromUrl(url);
+      if (!params) return;
+      setPasswordReset(params);
       void beginPasswordReset();
     };
     void Linking.getInitialURL()
@@ -50,7 +50,7 @@ export function RootNavigator() {
   }, [justLoggedIn]);
 
   if (status === 'booting' || checkingInitialDeepLink) return <SplashScreen />;
-  if (status === 'signedOut') return <NavigationContainer><AuthNavigator passwordResetToken={passwordResetToken} /></NavigationContainer>;
+  if (status === 'signedOut') return <NavigationContainer><AuthNavigator passwordReset={passwordReset} /></NavigationContainer>;
   if (status === 'locked') return <BiometricUnlockScreen />;
   if (showBiometricPrompt) return <BiometricSetupScreen />;
   return <NavigationContainer><AppNavigator /></NavigationContainer>;

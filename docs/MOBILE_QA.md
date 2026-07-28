@@ -57,10 +57,10 @@ El `.env`/`apps/api/.env` del repositorio apunta a un clúster de MongoDB Atlas 
 
 ## 5. Recomendaciones antes de producción
 
-1. Agregar rate limiting a `/api/mobile/auth/login` y `/api/mobile/auth/forgot-password` (hoy sin límite específico, igual que sus equivalentes web).
+1. Agregar rate limiting a `/api/mobile/auth/login` (la recuperación de contraseña ya limita solicitudes por IP y los intentos de cada código, pero el login sigue igual que su equivalente web).
 2. Agregar tests de render con `@testing-library/react-native` para las pantallas críticas (Login, Home/fichaje).
 3. Definir `bundleIdentifier`/`package` definitivos y correr `eas build:configure` con la cuenta real de la organización.
-4. Decidir si se conecta push real (Expo Notifications) antes o después del primer rollout — el backend ya está listo para recibir el token.
+4. Decidir si se conecta push real (Expo Notifications) antes o después del primer rollout; entonces habrá que implementar el registro seguro de tokens y el servicio de envío.
 5. Probar en al menos un dispositivo Android y uno iOS reales antes de distribuir (geolocalización, biometría y selector de fotos dependen de hardware/SO real).
 
 ## 6. Migración a Expo SDK 57 (2026-07-26) — verificación automática hecha, QA manual pendiente

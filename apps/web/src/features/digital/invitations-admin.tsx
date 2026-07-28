@@ -22,6 +22,7 @@ function InvitationVisualWorkspace({ invitation, onUpdated }: { invitation: Digi
 
 function TemplateCard({ template, selected, onSelect, actionLabel }: { template: InvitationTemplate; selected?: boolean; onSelect?: () => void; actionLabel?: string }) {
   const theme = template.theme ?? {}; const premium = template.tier === 'premium'; const features = template.allowedFeatures; const capabilityRows = [
+    { label: 'Confirmación RSVP', enabled: true, detail: 'formulario de asistencia' },
     { label: 'Música de fondo', enabled: features?.allowMusic ?? premium, detail: 'MP3 o URL de audio' },
     { label: 'Galería de fotos', enabled: true, detail: `hasta ${features?.maxGalleryImages ?? (premium ? 20 : 4)} imágenes` },
     { label: 'Agenda y regalos', enabled: features?.allowSchedule ?? premium, detail: 'secciones especiales' },

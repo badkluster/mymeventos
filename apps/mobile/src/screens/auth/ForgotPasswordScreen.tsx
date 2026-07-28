@@ -36,8 +36,8 @@ export function ForgotPasswordScreen({ navigation }: Props) {
       {sent ? (
         <View style={styles.sent}>
           <Text style={styles.sentTitle}>Revisá tu email</Text>
-          <Text style={styles.sentBody}>Si el usuario existe vas a recibir instrucciones. Abrí el enlace o pegá el código en la siguiente pantalla.</Text>
-          <AppButton title="Ya tengo el código" variant="secondary" onPress={() => navigation.navigate('ResetPassword')} />
+          <Text style={styles.sentBody}>Si el usuario existe y tiene email configurado, vas a recibir un código de seis dígitos. Abrí el enlace o ingresalo en la siguiente pantalla.</Text>
+          <AppButton title="Ya tengo el código" variant="secondary" onPress={() => navigation.navigate('ResetPassword', { username: username.trim() })} />
         </View>
       ) : (
         <View style={styles.form}>

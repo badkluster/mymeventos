@@ -20,8 +20,9 @@ type Campaign = {
 };
 type Audience = { _id: string; name: string; estimatedCount: number };
 type Template = { _id: string; name: string; subject?: string; preheader?: string; contentJson?: EmailContent };
-type Salon = { _id: string; name: string };
+type Salon = { _id: string; name: string; address?: string; locality?: string; city?: string; province?: string; phone?: string; whatsapp?: string };
 type Estimate = { estimatedCount: number; totalMatched: number; duplicatesRemoved: number; invalidEmailExcluded: number; manuallyExcluded: number };
+type MarketingSettings = { companyName?: string; logoUrl?: string; logoAlternativeUrl?: string; defaultImageUrl?: string; senderName?: string; senderEmail?: string; replyToEmail?: string; legalFooterText?: string };
 
 const STEPS = ['Información general', 'Audiencia', 'Diseño', 'Configuración de envío', 'Revisión'];
 
@@ -37,6 +38,7 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [salons, setSalons] = useState<Salon[]>([]);
+  const [marketingSettings, setMarketingSettings] = useState<MarketingSettings>({});
 
   const [name, setName] = useState('');
   const [internalDescription, setInternalDescription] = useState('');
@@ -61,7 +63,8 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
     void Promise.all([
       api.get<{ salons: Salon[] }>('/salons').then((r) => setSalons(r.salons)).catch(() => undefined),
       api.get<{ items: Audience[] }>('/marketing/audiences?limit=100').then((r) => setAudiences(r.items)).catch(() => undefined),
-      api.get<{ items: Template[] }>('/marketing/templates?limit=100&isActive=true').then((r) => setTemplates(r.items)).catch(() => undefined)
+      api.get<{ items: Template[] }>('/marketing/templates?limit=100&isActive=true').then((r) => setTemplates(r.items)).catch(() => undefined),
+      api.get<{ settings: MarketingSettings }>('/marketing/settings').then((r) => setMarketingSettings(r.settings)).catch(() => undefined)
     ]);
   }, []);
 
@@ -154,8 +157,26 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
     if (template.contentJson) setContent(template.contentJson);
   }
 
-  const previewHtml = useMemo(() => renderPreviewSample(renderEmailContentToHtml(content)), [content]);
   const selectedAudience = audiences.find((a) => a._id === audienceId);
+  const selectedSalon = salons.find((salon) => salon._id === salonId);
+  const previewContext = useMemo(() => {
+    const location = selectedSalon
+      ? [selectedSalon.address, selectedSalon.locality || selectedSalon.city, selectedSalon.province].filter(Boolean).join(', ')
+      : 'Elegí un salón en Información general';
+    return {
+      companyName: marketingSettings.companyName || 'Nombre de la empresa',
+      companyLogoUrl: marketingSettings.logoUrl || marketingSettings.logoAlternativeUrl || marketingSettings.defaultImageUrl || '',
+      legalFooterText: marketingSettings.legalFooterText || 'Pie institucional sin configurar',
+      salonName: selectedSalon?.name || 'Salón sin seleccionar',
+      salonAddress: location || 'Dirección sin configurar',
+      salonPhone: selectedSalon?.phone || 'Teléfono sin configurar',
+      salonWhatsApp: selectedSalon?.whatsapp || 'WhatsApp sin configurar'
+    };
+  }, [marketingSettings, selectedSalon]);
+  const previewHtml = useMemo(() => renderPreviewSample(renderEmailContentToHtml(content), previewContext), [content, previewContext]);
+  const configuredSenderName = marketingSettings.senderName || marketingSettings.companyName || '';
+  const configuredReplyTo = marketingSettings.replyToEmail || '';
+  const hasContactBlock = content.blocks.some((block) => block.type === 'contact' && block.enabled);
 
   if (loading) return <p className="p-6 text-sm text-zinc-500">Cargando campaña...</p>;
   const editable = campaign ? ['draft', 'scheduled'].includes(campaign.status) : true;
@@ -207,6 +228,15 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
 
         {step === 2 ? (
           <div className="space-y-4">
+            <div className="rounded-xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-950">
+              <p className="font-semibold">Armá el email en tres pasos simples</p>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-5 text-sky-900">
+                <li>Elegí una plantilla o empezá con las secciones que ya aparecen.</li>
+                <li>Hacé clic en una sección para cambiar su texto, imagen o botón.</li>
+                <li>Usá “Agregar dato” si querés personalizar el mensaje: se completa solo al enviarlo.</li>
+              </ol>
+            </div>
+            {hasContactBlock && !salonId ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">Incluiste datos de contacto, pero todavía no elegiste un salón. Seleccionalo en “Información general” para que el email muestre dirección, teléfono y WhatsApp reales.</p> : null}
             <div className="grid gap-3 md:grid-cols-3">
               <Select onChange={(e) => e.target.value && applyTemplate(e.target.value)} defaultValue="">
                 <option value="">Partir de una plantilla...</option>
@@ -215,14 +245,27 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
               <Input placeholder="Asunto" value={subject} onChange={(e) => setSubject(e.target.value)} />
               <Input placeholder="Preheader" value={preheader} onChange={(e) => setPreheader(e.target.value)} />
             </div>
-            <EmailBlockEditor content={content} onChange={setContent} />
+            <EmailBlockEditor content={content} onChange={setContent} previewContext={previewContext} />
           </div>
         ) : null}
 
         {step === 3 ? (
           <div className="grid gap-3 md:grid-cols-2">
-            <Input placeholder="Nombre del remitente" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
-            <Input type="email" placeholder="Email de respuesta" value={replyTo} onChange={(e) => setReplyTo(e.target.value)} />
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm md:col-span-2">
+              <p className="font-semibold text-zinc-900">Datos institucionales configurados</p>
+              <div className="mt-2 grid gap-1 text-xs text-zinc-600 md:grid-cols-2">
+                <p><span className="font-medium text-zinc-800">Remitente:</span> {configuredSenderName || 'Sin configurar'}</p>
+                <p><span className="font-medium text-zinc-800">Email de envío:</span> {marketingSettings.senderEmail || 'Sin configurar'}</p>
+                <p className="md:col-span-2"><span className="font-medium text-zinc-800">Email de respuesta:</span> {configuredReplyTo || 'Sin configurar'}</p>
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">Dejá los campos vacíos para usar estos datos. Completalos solo si esta campaña necesita una excepción.</p>
+            </div>
+            <label className="text-sm font-medium text-zinc-700">Nombre visible del remitente (opcional)
+              <Input className="mt-1.5" placeholder={configuredSenderName || 'Configuración institucional'} value={senderName} onChange={(e) => setSenderName(e.target.value)} />
+            </label>
+            <label className="text-sm font-medium text-zinc-700">Email de respuesta (opcional)
+              <Input className="mt-1.5" type="email" placeholder={configuredReplyTo || 'Configuración institucional'} value={replyTo} onChange={(e) => setReplyTo(e.target.value)} />
+            </label>
             <div className="md:col-span-2 flex flex-wrap gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
               <label className="flex items-center gap-2 text-sm"><input type="radio" checked={sendMode === 'now'} onChange={() => setSendMode('now')} />Enviar ahora</label>
               <label className="flex items-center gap-2 text-sm"><input type="radio" checked={sendMode === 'schedule'} onChange={() => setSendMode('schedule')} />Programar</label>
@@ -240,7 +283,8 @@ export default function EditCampaignPage({ params }: { params: Promise<{ id: str
           <div className="space-y-4">
             <div className="grid gap-3 rounded-xl bg-zinc-50 p-4 text-sm md:grid-cols-2">
               <p><span className="font-semibold">Asunto:</span> {subject || 'Sin definir'}</p>
-              <p><span className="font-semibold">Remitente:</span> {senderName || 'Configuración institucional'}</p>
+              <p><span className="font-semibold">Remitente:</span> {senderName || configuredSenderName || 'Sin configurar'}</p>
+              <p><span className="font-semibold">Respuestas a:</span> {replyTo || configuredReplyTo || 'Sin configurar'}</p>
               <p><span className="font-semibold">Audiencia:</span> {selectedAudience?.name ?? 'Sin seleccionar'}</p>
               <p><span className="font-semibold">Envío:</span> {sendMode === 'now' ? 'Inmediato' : scheduledAtLocal ? new Date(scheduledAtLocal).toLocaleString('es-AR') : 'Sin programar'}</p>
               <p><span className="font-semibold">Destinatarios estimados:</span> {estimate?.estimatedCount ?? campaign?.excludedRecipientEmails?.length ?? '—'}</p>

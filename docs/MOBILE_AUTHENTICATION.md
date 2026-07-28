@@ -35,16 +35,18 @@ También se exige `user.active` y, si existe `staffProfile.employmentStatus`, qu
 
 | Endpoint | Notas |
 |---|---|
-| `POST /login` | Body: `{username, password, device, pushToken?}`. Registra/actualiza el `MobileDevice` y responde `{accessToken, refreshToken, accessTokenExpiresIn, user}` en el body (no cookies). |
+| `POST /login` | Body: `{username, password, device}`. Registra/actualiza el `MobileDevice` y responde `{accessToken, refreshToken, accessTokenExpiresIn, user}` en el body (no cookies). |
 | `POST /refresh` | Body: `{refreshToken}` (no cookie). Rota el refresh token (revoca el usado, emite uno nuevo) y vuelve a validar elegibilidad móvil en cada rotación — si un admin apaga el acceso a mitad de sesión, el próximo refresh lo corta. |
 | `POST /logout` | Revoca solo el refresh token presentado. |
 | `POST /logout-all` | Requiere sesión. Revoca **solo** los `RefreshToken` con `channel: 'mobile'` del usuario — no cierra su sesión web si también es admin. |
 | `GET /session` | Equivalente móvil de `/auth/me`. |
-| `POST /forgot-password` | Genera un token aleatorio (`crypto.randomBytes(32)`), lo guarda hasheado (`sha256`, mismo `hashToken()` que ya usa el refresh token) con expiración de 30 min, y envía un email con el código + un deep link `mymeventos://reset-password?token=...`. Responde siempre `200` exista o no el usuario (no revela existencia). |
-| `POST /reset-password` | Valida el hash+expiración, cambia la contraseña y **revoca todos los refresh tokens** del usuario (web y móvil) por seguridad. |
+| `POST /forgot-password` | Para un usuario elegible, genera un código numérico de seis dígitos con CSPRNG, guarda sólo su hash (`sha256`) por 30 min y lo envía por email junto con un deep link `mymeventos://reset-password?username=...&token=...`. Responde siempre `200` exista o no el usuario (no revela existencia) y admite hasta 3 pedidos por IP cada 15 min. |
+| `POST /reset-password` | Recibe `{ username, token, newPassword }`, valida el hash+expiración para ese usuario y permite hasta 5 intentos del código. Al cambiarla, invalida el código y **revoca todos los refresh tokens** del usuario (web y móvil) por seguridad. La ruta además admite hasta 5 solicitudes por IP cada 15 min. |
 | `POST /change-password` | Requiere sesión + `Permission.SECURITY_PASSWORD_CHANGE` (en el preset de `STAFF` por defecto). |
 
 No existía ningún flujo de "olvidé mi contraseña" en el código (ni web ni móvil) — se construyó completo, reutilizando los campos `passwordResetTokenHash`/`passwordResetExpiresAt` que ya estaban en el esquema de `User` sin ningún consumidor.
+
+Para que el código llegue realmente al usuario, el entorno donde se despliega la API debe tener `EMAIL_NOTIFICATIONS_ENABLED=true` y las cinco variables SMTP configuradas (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`). Si se mantienen apagadas, la API conserva una respuesta genérica por privacidad pero no puede entregar el email.
 
 ## 4. Dispositivos (`MobileDevice`)
 
@@ -66,4 +68,4 @@ Explícitamente **no se guarda ningún dato biométrico**, ni en `MobileDevice` 
 ## 6. Fuera de alcance de esta tarea (documentado, no fingido)
 
 - **Validación de entradas QR desde el móvil.** El prompt original es explícito: debe ser un permiso y flujo separado del fichaje, no mezclado. `Permission.TICKETS_VALIDATE` ya existe (módulo de Entradas Digitales) y es independiente de `Permission.MOBILE_ACCESS`/`ATTENDANCE_CLOCK` — no se tocó ni se mezcló.
-- **Rate limiting específico sobre `/api/mobile/auth/login`.** El limitador genérico (`publicRateLimit`) solo está montado en rutas públicas de invitaciones/entradas; no se agregó a los endpoints de auth móvil en esta tarea (mismo estado que `/api/auth/login` web, que tampoco lo tiene). Queda como mejora de seguridad recomendada antes de producción — ver `docs/MOBILE_QA.md` §Recomendaciones.
+- **Rate limiting específico sobre `/api/mobile/auth/login`.** La recuperación de contraseña ya tiene límite local por IP y por código; el login aún no tiene uno (mismo estado que `/api/auth/login` web). Queda como mejora de seguridad recomendada antes de producción — ver `docs/MOBILE_QA.md` §Recomendaciones.

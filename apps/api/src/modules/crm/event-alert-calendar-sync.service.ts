@@ -9,7 +9,7 @@ type EventAlertItem = {
   notes?: string;
 };
 
-const notificationChannels = ['system', 'email', 'whatsapp'];
+const notificationChannels = ['system', 'email'];
 
 function calendarStatus(status?: string): 'pending' | 'scheduled' | 'done' | 'cancelled' {
   if (status === 'scheduled') return 'scheduled';

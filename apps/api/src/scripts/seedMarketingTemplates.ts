@@ -46,7 +46,16 @@ function renderBlocksToText(blocks: Block[]): string {
   }).filter(Boolean).join('\n');
 }
 
-type SeedTemplate = { category: string; name: string; subject: string; preheader: string; blocks: Block[] };
+type SeedTemplate = {
+  category: string;
+  name: string;
+  subject: string;
+  preheader: string;
+  description?: string;
+  thumbnailUrl?: string;
+  tags?: string[];
+  blocks: Block[];
+};
 
 const templates: SeedTemplate[] = [
   {
@@ -192,16 +201,123 @@ const templates: SeedTemplate[] = [
   {
     category: 'blank', name: 'Plantilla en blanco', subject: 'Asunto de tu campaña',
     preheader: '', blocks: [logoBlock(), block('text', { text: 'Escribí acá el contenido de tu campaña.' }), footerBlock('{{companyName}} — {{salonAddress}}')]
+  },
+
+  // Plantillas comerciales elaboradas a partir de la oferta vigente de M&M:
+  // salones en San Carlos, Villa Elisa y La Plata; eventos sociales, infantiles,
+  // egresados y propuestas integrales con catering, DJ y ambientación.
+  {
+    category: 'general_promotion',
+    name: 'M&M · Tu fiesta de 15, hecha a medida',
+    description: 'Presenta la propuesta integral para fiestas de 15: salón, catering, ambientación, DJ y coordinación.',
+    subject: 'Tu fiesta de 15 puede ser inolvidable ✨',
+    preheader: 'Conocé una propuesta integral para celebrar sin preocupaciones.',
+    thumbnailUrl: 'https://res.cloudinary.com/ujgqo14q/image/upload/v1783888531/mym-eventos/general/file_ngkxzz.jpg',
+    tags: ['15 años', 'eventos sociales', 'propuesta integral'],
+    blocks: [
+      block('image', { url: 'https://res.cloudinary.com/ujgqo14q/image/upload/v1783888531/mym-eventos/general/file_ngkxzz.jpg', alt: 'Fiesta de 15 en M&M Eventos' }, { paddingY: 0, paddingX: 0 }),
+      block('heading', { text: 'Tu fiesta de 15, como siempre la soñaste', fontSize: 28, color: '#111827' }),
+      block('text', { text: 'Hola {{firstName}}, en {{companyName}} creamos celebraciones con identidad propia. Te ayudamos a combinar salón, catering, DJ, iluminación, ambientación y coordinación para que disfrutes cada momento.' }),
+      block('text', { text: 'Contanos tu idea y armamos una propuesta a medida para tu fecha y cantidad de invitados.' }),
+      block('button', { label: 'Quiero mi propuesta para 15', url: '{{buttonUrl}}', backgroundColor: '#111827', textColor: '#FFFFFF' }),
+      contactBlock(),
+      footerBlock('{{companyName}} — {{salonAddress}}')
+    ]
+  },
+  {
+    category: 'venue_invitation',
+    name: 'M&M · Visitá nuestros salones',
+    description: 'Invitación a conocer los espacios de San Carlos, Villa Elisa y La Plata antes de elegir fecha.',
+    subject: 'Conocé el espacio para tu próximo evento',
+    preheader: 'Coordiná una visita a nuestros salones y elegí el que mejor se adapta a tu celebración.',
+    thumbnailUrl: 'https://res.cloudinary.com/ujgqo14q/image/upload/v1783888286/mym-eventos/general/file_jalbje.png',
+    tags: ['visita', 'salones', 'La Plata'],
+    blocks: [
+      block('image', { url: 'https://res.cloudinary.com/ujgqo14q/image/upload/v1783888286/mym-eventos/general/file_jalbje.png', alt: 'Salón ambientado de M&M Eventos' }, { paddingY: 0, paddingX: 0 }),
+      block('heading', { text: 'Elegí el salón perfecto para tu celebración', fontSize: 27, color: '#111827' }),
+      block('text', { text: 'Hola {{firstName}}, te invitamos a conocer nuestros espacios en San Carlos, Villa Elisa y La Plata. Tenemos opciones para celebraciones de 50 a 160 invitados, con propuestas adaptadas a cada evento.' }),
+      block('text', { text: 'Durante la visita podemos conversar sobre tu fecha, estilo de fiesta, servicios y presupuesto.' }),
+      block('button', { label: 'Coordinar una visita', url: '{{buttonUrl}}', backgroundColor: '#111827', textColor: '#FFFFFF' }),
+      contactBlock(),
+      footerBlock('{{companyName}} — {{salonAddress}}')
+    ]
+  },
+  {
+    category: 'new_package_or_service',
+    name: 'M&M · Cumples infantiles sin complicaciones',
+    description: 'Promociona las propuestas infantiles Risitas y Sonrisitas, disponibles en San Carlos y Villa Elisa.',
+    subject: 'Un cumple infantil para disfrutar de principio a fin 🎈',
+    preheader: 'Salón, inflable, sonido, vajilla, staff y tarjeta digital en una propuesta práctica.',
+    tags: ['infantiles', 'cumpleaños', 'San Carlos', 'Villa Elisa'],
+    blocks: [
+      block('heading', { text: 'El cumple de ellos. La tranquilidad para vos.', fontSize: 28, color: '#111827' }),
+      block('text', { text: 'Hola {{firstName}}, nuestras propuestas infantiles reúnen lo necesario para celebrar: salón, cocina equipada, vajilla, staff, inflable, sonido y tarjeta digital.' }),
+      block('text', { text: 'Consultá por las opciones Risitas y Sonrisitas, pensadas para festejos de hasta 100 personas en San Carlos y Villa Elisa.' }),
+      block('button', { label: 'Consultar propuestas infantiles', url: '{{buttonUrl}}', backgroundColor: '#111827', textColor: '#FFFFFF' }),
+      contactBlock(),
+      footerBlock('{{companyName}} — {{salonAddress}}')
+    ]
+  },
+  {
+    category: 'new_package_or_service',
+    name: 'M&M · Egresados con organización integral',
+    description: 'Presenta la propuesta para fiestas de egresados con conducción, cronograma, DJ y catering.',
+    subject: 'La fiesta de egresados que todos van a recordar 🎓',
+    preheader: 'Organización, conducción, DJ, ambientación y menú para una noche inolvidable.',
+    tags: ['egresados', 'organización', 'La Plata', 'San Carlos'],
+    blocks: [
+      block('heading', { text: 'Una fiesta de egresados a la altura del momento', fontSize: 27, color: '#111827' }),
+      block('text', { text: 'Hola {{firstName}}, en {{companyName}} organizamos fiestas de egresados con cronograma, conducción para el ingreso y la entrega de bandas, DJ, sonido, iluminación, sectores ambientados y staff.' }),
+      block('text', { text: 'Además, podés sumar una propuesta gastronómica y de bebidas para que el grupo solo tenga que disfrutar.' }),
+      block('button', { label: 'Pedir propuesta para egresados', url: '{{buttonUrl}}', backgroundColor: '#111827', textColor: '#FFFFFF' }),
+      contactBlock(),
+      footerBlock('{{companyName}} — {{salonAddress}}')
+    ]
+  },
+  {
+    category: 'quote_follow_up',
+    name: 'M&M · Retomemos tu presupuesto',
+    description: 'Seguimiento cálido de presupuestos con énfasis en fecha, propuesta a medida y condiciones de reserva.',
+    subject: '{{firstName}}, ¿retomamos la propuesta para tu evento?',
+    preheader: 'Estamos para ajustar la propuesta y ayudarte a reservar tu fecha.',
+    tags: ['seguimiento', 'presupuesto', 'reserva'],
+    blocks: [
+      block('heading', { text: 'Estamos a un paso de darle forma a tu evento', fontSize: 27, color: '#111827' }),
+      block('text', { text: 'Hola {{firstName}}, queríamos saber si pudiste revisar la propuesta que preparamos para vos. Podemos ajustar servicios, cantidad de invitados o formato para que se adapte a lo que necesitás.' }),
+      block('text', { text: 'Cuando encuentres la opción ideal, consultanos cómo reservar tu fecha y mantener las condiciones comerciales vigentes.' }),
+      block('button', { label: 'Retomar mi presupuesto', url: '{{buttonUrl}}', backgroundColor: '#111827', textColor: '#FFFFFF' }),
+      contactBlock(),
+      footerBlock('{{companyName}} — {{salonAddress}}')
+    ]
+  },
+  {
+    category: 'informational',
+    name: 'M&M · Todo para tu evento en un solo lugar',
+    description: 'Campaña de posicionamiento para presentar la oferta integral de M&M Eventos.',
+    subject: 'Salón, catering y organización para disfrutar tu evento',
+    preheader: 'Conocé cómo armamos celebraciones personalizadas de principio a fin.',
+    thumbnailUrl: 'https://res.cloudinary.com/ujgqo14q/image/upload/v1783888436/mym-eventos/general/file_m8poj6.jpg',
+    tags: ['servicio integral', 'catering', 'eventos'],
+    blocks: [
+      block('image', { url: 'https://res.cloudinary.com/ujgqo14q/image/upload/v1783888436/mym-eventos/general/file_m8poj6.jpg', alt: 'Recepción de un evento M&M' }, { paddingY: 0, paddingX: 0 }),
+      block('heading', { text: 'Tu evento, resuelto de principio a fin', fontSize: 27, color: '#111827' }),
+      block('text', { text: 'Hola {{firstName}}, en {{companyName}} reunimos salón, catering, bebidas, ambientación, DJ, iluminación, vajilla, mantelería y coordinación para que puedas disfrutar sin preocupaciones.' }),
+      block('text', { text: 'Realizamos cumpleaños, fiestas de 15, casamientos, egresados, eventos infantiles, empresariales y celebraciones personalizadas.' }),
+      block('button', { label: 'Contanos qué querés celebrar', url: '{{buttonUrl}}', backgroundColor: '#111827', textColor: '#FFFFFF' }),
+      contactBlock(),
+      footerBlock('{{companyName}} — {{salonAddress}}')
+    ]
   }
 ];
 
 async function seedTemplate(input: SeedTemplate) {
   const contentJson = { blocks: input.blocks, settings };
   await MarketingTemplate.findOneAndUpdate(
-    { isSystemTemplate: true, category: input.category },
+    { isSystemTemplate: true, name: input.name },
     {
       $set: {
-        name: input.name, category: input.category, subject: input.subject, preheader: input.preheader,
+        name: input.name, description: input.description, category: input.category, thumbnailUrl: input.thumbnailUrl,
+        subject: input.subject, preheader: input.preheader, tags: input.tags ?? [],
         contentJson, renderedHtml: renderBlocksToHtml(input.blocks), renderedText: renderBlocksToText(input.blocks),
         isSystemTemplate: true, isActive: true
       },

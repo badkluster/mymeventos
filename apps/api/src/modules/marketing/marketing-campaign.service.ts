@@ -15,7 +15,7 @@ const MAX_RECIPIENT_ATTEMPTS = 3;
 export async function buildSenderIdentity(campaign: any) {
   const settings = await getOrCreateMarketingSettings();
   return {
-    fromEmail: env.MARKETING_FROM_EMAIL || settings.senderEmail || 'no-reply@mymeventos.com.ar',
+    fromEmail: settings.senderEmail || env.MARKETING_FROM_EMAIL || 'no-reply@mymeventos.com.ar',
     fromName: campaign.senderName || settings.senderName || settings.companyName || 'M&M Eventos',
     replyTo: campaign.replyTo || settings.replyToEmail || env.MARKETING_REPLY_TO || undefined,
     settings
@@ -25,11 +25,15 @@ export async function buildSenderIdentity(campaign: any) {
 async function companyAndSalonContext(salonId?: string | Types.ObjectId | null, settings?: any) {
   const marketingSettings = settings ?? (await getOrCreateMarketingSettings());
   const salon = salonId ? await Salon.findOne({ _id: salonId }).lean() : null;
+  const salonAddress = salon
+    ? [(salon as any).address, (salon as any).locality || (salon as any).city, (salon as any).province].filter(Boolean).join(', ')
+    : '';
   return {
     companyName: marketingSettings.companyName,
-    companyLogoUrl: marketingSettings.logoUrl ?? '',
+    companyLogoUrl: marketingSettings.logoUrl || marketingSettings.logoAlternativeUrl || marketingSettings.defaultImageUrl || '',
+    legalFooterText: marketingSettings.legalFooterText ?? '',
     salonName: (salon as any)?.name ?? marketingSettings.companyName,
-    salonAddress: (salon as any)?.address ?? '',
+    salonAddress,
     salonPhone: (salon as any)?.phone ?? '',
     salonWhatsApp: (salon as any)?.whatsapp ?? ''
   };
@@ -153,13 +157,22 @@ function removeLegacyUnsubscribeContent(content: string): string {
     .replace(/\s*Dejar de recibir estas comunicaciones:\s*\{\{unsubscribeUrl\}\}/gi, '');
 }
 
+// A logo block can legitimately use the configured logo. If it has not been
+// configured yet, the variable resolves to an empty string; remove that image
+// instead of sending the familiar broken-image placeholder to recipients.
+function removeEmptyImages(content: string): string {
+  return content
+    .replace(/<a\b[^>]*>\s*<img\b[^>]*\bsrc=(['\"])\s*\1[^>]*>\s*<\/a>/gi, '')
+    .replace(/<img\b[^>]*\bsrc=(['\"])\s*\1[^>]*>/gi, '');
+}
+
 export async function renderRecipientEmail(campaign: any, recipient: any) {
   const settingsAndCompany = await companyAndSalonContext(campaign.salonId, undefined);
   const context = buildRecipientContext(campaign, recipient, settingsAndCompany as MarketingVariableContext);
   const subject = renderMarketingVariables(campaign.subject ?? '', context).rendered;
   const sourceHtml = removeLegacyUnsubscribeContent(campaign.renderedHtml ?? '');
   const sourceText = removeLegacyUnsubscribeContent(campaign.renderedText ?? htmlToText(sourceHtml));
-  const html = renderMarketingVariables(sourceHtml, context, { escapeValues: false }).rendered;
+  const html = removeEmptyImages(renderMarketingVariables(sourceHtml, context, { escapeValues: false }).rendered);
   const text = renderMarketingVariables(sourceText, context, { escapeValues: false }).rendered;
   return { subject, html, text };
 }
@@ -179,7 +192,7 @@ export async function sendTestEmails(input: { campaignId: string; testEmails: st
   const subject = `[PRUEBA] ${renderMarketingVariables((campaign as any).subject ?? '', context).rendered}`;
   const sourceHtml = removeLegacyUnsubscribeContent((campaign as any).renderedHtml ?? '');
   const sourceText = removeLegacyUnsubscribeContent((campaign as any).renderedText ?? htmlToText(sourceHtml));
-  const html = renderMarketingVariables(sourceHtml, context, { escapeValues: false }).rendered;
+  const html = removeEmptyImages(renderMarketingVariables(sourceHtml, context, { escapeValues: false }).rendered);
   const text = renderMarketingVariables(sourceText, context, { escapeValues: false }).rendered;
 
   const provider = getMarketingEmailProvider();

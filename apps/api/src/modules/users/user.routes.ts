@@ -25,12 +25,12 @@ const optionalText = z.string().trim().optional().or(z.literal(''));
 const notificationSchema = z.object({
   emailNotificationsEnabled: z.boolean().optional(),
   systemNotificationsEnabled: z.boolean().optional(),
-  whatsappNotificationsEnabled: z.boolean().optional(),
   notifyOnNewLead: z.boolean().optional(),
   notifyOnNewQuoteRequest: z.boolean().optional(),
   notifyOnQuoteApproved: z.boolean().optional(),
   notifyOnContractApproved: z.boolean().optional(),
   notifyOnPaymentReceived: z.boolean().optional(),
+  paymentReminder: z.boolean().optional(),
   notifyOnEventReminder: z.boolean().optional(),
   notifyOnAssignedTask: z.boolean().optional()
 }).partial();

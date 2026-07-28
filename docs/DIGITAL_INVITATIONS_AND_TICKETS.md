@@ -52,7 +52,7 @@ API pública:
 - `POST /api/public/tickets/:slug/orders`
 - `GET /api/public/ticket/:token`
 
-La creación pública recibe comprador, selecciones e `idempotencyKey`. Las órdenes pagas quedan en `pending_payment`; las gratuitas se confirman como `paid` y generan entradas válidas de inmediato. La confirmación de una orden paga es manual y requiere referencia de pago.
+La creación pública recibe comprador, selecciones e `idempotencyKey`. Las órdenes pagas quedan en `payment_pending`; las gratuitas se confirman como `paid` y generan entradas válidas de inmediato. Con Mercado Pago configurado, el webhook firmado consulta el pago real, compara importe y moneda y confirma la orden de forma automática e idempotente. El pago manual permanece disponible para las operaciones que no usan un proveedor online.
 
 ## Seguridad, capacidad y auditoría
 
@@ -67,9 +67,11 @@ La creación pública recibe comprador, selecciones e `idempotencyKey`. Las órd
 
 Se agregaron `tickets.update` y los permisos se aplican por acción. Los perfiles manager reciben gestión de invitaciones y entradas; el perfil de salón sólo puede leer invitaciones/entradas y validar acceso. Personal conserva el mínimo privilegio y sólo puede validar si se le asigna explícitamente `tickets.validate`.
 
-## Pagos
+## Pagos y avisos
 
-El flujo conserva `paymentMethod` y `paymentReference` para asociar una orden con la infraestructura de pago existente. No se agregó una integración nueva ni se confirmó un pago automáticamente: esa automatización requiere las credenciales, webhook y contrato vigente de Mercado Pago del entorno objetivo.
+El flujo conserva `paymentMethod` y `paymentReference` para asociar una orden con la infraestructura de pago existente. Con las credenciales y webhook de Mercado Pago configurados, la confirmación es automática: se valida firma, se deduplica la notificación, se consulta el pago real y se verifica importe/moneda antes de emitir entradas, registrar el movimiento contable y enviar el correo.
+
+El proceso programado de entradas agrega avisos de pago pendiente o rechazado, abandono de checkout, reembolso confirmado, recordatorios de 48 h/24 h y reintentos automáticos de correo. La operación y las variables necesarias están documentadas en [TICKET_AUTOMATION.md](./TICKET_AUTOMATION.md).
 
 ## Operación y reversión
 

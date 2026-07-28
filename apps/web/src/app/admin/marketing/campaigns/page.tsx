@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Copy, Megaphone, Plus, Search, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Megaphone, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { Button, Input, Modal, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { MarketingTabs } from '@/components/admin/marketing-tabs';
@@ -95,7 +95,7 @@ export default function MarketingCampaignsPage() {
                     <td className="px-5 py-4">{item.failedCount}</td>
                     <td className="px-5 py-4 text-xs">{item.completedAt ? new Date(item.completedAt).toLocaleString('es-AR') : item.scheduledAt ? new Date(item.scheduledAt).toLocaleString('es-AR') : '—'}</td>
                     <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}><div className="flex justify-end">
-                      {item.status === 'draft' ? <TableActionButton icon={Copy} label="Editar" onClick={() => router.push(`/admin/marketing/campaigns/${item._id}/edit`)} /> : null}
+                      {item.status === 'draft' ? <TableActionButton icon={Pencil} label="Editar" onClick={() => router.push(`/admin/marketing/campaigns/${item._id}/edit`)} /> : null}
                       <TableActionButton icon={Copy} label="Duplicar" onClick={() => void duplicate(item)} />
                       {['draft', 'cancelled', 'failed'].includes(item.status) ? <TableActionButton icon={Trash2} label="Eliminar" onClick={() => setCampaignToDelete(item)} /> : null}
                     </div></td>

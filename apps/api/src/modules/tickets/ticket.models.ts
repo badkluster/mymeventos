@@ -433,9 +433,23 @@ const deliverySchema = new Schema(
     },
     channel: {
       type: String,
-      enum: ["email", "manual_download", "admin_resend"],
+      enum: [
+        "email",
+        "manual_download",
+        "admin_resend",
+        "payment_pending",
+        "payment_rejected",
+        "checkout_abandoned",
+        "refund_confirmation",
+        "event_reminder_48h",
+        "event_reminder_24h",
+        "automatic_retry",
+      ],
       required: true,
     },
+    // A lifecycle email owns one stable key for its order. It makes scheduled
+    // processing idempotent while preserving attempt history in the same row.
+    automationKey: { type: String, unique: true, sparse: true, index: true },
     destinationMasked: String,
     status: {
       type: String,
@@ -448,6 +462,8 @@ const deliverySchema = new Schema(
     attemptNumber: { type: Number, required: true },
     errorCode: String,
     errorMessage: String,
+    lastAttemptAt: Date,
+    nextRetryAt: { type: Date, index: true },
     requestedBy: { type: objectId, ref: "User" },
     sentAt: Date,
   },
@@ -574,7 +590,7 @@ const refundSchema = new Schema(
       required: true,
       index: true,
     },
-    provider: { type: String, enum: ["mercado_pago"], required: true },
+    provider: { type: String, enum: ["mock", "mercado_pago"], required: true },
     providerRefundId: String,
     type: { type: String, enum: ["full", "partial"], required: true },
     status: {

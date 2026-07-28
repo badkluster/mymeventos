@@ -4,6 +4,8 @@
 
 La primera implementación vinculó incorrectamente `DigitalInvitation` y `TicketSale` a `Event` mediante `eventId`, rutas bajo `/admin/events`, y lecturas de fecha, salón, cliente y capacidad desde el dominio comercial. Esto contradice la autonomía requerida y puede impedir usar estos productos sin un evento administrativo.
 
+Posteriormente se habilitó una excepción acotada para invitaciones: `DigitalInvitation.linkedEventId` es un vínculo operativo opcional, uno a uno y de sólo referencia. Al crearla desde un evento se copia la información disponible a la invitación; las ediciones posteriores permanecen en `DigitalInvitation` y una invitación independiente no necesita un evento.
+
 ## Archivos afectados
 
 | Área | Archivos principales | Corrección |
@@ -15,7 +17,7 @@ La primera implementación vinculó incorrectamente `DigitalInvitation` y `Ticke
 
 ## Relaciones que se eliminan
 
-- `DigitalInvitation.eventId`, `salonId` y `customerId`.
+- `DigitalInvitation.eventId`, `salonId` y `customerId`. Se admite únicamente `linkedEventId` como vínculo operativo opcional y sin sincronización de datos.
 - `TicketSale.eventId`, `salonId` y `customerId`, así como los equivalentes en orden, entrada e intento de acceso.
 - Consultas a `Event` y validación por alcance de salón desde ambos módulos.
 - Rutas y enlaces `/admin/events/:eventId/(invitations|tickets|check-in)`.

@@ -18,6 +18,7 @@ import { requireAuth, requirePermission, userHasPermission } from '../../middlew
 import { writeAuditLog } from '../audit/audit.service';
 import { sendEmail } from '../email/email.service';
 import { getApiMessage } from '../../utils/messages';
+import { publicRateLimit } from '../../middlewares/publicRateLimit';
 
 const router = Router();
 
@@ -50,12 +51,12 @@ const deviceFields = z.object({
 });
 
 const loginSchema = z.object({
-  body: z.object({ username: z.string().trim().min(3).max(100), password: z.string().min(1).max(256), device: deviceFields, pushToken: z.string().trim().optional() }),
+  body: z.object({ username: z.string().trim().min(3).max(100), password: z.string().min(1).max(256), device: deviceFields }),
   params: z.object({}), query: z.object({})
 });
 const refreshSchema = z.object({ body: z.object({ refreshToken: z.string().min(10) }), params: z.object({}), query: z.object({}) });
 const forgotSchema = z.object({ body: z.object({ username: z.string().trim().min(1) }), params: z.object({}), query: z.object({}) });
-const resetSchema = z.object({ body: z.object({ token: z.string().min(10), newPassword: z.string().min(8) }), params: z.object({}), query: z.object({}) });
+const resetSchema = z.object({ body: z.object({ username: z.string().trim().min(1), token: z.string().regex(/^\d{6}$/), newPassword: z.string().min(8) }), params: z.object({}), query: z.object({}) });
 const changePasswordSchema = z.object({ body: z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) }), params: z.object({}), query: z.object({}) });
 
 function toPseudoAuthUser(user: any) {
@@ -74,6 +75,10 @@ function isMobileEligible(user: any): boolean {
   return userHasPermission(toPseudoAuthUser(user), Permission.MOBILE_ACCESS);
 }
 
+function generatePasswordResetCode(): string {
+  return crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
+}
+
 async function issueMobileTokens(user: any, installationId: string | undefined, request: any) {
   const payload = { sub: user._id.toString(), username: user.username };
   const accessToken = generateAccessToken(payload, env.MOBILE_ACCESS_TOKEN_TTL);
@@ -85,7 +90,7 @@ async function issueMobileTokens(user: any, installationId: string | undefined, 
   return { accessToken, refreshToken, accessTokenExpiresIn: env.MOBILE_ACCESS_TOKEN_TTL };
 }
 
-async function upsertDevice(userId: string, device: z.infer<typeof deviceFields>, request: any, pushToken?: string) {
+async function upsertDevice(userId: string, device: z.infer<typeof deviceFields>, request: any) {
   return MobileDevice.findOneAndUpdate(
     { userId, installationId: device.installationId },
     {
@@ -96,7 +101,7 @@ async function upsertDevice(userId: string, device: z.infer<typeof deviceFields>
         deviceModel: device.deviceModel, modelId: device.modelId, deviceName: device.deviceName, manufacturer: device.manufacturer, designName: device.designName, productName: device.productName,
         deviceYearClass: device.deviceYearClass, rooted: device.rooted, appInstalledAt: device.appInstalledAt, appLastUpdatedAt: device.appLastUpdatedAt,
         lastPublicIp: request.ip, lastReportedIp: device.network?.reportedIp, lastConnectionType: device.network?.connectionType, lastUserAgent: request.get('user-agent'),
-        ...(pushToken ? { pushToken } : {}), lastLoginAt: new Date(), lastUsedAt: new Date(), isActive: true
+        lastLoginAt: new Date(), lastUsedAt: new Date(), isActive: true
       },
       $unset: { revokedAt: 1, revokedBy: 1 },
       $setOnInsert: { userId, installationId: device.installationId }
@@ -120,7 +125,7 @@ router.post('/login', validateRequest(loginSchema), asyncHandler(async (request,
     throw new ApiError(403, 'MOBILE_ACCESS_DENIED');
   }
   await User.updateOne({ _id: user._id }, { lastLoginAt: new Date(), failedLoginAttempts: 0, $unset: { lockedUntil: 1 } });
-  await upsertDevice(user._id.toString(), request.body.device, request, request.body.pushToken);
+  await upsertDevice(user._id.toString(), request.body.device, request);
   const tokens = await issueMobileTokens(user, request.body.device.installationId, request);
   await writeAuditLog(request, 'AUTH_MOBILE_LOGIN_SUCCESS', 'User', user._id.toString(), {
     channel: 'mobile', installationId: request.body.device.installationId, platform: request.body.device.platform,
@@ -161,30 +166,43 @@ router.get('/session', requireAuth, asyncHandler(async (request, response) => {
   return sendSuccess(response, { user: sanitizeUser(user) });
 }));
 
-router.post('/forgot-password', validateRequest(forgotSchema), asyncHandler(async (request, response) => {
+router.post('/forgot-password', publicRateLimit({ windowMs: 15 * 60_000, max: 3 }), validateRequest(forgotSchema), asyncHandler(async (request, response) => {
   const identifier = normalizeUserEmail(request.body.username) ?? request.body.username.toLowerCase().trim();
   const user: any = await User.findOne({ deletedAt: null, $or: [{ username: identifier }, { normalizedEmail: identifier }] });
   if (user?.email && isMobileEligible(user)) {
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    await User.updateOne({ _id: user._id }, { passwordResetTokenHash: hashToken(rawToken), passwordResetExpiresAt: new Date(Date.now() + 30 * 60_000) });
-    const deepLink = `${env.MOBILE_DEEP_LINK_SCHEME}://reset-password?token=${rawToken}`;
-    await sendEmail({
+    const code = generatePasswordResetCode();
+    await User.updateOne({ _id: user._id }, {
+      passwordResetTokenHash: hashToken(code), passwordResetExpiresAt: new Date(Date.now() + 30 * 60_000), passwordResetAttempts: 0
+    });
+    const deepLink = `${env.MOBILE_DEEP_LINK_SCHEME}://reset-password?username=${encodeURIComponent(user.username)}&token=${code}`;
+    const emailSent = await sendEmail({
       to: user.email,
       subject: 'Restablecer contraseña — M&M Eventos',
-      text: `Usá este código en la app para restablecer tu contraseña: ${rawToken}\n\nSi tenés la app instalada, también podés abrir este enlace: ${deepLink}\n\nEste código vence en 30 minutos. Si no lo solicitaste, ignorá este mensaje.`
+      text: `Tu código para restablecer la contraseña es: ${code}\n\nIngresalo en la app junto con tu usuario o email. Si tenés la app instalada, también podés abrir este enlace: ${deepLink}\n\nEl código vence en 30 minutos y sólo puede usarse una vez. Si no lo solicitaste, ignorá este mensaje.`,
+      html: `<p>Tu código para restablecer la contraseña es:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>Ingresalo en la app junto con tu usuario o email.</p><p><a href="${deepLink}">Abrir M&M Eventos y restablecer mi contraseña</a></p><p>El código vence en 30 minutos y sólo puede usarse una vez. Si no lo solicitaste, ignorá este mensaje.</p>`
     });
-    await writeAuditLog(request, 'AUTH_MOBILE_PASSWORD_RESET_REQUESTED', 'User', user._id.toString());
+    await writeAuditLog(request, 'AUTH_MOBILE_PASSWORD_RESET_REQUESTED', 'User', user._id.toString(), { emailSent });
   }
   return sendSuccess(response, { requested: true }, 200, getApiMessage('PASSWORD_RESET_REQUESTED'));
 }));
 
-router.post('/reset-password', validateRequest(resetSchema), asyncHandler(async (request, response) => {
-  const tokenHash = hashToken(request.body.token);
-  const user: any = await User.findOne({ passwordResetTokenHash: tokenHash, passwordResetExpiresAt: { $gt: new Date() }, deletedAt: null });
-  if (!user) throw new ApiError(400, 'PASSWORD_RESET_TOKEN_INVALID');
+router.post('/reset-password', publicRateLimit({ windowMs: 15 * 60_000, max: 5 }), validateRequest(resetSchema), asyncHandler(async (request, response) => {
+  const identifier = normalizeUserEmail(request.body.username) ?? request.body.username.toLowerCase().trim();
+  const user: any = await User.findOne({
+    deletedAt: null,
+    passwordResetExpiresAt: { $gt: new Date() },
+    $or: [{ username: identifier }, { normalizedEmail: identifier }]
+  });
+  const codeIsValid = user?.passwordResetTokenHash === hashToken(request.body.token);
+  if (!user || !codeIsValid || (user.passwordResetAttempts ?? 0) >= 5) {
+    if (user && (user.passwordResetAttempts ?? 0) < 5) {
+      await User.updateOne({ _id: user._id }, { $inc: { passwordResetAttempts: 1 } });
+    }
+    throw new ApiError(400, 'PASSWORD_RESET_TOKEN_INVALID');
+  }
   await User.updateOne({ _id: user._id }, {
     $set: { passwordHash: await hashPassword(request.body.newPassword), mustChangePassword: false, lastPasswordChangeAt: new Date(), failedLoginAttempts: 0 },
-    $unset: { lockedUntil: 1, passwordResetTokenHash: 1, passwordResetExpiresAt: 1 }
+    $unset: { lockedUntil: 1, passwordResetTokenHash: 1, passwordResetExpiresAt: 1, passwordResetAttempts: 1 }
   });
   await RefreshToken.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: new Date() });
   await writeAuditLog(request, 'AUTH_MOBILE_PASSWORD_RESET_SUCCESS', 'User', user._id.toString());

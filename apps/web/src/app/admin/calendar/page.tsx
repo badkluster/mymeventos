@@ -301,6 +301,11 @@ function entryDateRange(entry: CalendarEntry) {
   return fullDateTimeFormatter.format(entry.startAt);
 }
 
+function reminderChannelLabel(channels?: string[]) {
+  const supportedChannels = (channels ?? []).filter((channel) => channel === 'system' || channel === 'email');
+  return (supportedChannels.length ? supportedChannels : ['system']).join(', ');
+}
+
 function emptyForm(date = new Date(), type: CalendarItemType = 'reminder'): CalendarForm {
   return {
     type,
@@ -945,7 +950,7 @@ function EntryDetailModal({ entry, currentUserId, onClose, onEdit, onDelete, onP
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <InfoCard icon={Info} label="Detalle" value={entry.description || 'Sin detalle cargado.'} />
-        <InfoCard icon={Mail} label="Recordatorio" value={entry.notification?.enabled ? `Activo: ${entry.notification.offsetValue ?? 1} ${entry.notification.offsetUnit ?? 'dias'} antes por ${(entry.notification.channels ?? ['system']).join(', ')}` : 'Sin recordatorio configurado.'} />
+        <InfoCard icon={Mail} label="Recordatorio" value={entry.notification?.enabled ? `Activo: ${entry.notification.offsetValue ?? 1} ${entry.notification.offsetUnit ?? 'dias'} antes por ${reminderChannelLabel(entry.notification.channels)}` : 'Sin recordatorio configurado.'} />
         <InfoCard icon={UserRound} label="Creado por" value={entry.item ? entityName(entry.item.createdBy) : 'Generado automáticamente por el sistema'} />
       </div>
       {links.length ? <section className="rounded-2xl border border-zinc-200 bg-white p-4">

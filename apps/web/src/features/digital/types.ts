@@ -175,6 +175,7 @@ export type InvitationTemplate = {
 export type DigitalInvitation = {
   _id: string;
   ownerId?: string;
+  linkedEventId?: string;
   templateId?: string | InvitationTemplate;
   template?: string;
   templateTier?: InvitationTemplateTier;

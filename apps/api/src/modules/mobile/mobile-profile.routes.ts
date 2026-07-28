@@ -15,7 +15,6 @@ import { getApiMessage } from '../../utils/messages';
 import { ObjectIdSchema } from '@mym/shared';
 
 const router = Router();
-const devicePushRouter = Router();
 
 const optionalText = z.string().trim().optional().or(z.literal(''));
 const optionalDate = z.string().trim().optional().refine((value) => {
@@ -41,7 +40,6 @@ const profileSchema = z.object({
 });
 const avatarSchema = z.object({ body: z.object({ avatarUrl: z.string().trim().url() }), params: z.object({}), query: z.object({}) });
 const deviceParams = z.object({ body: z.unknown().optional(), params: z.object({ deviceId: ObjectIdSchema }), query: z.object({}) });
-const pushTokenSchema = z.object({ body: z.object({ installationId: z.string().trim().min(1), pushToken: z.string().trim().min(1) }), params: z.object({}), query: z.object({}) });
 
 router.use(requireAuth);
 
@@ -122,16 +120,4 @@ router.delete('/devices/:deviceId', validateRequest(deviceParams), asyncHandler(
   return sendSuccess(response, { revoked: true }, 200, getApiMessage('MOBILE_DEVICE_REVOKED'));
 }));
 
-devicePushRouter.use(requireAuth);
-devicePushRouter.post('/push-token', validateRequest(pushTokenSchema), asyncHandler(async (request, response) => {
-  const device = await MobileDevice.findOneAndUpdate(
-    { userId: request.user!.id, installationId: request.body.installationId },
-    { pushToken: request.body.pushToken, lastUsedAt: new Date() },
-    { new: true }
-  );
-  if (!device) throw new ApiError(404, 'MOBILE_DEVICE_NOT_FOUND');
-  return sendSuccess(response, { updated: true });
-}));
-
 export default router;
-export { devicePushRouter as mobileDevicePushRoutes };

@@ -74,7 +74,7 @@ function blockData(type: EmailBlockType): EmailBlockData {
     case 'promotion': return { showCode: true, showButton: true };
     case 'social': return { instagramUrl: '', facebookUrl: '', whatsappUrl: '' };
     case 'contact': return { showAddress: true, showPhone: true, showWhatsApp: true };
-    case 'footer': return { text: '{{companyName}} — {{salonAddress}}' };
+    case 'footer': return { text: '{{legalFooterText}}' };
     default: return {};
   }
 }

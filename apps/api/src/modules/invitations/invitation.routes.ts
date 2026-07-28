@@ -2,13 +2,15 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Types } from 'mongoose';
 import { Permission, Role } from '@mym/shared';
-import { requireAuth, requirePermission, requireRole } from '../../middlewares/auth';
+import { canAccessSalon, requireAuth, requirePermission, requireRole } from '../../middlewares/auth';
 import { ApiError } from '../../middlewares/errorHandler';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
 import { writeAuditLog } from '../audit/audit.service';
 import { DigitalInvitation, InvitationGuest, InvitationTemplate } from './invitation.models';
+import { Event } from '../crm/crm.models';
+import { eventInvitationPrefill } from './event-invitation.service';
 import { createPublicToken, resolvePublicInvitationAccess, upsertRsvp } from './invitation.service';
 import { sendInvitationRsvpNotification } from './invitation-notifications.service';
 import { sendEmail } from '../email/email.service';
@@ -62,10 +64,25 @@ const templateFeaturesSchema = z.object({ maxGalleryImages: z.coerce.number().in
 const templateInput = z.object({ name: z.string().trim().min(1).max(120), slug: z.string().trim().toLowerCase().regex(/^[a-z0-9-]+$/).max(120), description: z.string().trim().max(500).optional(), category: z.enum(['wedding', 'fifteen', 'birthday', 'kids', 'baby_shower', 'baptism', 'communion', 'anniversary', 'corporate', 'general']).optional(), tier: z.enum(['basic', 'premium']).default('basic'), status: z.enum(['draft', 'active', 'inactive']).optional(), tags: z.array(z.string().trim().max(40)).max(12).optional(), previewImageUrl: z.string().url().optional().or(z.literal('')), theme: themeSchema.optional(), allowedFeatures: templateFeaturesSchema.optional(), defaultContent: contentSchema.optional() });
 const isAdmin = (request: Request) => request.user?.roles?.includes(Role.ADMIN) ?? false;
 const ownerFilter = (request: Request) => isAdmin(request) ? {} : { ownerId: request.user!.id };
+async function getAccessibleEvent(request: Request, id: string) {
+  const event: any = await Event.findOne({ _id: id, deletedAt: null })
+    .populate('customerId', 'fullName')
+    .populate('salonId', 'name address locality city mapUrl')
+    .lean();
+  if (!event) throw new ApiError(404, 'EVENT_NOT_FOUND');
+  const salonId = event.salonId?._id?.toString?.() ?? event.salonId?.toString?.();
+  if (salonId && !canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  return event;
+}
 async function getInvitationForAdmin(request: Request, id: string) {
-  const invitation: any = await DigitalInvitation.findOne({ _id: id, deletedAt: null, ...ownerFilter(request) });
+  const invitation: any = await DigitalInvitation.findOne({ _id: id, deletedAt: null });
   if (!invitation) throw new ApiError(404, 'INVITATION_NOT_FOUND');
-  return invitation;
+  if (isAdmin(request) || invitation.ownerId?.toString() === request.user!.id) return invitation;
+  if (invitation.linkedEventId) {
+    await getAccessibleEvent(request, invitation.linkedEventId.toString());
+    return invitation;
+  }
+  throw new ApiError(404, 'INVITATION_NOT_FOUND');
 }
 function serializeGuest(guest: any) { const item = guest.toObject ? guest.toObject() : guest; const { publicToken, ...safe } = item; return safe; }
 function serializePublicContent(content: any) { if (!content?.sections) return content; return { ...content, sections: content.sections.map((section: any) => section.type === 'rsvp' ? { ...section, data: { ...section.data, notificationEmail: undefined, notificationEnabled: undefined } } : section) }; }
@@ -112,6 +129,11 @@ router.post('/templates/:templateId/duplicate', requireRole(Role.ADMIN), validat
   await writeAuditLog(req, 'INVITATION_TEMPLATE_DUPLICATE', 'InvitationTemplate', copy._id.toString(), { sourceTemplateId: source._id.toString() });
   return sendSuccess(res, { template: copy.toObject() }, 201);
 }));
+router.get('/event/:eventId', requirePermission(Permission.INVITATIONS_READ), requirePermission(Permission.EVENTS_READ), validateRequest(wrap(z.unknown().optional(), z.object({ eventId: objectId }))), asyncHandler(async (req, res) => {
+  const event = await getAccessibleEvent(req, req.params.eventId);
+  const invitation = await DigitalInvitation.findOne({ linkedEventId: event._id, deletedAt: null }).lean();
+  return sendSuccess(res, { invitation: invitation ?? null, prefill: eventInvitationPrefill(event) });
+}));
 router.get('/', requirePermission(Permission.INVITATIONS_READ), asyncHandler(async (req, res) => {
   const { search, date } = invitationListQuery.parse(req.query);
   const filters: Record<string, unknown> = { deletedAt: null, ...ownerFilter(req) };
@@ -146,6 +168,23 @@ router.post('/', requirePermission(Permission.INVITATIONS_CREATE), validateReque
   await writeAuditLog(req, 'DIGITAL_INVITATION_CREATE', 'DigitalInvitation', invitation._id.toString());
   return sendSuccess(res, { invitation: invitation.toObject() }, 201);
 }));
+router.post('/from-event/:eventId', requirePermission(Permission.INVITATIONS_CREATE), requirePermission(Permission.EVENTS_READ), validateRequest(wrap(invitationFields, z.object({ eventId: objectId }))), asyncHandler(async (req, res) => {
+  const event = await getAccessibleEvent(req, req.params.eventId);
+  const existing = await DigitalInvitation.findOne({ linkedEventId: event._id, deletedAt: null }).lean();
+  if (existing) throw new ApiError(409, 'EVENT_INVITATION_EXISTS', 'Este evento ya tiene una invitación digital vinculada.');
+  const defaults = await templateDefaults(req.body.templateId, req.user!.id);
+  const content = contentWithIntroduction(req.body.content ?? defaults.content, req.body.introduction);
+  validateInvitationContent(content, defaults.templateFeatures);
+  validateInvitationCustomization({ theme: req.body.theme, generalBackground: req.body.generalBackground, content }, defaults.templateFeatures);
+  try {
+    const invitation = await DigitalInvitation.create({ ...defaults, ...req.body, linkedEventId: event._id, content, theme: req.body.theme ?? defaults.theme, celebrationType: req.body.celebrationType ?? defaults.celebrationType, ownerId: req.user!.id, publicToken: createPublicToken(), createdBy: req.user!.id, updatedBy: req.user!.id });
+    await writeAuditLog(req, 'DIGITAL_INVITATION_CREATE_FROM_EVENT', 'DigitalInvitation', invitation._id.toString(), { eventId: event._id.toString() });
+    return sendSuccess(res, { invitation: invitation.toObject() }, 201);
+  } catch (error: any) {
+    if (error?.code === 11000) throw new ApiError(409, 'EVENT_INVITATION_EXISTS', 'Este evento ya tiene una invitación digital vinculada.');
+    throw error;
+  }
+}));
 router.get('/:id', requirePermission(Permission.INVITATIONS_READ), validateRequest(wrap(z.unknown().optional(), z.object({ id: objectId }))), asyncHandler(async (req, res) => sendSuccess(res, { invitation: (await getInvitationForAdmin(req, req.params.id)).toObject() })));
 router.patch('/:id', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(invitationFields.partial().refine((value) => Object.keys(value).length > 0), z.object({ id: objectId }))), asyncHandler(async (req, res) => { const invitation = await getInvitationForAdmin(req, req.params.id); const defaults = req.body.templateId && req.body.templateId.toString() !== invitation.templateId?.toString() ? await templateDefaults(req.body.templateId, req.user!.id) : undefined; const features = defaults?.templateFeatures ?? invitation.templateFeatures ?? basicFeatures; const content = contentWithIntroduction(req.body.content ?? defaults?.content ?? invitation.content, req.body.introduction); const theme = req.body.theme ?? defaults?.theme ?? invitation.theme; const generalBackground = req.body.generalBackground ?? invitation.generalBackground; validateInvitationContent(content, features); validateInvitationCustomization({ theme: req.body.theme, generalBackground, content }, features); Object.assign(invitation, defaults ?? {}, req.body, { content, theme, generalBackground, celebrationType: req.body.celebrationType ?? defaults?.celebrationType ?? invitation.celebrationType, updatedBy: req.user!.id }); await invitation.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_UPDATE', 'DigitalInvitation', invitation._id.toString()); return sendSuccess(res, { invitation: invitation.toObject() }); }));
 router.post('/:id/publish', requirePermission(Permission.INVITATIONS_UPDATE), validateRequest(wrap(z.object({}), z.object({ id: objectId }))), asyncHandler(async (req, res) => { const invitation = await getInvitationForAdmin(req, req.params.id); const errors: string[] = []; const sections = invitation.content?.sections ?? []; if (!invitation.title?.trim()) errors.push('Debe indicar un título público.'); if (!invitation.eventDate) errors.push('Debe indicar fecha y horario.'); if (!sections.some((item: { type?: string; enabled?: boolean }) => item.type === 'hero' && item.enabled)) errors.push('Debe activar la sección Hero.'); if (!sections.some((item: { type?: string; enabled?: boolean }) => item.type === 'event_details' && item.enabled)) errors.push('Debe activar la sección de datos principales.'); try { validateInvitationContent(invitation.content, invitation.templateFeatures ?? basicFeatures); validateInvitationCustomization({ generalBackground: invitation.generalBackground, content: invitation.content }, invitation.templateFeatures ?? basicFeatures); } catch (error) { errors.push(error instanceof Error ? error.message : 'La configuración excede los límites de la plantilla.'); } if (errors.length) throw new ApiError(422, 'INVITATION_PUBLISH_VALIDATION', errors.join(' ')); Object.assign(invitation, { status: 'published', publishedAt: new Date(), updatedBy: req.user!.id }); await invitation.save(); await writeAuditLog(req, 'DIGITAL_INVITATION_PUBLISH', 'DigitalInvitation', invitation._id.toString()); return sendSuccess(res, { invitation: invitation.toObject() }); }));
@@ -168,7 +207,7 @@ router.post('/:id/send-email', requirePermission(Permission.INVITATIONS_UPDATE),
 router.post('/:id/clone', requirePermission(Permission.INVITATIONS_CREATE), validateRequest(wrap(z.object({ title: z.string().trim().min(1).max(180).optional() }), z.object({ id: objectId }))), asyncHandler(async (req, res) => {
   const source = await getInvitationForAdmin(req, req.params.id);
   const sourceData = source.toObject();
-  const clone = await DigitalInvitation.create({ ...sourceData, _id: undefined, __v: undefined, title: req.body.title ?? `Copia de ${source.title ?? 'invitación'}`, publicToken: createPublicToken(), publicTokenCreatedAt: new Date(), status: 'draft', publishedAt: undefined, unpublishedAt: undefined, deletedAt: undefined, deletedBy: undefined, createdAt: undefined, updatedAt: undefined, createdBy: req.user!.id, updatedBy: req.user!.id });
+  const clone = await DigitalInvitation.create({ ...sourceData, _id: undefined, __v: undefined, linkedEventId: undefined, title: req.body.title ?? `Copia de ${source.title ?? 'invitación'}`, publicToken: createPublicToken(), publicTokenCreatedAt: new Date(), status: 'draft', publishedAt: undefined, unpublishedAt: undefined, deletedAt: undefined, deletedBy: undefined, createdAt: undefined, updatedAt: undefined, createdBy: req.user!.id, updatedBy: req.user!.id });
   await writeAuditLog(req, 'DIGITAL_INVITATION_CLONE', 'DigitalInvitation', clone._id.toString(), { sourceInvitationId: source._id.toString() });
   return sendSuccess(res, { invitation: clone.toObject() }, 201);
 }));

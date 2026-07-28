@@ -40,6 +40,7 @@ function notificationTypeLabel(type: string): string {
     contract_approved: 'Contrato aprobado',
     payment_created: 'Pago registrado',
     payment_received: 'Pago recibido',
+    financial_reminder: 'Recordatorio financiero',
     event_created: 'Evento creado',
     event_reminder: 'Recordatorio de evento',
     lead_created: 'Nuevo contacto',

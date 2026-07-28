@@ -15,7 +15,6 @@ export function buildUserFullName(firstName?: string, lastName?: string): string
 const notificationPreferencesSchema = new Schema({
   emailNotificationsEnabled: { type: Boolean, default: true },
   systemNotificationsEnabled: { type: Boolean, default: true },
-  whatsappNotificationsEnabled: { type: Boolean, default: false },
   notifyOnNewLead: { type: Boolean, default: true },
   notifyOnNewQuoteRequest: { type: Boolean, default: true },
   notifyOnQuoteApproved: { type: Boolean, default: true },
@@ -25,7 +24,6 @@ const notificationPreferencesSchema = new Schema({
   notifyOnAssignedTask: { type: Boolean, default: true },
   email: { type: Boolean },
   inApp: { type: Boolean },
-  whatsapp: { type: Boolean },
   newLead: { type: Boolean },
   newQuoteRequest: { type: Boolean },
   quoteAccepted: { type: Boolean },
@@ -147,6 +145,7 @@ const userSchema = new Schema({
   lastPasswordChangeAt: Date,
   passwordResetTokenHash: String,
   passwordResetExpiresAt: Date,
+  passwordResetAttempts: { type: Number, default: 0 },
   failedLoginAttempts: { type: Number, default: 0 },
   lockedUntil: Date,
   notificationPreferences: {

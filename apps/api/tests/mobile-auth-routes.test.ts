@@ -29,7 +29,8 @@ vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: mocks.writ
 vi.mock('../src/modules/email/email.service', () => ({ sendEmail: mocks.sendEmail }));
 
 import app from '../src/app';
-import { hashPassword } from '../src/utils/password';
+import { hashPassword, verifyPassword } from '../src/utils/password';
+import { hashToken } from '../src/utils/tokens';
 
 const device = { installationId: 'device-1', platform: 'android' as const };
 
@@ -132,5 +133,82 @@ describe('mobile auth routes', () => {
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('MOBILE_ACCESS_DENIED');
     expect(mocks.refreshTokenCreate).not.toHaveBeenCalled();
+  });
+
+  it('sends a six-digit password reset code to an eligible mobile user without exposing the stored token', async () => {
+    const userId = new Types.ObjectId();
+    mocks.userFindOne.mockResolvedValue({
+      _id: userId, username: 'waiter1', email: 'waiter@example.com', active: true,
+      roles: [Role.STAFF], permissionOverrides: [], permissionDeniedOverrides: [], attendanceConfig: { canUseMobileApp: true }
+    });
+    mocks.sendEmail.mockResolvedValue(true);
+
+    const response = await request(app).post('/api/mobile/auth/forgot-password').send({ username: 'waiter@example.com' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ requested: true });
+    expect(mocks.userUpdateOne).toHaveBeenCalledWith(
+      { _id: userId },
+      expect.objectContaining({
+        passwordResetTokenHash: expect.any(String),
+        passwordResetExpiresAt: expect.any(Date),
+        passwordResetAttempts: 0
+      })
+    );
+    const email = mocks.sendEmail.mock.calls[0][0];
+    const code = email.text.match(/código para restablecer la contraseña es: (\d{6})/i)?.[1];
+    expect(code).toMatch(/^\d{6}$/);
+    expect(email.text).toContain(`mymeventos://reset-password?username=waiter1&token=${code}`);
+    expect(email.html).toContain(code);
+    expect(mocks.userUpdateOne.mock.calls[0][1].passwordResetTokenHash).toBe(hashToken(code!));
+  });
+
+  it('keeps the password reset request generic when the account is not eligible', async () => {
+    mocks.userFindOne.mockResolvedValue(null);
+
+    const response = await request(app).post('/api/mobile/auth/forgot-password').send({ username: 'unknown@example.com' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ requested: true });
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+    expect(mocks.userUpdateOne).not.toHaveBeenCalled();
+  });
+
+  it('resets the password with the matching user and code, then revokes every session', async () => {
+    const userId = new Types.ObjectId();
+    mocks.userFindOne.mockResolvedValue({
+      _id: userId, username: 'waiter1', passwordResetTokenHash: hashToken('123456'), passwordResetAttempts: 0
+    });
+
+    const response = await request(app)
+      .post('/api/mobile/auth/reset-password')
+      .send({ username: 'waiter1', token: '123456', newPassword: 'new-secret123' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ reset: true });
+    expect(mocks.userFindOne).toHaveBeenCalledWith(expect.objectContaining({
+      deletedAt: null,
+      $or: [{ username: 'waiter1' }, { normalizedEmail: 'waiter1' }]
+    }));
+    const update = mocks.userUpdateOne.mock.calls[0][1];
+    await expect(verifyPassword('new-secret123', update.$set.passwordHash)).resolves.toBe(true);
+    expect(update.$unset).toEqual(expect.objectContaining({ passwordResetTokenHash: 1, passwordResetExpiresAt: 1, passwordResetAttempts: 1 }));
+    expect(mocks.refreshTokenUpdateMany).toHaveBeenCalledWith({ userId, revokedAt: null }, { revokedAt: expect.any(Date) });
+  });
+
+  it('counts invalid reset-code attempts and never changes the password', async () => {
+    const userId = new Types.ObjectId();
+    mocks.userFindOne.mockResolvedValue({
+      _id: userId, username: 'waiter1', passwordResetTokenHash: hashToken('123456'), passwordResetAttempts: 0
+    });
+
+    const response = await request(app)
+      .post('/api/mobile/auth/reset-password')
+      .send({ username: 'waiter1', token: '654321', newPassword: 'new-secret123' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('PASSWORD_RESET_TOKEN_INVALID');
+    expect(mocks.userUpdateOne).toHaveBeenCalledWith({ _id: userId }, { $inc: { passwordResetAttempts: 1 } });
+    expect(mocks.refreshTokenUpdateMany).not.toHaveBeenCalled();
   });
 });

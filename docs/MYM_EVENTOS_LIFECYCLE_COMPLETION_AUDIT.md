@@ -435,7 +435,7 @@ Cualquier entidad cancelable: [estado activo] → cancelled
 
 Un único endpoint interno protegido (p. ej. `POST /api/internal/calendar-tick`, autenticado por un secreto en variable de entorno, no por sesión de usuario) invocado por **Vercel Cron** (entrada `crons` en `vercel.json`, ejecutando cada N minutos/horas — suficiente para un negocio de eventos, no se necesita granularidad de segundos). Ese endpoint:
 1. Recorre `CalendarItem` con `notification.enabled=true`, `notification.status='pending'|'scheduled'` y `notification.sendAt <= now`.
-2. Envía por los canales configurados (`system` = crea `Notification`; `email` = reutiliza `email.service.ts` ya existente; `whatsapp` = fuera de alcance real hoy, se deja como `channels` aceptado pero no implementado hasta que exista una integración real — **no simular un envío de WhatsApp que no ocurre**).
+2. Envía por los canales implementados (`system` = crea `Notification`; `email` = reutiliza `email.service.ts` ya existente). WhatsApp no se ofrece como canal hasta contar con una integración real.
 3. Marca `notification.status='sent'`, `notification.lastSentAt=now`.
 4. Corre además las reglas de auto-generación de la tabla de arriba (crear entradas nuevas cuando corresponda) y la expiración automática de `Quote.status='expired'`.
 

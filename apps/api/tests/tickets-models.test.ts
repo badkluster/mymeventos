@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DigitalTicket, TicketOrder, TicketPublication, TicketType } from '../src/modules/tickets/ticket.models';
+import { DigitalTicket, TicketDelivery, TicketOrder, TicketPublication, TicketType } from '../src/modules/tickets/ticket.models';
 
 describe('ticket models', () => {
   it('keeps public ticket identifiers non-sequential and validates sale counters', () => {
@@ -22,5 +22,13 @@ describe('ticket models', () => {
     const fields = Object.keys(TicketPublication.schema.paths);
     expect(fields).not.toContain('eventId'); expect(fields).not.toContain('salonId'); expect(fields).not.toContain('customerId');
     expect(Object.keys(TicketOrder.schema.paths)).not.toContain('eventId');
+  });
+
+  it('keeps lifecycle email deliveries idempotent and retryable', () => {
+    const fields = Object.keys(TicketDelivery.schema.paths);
+    expect(fields).toContain('automationKey');
+    expect(fields).toContain('nextRetryAt');
+    expect(TicketDelivery.schema.path('channel')?.options.enum).toContain('event_reminder_24h');
+    expect(TicketDelivery.schema.path('channel')?.options.enum).toContain('refund_confirmation');
   });
 });

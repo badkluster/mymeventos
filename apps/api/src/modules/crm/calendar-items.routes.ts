@@ -18,7 +18,7 @@ const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id:
 const listSchema = z.object({ body: z.unknown().optional(), params: z.object({}), query: z.record(z.string(), z.unknown()) });
 const notificationSchema = z.object({
   enabled: z.boolean().optional(),
-  channels: z.array(z.enum(['system', 'email', 'whatsapp'])).optional(),
+  channels: z.array(z.enum(['system', 'email'])).optional(),
   offsetValue: z.coerce.number().positive().optional(),
   offsetUnit: z.enum(['minutes', 'hours', 'days', 'weeks']).optional(),
   sendAt: z.coerce.date().optional(),

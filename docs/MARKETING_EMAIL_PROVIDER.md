@@ -18,7 +18,6 @@ MARKETING_FROM_EMAIL=               # email remitente por defecto si MarketingSe
 MARKETING_FROM_NAME=                # nombre remitente por defecto
 MARKETING_REPLY_TO=                 # reply-to por defecto
 MARKETING_BATCH_SIZE=25             # emails procesados por tick de cron (tope defensivo: 500)
-MARKETING_SEND_RATE_LIMIT=10        # reservado para ajustar velocidad de envío
 MARKETING_CRON_SECRET=              # secreto compartido para /api/marketing/process
 ```
 

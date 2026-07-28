@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   recipientInsertMany: vi.fn(),
   recipientCountDocuments: vi.fn(),
   resolveAudienceContacts: vi.fn(),
-  getMarketingSettings: vi.fn()
+  getMarketingSettings: vi.fn(),
+  salonFindOne: vi.fn()
 }));
 
 vi.mock('../src/modules/marketing/marketing.models', () => ({
@@ -21,9 +22,9 @@ vi.mock('../src/modules/marketing/marketing.models', () => ({
 }));
 vi.mock('../src/modules/marketing/marketing-audience.service', () => ({ resolveAudienceContacts: mocks.resolveAudienceContacts }));
 vi.mock('../src/modules/marketing/marketing-settings.service', () => ({ getOrCreateMarketingSettings: mocks.getMarketingSettings }));
-vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { findOne: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }) } }));
+vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { findOne: mocks.salonFindOne } }));
 
-import { prepareCampaignRecipients, renderRecipientEmail } from '../src/modules/marketing/marketing-campaign.service';
+import { buildSenderIdentity, prepareCampaignRecipients, renderRecipientEmail } from '../src/modules/marketing/marketing-campaign.service';
 
 function chain(result: unknown) {
   return { select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(result) }) };
@@ -41,6 +42,7 @@ describe('prepareCampaignRecipients idempotency', () => {
     mocks.resolveAudienceContacts.mockResolvedValue({ contacts, totalMatched: 2, duplicatesRemoved: 0, invalidEmailExcluded: 0, manuallyExcluded: 0 });
     mocks.recipientInsertMany.mockResolvedValue(contacts);
     mocks.getMarketingSettings.mockResolvedValue({ senderName: 'M&M Eventos', senderEmail: 'no-reply@mym.test', companyName: 'M&M Eventos' });
+    mocks.salonFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
   });
 
   it('inserts every newly-matched contact the first time it prepares recipients', async () => {
@@ -92,5 +94,44 @@ describe('prepareCampaignRecipients idempotency', () => {
 
     expect(rendered.html).not.toContain('unsubscribe');
     expect(rendered.text).not.toContain('baja');
+  });
+
+  it('uses the institutional sender email when the campaign has no override', async () => {
+    mocks.getMarketingSettings.mockResolvedValue({ senderName: 'Mi Empresa', senderEmail: 'comunicacion@miempresa.com' });
+
+    await expect(buildSenderIdentity({})).resolves.toMatchObject({
+      fromEmail: 'comunicacion@miempresa.com',
+      fromName: 'Mi Empresa'
+    });
+  });
+
+  it('uses the configured fallback logo and the complete selected salon address', async () => {
+    mocks.getMarketingSettings.mockResolvedValue({
+      companyName: 'Mi Empresa',
+      logoAlternativeUrl: 'https://cdn.example.com/logo.png',
+      legalFooterText: 'Mi Empresa · Mensaje institucional'
+    });
+    mocks.salonFindOne.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({ name: 'Salón Norte', address: 'Av. Central 123', locality: 'Palermo', province: 'Buenos Aires' })
+    });
+
+    const rendered = await renderRecipientEmail(
+      { salonId: '507f1f77bcf86cd799439011', name: 'Campaña', renderedHtml: '<img src="{{companyLogoUrl}}" /><p>{{salonAddress}}</p><footer>{{legalFooterText}}</footer>' },
+      { email: 'ana@mail.com', firstName: 'Ana' }
+    );
+
+    expect(rendered.html).toContain('https://cdn.example.com/logo.png');
+    expect(rendered.html).toContain('Av. Central 123, Palermo, Buenos Aires');
+    expect(rendered.html).toContain('Mi Empresa · Mensaje institucional');
+  });
+
+  it('omits a logo image when no institutional logo was configured', async () => {
+    const rendered = await renderRecipientEmail(
+      { name: 'Campaña', renderedHtml: '<a href="#"><img src="{{companyLogoUrl}}" /></a><p>Contenido</p>' },
+      { email: 'ana@mail.com', firstName: 'Ana' }
+    );
+
+    expect(rendered.html).not.toContain('<img');
+    expect(rendered.html).toContain('Contenido');
   });
 });

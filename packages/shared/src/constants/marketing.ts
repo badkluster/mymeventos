@@ -136,6 +136,7 @@ export const MARKETING_DYNAMIC_VARIABLES = [
   'discountValue',
   'buttonUrl',
   'companyName',
-  'companyLogoUrl'
+  'companyLogoUrl',
+  'legalFooterText'
 ] as const;
 export type MarketingDynamicVariable = (typeof MARKETING_DYNAMIC_VARIABLES)[number];

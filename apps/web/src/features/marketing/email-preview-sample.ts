@@ -8,12 +8,18 @@ export const EMAIL_PREVIEW_SAMPLE: Record<string, string> = {
   salonName: 'Salón San Carlos', salonAddress: 'Av. Siempre Viva 1234, San Carlos', salonPhone: '+54 9 11 1234-5678', salonWhatsApp: '+54 9 11 1234-5678',
   campaignName: 'Campaña de ejemplo', promotionTitle: '20% OFF en tu evento de fin de año', promotionDescription: 'Válido para eventos contratados durante noviembre y diciembre.',
   promotionCode: 'FINDEANIO20', promotionValidUntil: '31/12/2026', discountValue: '20%', buttonUrl: '#',
-  companyName: 'M&M Eventos', companyLogoUrl: ''
+  companyName: 'M&M Eventos', companyLogoUrl: '', legalFooterText: 'M&M Eventos. Recibiste este correo porque nos dejaste tus datos de contacto.'
 };
 
 const VARIABLE_PATTERN = /\{\{\s*([a-zA-Z0-9_]+)\s*(?:\|\s*default:\s*"([^"]*)")?\s*\}\}/g;
 
+function removeEmptyImages(html: string): string {
+  return html
+    .replace(/<a\b[^>]*>\s*<img\b[^>]*\bsrc=(['\"])\s*\1[^>]*>\s*<\/a>/gi, '')
+    .replace(/<img\b[^>]*\bsrc=(['\"])\s*\1[^>]*>/gi, '');
+}
+
 export function renderPreviewSample(html: string, overrides: Record<string, string> = {}): string {
   const context = { ...EMAIL_PREVIEW_SAMPLE, ...overrides };
-  return (html ?? '').replace(VARIABLE_PATTERN, (_match, key: string, fallback: string | undefined) => context[key] ?? fallback ?? `{{${key}}}`);
+  return removeEmptyImages((html ?? '').replace(VARIABLE_PATTERN, (_match, key: string, fallback: string | undefined) => context[key] ?? fallback ?? `{{${key}}}`));
 }

@@ -90,10 +90,10 @@ No se creó ningún proyecto EAS ni `eas.json` — requiere una cuenta/organizac
 4. Generar/self-generar las credenciales de firma (`eas credentials`) — no se generó ninguna credencial de firma en esta tarea.
 5. Configurar Expo Application Services notifications si se quiere activar push real (ver §6).
 
-## 6. Push notifications: preparado, no conectado
+## 6. Push notifications: no implementadas
 
-`MobileDevice.pushToken` existe en el modelo y `POST /api/mobile/devices/push-token` lo persiste — pero **nada en el backend envía notificaciones push todavía** (ni Expo Push API ni FCM/APNs directo). La bandeja in-app (`/notifications`, reutilizando el módulo existente) se conserva, pero no está expuesta en la navegación actual. Conectar push real requeriría:
-- Agregar `expo-notifications` al cliente (pedir permiso, obtener el Expo push token, enviarlo a `POST /mobile/devices/push-token` — el endpoint ya lo acepta).
-- Un servicio en el backend que llame a la Expo Push API (`https://exp.host/--/api/v2/push/send`) cuando se cree una `Notification` con `recipientUserIds` que tengan `MobileDevice.pushToken` activo.
+No se expone un registro de tokens ni se persisten tokens en `MobileDevice`; no hay infraestructura de envío (Expo Push API ni FCM/APNs). La bandeja in-app (`/notifications`, reutilizando el módulo existente) se conserva, pero no está expuesta en la navegación actual. Conectar push real requeriría:
+- Agregar `expo-notifications` al cliente para pedir permiso y obtener el Expo push token.
+- Exponer un endpoint autenticado para registrar el token por instalación y un servicio en el backend que llame a la Expo Push API cuando se cree una `Notification`.
 
 No se implementó para no declarar como "funcionando" algo que no se puede probar sin credenciales/dispositivo físico real, tal como pide explícitamente la tarea ("Si todavía no existe infraestructura push, dejarla correctamente preparada y documentada, sin declarar que funciona").

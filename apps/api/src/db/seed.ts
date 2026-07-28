@@ -420,7 +420,6 @@ function userSeedSet(seed: { username: string; email: string; firstName: string;
     notificationPreferences: {
       emailNotificationsEnabled: true,
       systemNotificationsEnabled: true,
-      whatsappNotificationsEnabled: false,
       notifyOnNewLead: seed.canReceiveLeadNotifications,
       notifyOnNewQuoteRequest: seed.canReceiveQuoteRequestNotifications,
       notifyOnQuoteApproved: true,
@@ -476,7 +475,7 @@ async function seed(): Promise<void> {
           canReceiveQuoteRequestNotifications: true,
           permissionOverrides: [],
           permissionDeniedOverrides: [],
-          notificationPreferences: { email: true, inApp: true, whatsapp: false, newLead: true, newQuoteRequest: true, quoteAccepted: true, eventReminder: true, paymentReminder: true, emailNotificationsEnabled: true, systemNotificationsEnabled: true, whatsappNotificationsEnabled: false, notifyOnNewLead: true, notifyOnNewQuoteRequest: true, notifyOnQuoteApproved: true, notifyOnContractApproved: true, notifyOnPaymentReceived: false, notifyOnEventReminder: true, notifyOnAssignedTask: true },
+          notificationPreferences: { email: true, inApp: true, newLead: true, newQuoteRequest: true, quoteAccepted: true, eventReminder: true, paymentReminder: true, emailNotificationsEnabled: true, systemNotificationsEnabled: true, notifyOnNewLead: true, notifyOnNewQuoteRequest: true, notifyOnQuoteApproved: true, notifyOnContractApproved: true, notifyOnPaymentReceived: false, notifyOnEventReminder: true, notifyOnAssignedTask: true },
           employeeProfile: { position: `Encargado/a ${managerSeed.salonName}`, department: 'Operaciones', employmentStatus: 'active' },
           attendanceConfig: { enabled: false, canUseMobileApp: false, requiresGeolocation: true, requiresWifiOrIpValidation: false, allowedIpAddresses: [], allowManualAdjustment: false }
         },

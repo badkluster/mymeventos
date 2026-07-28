@@ -53,7 +53,6 @@ const campaignBody = z.object({
   openTrackingEnabled: z.boolean().optional(),
   clickTrackingEnabled: z.boolean().optional(),
   batchSize: z.coerce.number().int().min(1).max(500).optional(),
-  sendRateLimit: z.coerce.number().int().min(1).max(500).optional(),
   tags: z.array(z.string().max(60)).optional(),
   timezone: z.string().max(60).optional()
 });

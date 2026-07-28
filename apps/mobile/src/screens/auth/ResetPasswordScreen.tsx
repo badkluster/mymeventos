@@ -13,6 +13,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
 
 export function ResetPasswordScreen({ route, navigation }: Props) {
   const [token, setToken] = useState(route.params?.token ?? '');
+  const [username, setUsername] = useState(route.params?.username ?? '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,12 +21,14 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
   const [done, setDone] = useState(false);
 
   async function submit() {
+    if (!username.trim()) return setError('Ingresá tu usuario o email.');
+    if (!/^\d{6}$/.test(token)) return setError('Ingresá el código de seis dígitos que recibiste por email.');
     if (newPassword.length < 8) return setError('La contraseña debe tener al menos 8 caracteres.');
     if (newPassword !== confirmPassword) return setError('Las contraseñas no coinciden.');
     setLoading(true);
     setError('');
     try {
-      await api.post('/mobile/auth/reset-password', { token: token.trim(), newPassword });
+      await api.post('/mobile/auth/reset-password', { username: username.trim(), token: token.trim(), newPassword });
       setDone(true);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'No se pudo restablecer la contraseña.');
@@ -36,7 +39,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <ScreenHeader title="Restablecer contraseña" description="Pegá el código que recibiste por email y elegí una nueva contraseña." />
+      <ScreenHeader title="Restablecer contraseña" description="Ingresá el código de seis dígitos que recibiste por email y elegí una nueva contraseña." />
       {done ? (
         <>
           <Text style={styles.success}>Contraseña actualizada correctamente. Iniciá sesión con tu nueva contraseña.</Text>
@@ -44,11 +47,12 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
         </>
       ) : (
         <>
-          <AppTextInput label="Código recibido por email" autoCapitalize="none" autoCorrect={false} value={token} onChangeText={setToken} multiline />
+          <AppTextInput label="Usuario o email" autoCapitalize="none" autoCorrect={false} value={username} onChangeText={setUsername} />
+          <AppTextInput label="Código recibido por email" autoCapitalize="none" autoCorrect={false} value={token} onChangeText={(value) => setToken(value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" maxLength={6} />
           <PasswordInput label="Nueva contraseña" value={newPassword} onChangeText={setNewPassword} hint="Mínimo 8 caracteres." />
           <PasswordInput label="Confirmar contraseña" value={confirmPassword} onChangeText={setConfirmPassword} />
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <AppButton title="Restablecer contraseña" onPress={() => void submit()} loading={loading} disabled={!token.trim() || !newPassword || !confirmPassword} />
+          <AppButton title="Restablecer contraseña" onPress={() => void submit()} loading={loading} disabled={!username.trim() || token.length !== 6 || !newPassword || !confirmPassword} />
         </>
       )}
     </ScrollView>

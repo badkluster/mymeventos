@@ -204,12 +204,19 @@ eventStaffAssignmentSchema.index({ eventId: 1, staffUserId: 1, shiftStart: 1, sh
 
 const calendarNotificationSchema = new Schema({
   enabled: { type: Boolean, default: false },
-  channels: { type: [String], enum: ['system', 'email', 'whatsapp'], default: ['system'] },
+  channels: { type: [String], enum: ['system', 'email'], default: ['system'] },
   offsetValue: { type: Number, default: 1 },
   offsetUnit: { type: String, enum: ['minutes', 'hours', 'days', 'weeks'], default: 'days' },
   sendAt: Date,
   lastSentAt: Date,
-  status: { type: String, enum: ['pending', 'scheduled', 'sent', 'failed', 'cancelled'], default: 'pending' }
+  // `processing` plus the lease fields make cron delivery safe when two ticks
+  // overlap or a serverless invocation is retried.
+  status: { type: String, enum: ['pending', 'scheduled', 'processing', 'sent', 'failed', 'cancelled'], default: 'pending' },
+  lockedAt: Date,
+  lockExpiresAt: Date,
+  attemptCount: { type: Number, default: 0 },
+  nextRetryAt: Date,
+  lastError: String
 }, { _id: false });
 
 const calendarItemSchema = new Schema({
@@ -232,6 +239,8 @@ const calendarItemSchema = new Schema({
   paymentId: { type: Schema.Types.ObjectId, ref: 'Payment', index: true },
   supplierId: { type: Schema.Types.ObjectId, ref: 'Supplier', index: true },
   source: { type: String, enum: ['manual', 'event', 'payment', 'contract', 'system'], default: 'manual', index: true },
+  // System-generated calendar work uses this stable key for idempotent upserts.
+  automationKey: { type: String, unique: true, sparse: true, index: true },
   notification: { type: calendarNotificationSchema, default: () => ({}) },
   metadata: Schema.Types.Mixed,
   ...base
@@ -239,6 +248,7 @@ const calendarItemSchema = new Schema({
 calendarItemSchema.index({ startAt: 1, endAt: 1, deletedAt: 1 });
 calendarItemSchema.index({ salonId: 1, startAt: 1, deletedAt: 1 });
 calendarItemSchema.index({ visibility: 1, createdBy: 1, startAt: 1, deletedAt: 1 });
+calendarItemSchema.index({ 'notification.status': 1, 'notification.sendAt': 1, deletedAt: 1 });
 
 const securityDepositSchema = new Schema({
   amount: { type: Number, default: 0 },
