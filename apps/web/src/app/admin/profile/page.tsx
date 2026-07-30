@@ -66,7 +66,7 @@ export default function AdminProfilePage() {
     }
   }
 
-  if (!user) return <div className="grid min-h-56 place-items-center rounded-2xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">Cargando perfil...</div>;
+  if (!user) return <div className="grid min-h-56 place-items-center rounded-2xl border border-border bg-card p-8 text-sm text-muted-foreground shadow-sm">Cargando perfil...</div>;
 
   const displayName = user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username;
 
@@ -74,35 +74,35 @@ export default function AdminProfilePage() {
     <PageHeader title="Mi perfil" description="Gestioná tus datos personales, avatar y contraseña de acceso al backoffice." />
 
     <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <aside className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-5">
-          <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-full bg-zinc-950 text-2xl font-semibold text-white">
+      <aside className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex flex-wrap items-center gap-5">
+          <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-full bg-primary text-2xl font-semibold text-primary-foreground">
             {avatarPreview ? <span aria-label={displayName} role="img" className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${avatarPreview})` }} /> : initials(user.firstName, user.lastName, user.username)}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-xl font-semibold text-zinc-950">{displayName}</p>
-            <p className="mt-1 truncate text-sm text-zinc-500">{user.email || user.username}</p>
-            <div className="mt-3 flex flex-wrap gap-2">{(user.roles ?? []).map((role) => <span key={role} className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">{role}</span>)}</div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xl font-semibold text-foreground">{displayName}</p>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{user.email || user.username}</p>
+            <div className="mt-3 flex flex-wrap gap-2">{(user.roles ?? []).map((role) => <span key={role} className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">{role}</span>)}</div>
           </div>
         </div>
-        <p className="mt-6 rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">Los cambios de nombre, contacto y avatar impactan en el encabezado del backoffice después de guardar.</p>
+        <p className="mt-6 rounded-2xl border border-warning-border bg-warning-bg px-4 py-3 text-sm leading-6 text-warning-foreground">Los cambios de nombre, contacto y avatar impactan en el encabezado del backoffice después de guardar.</p>
       </aside>
 
-      <form onSubmit={(event) => void saveProfile(event)} className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 text-zinc-600"><UserRound className="h-5 w-5" /></span><div><h2 className="font-semibold text-zinc-950">Datos básicos y personales</h2><p className="text-sm text-zinc-500">Información visible para operaciones internas.</p></div></div>
+      <form onSubmit={(event) => void saveProfile(event)} className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><UserRound className="h-5 w-5" /></span><div><h2 className="font-semibold text-foreground">Datos básicos y personales</h2><p className="text-sm text-muted-foreground">Información visible para operaciones internas.</p></div></div>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <label className="text-sm font-medium text-zinc-700">Nombre<Input name="firstName" required defaultValue={user.firstName} className="mt-1.5" /></label>
-          <label className="text-sm font-medium text-zinc-700">Apellido<Input name="lastName" required defaultValue={user.lastName} className="mt-1.5" /></label>
-          <label className="text-sm font-medium text-zinc-700">Email<Input name="email" type="email" defaultValue={user.email ?? ''} className="mt-1.5" /></label>
-          <label className="text-sm font-medium text-zinc-700">Teléfono<Input name="phone" defaultValue={user.phone ?? ''} className="mt-1.5" /></label>
-          <label className="text-sm font-medium text-zinc-700">Tipo de documento<Input name="documentType" defaultValue={user.documentType ?? ''} placeholder="DNI, CUIT..." className="mt-1.5" /></label>
-          <label className="text-sm font-medium text-zinc-700">Número de documento<Input name="documentNumber" defaultValue={user.documentNumber ?? ''} className="mt-1.5" /></label>
+          <label className="text-sm font-medium text-muted-foreground">Nombre<Input name="firstName" required defaultValue={user.firstName} className="mt-1.5" /></label>
+          <label className="text-sm font-medium text-muted-foreground">Apellido<Input name="lastName" required defaultValue={user.lastName} className="mt-1.5" /></label>
+          <label className="text-sm font-medium text-muted-foreground">Email<Input name="email" type="email" defaultValue={user.email ?? ''} className="mt-1.5" /></label>
+          <label className="text-sm font-medium text-muted-foreground">Teléfono<Input name="phone" defaultValue={user.phone ?? ''} className="mt-1.5" /></label>
+          <label className="text-sm font-medium text-muted-foreground">Tipo de documento<Input name="documentType" defaultValue={user.documentType ?? ''} placeholder="DNI, CUIT..." className="mt-1.5" /></label>
+          <label className="text-sm font-medium text-muted-foreground">Número de documento<Input name="documentNumber" defaultValue={user.documentNumber ?? ''} className="mt-1.5" /></label>
           <div className="md:col-span-2">
-            <p className="text-sm font-medium text-zinc-700">Avatar</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+            <p className="text-sm font-medium text-muted-foreground">Avatar</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-muted p-3">
               <CloudinaryUpload context="users" accept="image/*" label="Subir avatar" onUploaded={(asset) => setAvatarPreview(asset.secureUrl || asset.url)} />
               {avatarPreview ? <Button type="button" variant="danger" onClick={() => { setAvatarPreview(''); showToast({ message: 'El avatar se quitará cuando guardes el perfil.', variant: 'success' }); }}><Trash2 className="mr-2 h-4 w-4" />Quitar avatar</Button> : null}
-              <span className="inline-flex items-center gap-2 text-sm text-zinc-500"><Camera className="h-4 w-4" />La imagen se guarda en la nube.</span>
+              <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><Camera className="h-4 w-4" />La imagen se guarda en la nube.</span>
             </div>
             <input type="hidden" name="avatarUrl" value={avatarPreview} />
           </div>
@@ -111,12 +111,12 @@ export default function AdminProfilePage() {
       </form>
     </div>
 
-    <form onSubmit={(event) => void savePassword(event)} className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 text-zinc-600"><KeyRound className="h-5 w-5" /></span><div><h2 className="font-semibold text-zinc-950">Contraseña</h2><p className="text-sm text-zinc-500">Actualizá tu clave usando la contraseña actual.</p></div></div>
+    <form onSubmit={(event) => void savePassword(event)} className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+      <div className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><KeyRound className="h-5 w-5" /></span><div><h2 className="font-semibold text-foreground">Contraseña</h2><p className="text-sm text-muted-foreground">Actualizá tu clave usando la contraseña actual.</p></div></div>
       <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <label className="text-sm font-medium text-zinc-700">Contraseña actual<Input name="currentPassword" type="password" required autoComplete="current-password" className="mt-1.5" /></label>
-        <label className="text-sm font-medium text-zinc-700">Nueva contraseña<Input name="newPassword" type="password" required minLength={8} autoComplete="new-password" className="mt-1.5" /></label>
-        <label className="text-sm font-medium text-zinc-700">Confirmar contraseña<Input name="confirmPassword" type="password" required minLength={8} autoComplete="new-password" className="mt-1.5" /></label>
+        <label className="text-sm font-medium text-muted-foreground">Contraseña actual<Input name="currentPassword" type="password" required autoComplete="current-password" className="mt-1.5" /></label>
+        <label className="text-sm font-medium text-muted-foreground">Nueva contraseña<Input name="newPassword" type="password" required minLength={8} autoComplete="new-password" className="mt-1.5" /></label>
+        <label className="text-sm font-medium text-muted-foreground">Confirmar contraseña<Input name="confirmPassword" type="password" required minLength={8} autoComplete="new-password" className="mt-1.5" /></label>
       </div>
       <footer className="mt-6 flex justify-end"><Button disabled={savingPassword}><KeyRound className="mr-2 h-4 w-4" />{savingPassword ? 'Actualizando...' : 'Cambiar contraseña'}</Button></footer>
     </form>

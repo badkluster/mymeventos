@@ -107,7 +107,7 @@ export async function dashboardSummary(request: Request) {
     collected, collectedPrevious, overdue,
     expensesPaid, expensesPaidPrevious,
     productionEvents, previousProductionEvents,
-    funnel, eventsBySalonRaw, eventsByType, leadsBySource,
+    funnelCore, eventsBySalonRaw, eventsByType, leadsBySource,
     leadsTrendMap, eventsTrendMap, revenueTrendMap,
   ] = await Promise.all([
     Lead.countDocuments(current('createdAt')),
@@ -133,11 +133,8 @@ export async function dashboardSummary(request: Request) {
     Event.find({ ...current('eventDate'), ...activeEventQuery() }).select('_id').lean(),
     Event.find({ ...previous('eventDate'), ...activeEventQuery() }).select('_id').lean(),
     Promise.all([
-      Lead.countDocuments(current('createdAt')),
       Quote.countDocuments(current('createdAt')),
-      Quote.countDocuments(current('acceptedAt')),
       Contract.countDocuments({ ...current('approvedAt'), status: 'approved' }),
-      Event.countDocuments({ ...current('eventDate'), status: 'confirmed' }),
     ]),
     Event.aggregate([{ $match: { ...current('eventDate'), status: { $nin: ['cancelled', 'lost'] } } }, { $group: { _id: '$salonId', value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
     Event.aggregate([{ $match: { ...current('eventDate'), status: { $nin: ['cancelled', 'lost'] } } }, { $group: { _id: { $ifNull: ['$eventType', 'other'] }, value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
@@ -156,6 +153,7 @@ export async function dashboardSummary(request: Request) {
   ]);
   const currentPlanMap = new Map(currentPlans.map((plan: any) => [plan.eventId.toString(), plan.status]));
   const previousPlanMap = new Map(previousPlans.map((plan: any) => [plan.eventId.toString(), plan.status]));
+  const funnel = [leadsNew, funnelCore[0], quotesAccepted, funnelCore[1], eventsConfirmed];
   const definitionById = new Map(dashboardMetricDefinitions.map((item) => [item.id, item]));
   const pendingProduction = productionEvents.filter((event: any) => !['checked', 'closed'].includes(currentPlanMap.get(event._id.toString()) ?? '')).length;
   const previousPendingProduction = previousProductionEvents.filter((event: any) => !['checked', 'closed'].includes(previousPlanMap.get(event._id.toString()) ?? '')).length;

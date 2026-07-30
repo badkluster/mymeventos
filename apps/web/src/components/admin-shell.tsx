@@ -3,8 +3,9 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ChartNoAxesCombined, ChevronDown, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Settings, ShieldX, Sun } from 'lucide-react';
+import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
+import { ChartNoAxesCombined, ChevronDown, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Settings, ShieldX, Sun, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { NotificationBell } from '@/components/admin/notification-bell';
 import { brandAssets } from '@/lib/brand-assets';
@@ -45,6 +46,43 @@ function userInitials(user: ReturnType<typeof useSession>['user']) {
   return (user?.username?.slice(0, 2) || 'MM').toUpperCase();
 }
 
+// Mirrors the focus-trap/scroll-lock pattern already used for the public landing's
+// mobile menu (public-landing-client.tsx), scoped to the admin drawer's own container.
+function useMobileDrawerA11y(active: boolean, onClose: () => void, containerRef: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    if (!active) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const mainEl = document.querySelector('main');
+    mainEl?.setAttribute('aria-hidden', 'true');
+
+    const focusables = () => containerRef.current
+      ? Array.from(containerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ))
+      : [];
+    focusables()[0]?.focus({ preventScroll: true });
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+      if (event.key !== 'Tab') return;
+      const nodes = focusables();
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      mainEl?.removeAttribute('aria-hidden');
+      document.removeEventListener('keydown', onKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+}
+
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useSession();
   const router = useRouter();
@@ -53,8 +91,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [controlOpen, setControlOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [newQuoteRequests, setNewQuoteRequests] = useState(0);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const items = visibleAdminModules(user);
   const currentModule = moduleForPath(pathname);
   const blocked = Boolean(currentModule && !userCanAccess(user, currentModule.permissions));
@@ -79,25 +119,69 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Usuario';
   const canSeeQuotes = userCanAccess(user, [Permission.QUOTES_READ]);
   const sidebarCollapsed = useSyncExternalStore(subscribeToSidebarPreference, getSidebarPreference, getServerSidebarPreference);
-  const controlMenu = controlSubitems.length ? <div className="pt-2">
-    <Tooltip label="Reportes y análisis">
-      <button type="button" aria-label="Reportes y análisis" aria-expanded={showControlSubmenu} onClick={() => setControlOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${sidebarCollapsed ? 'justify-center' : ''} ${controlActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-      <ChartNoAxesCombined className="h-4 w-4" />
-      {!sidebarCollapsed ? <span className="flex-1">Reportes y análisis</span> : null}
-      {!sidebarCollapsed ? <ChevronDown className={`h-4 w-4 transition-transform ${showControlSubmenu ? 'rotate-180' : ''}`} /> : null}
-      </button>
-    </Tooltip>
-    {showControlSubmenu ? <div className={`mt-1 space-y-1 ${sidebarCollapsed ? '' : 'border-l border-border/70 pl-3'}`}>
-      {controlSubitems.map(({ href, label, icon: Icon }) => {
-        const active = isActive(href);
-        const link = <Link key={href} href={href} aria-label={label} aria-current={active ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${sidebarCollapsed ? 'justify-center' : ''} ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+
+  useMobileDrawerA11y(mobileMenuOpen, () => setMobileMenuOpen(false), mobileMenuRef);
+
+  function renderControlMenu(collapsed: boolean) {
+    if (!controlSubitems.length) return null;
+    return <div className="pt-2">
+      <Tooltip label="Reportes y análisis">
+        <button type="button" aria-label="Reportes y análisis" aria-expanded={showControlSubmenu} onClick={() => setControlOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${collapsed ? 'justify-center' : ''} ${controlActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+          <ChartNoAxesCombined className="h-4 w-4" />
+          {!collapsed ? <span className="flex-1">Reportes y análisis</span> : null}
+          {!collapsed ? <ChevronDown className={`h-4 w-4 transition-transform ${showControlSubmenu ? 'rotate-180' : ''}`} /> : null}
+        </button>
+      </Tooltip>
+      {showControlSubmenu ? <div className={`mt-1 space-y-1 ${collapsed ? '' : 'border-l border-border/70 pl-3'}`}>
+        {controlSubitems.map(({ href, label, icon: Icon }) => {
+          const active = isActive(href);
+          const link = <Link key={href} href={href} aria-label={label} aria-current={active ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${collapsed ? 'justify-center' : ''} ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+            <Icon className="h-4 w-4" />
+            {!collapsed ? label : null}
+          </Link>;
+          return collapsed ? <Tooltip key={href} label={label}>{link}</Tooltip> : link;
+        })}
+      </div> : null}
+    </div>;
+  }
+
+  function renderConfigMenu(collapsed: boolean) {
+    if (!configSubitems.length) return null;
+    return <div className="pt-2">
+      <Tooltip label="Configuración y herramientas">
+        <button type="button" aria-label="Configuración y herramientas" aria-expanded={showConfigSubmenu} onClick={() => setSettingsOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${collapsed ? 'justify-center' : ''} ${configActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+          <Settings className="h-4 w-4" />
+          {!collapsed ? <span className="flex-1">Configuración y herramientas</span> : null}
+          {!collapsed ? <ChevronDown className={`h-4 w-4 transition-transform ${showConfigSubmenu ? 'rotate-180' : ''}`} /> : null}
+        </button>
+      </Tooltip>
+      {showConfigSubmenu ? <div className={`mt-1 space-y-1 ${collapsed ? '' : 'border-l border-border/70 pl-3'}`}>
+        {configSubitems.map(({ href, label, icon: Icon }) => {
+          const active = isActive(href);
+          const link = <Link key={href} href={href} aria-label={label} aria-current={active ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${collapsed ? 'justify-center' : ''} ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+            <Icon className="h-4 w-4" />
+            {!collapsed ? label : null}
+          </Link>;
+          return collapsed ? <Tooltip key={href} label={label}>{link}</Tooltip> : link;
+        })}
+      </div> : null}
+    </div>;
+  }
+
+  function renderNav(collapsed: boolean) {
+    return <nav className={`min-h-0 flex-1 space-y-1 overflow-y-auto ${collapsed ? 'mt-8' : 'mt-10 pr-1'}`} aria-label="Módulos del backoffice">
+      {mainItems.map(({ href, label, icon: Icon }) => <div key={href}>
+        {collapsed ? <Tooltip label={label}><Link href={href} aria-label={label} aria-current={isActive(href) ? 'page' : undefined} className={`flex items-center justify-center rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Icon className="h-4 w-4" /></Link></Tooltip> : <Link href={href} aria-current={isActive(href) ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
           <Icon className="h-4 w-4" />
-          {!sidebarCollapsed ? label : null}
-        </Link>;
-        return sidebarCollapsed ? <Tooltip key={href} label={label}>{link}</Tooltip> : link;
-      })}
-    </div> : null}
-  </div> : null;
+          <span className="flex-1">{label}</span>
+          {href === '/admin/quotes' && canSeeQuotes && newQuoteRequests > 0 ? <span title={`${newQuoteRequests} solicitudes nuevas`} aria-label={`${newQuoteRequests} solicitudes nuevas`} className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold ${isActive(href) ? 'bg-primary-foreground text-primary' : 'bg-red-500 text-white'}`}>{newQuoteRequests > 99 ? '99+' : newQuoteRequests}</span> : null}
+        </Link>}
+        {href === '/admin/expenses' ? renderControlMenu(collapsed) : null}
+      </div>)}
+      {!mainItems.some((item) => item.href === '/admin/expenses') ? renderControlMenu(collapsed) : null}
+      {renderConfigMenu(collapsed)}
+    </nav>;
+  }
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -112,6 +196,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     window.dispatchEvent(new Event(sidebarPreferenceEvent));
   }
 
+  // Closes the mobile drawer on every route change, covering nav-link taps as well as
+  // browser back/forward, without threading an onClick through every link variant above.
+  useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
+
   useEffect(() => {
     if (!canSeeQuotes) return;
     let mounted = true;
@@ -121,7 +209,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     void loadCount();
     const interval = window.setInterval(() => void loadCount(), 30000);
     return () => { mounted = false; window.clearInterval(interval); };
-  }, [canSeeQuotes, pathname]);
+  }, [canSeeQuotes]);
 
   async function logoutAll() {
     await api.post('/auth/logout-all');
@@ -131,49 +219,40 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div data-admin-shell className="min-h-screen bg-background text-foreground">
-      <aside className={`fixed inset-y-0 flex flex-col overflow-hidden border-r bg-card transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-20 p-3' : 'w-64 p-5'}`}>
+      <aside className={`fixed inset-y-0 z-30 hidden flex-col overflow-hidden border-r bg-card transition-[width,padding] duration-200 lg:flex ${sidebarCollapsed ? 'w-20 p-3' : 'w-64 p-5'}`}>
         <div className={`flex shrink-0 items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
           <Link href="/admin" className="block" aria-label="Ir al panel de M&M Eventos">
             {sidebarCollapsed ? <Image src={brandAssets.icon64} alt="M&M Eventos" width={40} height={40} className="h-10 w-10 rounded-lg" priority /> : <Image src={brandAssets.logoDarkOnLight} alt="M&M Eventos" width={150} height={150} className="h-auto w-32 object-contain" priority />}
           </Link>
           {!sidebarCollapsed ? <button type="button" aria-label="Contraer menú lateral" onClick={toggleSidebar} className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"><PanelLeftClose className="h-4 w-4" /></button> : null}
         </div>
-        <nav className={`min-h-0 flex-1 space-y-1 overflow-y-auto ${sidebarCollapsed ? 'mt-8' : 'mt-10 pr-1'}`} aria-label="Módulos del backoffice">
-          {mainItems.map(({ href, label, icon: Icon }) => <div key={href}>
-            {sidebarCollapsed ? <Tooltip label={label}><Link href={href} aria-label={label} aria-current={isActive(href) ? 'page' : undefined} className={`flex items-center justify-center rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Icon className="h-4 w-4" /></Link></Tooltip> : <Link href={href} aria-current={isActive(href) ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive(href) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-              <Icon className="h-4 w-4" />
-              <span className="flex-1">{label}</span>
-              {href === '/admin/quotes' && canSeeQuotes && newQuoteRequests > 0 ? <span title={`${newQuoteRequests} solicitudes nuevas`} aria-label={`${newQuoteRequests} solicitudes nuevas`} className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold ${isActive(href) ? 'bg-white text-zinc-950' : 'bg-red-500 text-white'}`}>{newQuoteRequests > 99 ? '99+' : newQuoteRequests}</span> : null}
-            </Link>}
-            {href === '/admin/expenses' ? controlMenu : null}
-          </div>)}
-          {!mainItems.some((item) => item.href === '/admin/expenses') ? controlMenu : null}
-          {configSubitems.length ? <div className="pt-2">
-            <Tooltip label="Configuración y herramientas">
-              <button type="button" aria-label="Configuración y herramientas" aria-expanded={showConfigSubmenu} onClick={() => setSettingsOpen((open) => !open)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium ${sidebarCollapsed ? 'justify-center' : ''} ${configActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-              <Settings className="h-4 w-4" />
-              {!sidebarCollapsed ? <span className="flex-1">Configuración y herramientas</span> : null}
-              {!sidebarCollapsed ? <ChevronDown className={`h-4 w-4 transition-transform ${showConfigSubmenu ? 'rotate-180' : ''}`} /> : null}
-              </button>
-            </Tooltip>
-            {showConfigSubmenu ? <div className={`mt-1 space-y-1 ${sidebarCollapsed ? '' : 'border-l border-border/70 pl-3'}`}>
-              {configSubitems.map(({ href, label, icon: Icon }) => {
-                const active = isActive(href);
-                const link = <Link key={href} href={href} aria-label={label} aria-current={active ? 'page' : undefined} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${sidebarCollapsed ? 'justify-center' : ''} ${active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-                  <Icon className="h-4 w-4" />
-                  {!sidebarCollapsed ? label : null}
-                </Link>;
-                return sidebarCollapsed ? <Tooltip key={href} label={label}>{link}</Tooltip> : link;
-              })}
-            </div> : null}
-          </div> : null}
-        </nav>
+        {renderNav(sidebarCollapsed)}
         {sidebarCollapsed ? <Tooltip label="Expandir menú lateral"><button type="button" aria-label="Expandir menú lateral" onClick={toggleSidebar} className="mt-3 flex w-full justify-center rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"><PanelLeftOpen className="h-4 w-4" /></button></Tooltip> : null}
       </aside>
-      <main className={`transition-[margin] duration-200 ${sidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
-        <header className="flex h-16 items-center justify-between border-b px-8">
-          <p className="text-sm text-muted-foreground">Administración</p>
-          <div className="flex items-center gap-3">
+
+      {mobileMenuOpen ? createPortal(
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div aria-hidden="true" onClick={() => setMobileMenuOpen(false)} className="absolute inset-0 bg-zinc-950/60" />
+          <div ref={mobileMenuRef} role="dialog" aria-modal="true" aria-label="Menú de navegación" className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-hidden border-r bg-card p-5 shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between">
+              <Link href="/admin" onClick={() => setMobileMenuOpen(false)} className="block" aria-label="Ir al panel de M&M Eventos">
+                <Image src={brandAssets.logoDarkOnLight} alt="M&M Eventos" width={150} height={150} className="h-auto w-32 object-contain" priority />
+              </Link>
+              <button type="button" aria-label="Cerrar menú" onClick={() => setMobileMenuOpen(false)} className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+            {renderNav(false)}
+          </div>
+        </div>,
+        document.body,
+      ) : null}
+
+      <main className={`transition-[margin] duration-200 ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+        <header className="flex h-16 items-center justify-between gap-3 border-b px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2">
+            <button type="button" aria-label="Abrir menú" onClick={() => setMobileMenuOpen(true)} className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground lg:hidden"><Menu className="h-5 w-5" /></button>
+            <p className="text-sm text-muted-foreground">Administración</p>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-3">
             <NotificationBell />
             <button aria-label="Cambiar tema" onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} className="rounded p-2 hover:bg-muted">
               {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -196,16 +275,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <Link href="/admin/profile" role="menuitem" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm transition hover:bg-muted"><Settings className="h-4 w-4" />Editar perfil</Link>
                 <button type="button" role="menuitem" onClick={() => void logoutAll()} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted"><ShieldX className="h-4 w-4" />Cerrar todas las sesiones</button>
-                <button type="button" role="menuitem" onClick={() => void logout().then(() => router.push('/admin/login'))} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-red-600 transition hover:bg-red-50"><LogOut className="h-4 w-4" />Cerrar sesión</button>
+                <button type="button" role="menuitem" onClick={() => void logout().then(() => router.push('/admin/login'))} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-danger-foreground transition hover:bg-danger-bg"><LogOut className="h-4 w-4" />Cerrar sesión</button>
               </div> : null}
             </div>
           </div>
         </header>
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
           {blocked ? (
-            <section className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-              <h1 className="text-xl font-semibold text-zinc-950">Sin acceso</h1>
-              <p className="mt-2 text-sm text-zinc-500">No tenés permisos para ver esta sección. Pedile a un administrador que revise tus permisos.</p>
+            <section className="rounded-2xl border border-border bg-card p-8 shadow-sm">
+              <h1 className="text-xl font-semibold text-foreground">Sin acceso</h1>
+              <p className="mt-2 text-sm text-muted-foreground">No tenés permisos para ver esta sección. Pedile a un administrador que revise tus permisos.</p>
             </section>
           ) : children}
         </div>

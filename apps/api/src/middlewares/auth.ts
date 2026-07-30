@@ -26,8 +26,13 @@ export const requireAuth: RequestHandler = async (request, _response, next) => {
     const payload = verifyAccessToken(token);
     const filter: Record<string, unknown> = { _id: payload.sub, active: true, deletedAt: null };
     if (viaCookie) filter.canAccessBackoffice = { $ne: false };
-    const user: any = await User.findOne(filter).lean();
+    const userQuery = User.findOne(filter);
+    const projectedUserQuery = typeof userQuery.select === 'function'
+      ? userQuery.select('_id username email phone documentType documentNumber avatarUrl firstName lastName fullName roles permissionOverrides permissionDeniedOverrides salonIds managedSalonIds active canAccessBackoffice')
+      : userQuery;
+    const user: any = await projectedUserQuery.lean();
     if (!user) throw new ApiError(401, 'UNAUTHENTICATED');
+    request.authUser = user;
     request.user = { id: user._id.toString(), roles: user.roles, permissionOverrides: user.permissionOverrides ?? [], permissionDeniedOverrides: user.permissionDeniedOverrides ?? [], salonIds: (user.salonIds ?? []).map(String), managedSalonIds: (user.managedSalonIds ?? []).map(String), active: user.active };
     next();
   } catch { next(new ApiError(401, 'UNAUTHENTICATED')); }

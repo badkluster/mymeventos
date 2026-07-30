@@ -125,28 +125,28 @@ function formatPrevious(metric: Metric) {
 }
 
 function metricTone(id: string) {
-  if (id.includes('overdue') || id.includes('pending')) return 'border-amber-200 bg-amber-50/55';
-  if (id.includes('accepted') || id.includes('collected') || id.includes('confirmed')) return 'border-emerald-200 bg-emerald-50/45';
-  return 'border-zinc-200 bg-white';
+  if (id.includes('overdue') || id.includes('pending')) return 'border-warning-border bg-warning-bg';
+  if (id.includes('accepted') || id.includes('collected') || id.includes('confirmed')) return 'border-success-border bg-success-bg';
+  return 'border-border bg-card';
 }
 
 function DeltaBadge({ item }: { item: Metric }) {
-  if (item.attributionDate === 'current_snapshot') return <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">Estado actual</span>;
-  if (item.changePercentage === null) return <span className="text-xs text-zinc-400">Sin base</span>;
+  if (item.attributionDate === 'current_snapshot') return <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">Estado actual</span>;
+  if (item.changePercentage === null) return <span className="text-xs text-muted-foreground">Sin base</span>;
   return item.changePercentage >= 0
-    ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><TrendingUp className="h-3.5 w-3.5" />{number.format(item.changePercentage)}%</span>
-    : <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700"><TrendingDown className="h-3.5 w-3.5" />{number.format(Math.abs(item.changePercentage))}%</span>;
+    ? <span className="inline-flex items-center gap-1 text-xs font-medium text-success-foreground"><TrendingUp className="h-3.5 w-3.5" />{number.format(item.changePercentage)}%</span>
+    : <span className="inline-flex items-center gap-1 text-xs font-medium text-danger-foreground"><TrendingDown className="h-3.5 w-3.5" />{number.format(Math.abs(item.changePercentage))}%</span>;
 }
 
 function MetricCard({ item }: { item: Metric }) {
   const currentSnapshot = item.attributionDate === 'current_snapshot';
   return <Link href={item.drillDownHref || item.drilldown || '/admin/reports'} title={`${item.description} Fórmula: ${item.formula}`} className={`group rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${metricTone(item.id)}`}>
     <div className="flex items-start justify-between gap-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{item.label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
       <DeltaBadge item={item} />
     </div>
-    <p className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950">{formatMetric(item)}</p>
-    <p className="mt-2 flex items-center justify-between text-xs text-zinc-500"><span>{currentSnapshot ? item.description : `Período anterior: ${formatPrevious(item)}`}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" /></p>
+    <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{formatMetric(item)}</p>
+    <p className="mt-2 flex items-center justify-between text-xs text-muted-foreground"><span>{currentSnapshot ? item.description : `Período anterior: ${formatPrevious(item)}`}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" /></p>
   </Link>;
 }
 
@@ -154,23 +154,23 @@ function MeterMetricCard({ item }: { item: Metric }) {
   const config = meterConfigs[item.id];
   const value = item.value ?? 0;
   const tone = config ? meterTone(config.bands, value) : 'good';
-  return <Link href={item.drillDownHref || item.drilldown || '/admin/reports'} title={`${item.description} Fórmula: ${item.formula}`} className="group rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+  return <Link href={item.drillDownHref || item.drilldown || '/admin/reports'} title={`${item.description} Fórmula: ${item.formula}`} className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
     <div className="flex items-start justify-between gap-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{item.label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
       <DeltaBadge item={item} />
     </div>
-    <p className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950">{formatMetric(item)}</p>
+    <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{formatMetric(item)}</p>
     <div className="mt-3"><Meter value={value} tone={tone} caption={config?.caption ?? ''} /></div>
   </Link>;
 }
 
 function PulseTile({ item, color, points, format, index }: { item: Metric; color: string; points: TrendPoint[]; format: 'integer' | 'currency'; index: number }) {
-  return <article style={{ animationDelay: `${index * 60}ms` }} className="mym-rise rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+  return <article style={{ animationDelay: `${index * 60}ms` }} className="mym-rise rounded-2xl border border-border bg-card p-4 shadow-sm">
     <div className="flex items-start justify-between gap-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{item.label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
       <DeltaBadge item={item} />
     </div>
-    <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">{formatMetric(item)}</p>
+    <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{formatMetric(item)}</p>
     <div className="mt-3"><Sparkline points={points} accent={color} format={format} /></div>
   </article>;
 }
@@ -179,23 +179,23 @@ function QuickActionTile({ label, href, icon: Icon, badge, index }: { label: str
   return <Link
     href={href}
     style={{ animationDelay: `${index * 40}ms` }}
-    className="mym-rise group relative flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-400 hover:shadow-md"
+    className="mym-rise group relative flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-md"
   >
-    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-zinc-950 text-white transition group-hover:bg-zinc-800"><Icon className="h-5 w-5" /></span>
+    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition group-hover:opacity-90"><Icon className="h-5 w-5" /></span>
     <span className="min-w-0 flex-1">
-      <span className="block truncate text-sm font-medium text-zinc-800">{label}</span>
-      {badge ? <span className="mt-0.5 block truncate text-xs font-semibold text-amber-700">{badge}</span> : null}
+      <span className="block truncate text-sm font-medium text-foreground">{label}</span>
+      {badge ? <span className="mt-0.5 block truncate text-xs font-semibold text-warning-foreground">{badge}</span> : null}
     </span>
   </Link>;
 }
 
 function EmptyCompact({ text }: { text: string }) {
-  return <div className="grid min-h-28 place-items-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/70 px-4 text-center text-sm text-zinc-500">{text}</div>;
+  return <div className="grid min-h-28 place-items-center rounded-xl border border-dashed border-border bg-muted/70 px-4 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
 function LoadingBlock() {
-  return <div className="grid min-h-72 place-items-center rounded-2xl border border-zinc-200 bg-white">
-    <span className="inline-flex items-center gap-2 text-sm text-zinc-500"><LoaderCircle className="h-4 w-4 animate-spin" /> Actualizando indicadores…</span>
+  return <div className="grid min-h-72 place-items-center rounded-2xl border border-border bg-card">
+    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="h-4 w-4 animate-spin" /> Actualizando indicadores…</span>
   </div>;
 }
 
@@ -220,14 +220,10 @@ export function DashboardWorkspace() {
     const params = new URLSearchParams({ from, to });
     if (salonId) params.set('salonId', salonId);
     try {
-      const [nextSummary, nextAgenda, nextAlerts] = await Promise.all([
-        api.get<Summary>(`/dashboard/summary?${params}`),
-        api.get<Agenda>(`/dashboard/agenda?${params}`),
-        api.get<Alerts>(`/dashboard/alerts?${params}`),
-      ]);
-      setSummary(nextSummary);
-      setAgenda(nextAgenda);
-      setAlerts(nextAlerts);
+      const result = await api.get<{ summary: Summary; agenda: Agenda; alerts: Alerts }>(`/dashboard/initial?${params}`);
+      setSummary(result.summary);
+      setAgenda(result.agenda);
+      setAlerts(result.alerts);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudo cargar el dashboard.');
     } finally {
@@ -236,7 +232,7 @@ export function DashboardWorkspace() {
   }, [from, to, salonId]);
 
   useEffect(() => {
-    void api.get<{ salons?: Salon[] } | Salon[]>('/salons?limit=100')
+    void api.get<{ salons?: Salon[] } | Salon[]>('/salons?limit=100&summary=true')
       .then((result) => setSalons(Array.isArray(result) ? result : result.salons ?? []))
       .catch(() => setSalons([]));
   }, []);
@@ -274,33 +270,33 @@ export function DashboardWorkspace() {
       action={<Button variant="secondary" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</Button>}
     />
 
-    <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <label className="min-w-40 flex-1 text-xs font-medium text-zinc-600">Desde<Input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} className="mt-1.5" /></label>
-      <label className="min-w-40 flex-1 text-xs font-medium text-zinc-600">Hasta<Input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className="mt-1.5" /></label>
-      <label className="min-w-52 flex-[1.3] text-xs font-medium text-zinc-600">Salón
+    <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:flex-wrap sm:items-end">
+      <label className="min-w-40 flex-1 text-xs font-medium text-muted-foreground">Desde<Input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} className="mt-1.5" /></label>
+      <label className="min-w-40 flex-1 text-xs font-medium text-muted-foreground">Hasta<Input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} className="mt-1.5" /></label>
+      <label className="min-w-52 flex-[1.3] text-xs font-medium text-muted-foreground">Salón
         <Select value={salonId} onChange={(event) => setSalonId(event.target.value)} className="mt-1.5">
           {canSeeAllSalons ? <option value="">Todos los salones</option> : null}
           {!canSeeAllSalons && !salonId ? <option value="">Mi alcance asignado</option> : null}
           {salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}
         </Select>
       </label>
-      {summary ? <p className="pb-2 text-xs text-zinc-400">Actualizado {dateTime.format(new Date(summary.meta.lastUpdatedAt))}</p> : null}
+      {summary ? <p className="text-xs text-muted-foreground sm:pb-2">Actualizado {dateTime.format(new Date(summary.meta.lastUpdatedAt))}</p> : null}
     </div>
 
     {quickActions.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {quickActions.map((action, index) => <QuickActionTile key={action.href} label={action.label} href={action.href} icon={action.icon} badge={action.badge} index={index} />)}
     </div> : null}
 
-    {error ? <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><span><strong>No pudimos actualizar el dashboard.</strong> {error}</span><Button variant="secondary" onClick={() => void load()}>Reintentar</Button></div> : null}
+    {error ? <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger-border bg-danger-bg p-4 text-sm text-foreground"><span><strong>No pudimos actualizar el dashboard.</strong> {error}</span><Button variant="secondary" onClick={() => void load()}>Reintentar</Button></div> : null}
     {loading && !summary ? <LoadingBlock /> : null}
 
     {priorityMetrics.length ? <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Necesita tu atención</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Necesita tu atención</p>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{priorityMetrics.map((item) => <MetricCard key={item.id} item={item} />)}</div>
     </div> : null}
 
     {pulseTiles.length ? <div>
-      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400"><Activity className="h-3.5 w-3.5" />Pulso del período</p>
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><Activity className="h-3.5 w-3.5" />Pulso del período</p>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {pulseTiles.map(({ series, metric }, index) => <PulseTile
           key={series.id}
@@ -313,72 +309,72 @@ export function DashboardWorkspace() {
       </div>
     </div> : null}
 
-    {summary && summary.funnel.length ? <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+    {summary && summary.funnel.length ? <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="flex items-center gap-2 font-semibold text-zinc-950"><FunnelIcon className="h-4 w-4 text-zinc-400" />Pipeline de conversión</h2><p className="mt-1 text-xs text-zinc-500">De la primera consulta al evento confirmado, en el orden real del proceso comercial.</p></div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">{overallConversion}% llega a evento confirmado</span>
+        <div><h2 className="flex items-center gap-2 font-semibold text-foreground"><FunnelIcon className="h-4 w-4 text-muted-foreground" />Pipeline de conversión</h2><p className="mt-1 text-xs text-muted-foreground">De la primera consulta al evento confirmado, en el orden real del proceso comercial.</p></div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">{overallConversion}% llega a evento confirmado</span>
       </header>
       <FunnelChart stages={summary.funnel} />
     </article> : null}
 
     <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-      <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-        <header className="flex items-center justify-between border-b border-zinc-100 px-5 py-4"><div><h2 className="font-semibold">Agenda de hoy</h2><p className="mt-1 text-xs text-zinc-500">{agenda ? dateOnly.format(new Date(`${agenda.date}T12:00:00-03:00`)) : 'Eventos, tareas y vencimientos'}</p></div><CalendarDays className="h-5 w-5 text-zinc-400" /></header>
-        <div className="divide-y divide-zinc-100">
-          {agenda?.items.length ? agenda.items.slice(0, 10).map((item) => <Link key={`${item.type}-${item.id}`} href={item.href} className="flex items-center gap-3 px-5 py-3 transition hover:bg-zinc-50">
-            <span className="w-12 shrink-0 text-xs font-semibold tabular-nums text-zinc-600">{item.time || dateTime.format(new Date(item.at)).split(', ')[1]}</span>
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-zinc-900">{item.title}</span><span className="block truncate text-xs text-zinc-500">{[item.salon, item.customer, item.responsible].filter(Boolean).join(' · ') || 'Sin detalle adicional'}</span></span>
-            {item.amount ? <span className="text-xs font-semibold">{money.format(item.amount)}</span> : null}<ArrowRight className="h-4 w-4 text-zinc-300" />
+      <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <header className="flex items-center justify-between border-b border-border px-5 py-4"><div><h2 className="font-semibold text-foreground">Agenda de hoy</h2><p className="mt-1 text-xs text-muted-foreground">{agenda ? dateOnly.format(new Date(`${agenda.date}T12:00:00-03:00`)) : 'Eventos, tareas y vencimientos'}</p></div><CalendarDays className="h-5 w-5 text-muted-foreground" /></header>
+        <div className="divide-y divide-border">
+          {agenda?.items.length ? agenda.items.slice(0, 10).map((item) => <Link key={`${item.type}-${item.id}`} href={item.href} className="flex items-center gap-3 px-5 py-3 transition hover:bg-muted">
+            <span className="w-12 shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{item.time || dateTime.format(new Date(item.at)).split(', ')[1]}</span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{item.title}</span><span className="block truncate text-xs text-muted-foreground">{[item.salon, item.customer, item.responsible].filter(Boolean).join(' · ') || 'Sin detalle adicional'}</span></span>
+            {item.amount ? <span className="text-xs font-semibold text-foreground">{money.format(item.amount)}</span> : null}<ArrowRight className="h-4 w-4 text-muted-foreground" />
           </Link>) : <div className="p-5"><EmptyCompact text="No hay actividades ni vencimientos para hoy." /></div>}
         </div>
-        <footer className="border-t border-zinc-100 p-3"><Link href="/admin/calendar" className="flex items-center justify-center gap-2 text-sm font-medium text-zinc-700 hover:text-zinc-950">Ver calendario completo <ArrowRight className="h-4 w-4" /></Link></footer>
+        <footer className="border-t border-border p-3"><Link href="/admin/calendar" className="flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">Ver calendario completo <ArrowRight className="h-4 w-4" /></Link></footer>
       </article>
 
-      <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-        <header className="border-b border-zinc-100 px-5 py-4">
-          <div className="flex items-center justify-between"><h2 className="font-semibold">Alertas y pendientes</h2>{alerts?.items.length ? <AlertTriangle className="h-5 w-5 text-amber-500" /> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}</div>
-          <p className="mt-1 text-xs text-zinc-500">Ordenados por prioridad y fecha.</p>
+      <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <header className="border-b border-border px-5 py-4">
+          <div className="flex items-center justify-between"><h2 className="font-semibold text-foreground">Alertas y pendientes</h2>{alerts?.items.length ? <AlertTriangle className="h-5 w-5 text-amber-500" /> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}</div>
+          <p className="mt-1 text-xs text-muted-foreground">Ordenados por prioridad y fecha.</p>
           {alerts?.items.length ? <div className="mt-3 flex flex-wrap gap-1.5">
             {(Object.keys(severityMeta) as Severity[]).filter((severity) => severityCounts[severity] > 0).map((severity) => {
               const meta = severityMeta[severity];
               const Icon = meta.icon;
               const active = severityFilter === severity;
-              return <button key={severity} type="button" onClick={() => setSeverityFilter(active ? null : severity)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400'}`}>
+              return <button key={severity} type="button" onClick={() => setSeverityFilter(active ? null : severity)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:border-foreground/30'}`}>
                 <Icon className="h-3 w-3" style={{ color: active ? undefined : meta.color }} />{meta.label} · {severityCounts[severity]}
               </button>;
             })}
           </div> : null}
         </header>
-        <div className="max-h-[30rem] divide-y divide-zinc-100 overflow-y-auto">
+        <div className="max-h-120 divide-y divide-border overflow-y-auto">
           {visibleAlerts?.length ? visibleAlerts.slice(0, 20).map((item) => {
             const meta = severityMeta[item.severity];
             const Icon = meta.icon;
-            return <Link key={item.id} href={item.href} style={{ borderLeft: `3px solid ${meta.color}` }} className="block px-5 py-3.5 transition hover:bg-zinc-50">
+            return <Link key={item.id} href={item.href} style={{ borderLeft: `3px solid ${meta.color}` }} className="block px-5 py-3.5 transition hover:bg-muted">
               <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-zinc-500"><Icon className="h-3 w-3" style={{ color: meta.color }} />{meta.label}</span>
-                <span className="text-[11px] text-zinc-400">{dateOnly.format(new Date(item.dueAt))}</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-muted-foreground"><Icon className="h-3 w-3" style={{ color: meta.color }} />{meta.label}</span>
+                <span className="text-[11px] text-muted-foreground">{dateOnly.format(new Date(item.dueAt))}</span>
               </div>
-              <p className="mt-2 text-sm font-semibold text-zinc-900">{item.title}</p><p className="mt-0.5 text-xs leading-5 text-zinc-500">{item.description}</p><p className="mt-1.5 text-xs font-medium text-zinc-700">{item.recommendedAction}</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{item.title}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{item.description}</p><p className="mt-1.5 text-xs font-medium text-muted-foreground">{item.recommendedAction}</p>
             </Link>;
           }) : <div className="p-5"><EmptyCompact text={severityFilter ? 'No hay alertas de esta severidad.' : 'No hay alertas operativas dentro del alcance actual.'} /></div>}
         </div>
       </article>
     </div>
 
-    {summary ? <details className="group rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-zinc-800"><span>Ver análisis completo del período</span><span className="text-xs font-normal text-zinc-400 group-open:hidden">{secondaryMetrics.length + meterMetrics.length} indicadores y distribuciones</span><span className="hidden text-xs font-normal text-zinc-400 group-open:inline">Ocultar análisis</span></summary>
-      <div className="space-y-5 border-t border-zinc-100 p-5">
+    {summary ? <details className="group rounded-2xl border border-border bg-card shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-foreground"><span>Ver análisis completo del período</span><span className="text-xs font-normal text-muted-foreground group-open:hidden">{secondaryMetrics.length + meterMetrics.length} indicadores y distribuciones</span><span className="hidden text-xs font-normal text-muted-foreground group-open:inline">Ocultar análisis</span></summary>
+      <div className="space-y-5 border-t border-border p-5">
         {meterMetrics.length ? <div>
-          <h2 className="mb-3 flex items-center gap-1.5 font-semibold text-zinc-950"><Gauge className="h-4 w-4 text-zinc-400" />Indicadores de salud</h2>
+          <h2 className="mb-3 flex items-center gap-1.5 font-semibold text-foreground"><Gauge className="h-4 w-4 text-muted-foreground" />Indicadores de salud</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{meterMetrics.map((item) => <MeterMetricCard key={item.id} item={item} />)}</div>
         </div> : null}
         {secondaryMetrics.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{secondaryMetrics.map((item) => <MetricCard key={item.id} item={item} />)}</div> : null}
         <div className="grid gap-4 lg:grid-cols-3">
-          <article className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Eventos por salón</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Eventos activos cuya fecha cae en el período.</p><RankedBars items={summary.breakdowns.eventsBySalon} /></article>
-          <article className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Eventos por tipo</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Distribución de la operación.</p><RankedBars items={summary.breakdowns.eventsByType.map((item) => ({ ...item, label: item.label || 'Sin especificar' }))} /></article>
-          <article className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Origen de leads</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Canales que generaron consultas.</p><RankedBars items={summary.breakdowns.leadsBySource.map((item) => ({ ...item, label: displayLabel(leadSourceLabels, item.label) }))} /></article>
+          <article className="rounded-2xl border border-border bg-card p-5"><h2 className="font-semibold text-foreground">Eventos por salón</h2><p className="mb-5 mt-1 text-xs text-muted-foreground">Eventos activos cuya fecha cae en el período.</p><RankedBars items={summary.breakdowns.eventsBySalon} /></article>
+          <article className="rounded-2xl border border-border bg-card p-5"><h2 className="font-semibold text-foreground">Eventos por tipo</h2><p className="mb-5 mt-1 text-xs text-muted-foreground">Distribución de la operación.</p><RankedBars items={summary.breakdowns.eventsByType.map((item) => ({ ...item, label: item.label || 'Sin especificar' }))} /></article>
+          <article className="rounded-2xl border border-border bg-card p-5"><h2 className="font-semibold text-foreground">Origen de leads</h2><p className="mb-5 mt-1 text-xs text-muted-foreground">Canales que generaron consultas.</p><RankedBars items={summary.breakdowns.leadsBySource.map((item) => ({ ...item, label: displayLabel(leadSourceLabels, item.label) }))} /></article>
         </div>
-        {summary.meta.financialVisible ? <article className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Gastos por categoría</h2><p className="mb-5 mt-1 text-xs text-zinc-500">Gastos pagados durante el período.</p><RankedBars items={summary.breakdowns.expensesByCategory} format="currency" /></article> : <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5"><h2 className="font-semibold">Información financiera restringida</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Tu rol puede consultar la operación, pero no importes financieros.</p></article>}
+        {summary.meta.financialVisible ? <article className="rounded-2xl border border-border bg-card p-5"><h2 className="font-semibold text-foreground">Gastos por categoría</h2><p className="mb-5 mt-1 text-xs text-muted-foreground">Gastos pagados durante el período.</p><RankedBars items={summary.breakdowns.expensesByCategory} format="currency" /></article> : <article className="rounded-2xl border border-border bg-muted p-5"><h2 className="font-semibold text-foreground">Información financiera restringida</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Tu rol puede consultar la operación, pero no importes financieros.</p></article>}
       </div>
     </details> : null}
   </section>;

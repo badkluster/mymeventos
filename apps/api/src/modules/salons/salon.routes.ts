@@ -226,6 +226,7 @@ router.use(requireAuth);
 
 router.get('/', requirePermission(Permission.SALONS_READ), asyncHandler(async (request, response) => {
   const query: Record<string, unknown> = { deletedAt: null, ...listScope(request) };
+  const summary = request.query.summary === 'true';
   if (request.query.active === 'true') query.active = true;
   if (request.query.active === 'false') query.active = false;
   if (request.query.visibleOnWebsite === 'true') query.visibleOnWebsite = true;
@@ -234,7 +235,10 @@ router.get('/', requirePermission(Permission.SALONS_READ), asyncHandler(async (r
     const term = { $regex: request.query.search.trim(), $options: 'i' };
     query.$or = [{ name: term }, { city: term }, { locality: term }, { address: term }];
   }
-  const salons = await Salon.find(query).sort({ displayOrder: 1, name: 1 }).lean();
+  const salonQuery = Salon.find(query).sort({ displayOrder: 1, name: 1 });
+  if (summary) salonQuery.select('_id name slug active');
+  const salons = await salonQuery.lean();
+  if (summary) return sendSuccess(response, { salons });
   const salonIds = salons.map((salon: any) => salon._id);
   const rules = salonIds.length ? await VenuePackageRule.find({ salonId: { $in: salonIds }, active: true, deletedAt: null }).select('salonId').lean() : [];
   const counts = new Map<string, number>();

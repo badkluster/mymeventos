@@ -15,8 +15,18 @@
 .invitation-mobile-preview [class~="sm:text-6xl"] { font-size: 2.25rem !important; line-height: 2.5rem !important; }
 .invitation-mobile-preview [class~="sm:text-7xl"] { font-size: 3rem !important; line-height: 1 !important; }
 
-:root { --background: #fafafa; --foreground: #171717; --card: #fff; --muted: #f1f1f1; --muted-foreground: #5f6472; --border: #e4e4e7; --primary: #171717; --primary-foreground: #fff; }
-.dark { --background: #0b0b0c; --foreground: #f7f7f7; --card: #151517; --muted: #262629; --muted-foreground: #a1a1aa; --border: #2f3037; --primary: #f7f7f7; --primary-foreground: #171717; }
+:root {
+  --background: #fafafa; --foreground: #171717; --card: #fff; --muted: #f1f1f1; --muted-foreground: #5f6472; --border: #e4e4e7; --primary: #171717; --primary-foreground: #fff;
+  --warning-bg: #fef6e7; --warning-border: #f0d29a; --warning-foreground: #8a5a10;
+  --success-bg: #eaf7f0; --success-border: #a9dfc1; --success-foreground: #147a4a;
+  --danger-bg: #fdecec; --danger-border: #f3b4b4; --danger-foreground: #a12626;
+}
+.dark {
+  --background: #0b0b0c; --foreground: #f7f7f7; --card: #151517; --muted: #262629; --muted-foreground: #a1a1aa; --border: #2f3037; --primary: #f7f7f7; --primary-foreground: #171717;
+  --warning-bg: rgba(217, 143, 42, 0.16); --warning-border: rgba(217, 143, 42, 0.42); --warning-foreground: #f0c674;
+  --success-bg: rgba(29, 148, 92, 0.16); --success-border: rgba(29, 148, 92, 0.42); --success-foreground: #6fd6a4;
+  --danger-bg: rgba(217, 60, 60, 0.16); --danger-border: rgba(217, 60, 60, 0.42); --danger-foreground: #f29b9b;
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -24,6 +34,9 @@
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
   --color-card: var(--card); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground); --color-border: var(--border); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-warning-bg: var(--warning-bg); --color-warning-border: var(--warning-border); --color-warning-foreground: var(--warning-foreground);
+  --color-success-bg: var(--success-bg); --color-success-border: var(--success-border); --color-success-foreground: var(--success-foreground);
+  --color-danger-bg: var(--danger-bg); --color-danger-border: var(--danger-border); --color-danger-foreground: var(--danger-foreground);
 }
 
 @media (prefers-color-scheme: dark) {

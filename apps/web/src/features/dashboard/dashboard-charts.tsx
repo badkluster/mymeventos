@@ -90,10 +90,10 @@ export function Meter({ value, tone, caption }: { value: number; tone: MeterTone
       <div className="h-2 w-full overflow-hidden rounded-sm" style={{ background: `color-mix(in srgb, ${color} 14%, transparent)` }}>
         <div className="h-full rounded-r-sm transition-[width] duration-700 ease-out" style={{ width: `${clamped}%`, background: color }} />
       </div>
-      <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-500">
+      <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
-        <span className="font-medium text-zinc-600">{TONE_LABEL[tone]}</span>
-        <span className="text-zinc-400">· {caption}</span>
+        <span className="font-medium text-foreground">{TONE_LABEL[tone]}</span>
+        <span className="text-muted-foreground">· {caption}</span>
       </p>
     </div>
   );
@@ -111,20 +111,20 @@ export function FunnelChart({ stages }: { stages: { id: string; label: string; v
         return (
           <div key={stage.id}>
             {dropRate !== null ? (
-              <p className="mb-1 pl-1 text-[11px] text-zinc-400">
+              <p className="mb-1 pl-1 text-[11px] text-muted-foreground">
                 {dropRate <= 0.5 ? 'sin caída respecto a la etapa anterior' : `${number.format(dropRate)}% no avanzó a esta etapa`}
               </p>
             ) : null}
             <div className="flex items-center gap-2 sm:gap-3">
-              <span className="w-20 shrink-0 truncate text-xs font-medium text-zinc-600 sm:w-40" title={stage.label}>{stage.label}</span>
-              <div className="h-4 min-w-0 flex-1 rounded-sm bg-zinc-100">
+              <span className="w-20 shrink-0 truncate text-xs font-medium text-foreground sm:w-40" title={stage.label}>{stage.label}</span>
+              <div className="h-4 min-w-0 flex-1 rounded-sm bg-muted">
                 <div
                   className="h-4 rounded-r-sm transition-[width] duration-700 ease-out"
                   style={{ width: `${widthPct}%`, background: ORDINAL_RAMP[index] ?? ORDINAL_RAMP[ORDINAL_RAMP.length - 1] }}
                   title={`${stage.label}: ${number.format(stage.value)}`}
                 />
               </div>
-              <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-zinc-900 sm:w-16">{number.format(stage.value)}</span>
+              <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums text-foreground sm:w-16">{number.format(stage.value)}</span>
             </div>
           </div>
         );
@@ -136,16 +136,16 @@ export function FunnelChart({ stages }: { stages: { id: string; label: string; v
 /** Ranked magnitude comparison within one dimension — one hue for every bar, never a rank-based gradient. */
 export function RankedBars({ items, format = 'number', emptyText = 'No hay información para este período.' }: { items: { id: string; label: string; value: number }[]; format?: 'number' | 'currency'; emptyText?: string }) {
   const max = Math.max(...items.map((item) => item.value), 0);
-  if (!items.length) return <div className="grid min-h-28 place-items-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/70 px-4 text-center text-sm text-zinc-500">{emptyText}</div>;
+  if (!items.length) return <div className="grid min-h-28 place-items-center rounded-xl border border-dashed border-border bg-muted/70 px-4 text-center text-sm text-muted-foreground">{emptyText}</div>;
   return (
     <div className="space-y-3">
       {items.slice(0, 8).map((item) => (
         <div key={item.id}>
           <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-            <span className="truncate font-medium text-zinc-700">{item.label}</span>
-            <span className="shrink-0 tabular-nums text-zinc-500">{format === 'currency' ? money.format(item.value) : number.format(item.value)}</span>
+            <span className="truncate font-medium text-foreground">{item.label}</span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">{format === 'currency' ? money.format(item.value) : number.format(item.value)}</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-sm bg-zinc-100">
+          <div className="h-2 overflow-hidden rounded-sm bg-muted">
             <div className="h-full rounded-r-sm transition-[width] duration-700 ease-out" style={{ width: `${max ? Math.max(3, (item.value / max) * 100) : 0}%`, background: 'var(--chart-blue)' }} />
           </div>
         </div>

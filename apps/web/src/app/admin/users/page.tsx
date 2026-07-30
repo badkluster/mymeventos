@@ -49,29 +49,52 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
   const [filters, setFilters] = useState({ search: '', role: '', active: '', attendanceEnabled: '', canAccessBackoffice: '', page: 1 });
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<User | null>(null);
   const [modal, setModal] = useState<'create' | 'edit' | 'roles' | 'salons' | 'delete' | null>(null);
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(filters.page), limit: '20' });
-    Object.entries({ ...filters, role: staffView ? Role.STAFF : filters.role }).forEach(([key, value]) => { if (value && key !== 'page') params.set(key, String(value)); });
+    Object.entries({
+      search: debouncedSearch,
+      role: staffView ? Role.STAFF : filters.role,
+      active: filters.active,
+      attendanceEnabled: filters.attendanceEnabled,
+      canAccessBackoffice: filters.canAccessBackoffice
+    }).forEach(([key, value]) => { if (value) params.set(key, String(value)); });
     return params.toString();
-  }, [filters, staffView]);
+  }, [debouncedSearch, filters.active, filters.attendanceEnabled, filters.canAccessBackoffice, filters.page, filters.role, staffView]);
 
-  const load = useCallback(async () => {
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
     try {
-      const [usersResponse, salonsResponse] = await Promise.all([api.get<ListResponse>(`/users?${query}`), api.get<{ salons: Salon[] }>('/salons?active=true')]);
+      const usersResponse = await api.get<ListResponse>(`/users?${query}`);
       setItems(usersResponse.items ?? usersResponse.users ?? []);
       setRoles(usersResponse.roles ?? Object.keys(roleLabels));
-      setSalons(salonsResponse.salons ?? []);
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudieron cargar los usuarios.', variant: 'error' });
     } finally {
       setLoading(false);
     }
   }, [query, showToast]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(filters.search.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [filters.search]);
+
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void loadUsers(); }, [loadUsers]);
+
+  useEffect(() => {
+    let mounted = true;
+    void api.get<{ salons: Salon[] }>('/salons?active=true&summary=true')
+      .then((response) => { if (mounted) setSalons(response.salons ?? []); })
+      .catch((error) => {
+        if (mounted) showToast({ message: error instanceof Error ? error.message : 'No se pudieron cargar los salones.', variant: 'error' });
+      });
+    return () => { mounted = false; };
+  }, [showToast]);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setModal('create'); };
   const openEdit = (user: User, next: typeof modal) => {
@@ -101,7 +124,7 @@ export default function UsersPage() {
         await api.patch(`/users/${editing._id}/salons`, { salonIds: form.salonIds, primarySalonId: form.primarySalonId || undefined });
         await api.patch(`/users/${editing._id}/managed-salons`, { managedSalonIds: form.managedSalonIds, primaryManagedSalonId: form.primaryManagedSalonId || undefined });
       }
-      close(); await load(); showToast({ message: 'Usuario actualizado correctamente.', variant: 'success' });
+      close(); await loadUsers(); showToast({ message: 'Usuario actualizado correctamente.', variant: 'success' });
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudo guardar el usuario.', variant: 'error' });
       setSavingId('');
@@ -109,14 +132,14 @@ export default function UsersPage() {
   };
   const toggleActive = async (user: User) => {
     setSavingId(user._id);
-    try { await api.patch(`/users/${user._id}/${user.active === false ? 'activate' : 'deactivate'}`, {}); await load(); showToast({ message: user.active === false ? 'Usuario activado.' : 'Usuario desactivado.', variant: 'success' }); }
+    try { await api.patch(`/users/${user._id}/${user.active === false ? 'activate' : 'deactivate'}`, {}); await loadUsers(); showToast({ message: user.active === false ? 'Usuario activado.' : 'Usuario desactivado.', variant: 'success' }); }
     catch (error) { showToast({ message: error instanceof Error ? error.message : 'No se pudo actualizar el usuario.', variant: 'error' }); }
     finally { setSavingId(''); }
   };
   const deleteUser = async () => {
     if (!editing) return;
     setSavingId(editing._id);
-    try { await api.delete(`/users/${editing._id}`); close(); await load(); showToast({ message: 'Usuario eliminado correctamente.', variant: 'success' }); }
+    try { await api.delete(`/users/${editing._id}`); close(); await loadUsers(); showToast({ message: 'Usuario eliminado correctamente.', variant: 'success' }); }
     catch (error) { showToast({ message: error instanceof Error ? error.message : 'No se pudo eliminar el usuario.', variant: 'error' }); setSavingId(''); }
   };
 

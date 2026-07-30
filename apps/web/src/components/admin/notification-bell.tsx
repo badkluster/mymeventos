@@ -95,13 +95,13 @@ export function NotificationBell() {
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={10} className="z-50 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl">
-          <header className="flex items-center justify-between gap-3 border-b border-zinc-100 px-4 py-3">
+        <DropdownMenu.Content align="end" sideOffset={10} className="z-50 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+          <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-zinc-950">Notificaciones</p>
-              <p className="text-xs text-zinc-500">{unreadCount ? `${unreadCount} sin leer` : 'Todo al día'}</p>
+              <p className="text-sm font-semibold text-foreground">Notificaciones</p>
+              <p className="text-xs text-muted-foreground">{unreadCount ? `${unreadCount} sin leer` : 'Todo al día'}</p>
             </div>
-            <button type="button" disabled={!unreadCount} onClick={() => void markAllAsRead()} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="button" disabled={!unreadCount} onClick={() => void markAllAsRead()} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40">
               <CheckCheck className="h-3.5 w-3.5" />
               Leer todo
             </button>
@@ -112,12 +112,12 @@ export function NotificationBell() {
               const destination = normalizeAdminUrl(notification.actionUrl);
               return (
                 <DropdownMenu.Item key={notification._id} asChild>
-                  <button type="button" onClick={() => void openNotification(notification)} className="flex w-full items-start gap-3 px-4 py-3 text-left outline-none hover:bg-zinc-50 focus:bg-zinc-50">
-                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${notification.readAt ? 'bg-zinc-300' : 'bg-red-600'}`} />
+                  <button type="button" onClick={() => void openNotification(notification)} className="flex w-full items-start gap-3 px-4 py-3 text-left outline-none hover:bg-muted focus:bg-muted">
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${notification.readAt ? 'bg-muted-foreground/40' : 'bg-red-600'}`} />
                     <span className="min-w-0 flex-1">
-                      <span className="line-clamp-1 block text-sm font-semibold text-zinc-950">{notification.title}</span>
-                      <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-zinc-600">{notification.message}</span>
-                      <span className="mt-1 flex items-center gap-2 text-[11px] font-medium text-zinc-400">
+                      <span className="line-clamp-1 block text-sm font-semibold text-foreground">{notification.title}</span>
+                      <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-muted-foreground">{notification.message}</span>
+                      <span className="mt-1 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
                         {formatNotificationDate(notification.createdAt)}
                         {destination && <ExternalLink className="h-3 w-3" />}
                       </span>
@@ -128,15 +128,15 @@ export function NotificationBell() {
             })}
             {!recentNotifications.length && (
               <div className="grid place-items-center px-6 py-10 text-center">
-                <Inbox className="h-8 w-8 text-zinc-300" />
-                <p className="mt-3 text-sm font-medium text-zinc-900">{loading ? 'Cargando notificaciones…' : 'Sin notificaciones'}</p>
+                <Inbox className="h-8 w-8 text-muted-foreground/50" />
+                <p className="mt-3 text-sm font-medium text-foreground">{loading ? 'Cargando notificaciones…' : 'Sin notificaciones'}</p>
               </div>
             )}
           </div>
 
-          <footer className="border-t border-zinc-100 bg-zinc-50 px-4 py-3">
+          <footer className="border-t border-border bg-muted px-4 py-3">
             <DropdownMenu.Item asChild>
-              <Link href="/admin/notifications" className="block rounded-lg px-3 py-2 text-center text-sm font-medium text-zinc-800 outline-none hover:bg-white focus:bg-white">
+              <Link href="/admin/notifications" className="block rounded-lg px-3 py-2 text-center text-sm font-medium text-foreground outline-none hover:bg-card focus:bg-card">
                 Ver centro de notificaciones
               </Link>
             </DropdownMenu.Item>

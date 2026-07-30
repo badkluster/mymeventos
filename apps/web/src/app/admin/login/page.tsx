@@ -7,11 +7,13 @@ import { ArrowLeft, ArrowRight, CalendarDays, Eye, EyeOff, Home, LockKeyhole, Sh
 import { FormEvent, useState } from 'react';
 import { login } from '@/lib/auth';
 import { brandAssets } from '@/lib/brand-assets';
+import { useSession } from '@/components/session-provider';
 
 const heroImage = 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1800&q=85';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { establishSession } = useSession();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -28,7 +30,8 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await login(username, password);
+      const result = await login(username, password);
+      establishSession(result.user);
       router.replace('/admin/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudo iniciar sesión.');

@@ -8,11 +8,35 @@ const passwordSchema = z.object({ body: z.object({ currentPassword: z.string().m
 function safeUser(user: any) { const { passwordHash, passwordResetTokenHash, passwordResetExpiresAt, ...safe } = user.toObject ? user.toObject() : user; return safe; }
 async function issueTokens(request: any, response: any, user: any) { const payload = { sub: user._id.toString(), username: user.username }; const accessToken = generateAccessToken(payload); const refreshToken = generateRefreshToken(payload); await RefreshToken.create({ userId: user._id, tokenHash: hashToken(refreshToken), expiresAt: new Date(Date.now() + duration(env.REFRESH_TOKEN_EXPIRES_IN)), createdByIp: request.ip, userAgent: request.get('user-agent') }); response.cookie('accessToken', accessToken, { ...cookieBase, maxAge: duration(env.ACCESS_TOKEN_EXPIRES_IN) }); response.cookie('refreshToken', refreshToken, { ...cookieBase, maxAge: duration(env.REFRESH_TOKEN_EXPIRES_IN) }); }
 function clearTokens(response: any) { response.clearCookie('accessToken', cookieBase); response.clearCookie('refreshToken', cookieBase); }
-router.post('/login', validateRequest(loginSchema), asyncHandler(async (request, response) => { const identifier = request.body.username.trim().toLowerCase(); const user = await User.findOne({ deletedAt: null, $or: [{ username: identifier }, { normalizedEmail: identifier }] }).select('+passwordHash'); if (!user || !user.passwordHash || user.canAccessBackoffice === false || !(await verifyPassword(request.body.password, user.passwordHash)) || !user.active || (user.lockedUntil && user.lockedUntil > new Date())) { if (user) await User.updateOne({ _id: user._id }, { $inc: { failedLoginAttempts: 1 } }); await writeAuditLog(request, 'AUTH_LOGIN_FAILURE', 'User', user?._id?.toString(), { username: request.body.username, channel: 'web' }); throw new ApiError(401, 'INVALID_CREDENTIALS'); } await User.updateOne({ _id: user._id }, { lastLoginAt: new Date(), failedLoginAttempts: 0, $unset: { lockedUntil: 1 } }); await issueTokens(request, response, user); await writeAuditLog(request, 'AUTH_LOGIN_SUCCESS', 'User', user._id.toString(), { channel: 'web' }, user._id.toString()); return sendSuccess(response, { user: safeUser(user) }); }));
+router.post('/login', validateRequest(loginSchema), asyncHandler(async (request, response) => {
+  const identifier = request.body.username.trim().toLowerCase();
+  const user = await User.findOne({ deletedAt: null, $or: [{ username: identifier }, { normalizedEmail: identifier }] }).select('+passwordHash');
+  const invalidCredentials = !user
+    || !user.passwordHash
+    || user.canAccessBackoffice === false
+    || !(await verifyPassword(request.body.password, user.passwordHash))
+    || !user.active
+    || (user.lockedUntil && user.lockedUntil > new Date());
+
+  if (invalidCredentials) {
+    await Promise.all([
+      user ? User.updateOne({ _id: user._id }, { $inc: { failedLoginAttempts: 1 } }) : Promise.resolve(),
+      writeAuditLog(request, 'AUTH_LOGIN_FAILURE', 'User', user?._id?.toString(), { username: request.body.username, channel: 'web' })
+    ]);
+    throw new ApiError(401, 'INVALID_CREDENTIALS');
+  }
+
+  await Promise.all([
+    User.updateOne({ _id: user._id }, { lastLoginAt: new Date(), failedLoginAttempts: 0, $unset: { lockedUntil: 1 } }),
+    issueTokens(request, response, user),
+    writeAuditLog(request, 'AUTH_LOGIN_SUCCESS', 'User', user._id.toString(), { channel: 'web' }, user._id.toString())
+  ]);
+  return sendSuccess(response, { user: safeUser(user) });
+}));
 router.post('/refresh', asyncHandler(async (request, response) => { const token = request.cookies.refreshToken; if (!token) throw new ApiError(401, 'UNAUTHENTICATED'); const payload = verifyRefreshToken(token); const stored = await RefreshToken.findOne({ tokenHash: hashToken(token), userId: payload.sub, revokedAt: null }); if (!stored) throw new ApiError(401, 'UNAUTHENTICATED'); const user = await User.findOne({ _id: payload.sub, active: true, canAccessBackoffice: { $ne: false }, deletedAt: null }); if (!user) throw new ApiError(401, 'UNAUTHENTICATED'); await RefreshToken.updateOne({ _id: stored._id }, { revokedAt: new Date() }); await issueTokens(request, response, user); await writeAuditLog(request, 'AUTH_REFRESH_ROTATION', 'User', user._id.toString()); return sendSuccess(response, { refreshed: true }); }));
 router.post('/logout', asyncHandler(async (request, response) => { const token = request.cookies.refreshToken; if (token) await RefreshToken.updateOne({ tokenHash: hashToken(token), revokedAt: null }, { revokedAt: new Date() }); clearTokens(response); await writeAuditLog(request, 'AUTH_LOGOUT', 'User', request.user?.id); return sendSuccess(response, { loggedOut: true }); }));
 router.post('/logout-all', requireAuth, asyncHandler(async (request, response) => { await RefreshToken.updateMany({ userId: request.user!.id, revokedAt: null }, { revokedAt: new Date() }); clearTokens(response); await writeAuditLog(request, 'AUTH_LOGOUT_ALL', 'User', request.user!.id); return sendSuccess(response, { loggedOut: true }); }));
-router.get('/me', requireAuth, asyncHandler(async (request, response) => { const user = await User.findById(request.user!.id).lean(); return sendSuccess(response, { user: safeUser(user) }); }));
+router.get('/me', requireAuth, asyncHandler(async (request, response) => sendSuccess(response, { user: safeUser(request.authUser) })));
 router.patch('/profile', requireAuth, validateRequest(profileSchema), asyncHandler(async (request, response) => {
   const email = normalizeUserEmail(request.body.email);
   const currentUser: any = await User.findOne({ _id: request.user!.id, deletedAt: null }).lean();

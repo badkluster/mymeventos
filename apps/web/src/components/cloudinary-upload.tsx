@@ -97,6 +97,6 @@ export function CloudinaryUpload({ context, salonId, quoteId, accept = 'image/*,
       <Button type="button" disabled={uploading} className="pointer-events-none"><UploadCloud className="mr-2 h-4 w-4" />{uploading ? `Subiendo${fileCount > 1 ? ` ${fileCount}` : ''}…` : label}</Button>
     </label>
     {dropzone && <p className="px-1 text-xs text-zinc-500">{dragging ? 'Soltá el archivo para subirlo.' : 'También podés arrastrar y soltar archivos aquí.'}</p>}
-    {error && <p className="text-sm text-red-600">{error}</p>}
+    {error && <p className="text-sm text-danger-foreground">{error}</p>}
   </div>;
 }
