@@ -72,6 +72,22 @@ export type PublicLanding = {
 
 type ApiEnvelope<T> = { success: boolean; data?: T };
 
+export function normalizePublicLanding(landing?: Partial<PublicLanding> | null): PublicLanding | null {
+  if (!landing) return null;
+  return {
+    ...landing,
+    salons: Array.isArray(landing.salons) ? landing.salons : [],
+    packages: Array.isArray(landing.packages) ? landing.packages : [],
+    promotions: Array.isArray(landing.promotions) ? landing.promotions : [],
+    gallery: Array.isArray(landing.gallery) ? landing.gallery : [],
+    testimonials: Array.isArray(landing.testimonials) ? landing.testimonials : [],
+    faqs: Array.isArray(landing.faqs) ? landing.faqs : [],
+    serviceBlocks: Array.isArray(landing.serviceBlocks) ? landing.serviceBlocks : [],
+    eventTypes: Array.isArray(landing.eventTypes) ? landing.eventTypes : [],
+    storySteps: Array.isArray(landing.storySteps) ? landing.storySteps : []
+  };
+}
+
 export function cloudinaryImageUrl(url?: string, width?: number): string {
   if (!url || !url.includes('/upload/')) return url ?? '';
   const stripped = url.replace(/\/upload\/(?:w_\d+,c_limit,)?f_auto,q_auto\//, '/upload/');
@@ -118,8 +134,8 @@ export async function getPublicLanding(): Promise<PublicLanding | null> {
   try {
     const response = await fetch(`${apiBaseUrl}/public/landing`, { next: { revalidate: 300 } });
     if (!response.ok) return null;
-    const payload = await response.json() as ApiEnvelope<PublicLanding>;
-    return payload.success && payload.data ? payload.data : null;
+    const payload = await response.json() as ApiEnvelope<Partial<PublicLanding>>;
+    return payload.success ? normalizePublicLanding(payload.data) : null;
   } catch {
     return null;
   }

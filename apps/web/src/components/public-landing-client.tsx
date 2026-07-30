@@ -22,6 +22,20 @@ type LandingItem = { _id?: string; title?: string; subtitle?: string; descriptio
 type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroVideoUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
 type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[]; storySteps: LandingItem[] };
 const emptyLanding: LandingPayload = { salons: [], packages: [], promotions: [], gallery: [], testimonials: [], faqs: [], serviceBlocks: [], eventTypes: [], storySteps: [] };
+function normalizeLanding(landing?: Partial<LandingPayload> | null): LandingPayload {
+  return {
+    ...landing,
+    salons: Array.isArray(landing?.salons) ? landing.salons : [],
+    packages: Array.isArray(landing?.packages) ? landing.packages : [],
+    promotions: Array.isArray(landing?.promotions) ? landing.promotions : [],
+    gallery: Array.isArray(landing?.gallery) ? landing.gallery : [],
+    testimonials: Array.isArray(landing?.testimonials) ? landing.testimonials : [],
+    faqs: Array.isArray(landing?.faqs) ? landing.faqs : [],
+    serviceBlocks: Array.isArray(landing?.serviceBlocks) ? landing.serviceBlocks : [],
+    eventTypes: Array.isArray(landing?.eventTypes) ? landing.eventTypes : [],
+    storySteps: Array.isArray(landing?.storySteps) ? landing.storySteps : []
+  };
+}
 
 const fallbackHero = 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1800&q=80';
 const fallbackGallery = [
@@ -600,8 +614,8 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
   </AnimatePresence>;
 }
 
-export function PublicLandingClient({ initialLanding }: { initialLanding?: LandingPayload | null }) {
-  const [landing, setLanding] = useState<LandingPayload>(initialLanding ?? emptyLanding);
+export function PublicLandingClient({ initialLanding }: { initialLanding?: Partial<LandingPayload> | null }) {
+  const [landing, setLanding] = useState<LandingPayload>(() => initialLanding ? normalizeLanding(initialLanding) : emptyLanding);
   const [selectedSalonId, setSelectedSalonId] = useState('');
   const [selectedContactPackageId, setSelectedContactPackageId] = useState('');
   const [selectedPackageSalonId, setSelectedPackageSalonId] = useState('');
@@ -663,8 +677,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
   useEffect(() => {
     if (initialLanding) return;
     let mounted = true;
-    void api.get<LandingPayload>('/public/landing')
-      .then((response) => { if (mounted) setLanding(response); })
+    void api.get<Partial<LandingPayload>>('/public/landing')
+      .then((response) => { if (mounted) setLanding(normalizeLanding(response)); })
       .catch(() => undefined)
       .finally(() => { if (mounted) setLandingLoading(false); });
     return () => { mounted = false; };
