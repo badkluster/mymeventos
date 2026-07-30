@@ -69,7 +69,7 @@ export default function PaymentsPage() {
   };
 
   return <section className="space-y-6">
-    <PageHeader title="Pagos" description="Señas, cuotas, saldos, reembolsos y depósitos asociados a contratos." />
+    <PageHeader title="Ingresos" description="Cobros, señas, cuotas, saldos, reembolsos y depósitos asociados a contratos." />
     <div className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_160px_160px_160px_160px_auto]">
       <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') applySearch(); }} className="h-11 pl-10" placeholder="Buscar número, recibo o referencia..." /></div>
       <Select value={filters.status} onChange={(event) => updateFilters({ page: 1, status: event.target.value })}><option value="">Todos los estados</option>{Object.entries(paymentStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>

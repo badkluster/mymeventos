@@ -184,8 +184,11 @@ router.post('/plans/:id/reopen', requirePermission(Permission.PRODUCTION_REOPEN)
 router.get('/consolidated', requirePermission(Permission.PRODUCTION_VIEW), asyncHandler(async (request, response) => {
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
-  const items = await consolidatedProduction(request, period.from, period.toExclusive, scope.match());
-  return sendSuccess(response, { items, period: { from: period.fromDate, to: period.toDate }, totals: { products: items.length, plannedQuantity: items.reduce((sum, item) => sum + item.plannedQuantity, 0), missingQuantity: items.reduce((sum, item) => sum + item.missingQuantity, 0) } });
+  const { sections, flat } = await consolidatedProduction(request, period.from, period.toExclusive, scope.match());
+  return sendSuccess(response, {
+    sections, period: { from: period.fromDate, to: period.toDate },
+    totals: { products: flat.length, plannedQuantity: flat.reduce((sum, item) => sum + item.plannedQuantity, 0), missingQuantity: flat.reduce((sum, item) => sum + item.missingQuantity, 0) },
+  });
 }));
 
 router.get('/rules', requirePermission(Permission.PRODUCTION_RULES_MANAGE), asyncHandler(async (request, response) => {

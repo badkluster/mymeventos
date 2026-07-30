@@ -6,7 +6,7 @@ import { ProductionPlan } from '../production/production.models';
 import { Salon } from '../salons/salon.model';
 import { userHasPermission } from '../../middlewares/auth';
 import { dashboardMetricDefinitions, type MetricDefinition } from './metric-catalog';
-import { parseReportPeriod, periodMatch, REPORT_TIME_ZONE, resolveReportScope } from './report-filter';
+import { addDays, parseReportPeriod, periodMatch, REPORT_TIME_ZONE, resolveReportScope, type ReportPeriod } from './report-filter';
 
 type MetricValue = MetricDefinition & {
   value: number | null;
@@ -41,6 +41,26 @@ function activeEventQuery(): Record<string, unknown> {
   return { status: { $nin: ['cancelled', 'lost'] }, deletedAt: null };
 }
 
+function trendBucketSizeDays(totalDays: number): number {
+  if (totalDays <= 31) return 1;
+  if (totalDays <= 62) return 2;
+  if (totalDays <= 120) return 4;
+  if (totalDays <= 200) return 7;
+  return Math.max(7, Math.ceil(totalDays / 30));
+}
+
+function bucketIndexExpr(period: ReportPeriod, field: string, bucketSizeDays: number) {
+  return { $floor: { $divide: [{ $dateDiff: { startDate: period.from, endDate: `$${field}`, unit: 'day', timezone: REPORT_TIME_ZONE } }, bucketSizeDays] } };
+}
+
+async function trendSeries(model: any, match: Record<string, unknown>, field: string, period: ReportPeriod, bucketSizeDays: number, valueExpr: unknown = 1): Promise<Map<number, number>> {
+  const raw = await model.aggregate([
+    { $match: match },
+    { $group: { _id: bucketIndexExpr(period, field, bucketSizeDays), value: { $sum: valueExpr } } },
+  ]);
+  return new Map(raw.map((item: any) => [item._id, Number(item.value || 0)]));
+}
+
 function metric(definition: MetricDefinition, value: number, previousValue: number): MetricValue {
   return { ...definition, value, previousValue, changePercentage: changePercentage(value, previousValue), available: true };
 }
@@ -73,17 +93,22 @@ export async function dashboardSummary(request: Request) {
   const now = new Date();
   const upcomingUntil = new Date(now.getTime() + 30 * 86_400_000);
   const pendingLeadStatuses = ['new', 'contacted', 'follow_up', 'quote_sent', 'negotiation'];
+  const financialVisible = userHasPermission(request.user!, Permission.DASHBOARD_FINANCIAL_VIEW);
+  const totalDays = Math.round((period.toExclusive.getTime() - period.from.getTime()) / 86_400_000);
+  const bucketSizeDays = trendBucketSizeDays(totalDays);
+  const totalBuckets = Math.max(1, Math.ceil(totalDays / bucketSizeDays));
 
   const [
     leadsNew, leadsNewPrevious, leadsPending,
     quotesSent, quotesSentPrevious, quotesAccepted, quotesAcceptedPrevious,
     sentQuotesAccepted, sentQuotesAcceptedPrevious,
     eventsConfirmed, eventsConfirmedPrevious, eventsUpcoming,
-    contractsTotal, contractsTotalPrevious,
+    contractsTotal, contractsTotalPrevious, contractsApprovedPrevious,
     collected, collectedPrevious, overdue,
     expensesPaid, expensesPaidPrevious,
     productionEvents, previousProductionEvents,
     funnel, eventsBySalonRaw, eventsByType, leadsBySource,
+    leadsTrendMap, eventsTrendMap, revenueTrendMap,
   ] = await Promise.all([
     Lead.countDocuments(current('createdAt')),
     Lead.countDocuments(previous('createdAt')),
@@ -99,6 +124,7 @@ export async function dashboardSummary(request: Request) {
     Event.countDocuments({ ...activeEventQuery(), ...salon, eventDate: { $gte: now, $lt: upcomingUntil } }),
     sum(Contract, { ...current('approvedAt'), status: 'approved' }, 'totalAmount'),
     sum(Contract, { ...previous('approvedAt'), status: 'approved' }, 'totalAmount'),
+    Contract.countDocuments({ ...previous('approvedAt'), status: 'approved' }),
     collectedAmount(current('paidAt')),
     collectedAmount(previous('paidAt')),
     sum(Payment, { deletedAt: null, ...salon, status: 'pending', affectsContractBalance: true, dueDate: { $lt: now } }, 'amount'),
@@ -116,6 +142,11 @@ export async function dashboardSummary(request: Request) {
     Event.aggregate([{ $match: { ...current('eventDate'), status: { $nin: ['cancelled', 'lost'] } } }, { $group: { _id: '$salonId', value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
     Event.aggregate([{ $match: { ...current('eventDate'), status: { $nin: ['cancelled', 'lost'] } } }, { $group: { _id: { $ifNull: ['$eventType', 'other'] }, value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
     Lead.aggregate([{ $match: current('createdAt') }, { $group: { _id: { $ifNull: ['$source', 'other'] }, value: { $sum: 1 } } }, { $sort: { value: -1 } }]),
+    trendSeries(Lead, current('createdAt'), 'createdAt', period, bucketSizeDays),
+    trendSeries(Event, { ...current('eventDate'), status: 'confirmed' }, 'eventDate', period, bucketSizeDays),
+    financialVisible
+      ? trendSeries(Payment, { ...current('paidAt'), status: 'paid', affectsContractBalance: true }, 'paidAt', period, bucketSizeDays, signedPaymentExpression())
+      : Promise.resolve(new Map<number, number>()),
   ]);
 
   const [currentPlans, previousPlans, expensesByCategory] = await Promise.all([
@@ -128,6 +159,7 @@ export async function dashboardSummary(request: Request) {
   const definitionById = new Map(dashboardMetricDefinitions.map((item) => [item.id, item]));
   const pendingProduction = productionEvents.filter((event: any) => !['checked', 'closed'].includes(currentPlanMap.get(event._id.toString()) ?? '')).length;
   const previousPendingProduction = previousProductionEvents.filter((event: any) => !['checked', 'closed'].includes(previousPlanMap.get(event._id.toString()) ?? '')).length;
+  const contractsApprovedCount = funnel[3];
   const values: Record<string, [number, number]> = {
     'leads.new': [leadsNew, leadsNewPrevious],
     'leads.pending': [leadsPending, 0],
@@ -141,8 +173,10 @@ export async function dashboardSummary(request: Request) {
     'payments.overdue': [overdue, 0],
     'expenses.paid': [expensesPaid, expensesPaidPrevious],
     'production.pending': [pendingProduction, previousPendingProduction],
+    'payments.averageTicket': [contractsApprovedCount ? contractsTotal / contractsApprovedCount : 0, contractsApprovedPrevious ? contractsTotalPrevious / contractsApprovedPrevious : 0],
+    'finance.profitMargin': [collected > 0 ? ((collected - expensesPaid) / collected) * 100 : 0, collectedPrevious > 0 ? ((collectedPrevious - expensesPaidPrevious) / collectedPrevious) * 100 : 0],
+    'production.readiness': [productionEvents.length ? ((productionEvents.length - pendingProduction) / productionEvents.length) * 100 : 0, previousProductionEvents.length ? ((previousProductionEvents.length - previousPendingProduction) / previousProductionEvents.length) * 100 : 0],
   };
-  const financialVisible = userHasPermission(request.user!, Permission.DASHBOARD_FINANCIAL_VIEW);
   const metrics = Object.entries(values).flatMap(([id, [value, previousValue]]) => {
     const definition = definitionById.get(id);
     if (!definition || (definition.financial && !financialVisible)) return [];
@@ -173,6 +207,15 @@ export async function dashboardSummary(request: Request) {
       eventsByType: eventsByType.map((item: any) => ({ id: item._id, label: item._id, value: item.value })),
       leadsBySource: leadsBySource.map((item: any) => ({ id: item._id, label: item._id, value: item.value })),
       expensesByCategory: financialVisible ? expensesByCategory : [],
+    },
+    trend: {
+      bucketSizeDays,
+      points: Array.from({ length: totalBuckets }, (_, index) => ({
+        date: addDays(period.fromDate, index * bucketSizeDays),
+        leads: leadsTrendMap.get(index) ?? 0,
+        events: eventsTrendMap.get(index) ?? 0,
+        revenue: financialVisible ? Math.max(0, revenueTrendMap.get(index) ?? 0) : null,
+      })),
     },
   };
 }

@@ -162,7 +162,7 @@ const eventSuppliersSchema = z.object({
   query: z.object({}),
 });
 const paymentReceiptSchema = z.object({ body: z.object({ email: z.string().trim().email().optional() }).optional(), params: z.object({ id: objectId, paymentId: objectId }), query: z.object({}) });
-const operationalDocumentType = z.enum(['timeline', 'logistics', 'guest_list']);
+const operationalDocumentType = z.enum(['timeline', 'logistics', 'guest_list', 'tableware']);
 const operationalDocumentSchema = z.object({ body: z.object({ format: z.enum(['pdf', 'word']) }), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
 const operationalDocumentEmailSchema = z.object({ body: z.object({ format: z.enum(['pdf', 'word']).default('pdf'), email: z.string().trim().email().optional() }), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
 const guestListLinkSchema = z.object({ body: z.object({}).optional(), params: z.object({ id: objectId }), query: z.object({}) });
@@ -288,9 +288,12 @@ async function ensureEventAccess(request: Request, event: any): Promise<void> {
   if (event.salonId && !canAccessSalon(request.user!, event.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
 }
 
-async function getEventForOperationalDocument(request: Request, eventId: string): Promise<any> {
-  const event = await Event.findOne({ _id: eventId, deletedAt: null }).populate('customerId', 'fullName phone email').populate('salonId', 'name address locality city');
+async function getEventForOperationalDocument(request: Request, eventId: string, type?: OperationalDocumentType): Promise<any> {
+  const event: any = await Event.findOne({ _id: eventId, deletedAt: null }).populate('customerId', 'fullName phone email').populate('salonId', 'name address locality city');
   await ensureEventAccess(request, event);
+  if (type === 'tableware') {
+    event.tablewareAllocations = await EventTablewareAllocation.find({ eventId: event._id }).sort({ source: 1, itemName: 1 }).lean();
+  }
   return event;
 }
 
@@ -720,20 +723,20 @@ router.get('/:id/payment-summary', requirePermission(Permission.PAYMENTS_READ), 
 }));
 
 router.post('/:id/operational-documents/:documentType/export', requirePermission(Permission.EVENTS_READ), validateRequest(operationalDocumentSchema), asyncHandler(async (request, response) => {
-  const event = await getEventForOperationalDocument(request, request.params.id);
   const type = request.params.documentType as OperationalDocumentType;
+  const event = await getEventForOperationalDocument(request, request.params.id, type);
   const document = await createOperationalDocument(event, type, request.body.format);
   await writeAuditLog(request, 'EVENT_OPERATIONAL_DOCUMENT_EXPORT', 'Event', event._id.toString(), { documentType: type, format: request.body.format });
   return sendSuccess(response, { document: { fileName: document.fileName, format: request.body.format, url: document.url, secureUrl: document.secureUrl } });
 }));
 
 router.post('/:id/operational-documents/:documentType/email', requirePermission(Permission.EVENTS_UPDATE), validateRequest(operationalDocumentEmailSchema), asyncHandler(async (request, response) => {
-  const event = await getEventForOperationalDocument(request, request.params.id);
   const type = request.params.documentType as OperationalDocumentType;
+  const event = await getEventForOperationalDocument(request, request.params.id, type);
   const email = request.body.email ?? event.customerId?.email;
   if (!email) throw new ApiError(422, 'El cliente no tiene un email registrado.');
   const document = await createOperationalDocument(event, type, request.body.format);
-  const title = type === 'timeline' ? 'Cronograma operativo' : type === 'guest_list' ? 'Control de invitados por mesa' : 'Logística y coordinación interna';
+  const title = type === 'timeline' ? 'Cronograma operativo' : type === 'guest_list' ? 'Control de invitados por mesa' : type === 'tableware' ? 'Reserva de vajilla' : 'Logística y coordinación interna';
   const eventName = event.eventName || event.eventType || 'evento';
   const emailSent = await sendEmail({
     to: email,

@@ -8,12 +8,20 @@ import { api } from '@/lib/api';
 import { useToast } from '@/components/ui/toast-provider';
 import { ProductionNav } from './production-nav';
 
+type EventQty = { planId: string; eventId?: string; eventName?: string; eventType?: string; customerName?: string; eventDate: string; plannedQuantity: number; completedQuantity: number };
 type Row = {
   productId?: string; productName: string; unit: string; plannedQuantity: number; completedQuantity: number; eventCount: number;
   pendingItems: number; availableQuantity: number; missingQuantity: number; toBuyQuantity: number; toProduceQuantity: number;
+  byEvent: EventQty[];
 };
-type Response = { items: Row[]; totals: { products: number; plannedQuantity: number; missingQuantity: number } };
+type Section = { type: string; name: string; events: EventQty[]; items: Row[] };
+type Response = { sections: Section[]; totals: { products: number; plannedQuantity: number; missingQuantity: number } };
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
+const shortDate = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit' });
+function eventLabel(event: EventQty) {
+  const name = event.customerName || event.eventName || event.eventType || 'Evento';
+  return `${name} ${shortDate.format(new Date(event.eventDate))}`;
+}
 
 function initialPeriod() {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).map((part) => [part.type, part.value]));
@@ -41,9 +49,28 @@ export function ProductionConsolidated() {
     <ProductionNav />
     <div className="print:hidden flex flex-wrap gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><label className="text-xs font-medium text-zinc-600">Desde<Input className="mt-1.5 w-44" type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label><label className="text-xs font-medium text-zinc-600">Hasta<Input className="mt-1.5 w-44" type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} /></label></div>
     {result ? <div className="grid gap-3 sm:grid-cols-3"><article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><p className="text-xs text-zinc-500">Productos distintos</p><p className="mt-2 text-2xl font-semibold">{result.totals.products}</p></article><article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><p className="text-xs text-zinc-500">Cantidad planificada</p><p className="mt-2 text-2xl font-semibold">{number.format(result.totals.plannedQuantity)}</p></article><article className={`rounded-2xl border p-4 shadow-sm ${result.totals.missingQuantity ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}><p className="text-xs text-zinc-600">Faltante contra stock</p><p className="mt-2 text-2xl font-semibold">{number.format(result.totals.missingQuantity)}</p></article></div> : null}
-    <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      {loading && !result ? <div className="grid min-h-64 place-items-center text-sm text-zinc-500"><span><LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />Consolidando…</span></div> : null}
-      {result ? <div className="overflow-x-auto"><table className="min-w-[1050px] w-full text-sm"><thead className="border-b border-zinc-200 bg-zinc-50/80"><tr>{['Producto', 'Unidad', 'Eventos', 'Planificado', 'Completado', 'Disponible', 'Faltante', 'A comprar', 'A producir', 'Pendientes'].map((label) => <th key={label} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</th>)}</tr></thead><tbody className="divide-y divide-zinc-100">{result.items.map((item) => <tr key={`${item.productId || item.productName}-${item.unit}`} className={item.missingQuantity ? 'bg-amber-50/35' : ''}><td className="px-4 py-3 font-semibold text-zinc-900">{item.productName}</td><td className="px-4 py-3">{item.unit}</td><td className="px-4 py-3 tabular-nums">{item.eventCount}</td><td className="px-4 py-3 tabular-nums">{number.format(item.plannedQuantity)}</td><td className="px-4 py-3 tabular-nums">{number.format(item.completedQuantity)}</td><td className="px-4 py-3 tabular-nums">{number.format(item.availableQuantity)}</td><td className="px-4 py-3 font-semibold tabular-nums">{item.missingQuantity ? <span className="inline-flex items-center gap-1 text-amber-800"><AlertTriangle className="h-3.5 w-3.5" />{number.format(item.missingQuantity)}</span> : '—'}</td><td className="px-4 py-3 tabular-nums">{number.format(item.toBuyQuantity)}</td><td className="px-4 py-3 tabular-nums">{number.format(item.toProduceQuantity)}</td><td className="px-4 py-3 tabular-nums">{item.pendingItems}</td></tr>)}</tbody></table>{!result.items.length ? <div className="grid min-h-52 place-items-center text-sm text-zinc-500">No hay ítems de producción en el período.</div> : null}</div> : null}
-    </article>
+    {loading && !result ? <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"><div className="grid min-h-64 place-items-center text-sm text-zinc-500"><span><LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />Consolidando…</span></div></article> : null}
+    {result && !result.sections.length ? <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"><div className="grid min-h-52 place-items-center text-sm text-zinc-500">No hay ítems de producción en el período.</div></article> : null}
+    {result?.sections.map((section) => <article key={section.type} className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <header className="border-b border-zinc-200 bg-zinc-50/80 px-4 py-3"><h2 className="text-sm font-semibold text-zinc-900">{section.name}</h2></header>
+      <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="border-b border-zinc-200"><tr>
+        <th className="sticky left-0 z-10 min-w-[220px] bg-white px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Producto</th>
+        {section.events.map((event) => <th key={event.planId} className="min-w-[92px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">{eventLabel(event)}</th>)}
+        {['Total', 'Completado', 'Disponible', 'Faltante', 'A comprar', 'A producir', 'Pendientes'].map((label) => <th key={label} className="min-w-[92px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</th>)}
+      </tr></thead><tbody className="divide-y divide-zinc-100">{section.items.map((item) => {
+        const byPlanId = new Map(item.byEvent.map((entry) => [entry.planId, entry]));
+        return <tr key={`${item.productId || item.productName}-${item.unit}`} className={item.missingQuantity ? 'bg-amber-50/35' : ''}>
+          <td className="sticky left-0 z-10 bg-white px-4 py-3 font-semibold text-zinc-900">{item.productName} <span className="font-normal text-zinc-400">({item.unit})</span></td>
+          {section.events.map((event) => <td key={event.planId} className="px-3 py-3 tabular-nums text-zinc-700">{byPlanId.has(event.planId) ? number.format(byPlanId.get(event.planId)!.plannedQuantity) : '—'}</td>)}
+          <td className="px-3 py-3 font-semibold tabular-nums">{number.format(item.plannedQuantity)}</td>
+          <td className="px-3 py-3 tabular-nums">{number.format(item.completedQuantity)}</td>
+          <td className="px-3 py-3 tabular-nums">{number.format(item.availableQuantity)}</td>
+          <td className="px-3 py-3 font-semibold tabular-nums">{item.missingQuantity ? <span className="inline-flex items-center gap-1 whitespace-nowrap text-amber-800"><AlertTriangle className="h-3.5 w-3.5" />{number.format(item.missingQuantity)}</span> : '—'}</td>
+          <td className="px-3 py-3 tabular-nums">{number.format(item.toBuyQuantity)}</td>
+          <td className="px-3 py-3 tabular-nums">{number.format(item.toProduceQuantity)}</td>
+          <td className="px-3 py-3 tabular-nums">{item.pendingItems}</td>
+        </tr>;
+      })}</tbody></table></div>
+    </article>)}
   </section>;
 }

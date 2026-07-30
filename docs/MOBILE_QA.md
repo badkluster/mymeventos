@@ -57,7 +57,7 @@ El `.env`/`apps/api/.env` del repositorio apunta a un clúster de MongoDB Atlas 
 
 ## 5. Recomendaciones antes de producción
 
-1. Agregar rate limiting a `/api/mobile/auth/login` (la recuperación de contraseña ya limita solicitudes por IP y los intentos de cada código, pero el login sigue igual que su equivalente web).
+1. Reemplazar el rate limit local en memoria de `/api/mobile/auth/login` por un almacén compartido (Redis u otro) si la API se despliega en más de una instancia. El límite actual es de 10 intentos por IP cada 15 minutos.
 2. Agregar tests de render con `@testing-library/react-native` para las pantallas críticas (Login, Home/fichaje).
 3. Definir `bundleIdentifier`/`package` definitivos y correr `eas build:configure` con la cuenta real de la organización.
 4. Decidir si se conecta push real (Expo Notifications) antes o después del primer rollout; entonces habrá que implementar el registro seguro de tokens y el servicio de envío.

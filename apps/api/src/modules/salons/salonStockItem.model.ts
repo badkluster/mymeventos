@@ -1,6 +1,6 @@
 import { Schema, model, models } from 'mongoose';
 
-export const salonStockCategories = ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'] as const;
+export const salonStockCategories = ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'LINENS', 'CLEANING', 'MINOR_EQUIPMENT', 'MISCELLANEOUS'] as const;
 export type SalonStockCategory = typeof salonStockCategories[number];
 
 const salonStockItemSchema = new Schema({

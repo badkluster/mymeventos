@@ -4,7 +4,7 @@ import { LocalSeoPageView } from '@/components/local-seo-page';
 import { absoluteUrl, defaultOgImage, localSeoPages, pageBySlug } from '@/lib/local-seo';
 import { findSalonForSeoSlug, getPublicLanding, imageForPublicSalon, packagesForSalon, titleForPublicSalon } from '@/lib/public-landing';
 
-export const revalidate = 3600;
+export const revalidate = 300;
 
 export function generateStaticParams() {
   return localSeoPages.map((page) => ({ slug: page.slug }));

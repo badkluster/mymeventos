@@ -68,4 +68,4 @@ Explícitamente **no se guarda ningún dato biométrico**, ni en `MobileDevice` 
 ## 6. Fuera de alcance de esta tarea (documentado, no fingido)
 
 - **Validación de entradas QR desde el móvil.** El prompt original es explícito: debe ser un permiso y flujo separado del fichaje, no mezclado. `Permission.TICKETS_VALIDATE` ya existe (módulo de Entradas Digitales) y es independiente de `Permission.MOBILE_ACCESS`/`ATTENDANCE_CLOCK` — no se tocó ni se mezcló.
-- **Rate limiting específico sobre `/api/mobile/auth/login`.** La recuperación de contraseña ya tiene límite local por IP y por código; el login aún no tiene uno (mismo estado que `/api/auth/login` web). Queda como mejora de seguridad recomendada antes de producción — ver `docs/MOBILE_QA.md` §Recomendaciones.
+- **Rate limiting distribuido.** `/api/mobile/auth/login` limita a 10 intentos por IP cada 15 minutos y devuelve `429`/`Retry-After` al superar ese umbral. El límite actual es local en memoria, igual que el de recuperación de contraseña; en un despliegue con varias instancias debe reemplazarse por un almacén compartido, por ejemplo Redis.

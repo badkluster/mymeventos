@@ -616,6 +616,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
   const [loadedMapIds, setLoadedMapIds] = useState<Set<string>>(new Set());
   const [hasActiveTickets, setHasActiveTickets] = useState(false);
   const [packagesRevealed, setPackagesRevealed] = useState(false);
+  const [heroVideoFailed, setHeroVideoFailed] = useState(false);
   const mobileMenuRef = useRef<HTMLElement | null>(null);
   const socialPanelRef = useRef<HTMLElement | null>(null);
   const heroRef = useRef<HTMLElement | null>(null);
@@ -688,6 +689,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
   const settings = landing.settings ?? {};
   const salons = landing.salons;
   const heroImage = cloudinaryImageUrl(settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' }), 1920);
+  const heroVideo = settings.heroVideoUrl ? cloudinaryImageUrl(settings.heroVideoUrl) : '';
   const serviceBlocks = landing.serviceBlocks.length ? landing.serviceBlocks : fallbackServices;
   const eventTypes = landing.eventTypes.length ? landing.eventTypes : fallbackEventTypes;
   const storySteps: LandingItem[] = landing.storySteps.length ? landing.storySteps : fallbackStorySteps;
@@ -825,8 +827,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
     </header>
 
     <section ref={heroRef as React.RefObject<HTMLElement>} id="inicio" data-analytics-section="hero" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
-      {settings.heroVideoUrl
-        ? <motion.video src={settings.heroVideoUrl} poster={heroImage} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover will-change-transform" style={shouldReduceMotion ? undefined : { scale: heroImageScale, y: heroImageY }} initial={shouldReduceMotion ? false : { opacity: 0.7 }} animate={shouldReduceMotion ? undefined : { opacity: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />
+      {heroVideo && !heroVideoFailed
+        ? <motion.video src={heroVideo} poster={heroImage} autoPlay muted loop playsInline onError={() => setHeroVideoFailed(true)} className="absolute inset-0 h-full w-full object-cover will-change-transform" style={shouldReduceMotion ? undefined : { scale: heroImageScale, y: heroImageY }} initial={shouldReduceMotion ? false : { opacity: 0.7 }} animate={shouldReduceMotion ? undefined : { opacity: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />
         : <motion.img src={heroImage} alt="Salón M&M preparado para evento" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover will-change-transform" style={shouldReduceMotion ? undefined : { scale: heroImageScale, y: heroImageY }} initial={shouldReduceMotion ? false : { opacity: 0.7 }} animate={shouldReduceMotion ? undefined : { opacity: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />}
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(7,7,7,1),rgba(7,7,7,.08)_38%,rgba(7,7,7,.64))]" />
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen [animation:hero-sheen_16s_ease-in-out_infinite] bg-[radial-gradient(55%_55%_at_25%_15%,rgba(229,229,231,.18),transparent_60%)]" />

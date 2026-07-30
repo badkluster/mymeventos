@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>M&amp;M Eventos — Análisis administrativo/contable: Excel manuales vs. plataforma</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --surface:#ffffff; --ink:#1b1b18; --ink-muted:#5c574f; --line:#e4e0d8;
+    --accent:#8a5a2b; --accent-soft:#f1e4d3;
+    --ok-bg:#e8f3e8; --ok-ink:#1f6b34; --ok-line:#bfe0c4;
+    --warn-bg:#fbf1de; --warn-ink:#8a5a13; --warn-line:#f0d9a6;
+    --bad-bg:#fbe9e7; --bad-ink:#a13a2c; --bad-line:#f3c3ba;
+    --code-bg:#efeae1;
+    --shadow: 0 1px 2px rgba(20,16,8,.04), 0 8px 24px rgba(20,16,8,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#151310; --surface:#1d1b17; --ink:#f1ede4; --ink-muted:#b7b0a2; --line:#332f27;
+      --accent:#d3a066; --accent-soft:#2c2318;
+      --ok-bg:#16261b; --ok-ink:#7fce93; --ok-line:#25422c;
+      --warn-bg:#2c2416; --warn-ink:#e2b563; --warn-line:#4a3c20;
+      --bad-bg:#2c1c19; --bad-ink:#e58a78; --bad-line:#4a2b25;
+      --code-bg:#25211a;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height:1.55; font-size:16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:0 24px 96px;}
+  header.hero{
+    padding:56px 24px 40px; border-bottom:1px solid var(--line);
+    background: linear-gradient(180deg, var(--accent-soft), var(--bg) 140%);
+  }
+  header.hero .inner{max-width:1080px; margin:0 auto;}
+  .eyebrow{
+    text-transform:uppercase; letter-spacing:.14em; font-size:12px; font-weight:700;
+    color:var(--accent);
+  }
+  h1{
+    font-size:clamp(28px,4vw,40px); line-height:1.15; margin:.5em 0 .3em; letter-spacing:-0.01em;
+  }
+  .meta{color:var(--ink-muted); font-size:14px;}
+  .lede{font-size:18px; color:var(--ink-muted); max-width:74ch; margin-top:18px;}
+
+  nav.toc{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:18px 22px; margin:32px 0 40px; box-shadow:var(--shadow);
+  }
+  nav.toc div.title{font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-muted); margin-bottom:10px;}
+  nav.toc ol{columns:2; column-gap:32px; margin:0; padding-left:20px;}
+  nav.toc li{margin-bottom:6px; break-inside:avoid;}
+  nav.toc a{color:var(--ink); text-decoration:none; border-bottom:1px dotted var(--ink-muted);}
+  nav.toc a:hover{color:var(--accent); border-color:var(--accent);}
+
+  section{margin:52px 0;}
+  h2{font-size:26px; letter-spacing:-.01em; margin:0 0 6px; scroll-margin-top:24px;}
+  h2 .num{color:var(--accent); font-variant-numeric:tabular-nums; margin-right:10px;}
+  h3{font-size:18px; margin:28px 0 10px;}
+  p{margin:0 0 14px;}
+  .section-sub{color:var(--ink-muted); margin-bottom:24px; max-width:76ch;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:22px 24px; box-shadow:var(--shadow);
+  }
+  .grid{display:grid; gap:18px;}
+  .grid.docs{grid-template-columns:repeat(auto-fit, minmax(230px,1fr));}
+
+  .doc-card h4{margin:0 0 6px; font-size:15px;}
+  .doc-card .filename{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; color:var(--ink-muted); word-break:break-word;}
+  .doc-card ul{margin:10px 0 0; padding-left:18px; font-size:14px; color:var(--ink-muted);}
+  .doc-card li{margin-bottom:4px;}
+
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700;
+    padding:4px 10px; border-radius:999px; border:1px solid transparent; white-space:nowrap;
+  }
+  .badge.ok{background:var(--ok-bg); color:var(--ok-ink); border-color:var(--ok-line);}
+  .badge.warn{background:var(--warn-bg); color:var(--warn-ink); border-color:var(--warn-line);}
+  .badge.bad{background:var(--bad-bg); color:var(--bad-ink); border-color:var(--bad-line);}
+
+  .artifact{
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
+    padding:26px 28px; margin:22px 0; box-shadow:var(--shadow);
+  }
+  .artifact > .head{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;}
+  .artifact h3{margin:0; font-size:20px;}
+  .artifact .head p{margin:6px 0 0; color:var(--ink-muted); font-size:14.5px;}
+  .subpart{border-top:1px solid var(--line); margin-top:18px; padding-top:16px;}
+  .subpart:first-of-type{border-top:none; margin-top:16px; padding-top:0;}
+  .subpart .sp-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px;}
+  .subpart .sp-head strong{font-size:15px;}
+  code, .cite{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px;
+    background:var(--code-bg); padding:1px 6px; border-radius:5px; color:var(--ink);
+  }
+  .cites{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+
+  table{width:100%; border-collapse:collapse; font-size:14.5px; margin:14px 0;}
+  th, td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top;}
+  th{font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); font-weight:700;}
+  tr:last-child td{border-bottom:none;}
+  .table-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:12px;}
+  .table-wrap table{margin:0;}
+  .table-wrap th, .table-wrap td{border-color:var(--line);}
+
+  .callout{
+    border-left:4px solid var(--accent); background:var(--accent-soft);
+    border-radius:0 12px 12px 0; padding:16px 20px; margin:20px 0; font-size:15px;
+  }
+  .callout strong{color:var(--accent);}
+
+  .platform-grid{grid-template-columns:repeat(auto-fit, minmax(260px,1fr));}
+  .platform-grid .card h4{margin:0 0 4px; font-size:15px;}
+  .platform-grid .card .badge{margin-bottom:8px;}
+  .platform-grid .card p{font-size:14px; color:var(--ink-muted); margin:0;}
+
+  ol.reco{padding-left:22px;}
+  ol.reco li{margin-bottom:16px;}
+  ol.reco .tag{font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:999px; margin-right:8px;}
+  .tag.quick{background:var(--ok-bg); color:var(--ok-ink);}
+  .tag.medium{background:var(--warn-bg); color:var(--warn-ink);}
+  .tag.large{background:var(--bad-bg); color:var(--bad-ink);}
+
+  footer{border-top:1px solid var(--line); margin-top:64px; padding-top:24px; color:var(--ink-muted); font-size:13px;}
+
+  @media print{
+    header.hero{background:none;}
+    .card, .artifact{box-shadow:none;}
+    nav.toc{break-after:page;}
+  }
+  @media (max-width:640px){
+    nav.toc ol{columns:1;}
+    .artifact .head{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <p class="eyebrow">M&amp;M Eventos · Análisis administrativo/contable</p>
+    <h1>¿La plataforma ya reemplaza los Excel y el Word que hoy usa el equipo?</h1>
+    <p class="meta">Generado el 29 de julio de 2026 · Cruce entre 5 documentos reales de la operación (cronograma, producción, control de gastos, contratos y control de pagos) y el código real del sistema, siguiendo el circuito completo Lead → Presupuesto → Cliente → Contrato → Evento.</p>
+    <p class="lede">Respuesta corta: <strong>mucho más de lo que la documentación interna del proyecto sugiere</strong>, pero no todo. Hay piezas que ya son 100% automáticas, piezas que existen pero muestran los datos de otra forma que la planilla, y un puñado de cálculos muy puntuales (la comisión fija del 30%, el consolidado ítem×evento) que hoy seguirían necesitando Excel o Word. <em>Actualización 2026-07-29:</em> el checklist de vajilla/mantelería/limpieza/equipamiento menor, mencionado más abajo como pendiente, ya se resolvió como catálogo de stock — ver recomendaciones 5 y 6, marcadas como resueltas.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<nav class="toc">
+  <div class="title">Contenido</div>
+  <ol>
+    <li><a href="#resumen">Resumen ejecutivo</a></li>
+    <li><a href="#documentos">Los 5 documentos reales analizados</a></li>
+    <li><a href="#doc-desactualizada">Aviso: la documentación del proyecto está desactualizada</a></li>
+    <li><a href="#cronograma">Cronograma del evento</a></li>
+    <li><a href="#produccion">Producción mensual</a></li>
+    <li><a href="#gastos">Control mensual de gastos</a></li>
+    <li><a href="#contratos">Contratos y comisión</a></li>
+    <li><a href="#pagos">Control de pagos mensual</a></li>
+    <li><a href="#plataforma">Panorama general de la plataforma</a></li>
+    <li><a href="#matriz">Matriz resumen</a></li>
+    <li><a href="#recomendaciones">Recomendaciones priorizadas</a></li>
+    <li><a href="#metodologia">Metodología</a></li>
+  </ol>
+</nav>
+
+<section id="resumen">
+  <h2><span class="num">01</span>Resumen ejecutivo</h2>
+  <p class="section-sub">La pregunta original: siguiendo el camino completo desde que se crea un lead hasta que se cierran uno o varios eventos, ¿la plataforma ya entrega lo que la empresa está acostumbrada a tener a mano (cronograma completo, reportes mensuales, control de gastos, reportes de producción)?</p>
+
+  <div class="card">
+    <p><strong>Lo que ya es automático hoy</strong>, sin depender de Excel/Word: el <strong>timeline del evento</strong> y el <strong>control de invitados por mesa</strong> se generan con un clic en PDF/Word a partir de datos cargados en el propio sistema (incluso el cliente puede cargar su lista de invitados por un link público). El <strong>plan de producción por evento</strong> (qué preparar, cantidades, listo/chequeado) se genera solo si hay reglas de cantidad-por-invitado cargadas. Los <strong>gastos por proveedor/categoría</strong>, el <strong>saldo y las cuotas de cada contrato</strong>, los <strong>recordatorios de pagos vencidos</strong> y una <strong>rentabilidad económica real por evento</strong> (ingreso contratado − gasto real) ya existen y se recalculan solos. El módulo de <strong>liquidación de personal</strong> (payroll) también es real y ya vuelca el costo de personal como gasto del evento.</p>
+    <p><strong>Lo que hoy seguiría siendo manual</strong>: (a) la <strong>comisión fija del 30%</strong> que arma "Contratos.xlsx" no existe como cálculo — el sistema calcula margen real (ingreso − gasto), no un porcentaje fijo de ganancia; (b) el <strong>checklist de mantelería, servilletas, insumos de limpieza y equipamiento menor</strong> (vajilla "chica") no tiene control de stock real ni un documento imprimible propio, a diferencia de la vajilla de mesa que sí está resuelta; (c) el <strong>consolidado mensual de producción por ítem cruzado con todos los eventos del mes</strong> (las pestañas "Salado"/"Bebidas" del Excel) existe como total agregado pero sin el desglose por evento que muestra la planilla; (d) no hay una <strong>vista mensual de "control de pagos" agrupada por cliente y filtrable por salón</strong> con el formato exacto de la planilla — los datos están, pero repartidos en dos reportes distintos.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Hallazgo colateral relevante:</strong> el documento de contexto persistente del proyecto (<code>docs/MYM_EVENTOS_PROJECT_CONTEXT.md</code>) describe los módulos de Producción, Gastos y Liquidación de personal como inexistentes o "solo permisos, sin implementación real". Eso ya no es así — los tres están construidos, montados y en uso. Ver <a href="#doc-desactualizada">§3</a>.
+  </div>
+</section>
+
+<section id="documentos">
+  <h2><span class="num">02</span>Los 5 documentos reales analizados</h2>
+  <p class="section-sub">Se revisaron pestaña por pestaña los archivos que hoy vive en <code>docs/</code>. Esta es la estructura real de cada uno (sin reproducir datos de clientes reales).</p>
+  <div class="grid docs">
+    <div class="card doc-card">
+      <h4>Cronograma de evento</h4>
+      <div class="filename">Cronograma XV Camila 29-05.docx</div>
+      <ul>
+        <li>Instrucciones de montaje (mantelería, color, cantidades)</li>
+        <li>Timeline minuto a minuto en tabla (hora → actividad)</li>
+        <li>Listado de invitados por mesa, con elección de menú</li>
+        <li>Checklist de vajilla/equipamiento: alquiler vs. salón vs. reposición</li>
+      </ul>
+    </div>
+    <div class="card doc-card">
+      <h4>Producción mensual</h4>
+      <div class="filename">Producción mayo.xlsx</div>
+      <ul>
+        <li>Una pestaña por evento del mes</li>
+        <li>Encabezado: salón, fecha, invitados, cliente</li>
+        <li>Tabla: producto | cantidad | listo | chequeo | observación</li>
+      </ul>
+    </div>
+    <div class="card doc-card">
+      <h4>Control mensual de gastos</h4>
+      <div class="filename">Control mensual de Gastos mayo.xlsx</div>
+      <ul>
+        <li>"Salado"/"Bebidas": ítem × evento del mes, con totales</li>
+        <li>"Control de Gastos I/II/III": gasto por proveedor/categoría</li>
+        <li>"Relación de Gastos": proveedor | gasto final | inicial | adicional</li>
+      </ul>
+    </div>
+    <div class="card doc-card">
+      <h4>Contratos</h4>
+      <div class="filename">Contratos enero 2026 VAMOS BIEN.xlsx</div>
+      <ul>
+        <li>Cliente, fecha del evento, salón, servicio</li>
+        <li>Seña, ganancia 30%, cobro de ganancia, resta por abonar</li>
+        <li>Cuotas y valor de cuota, con totales del mes</li>
+      </ul>
+    </div>
+    <div class="card doc-card">
+      <h4>Control de pagos mensual</h4>
+      <div class="filename">MARZO Control de pagos VE.xlsx</div>
+      <ul>
+        <li>Cliente, fecha del evento, mes</li>
+        <li>Total del evento, cuotas restantes, valor de cuota</li>
+        <li>Ventana de fecha de pago (ej. "del 1 al 10") y observaciones</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="doc-desactualizada">
+  <h2><span class="num">03</span>Aviso: la documentación del proyecto está desactualizada</h2>
+  <p>Los tres módulos que más importan para este análisis (Producción, Gastos, Payroll) se construyeron <strong>después</strong> de la última actualización a fondo de <code>docs/MYM_EVENTOS_PROJECT_CONTEXT.md</code> y de <code>docs/MYM_EVENTOS_LIFECYCLE_COMPLETION_AUDIT.md</code> (ambos fechados 2026-07-21/22). El historial de commits lo confirma: <code>feat(production)</code>, <code>feat(expenses)</code>/<code>fix(expenses)</code>, <code>feat(events): implementar cierre operativo financiero y administrativo</code>, <code>Add payroll implementation plan</code>, <code>fix(reporting)</code>, <code>fix(dashboard)</code> son todos posteriores a esa fecha.</p>
+  <p>Consecuencia práctica: si alguien (vos, un desarrollador nuevo, o un asistente de IA en una sesión futura) confía en esos documentos tal cual están hoy, va a subestimar seriamente lo que la plataforma ya hace. Recomendación al final del informe (§11).</p>
+</section>
+
+<section id="cronograma">
+  <div class="artifact">
+    <div class="head">
+      <div>
+        <h3>Cronograma del evento</h3>
+        <p>Timeline minuto a minuto + invitados por mesa + checklist de vajilla/equipamiento</p>
+      </div>
+      <span class="badge warn">Parcialmente automático</span>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Timeline minuto a minuto</strong><span class="badge warn">Parcial</span></div>
+      <p>El modelo ya existe (<code>Event.resourcePlanSnapshot.timelineItems</code>) con hora, actividad, área, responsable, estado y notas, con un editor dedicado en el backoffice. Con un clic, el sistema genera el <strong>PDF y el Word del timeline</strong> automáticamente y lo puede enviar por email — el plan inicial ya trae 10 momentos típicos como plantilla (armado, recepción, ingreso, torta, mesa dulce, baile, cierre).</p>
+      <p><strong>Qué falta:</strong> los horarios, platos y cantidades exactas no se derivan solos del menú/paquete/horario ya contratado — hay que tipearlos a mano en el formulario, igual que hoy se tipean en Word. La diferencia real es que el documento final ya no se arma a mano, se genera.</p>
+      <div class="cites">
+        <span class="cite">crm.models.ts:170</span>
+        <span class="cite">event-operations.tsx:403-431</span>
+        <span class="cite">event-operational-document.service.ts:123-175</span>
+        <span class="cite">event-resource-plan.ts:8-19</span>
+      </div>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Invitados por mesa</strong><span class="badge ok">Ya automático</span></div>
+      <p>Es el bloque más resuelto de los tres. Existe un tablero visual de mesas, carga rápida en lote, y <strong>un link público para que el propio cliente cargue su lista de invitados</strong> (mesa, menú, restricción alimentaria, grupo etario). El documento "control de mesas" se genera automáticamente en PDF/Word con el mismo formato que hoy arma Word a mano: una tabla por mesa, invitados numerados, menú de cada uno.</p>
+      <div class="cites">
+        <span class="cite">guest-list-workspace.tsx</span>
+        <span class="cite">events.routes.ts:748-760 (guest-list-link)</span>
+        <span class="cite">event-operational-document.service.ts:207-282,336-341</span>
+      </div>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Checklist de vajilla / mantelería / equipamiento</strong><span class="badge ok">Resuelto 2026-07-29 (con matiz de datos)</span></div>
+      <p>La <strong>vajilla de mesa</strong> (platos, copas, vasos, cubiertos y equipamiento de cocina/salón) tiene automatización real: reserva por fecha para evitar doble asignación entre eventos, calcula cuánto asignar por invitado y cuánto falta cubrir con alquiler externo, y desde la recomendación 5 (resuelta) también genera su propio documento exportable (<code>tableware</code>, PDF/Word) junto a timeline/logística/invitados.</p>
+      <p><strong>Resuelto por la recomendación 6:</strong> <code>SalonStockItem.category</code> ahora admite tres categorías nuevas — <code>LINENS</code> (mantelería), <code>CLEANING</code> (limpieza) y <code>MINOR_EQUIPMENT</code> (equipamiento menor) — además de las cinco existentes, con el mismo CRUD y la misma reserva por fecha de evento que ya usa la vajilla (el endpoint de reserva no filtraba por categoría, así que la extensión alcanzó automáticamente sin tocar esa lógica). La pestaña del salón se renombró de "Vajilla" a "Stock" para reflejarlo.</p>
+      <p><strong>Lo que sigue pendiente:</strong> no se sembraron cantidades reales para estas tres categorías nuevas — a diferencia de la vajilla (<code>salonStock.data.ts</code>, con conteos reales por salón), hoy no existe un Excel/fuente estructurada con los conteos de manteles/color, servilletas, bolsas de consorcio, detergente, alcohol, guantes, etc. El equipo debe cargarlos manualmente desde la pestaña "Stock" a medida que releve el stock real de cada salón. Tampoco se incorporaron estas categorías a la sugerencia automática "por invitado" del workspace de evento (sigue acotada a vajilla de mesa), porque mantelería/limpieza no escalan 1:1 por invitado.</p>
+      <div class="cites">
+        <span class="cite">salonStock.data.ts:14-63</span>
+        <span class="cite">salonStockItem.model.ts (categorías LINENS/CLEANING/MINOR_EQUIPMENT, 2026-07-29)</span>
+        <span class="cite">eventTablewareAllocation.model.ts</span>
+        <span class="cite">event-operations.tsx:465-534,634-646</span>
+        <span class="cite">event-operational-document.service.ts:5 (timeline|logistics|guest_list|tableware)</span>
+        <span class="cite">apps/web/src/app/admin/salons/[id]/page.tsx (pestaña "Stock")</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="produccion">
+  <div class="artifact">
+    <div class="head">
+      <div>
+        <h3>Producción mensual</h3>
+        <p>Checklist por evento + consolidado del mes cruzado por ítem</p>
+      </div>
+      <span class="badge warn">Parcialmente automático</span>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Checklist de producción por evento</strong><span class="badge ok">Ya automático (con matiz)</span></div>
+      <p>El módulo de Producción existe, está montado y calca casi campo a campo la planilla: producto, cantidad planificada, unidad, listo/chequeado (con quién y cuándo lo marcó) y observaciones. Se genera automáticamente combinando reglas de cantidad-por-invitado (configurables por salón/paquete) con los datos ya cargados del evento, y detecta cuándo el evento cambió para ofrecer regenerar el plan.</p>
+      <p><strong>Matiz:</strong> sin reglas de producción cargadas para un salón/paquete, el sistema solo trae lo que ya estaba escrito a mano — la automatización depende de que se invierta en cargar esas reglas una vez.</p>
+      <div class="cites">
+        <span class="cite">production.models.ts (ProductionPlan/Section/Item)</span>
+        <span class="cite">production.service.ts:190-247 (generateProductionPlan)</span>
+        <span class="cite">production.routes.ts:167-174</span>
+      </div>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Consolidado mensual por ítem (pestañas "Salado"/"Bebidas")</strong><span class="badge warn">Parcial</span></div>
+      <p>Existe un endpoint y una pantalla de "consolidado" que suma cada producto de todos los planes vigentes del período, cruza contra stock disponible y calcula cuánto falta comprar.</p>
+      <p><strong>Qué falta:</strong> no desglosa por evento (la planilla muestra una columna por evento con fecha y quién lo pidió) — solo da el total y cuántos eventos lo usaron. Tampoco separa por sección (salado vs. bebidas quedan mezclados). El dato fuente alcanza para construir el crosstab exacto, pero hoy no existe esa vista.</p>
+      <div class="cites">
+        <span class="cite">production.routes.ts:184-189 (GET /production/consolidated)</span>
+        <span class="cite">production.service.ts:285-303 (consolidatedProduction)</span>
+        <span class="cite">production-consolidated.tsx</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="gastos">
+  <div class="artifact">
+    <div class="head">
+      <div>
+        <h3>Control mensual de gastos</h3>
+        <p>Gasto por proveedor/categoría + conciliación final vs. inicial</p>
+      </div>
+      <span class="badge ok">Automático por proveedor (resuelto 2026-07-29); agrupación por categoría sigue pendiente</span>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Gasto por proveedor/categoría</strong><span class="badge ok">Resuelto para proveedor 2026-07-29</span></div>
+      <p>El modelo de Gastos tiene exactamente los campos de la planilla: proveedor, categoría (sembrada con las mismas categorías del Excel — Panadería, Limpieza, Staff, DJ, Proyector, Ambientación), monto inicial estimado, monto final, monto adicional e impuestos. Se puede filtrar por categoría/proveedor/período con un resumen agregado.</p>
+      <p><strong>Qué falta (estado original):</strong> no hay una vista que agrupe por proveedor o por categoría con el detalle línea por línea y un total por categoría, al estilo "Control de Gastos I/II/III". El único agregado por categoría vive en Reportes, y solo suma el monto total, sin el desglose inicial/final/adicional. Tampoco se encontró una agregación por proveedor.</p>
+      <p><strong>Actualización 2026-07-29:</strong> se implementó la recomendación #3 de este informe. <code>GET /expenses/by-supplier</code> agrupa los gastos del período (con el mismo filtro de salón/rango que el resto de reportes) por <code>supplierId</code>, sumando inicial/final/adicional/impuestos/total, pagado/pendiente y cantidad de gastos por proveedor — cubre "Control de Gastos I/II/III". La agrupación por categoría (en vez de por proveedor) sigue sin tener una vista propia.</p>
+      <div class="cites">
+        <span class="cite">operations.models.ts:38-76 (Expense/ExpenseCategory)</span>
+        <span class="cite">expenses.routes.ts:32-38,95-100,141-190 (by-supplier)</span>
+        <span class="cite">expenses-workspace.tsx</span>
+        <span class="cite">expenses-by-supplier-workspace.tsx</span>
+        <span class="cite">reports.service.ts:335,352</span>
+      </div>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Conciliación final vs. inicial por proveedor</strong><span class="badge ok">Resuelto 2026-07-29</span></div>
+      <p>El modelo soporta la conciliación campo a campo, y hay una tarjeta de "desvío final vs. inicial" en el workspace de Gastos.</p>
+      <p><strong>Qué faltaba (estado original):</strong> ese desvío era un <em>total global</em> del período filtrado, no desglosado por proveedor. La tabla "Relación de Gastos" (una fila por proveedor con sus tres montos) no tenía equivalente.</p>
+      <p><strong>Actualización 2026-07-29:</strong> <code>GET /expenses/by-supplier</code> devuelve, además del total global, el desvío (final − inicial) fila por fila para cada proveedor, con vista en <code>/admin/expenses/by-supplier</code> — equivalente directo de la tabla "Relación de Gastos".</p>
+      <div class="cites">
+        <span class="cite">expenses-workspace.tsx:97</span>
+        <span class="cite">expenses.routes.ts:141-190 (by-supplier)</span>
+        <span class="cite">expenses-by-supplier-workspace.tsx</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contratos">
+  <div class="artifact">
+    <div class="head">
+      <div>
+        <h3>Contratos y comisión</h3>
+        <p>Seña, ganancia 30%, cobro de ganancia, saldo y cuotas</p>
+      </div>
+      <span class="badge warn">Parcialmente automático</span>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Comisión fija del 30% y su cobro acumulado</strong><span class="badge bad">No existe, sigue siendo manual</span></div>
+      <p>No hay ningún campo ni cálculo de comisión/margen fijo en todo el modelo de Contrato/Pago. Lo más parecido que existe es un reporte de <strong>rentabilidad económica real</strong> por evento (ingreso contratado − gasto real registrado = margen económico, con % de margen y resultado de caja), filtrable por período y salón. Es un cálculo más honesto que un 30% fijo, pero <strong>no es lo mismo</strong>: no reemplaza la columna "ganancia 30%" ni "cobro ganancia" tal cual las usa la planilla hoy.</p>
+      <div class="cites">
+        <span class="cite">crm.models.ts (Quote/Event/Contract/Payment)</span>
+        <span class="cite">contract-financials.service.ts:30-53</span>
+        <span class="cite">expenses.routes.ts:141-192 (GET /expenses/profitability/events)</span>
+      </div>
+    </div>
+
+    <div class="subpart">
+      <div class="sp-head"><strong>Saldo pendiente y cuotas restantes por cliente</strong><span class="badge ok">Ya automático (con un detalle de presentación)</span></div>
+      <p>El saldo se recalcula solo en cada pago. Las cuotas ya distinguen cuáles están abiertas y generan recordatorios automáticos (D-7/D-3/D0/D+1/D+3/D+7). El reporte de Contratos ya expone, por contrato: total, seña, pagado, saldo, monto vencido, cantidad de cuotas pendientes y próximo vencimiento.</p>
+      <p><strong>Detalle menor:</strong> no hay una sola fila legible con "cuotas totales pactadas + valor de cuota" como en la planilla — hoy hay que abrir el contrato para ver ese detalle.</p>
+      <div class="cites">
+        <span class="cite">contract-financials.service.ts:30-38,87-102</span>
+        <span class="cite">financial-reminders.service.ts:94-101,108-109</span>
+        <span class="cite">reports.service.ts:245-280 (líneas 49-58: columnas expuestas)</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pagos">
+  <div class="artifact">
+    <div class="head">
+      <div>
+        <h3>Control de pagos mensual (por salón)</h3>
+        <p>Vista agregada por cliente, con ventana de fecha de pago</p>
+      </div>
+      <span class="badge ok">Resuelto 2026-07-29</span>
+    </div>
+    <p>El reporte de "Pagos y cobranzas" ya es filtrable por rango de fechas (mes en curso por defecto) y por salón, con un modo específico para ver cuotas que vencen en el período, y se puede exportar a CSV/Excel.</p>
+    <p><strong>Qué faltaba:</strong> era una tabla de <em>movimientos individuales</em> (una fila por pago/cuota), no la vista agregada por cliente que arma la planilla (cliente, total del evento, cuotas restantes, valor de cuota, ventana de fecha de pago, observaciones). No había una pantalla dedicada "control de pagos del mes por salón" con esas columnas exactas.</p>
+    <p><strong>Actualización 2026-07-29:</strong> se implementó la recomendación #4 de este informe. El nuevo reporte <code>GET /reports/payment-control</code> ("Control de pagos mensual") agrupa por contrato/cliente los pagos pendientes (<code>Payment</code>) cuyo vencimiento cae en el período, cruzados con los totales del contrato (<code>Contract.totalAmount/paidAmount/balanceAmount</code>) y con la ventana real de cada cuota (<code>Contract.paymentPlanSnapshot[].paymentWindowStart/paymentWindowEnd</code>, el mismo campo que ya usa el PDF de contrato para mostrar "del X al Y"). Una fila por cliente con: contrato, cliente, evento, salón, total del evento, cobrado, saldo, cuotas restantes (todas las pendientes del contrato, no solo las del mes), valor de la próxima cuota, ventana de fecha de pago y observaciones. Reutiliza la pantalla genérica de reportes (<code>/admin/reports/payment-control</code>) sin cambios de frontend, exportable a CSV/Excel como el resto.</p>
+    <div class="cites">
+      <span class="cite">reports.service.ts:282-318 (Pagos y cobranzas)</span>
+      <span class="cite">report-filter.ts:41-99 (resolveReportScope, filtro por salón y período)</span>
+      <span class="cite">reports.routes.ts:14-29 (export CSV/Excel)</span>
+    </div>
+  </div>
+</section>
+
+<section id="plataforma">
+  <h2><span class="num">04</span>Panorama general de la plataforma</h2>
+  <p class="section-sub">Además del pedido puntual sobre estos 5 documentos, esto es cómo está el resto del circuito comercial/operativo hoy, para dar contexto completo.</p>
+
+  <div class="grid platform-grid">
+    <div class="card">
+      <span class="badge ok">Sólido</span>
+      <h4>Lead → Presupuesto → Cliente → Contrato → Evento</h4>
+      <p>El núcleo comercial es maduro: presupuestos por paquete/custom/híbrido con revisiones versionadas, conversión a cliente y a evento idempotente (no duplica por reintentos), contratos versionados con adendas que recalculan el total automáticamente.</p>
+    </div>
+    <div class="card">
+      <span class="badge ok">Sólido</span>
+      <h4>Pagos, recordatorios y cierre del evento</h4>
+      <p>Saldo recalculado en cada pago, recordatorios financieros automáticos por email/notificación, y ya existe un cierre explícito del evento en tres niveles — operativo, financiero y administrativo — cada uno con su propio checklist.</p>
+    </div>
+    <div class="card">
+      <span class="badge ok">Sólido</span>
+      <h4>Producción, gastos y rentabilidad</h4>
+      <p>Los tres módulos auditados en este informe. Cubren gran parte del trabajo manual, con las brechas puntuales de desglose ya detalladas arriba.</p>
+    </div>
+    <div class="card">
+      <span class="badge ok">Sólido</span>
+      <h4>Personal, asistencia y liquidación (payroll)</h4>
+      <p>La app móvil de personal (fichaje con geolocalización) y el cálculo de liquidaciones a partir de horas trabajadas son reales — al aprobar una liquidación, se genera automáticamente un gasto de personal por evento/salón, cerrando el círculo con el reporte de rentabilidad.</p>
+    </div>
+    <div class="card">
+      <span class="badge warn">Brecha conocida</span>
+      <h4>Disponibilidad de salón/fecha</h4>
+      <p>No hay ningún bloqueo real que impida confirmar dos eventos el mismo salón el mismo día — se guarda la fecha, pero nadie valida conflictos. Señalado ya en la auditoría previa del ciclo de vida (2026-07-22) y, según la investigación de esta tarea, sigue sin resolverse.</p>
+    </div>
+    <div class="card">
+      <span class="badge warn">Brecha conocida</span>
+      <h4>Validación de monto de pago</h4>
+      <p>El backend no compara el monto de un pago cargado contra el saldo real del contrato antes de guardarlo — puede cargarse cualquier monto. Mismo hallazgo de la auditoría previa, no forma parte del alcance de esta tarea pero vale la pena tenerlo presente porque afecta la confiabilidad de los reportes financieros.</p>
+    </div>
+    <div class="card">
+      <span class="badge bad">Documentación desactualizada</span>
+      <h4>docs/MYM_EVENTOS_PROJECT_CONTEXT.md</h4>
+      <p>Describe Producción, Gastos y Payroll como inexistentes o incompletos. Ya no refleja el estado real del código (ver §3).</p>
+    </div>
+  </div>
+</section>
+
+<section id="matriz">
+  <h2><span class="num">05</span>Matriz resumen</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Artefacto manual hoy</th><th>Estado</th><th>Qué falta exactamente</th></tr></thead>
+    <tbody>
+      <tr><td>Timeline del evento</td><td><span class="badge warn">Parcial</span></td><td>Carga inicial de horarios/platos sigue siendo manual; el documento final ya se genera solo</td></tr>
+      <tr><td>Invitados por mesa</td><td><span class="badge ok">Automático</span></td><td>—</td></tr>
+      <tr><td>Checklist de vajilla de mesa</td><td><span class="badge ok">Automático</span></td><td>Resuelto 2026-07-29: documento <code>tableware</code> exportable propio (PDF/Word)</td></tr>
+      <tr><td>Mantelería / limpieza / equipamiento menor</td><td><span class="badge ok">Automático (catálogo); datos pendientes</span></td><td>Resuelto 2026-07-29: <code>SalonStockItem</code> ya admite estas categorías con el mismo CRUD/reserva por fecha que la vajilla; falta cargar las cantidades reales por salón (no hay fuente estructurada previa)</td></tr>
+      <tr><td>Producción por evento</td><td><span class="badge ok">Automático</span></td><td>Requiere reglas de cantidad-por-invitado cargadas por salón/paquete</td></tr>
+      <tr><td>Consolidado mensual de producción por ítem</td><td><span class="badge warn">Parcial</span></td><td>Sin desglose por evento ni por sección (salado/bebidas)</td></tr>
+      <tr><td>Gasto por proveedor/categoría</td><td><span class="badge ok">Automático (por proveedor)</span></td><td>Resuelto 2026-07-29 vía <code>GET /expenses/by-supplier</code>; sin vista agrupada por categoría</td></tr>
+      <tr><td>Conciliación final vs. inicial</td><td><span class="badge ok">Automático (por proveedor)</span></td><td>Resuelto 2026-07-29; el total global también se mantiene</td></tr>
+      <tr><td>Comisión fija 30% y su cobro</td><td><span class="badge bad">Manual</span></td><td>No existe el concepto — el sistema calcula margen real, no % fijo</td></tr>
+      <tr><td>Saldo y cuotas por cliente</td><td><span class="badge ok">Automático</span></td><td>Vista de detalle requiere abrir el contrato</td></tr>
+      <tr><td>Control de pagos mensual por salón</td><td><span class="badge ok">Automático (agregado por cliente)</span></td><td>Resuelto 2026-07-29 vía <code>GET /reports/payment-control</code></td></tr>
+      <tr><td>Reportes mensuales (leads/quotes/eventos/contratos/pagos/gastos)</td><td><span class="badge ok">Automático</span></td><td>Sin un reporte único de "facturación/cobranza" — se arma combinando dos</td></tr>
+      <tr><td>Liquidación de personal (payroll)</td><td><span class="badge ok">Automático</span></td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="recomendaciones">
+  <h2><span class="num">06</span>Recomendaciones priorizadas</h2>
+  <p class="section-sub">Ninguna de estas requiere modelos de datos nuevos salvo la marcada como "esfuerzo grande" — la mayoría es construir una vista/agregación sobre datos que ya existen.</p>
+  <ol class="reco">
+    <li><span class="tag quick">Rápido</span><strong>Actualizar <code>docs/MYM_EVENTOS_PROJECT_CONTEXT.md</code></strong> para reflejar que Producción, Gastos y Payroll son reales — evita que futuras decisiones (humanas o de IA) subestimen la plataforma.</li>
+    <li><span class="tag quick">Rápido</span><strong>Consolidado de producción por evento</strong>: extender <code>consolidatedProduction()</code> para incluir el desglose ítem×evento y separar por sección (salado/bebidas) — el dato fuente ya existe en <code>ProductionItem</code>, es una vista nueva sobre datos existentes.</li>
+    <li><span class="tag quick">Rápido</span><strong>Vista de gastos por proveedor</strong>: un endpoint que agrupe <code>Expense</code> por <code>supplierId</code> con inicial/final/adicional, reemplazando "Control de Gastos I/II/III" y "Relación de Gastos". <span class="badge ok">Resuelto 2026-07-29</span> — <code>GET /expenses/by-supplier</code> + <code>/admin/expenses/by-supplier</code>.</li>
+    <li><span class="tag medium">Medio</span><strong>Vista mensual de control de pagos por salón</strong>: combinar el reporte de Pagos con el de Contratos en una sola pantalla agregada por cliente, con la ventana de fecha de pago. <span class="badge ok">Resuelto 2026-07-29</span> — <code>GET /reports/payment-control</code> + <code>/admin/reports/payment-control</code>.</li>
+    <li><span class="tag medium">Medio</span><strong>Documento exportable de vajilla</strong>: agregar un cuarto tipo de documento operativo (<code>tableware</code>) junto a timeline/logística/invitados, para que la reserva de vajilla también se pueda imprimir/enviar. <span class="badge ok">Resuelto</span> — tipo <code>tableware</code> en <code>event-operational-document.service.ts</code>.</li>
+    <li><span class="tag large">Esfuerzo grande</span><strong>Checklist de mantelería/limpieza/equipamiento menor como stock real</strong>: extender el catálogo de <code>SalonStockItem</code> con estas categorías (hoy solo cubre vajilla de mesa), para que deje de vivir como texto libre. <span class="badge ok">Resuelto 2026-07-29</span> — categorías <code>LINENS</code>/<code>CLEANING</code>/<code>MINOR_EQUIPMENT</code> agregadas al enum, reutilizando el CRUD y la reserva por fecha existentes; cantidades reales todavía por cargar (sin fuente estructurada previa).</li>
+    <li><span class="tag medium">Medio</span><strong>Decidir qué hacer con la "ganancia 30%"</strong>: antes de construir nada, definir con el negocio si ese 30% fijo sigue siendo la métrica real que quieren ver, o si el margen económico real (ingreso − gasto) que ya calcula el sistema de Rentabilidad debería reemplazarlo como la métrica oficial. Son conceptualmente distintos y no conviene construir ambos sin decidir cuál manda.</li>
+  </ol>
+</section>
+
+<section id="metodologia">
+  <h2><span class="num">07</span>Metodología</h2>
+  <p>Se extrajeron y leyeron pestaña por pestaña los 5 archivos reales en <code>docs/</code> (formato original: 4 <code>.xlsx</code> y 1 <code>.docx</code>). Se lanzaron tres auditorías independientes de código sobre el backend y frontend reales (no sobre documentación), cada una enfocada en un grupo de artefactos, exigiendo veredicto por sub-componente con cita de archivo/línea. Se contrastó además contra la auditoría de ciclo de vida previa (2026-07-22) y el historial de commits para distinguir qué gaps ya documentados siguen vigentes y cuáles fueron cerrados por trabajo posterior no reflejado en la documentación persistente.</p>
+</section>
+
+<footer>
+  M&amp;M Eventos — informe interno generado a partir del código y los documentos operativos reales del proyecto. No reemplaza una decisión de negocio: las prioridades de la sección 6 son una propuesta, no una hoja de ruta cerrada.
+</footer>
+
+</div>
+</body>
+</html>

@@ -13,7 +13,7 @@ export type SalonExtra = {
   publicVisible: boolean;
 };
 
-export type SalonStockCategory = 'PLATES' | 'GLASSWARE' | 'DRINKWARE' | 'CUTLERY' | 'MISCELLANEOUS';
+export type SalonStockCategory = 'PLATES' | 'GLASSWARE' | 'DRINKWARE' | 'CUTLERY' | 'LINENS' | 'CLEANING' | 'MINOR_EQUIPMENT' | 'MISCELLANEOUS';
 
 export type SalonStockItem = {
   _id: string;
@@ -35,6 +35,9 @@ export const salonStockCategoryLabels: Record<SalonStockCategory, string> = {
   GLASSWARE: 'Copas',
   DRINKWARE: 'Vasos',
   CUTLERY: 'Cubiertos',
+  LINENS: 'Mantelería',
+  CLEANING: 'Limpieza',
+  MINOR_EQUIPMENT: 'Equipamiento menor',
   MISCELLANEOUS: 'Varios'
 };
 

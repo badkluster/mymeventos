@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Copy, FileStack, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
+import { Button, Input, Modal, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { MarketingTabs } from '@/components/admin/marketing-tabs';
 import { useToast } from '@/components/ui/toast-provider';
@@ -23,6 +23,8 @@ export default function MarketingTemplatesPage() {
   const [filters, setFilters] = useState({ search: '', category: '' });
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<Template>();
+  const [deleting, setDeleting] = useState(false);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -56,9 +58,19 @@ export default function MarketingTemplatesPage() {
     try { const response = await api.post<{ template: Template }>(`/marketing/templates/${template._id}/duplicate`, {}); await load(); router.push(`/admin/marketing/templates/${response.template._id}/edit`); }
     catch (error) { showToast({ message: error instanceof Error ? error.message : 'No se pudo duplicar la plantilla.', variant: 'error' }); }
   }
-  async function remove(template: Template) {
-    try { await api.delete(`/marketing/templates/${template._id}`); await load(); showToast({ message: 'Plantilla eliminada.', variant: 'success' }); }
-    catch (error) { showToast({ message: error instanceof Error ? error.message : 'No se pudo eliminar la plantilla.', variant: 'error' }); }
+  async function removeTemplate() {
+    if (!templateToDelete) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/marketing/templates/${templateToDelete._id}`);
+      setTemplateToDelete(undefined);
+      await load();
+      showToast({ message: 'Plantilla eliminada.', variant: 'success' });
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : 'No se pudo eliminar la plantilla.', variant: 'error' });
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -95,7 +107,7 @@ export default function MarketingTemplatesPage() {
                   <div className="flex">
                     <TableActionButton icon={Pencil} label="Editar" onClick={() => router.push(`/admin/marketing/templates/${template._id}/edit`)} />
                     <TableActionButton icon={Copy} label="Duplicar" onClick={() => void duplicate(template)} />
-                    {!template.isSystemTemplate ? <TableActionButton icon={Trash2} label="Eliminar" onClick={() => void remove(template)} /> : null}
+                    {!template.isSystemTemplate ? <TableActionButton icon={Trash2} label="Eliminar plantilla" onClick={() => setTemplateToDelete(template)} /> : null}
                   </div>
                 </div>
               </div>
@@ -104,6 +116,15 @@ export default function MarketingTemplatesPage() {
           {!items.length ? <p className="col-span-full py-16 text-center text-sm text-zinc-500">No hay plantillas todavía. <button type="button" onClick={() => void createTemplate()} className="font-semibold text-zinc-900 underline">Creá la primera</button>.</p> : null}
         </div>
       )}
+      <Modal open={Boolean(templateToDelete)} onClose={() => setTemplateToDelete(undefined)} title="Eliminar plantilla" description="La plantilla se quitará del listado, pero se conservará el registro de auditoría.">
+        <div className="space-y-4 p-6">
+          <p className="text-sm text-zinc-700">¿Querés eliminar la plantilla <strong>{templateToDelete?.name}</strong>?</p>
+          <footer className="flex justify-end gap-3 border-t border-zinc-100 pt-4">
+            <Button variant="secondary" disabled={deleting} onClick={() => setTemplateToDelete(undefined)}>Cancelar</Button>
+            <Button variant="danger" disabled={deleting} onClick={() => void removeTemplate()}>{deleting ? 'Eliminando...' : 'Eliminar plantilla'}</Button>
+          </footer>
+        </div>
+      </Modal>
     </section>
   );
 }

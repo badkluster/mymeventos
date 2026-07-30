@@ -211,4 +211,22 @@ describe('mobile auth routes', () => {
     expect(mocks.userUpdateOne).toHaveBeenCalledWith({ _id: userId }, { $inc: { passwordResetAttempts: 1 } });
     expect(mocks.refreshTokenUpdateMany).not.toHaveBeenCalled();
   });
+
+  it('limits repeated mobile login attempts from the same IP', async () => {
+    // This test is intentionally last: the rate limiter is process-local and the
+    // preceding login tests share Supertest's loopback IP.
+    mocks.userFindOne.mockReturnValue({ select: vi.fn().mockResolvedValue(null) });
+
+    let response: request.Response | undefined;
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      response = await request(app)
+        .post('/api/mobile/auth/login')
+        .send({ username: `unknown-${attempt}`, password: 'invalid-password', device });
+      if (response.status === 429) break;
+    }
+
+    expect(response?.status).toBe(429);
+    expect(response?.body.error.code).toBe('PUBLIC_RATE_LIMITED');
+    expect(response?.headers['retry-after']).toBeDefined();
+  });
 });

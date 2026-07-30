@@ -11,6 +11,7 @@ export function ExpensesNav() {
   const { user } = useSession();
   const items = [
     { href: '/admin/expenses', label: 'Gastos', permission: Permission.EXPENSES_VIEW, exact: true },
+    { href: '/admin/expenses/by-supplier', label: 'Por proveedor', permission: Permission.EXPENSES_VIEW },
     { href: '/admin/expenses/profitability', label: 'Rentabilidad', permission: Permission.REPORTS_PROFITABILITY_READ },
   ].filter((item) => userCanAccess(user, [item.permission]));
   return <nav className="flex flex-wrap gap-1 rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-sm">{items.map((item) => {

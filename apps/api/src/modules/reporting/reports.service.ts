@@ -67,6 +67,17 @@ export const reportDefinitions: ReportDefinition[] = [
     ],
   },
   {
+    key: 'payment-control', group: 'Finanzas', title: 'Control de pagos mensual', description: 'Vista por cliente: contrato, saldo, cuotas restantes y ventana de vencimiento del período.', permission: Permission.REPORTS_PAYMENTS_READ,
+    columns: [
+      { key: 'number', label: 'Contrato', linkKey: 'href' }, { key: 'customer', label: 'Cliente' }, { key: 'event', label: 'Evento' },
+      { key: 'eventDate', label: 'Fecha del evento', format: 'date' }, { key: 'salon', label: 'Salón' },
+      { key: 'totalAmount', label: 'Total del evento', format: 'currency' }, { key: 'paidAmount', label: 'Cobrado', format: 'currency' },
+      { key: 'balanceAmount', label: 'Saldo', format: 'currency' }, { key: 'installmentsRemaining', label: 'Cuotas restantes', format: 'number' },
+      { key: 'installmentAmount', label: 'Valor de cuota', format: 'currency' }, { key: 'paymentWindow', label: 'Ventana de pago' },
+      { key: 'notes', label: 'Observaciones' },
+    ],
+  },
+  {
     key: 'expenses', group: 'Finanzas', title: 'Gastos', description: 'Costos por fecha efectiva, categoría, salón y evento.', permission: Permission.REPORTS_EXPENSES_READ,
     columns: [
       { key: 'date', label: 'Fecha', format: 'date' }, { key: 'description', label: 'Concepto' }, { key: 'category', label: 'Categoría', format: 'status' },
@@ -122,6 +133,18 @@ function ensureReportAccess(request: Request, key: string) {
 
 function range(period: ReturnType<typeof parseReportPeriod>) {
   return { $gte: period.from, $lt: period.toExclusive };
+}
+
+const paymentWindowFormatter = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+function formatPaymentWindow(start: unknown, end: unknown): string {
+  const endDate = end ? new Date(String(end)) : undefined;
+  if (!endDate || Number.isNaN(endDate.getTime())) return 'Sin fecha definida';
+  const startDate = start ? new Date(String(start)) : undefined;
+  if (startDate && !Number.isNaN(startDate.getTime()) && startDate.toDateString() !== endDate.toDateString()) {
+    return `Del ${paymentWindowFormatter.format(startDate)} al ${paymentWindowFormatter.format(endDate)}`;
+  }
+  return `Vence el ${paymentWindowFormatter.format(endDate)}`;
 }
 
 async function leadsReport(request: Request, definition: ReportDefinition, exportAll: boolean) {
@@ -317,6 +340,86 @@ async function paymentsReport(request: Request, definition: ReportDefinition, ex
   };
 }
 
+async function paymentControlReport(request: Request, definition: ReportDefinition, exportAll: boolean) {
+  const period = parseReportPeriod(request.query);
+  const scope = resolveReportScope(request);
+  const { page, limit, skip } = pagination(request, exportAll);
+  const search = String(request.query.search || '').trim();
+  const emptyResult = { columns: definition.columns, rows: [], summary: [
+    { id: 'clients', label: 'Clientes con vencimiento', value: 0, format: 'number' },
+    { id: 'dueAmount', label: 'A cobrar en el período', value: 0, format: 'currency' },
+    { id: 'balance', label: 'Saldo pendiente total', value: 0, format: 'currency' },
+  ], breakdowns: {}, meta: commonMeta(definition, request, 0, page, limit, 'dueDate') };
+
+  let searchedContractIds: any[] | undefined;
+  if (search) {
+    const regex = new RegExp(escapeRegex(search), 'i');
+    const matches = await Contract.find({ deletedAt: null, ...scope.match(), $or: [{ contractNumber: regex }, { 'customerSnapshot.fullName': regex }] }).select('_id').lean();
+    searchedContractIds = matches.map((item: any) => item._id);
+    if (!searchedContractIds.length) return emptyResult;
+  }
+
+  const paymentMatch: any = { deletedAt: null, status: 'pending', affectsContractBalance: true, contractId: searchedContractIds ? { $in: searchedContractIds } : { $ne: null }, dueDate: range(period), ...scope.match() };
+  const grouped = await Payment.aggregate([
+    { $match: paymentMatch },
+    { $sort: { dueDate: 1 } },
+    { $group: { _id: '$contractId', dueCount: { $sum: 1 }, nextDueDate: { $first: '$dueDate' }, nextAmount: { $first: '$amount' }, nextNotes: { $first: '$notes' }, nextPlanInstallmentId: { $first: '$planInstallmentId' } } },
+  ]);
+  if (!grouped.length) return emptyResult;
+
+  const contractIds = grouped.map((item: any) => item._id).filter(Boolean);
+  const [contracts, remainingAgg] = await Promise.all([
+    Contract.find({ _id: { $in: contractIds }, deletedAt: null })
+      .populate('customerId', 'fullName').populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name')
+      .select('contractNumber customerId eventId salonId totalAmount paidAmount balanceAmount paymentPlanSnapshot observations').lean(),
+    Payment.aggregate([
+      { $match: { deletedAt: null, status: 'pending', affectsContractBalance: true, contractId: { $in: contractIds } } },
+      { $group: { _id: '$contractId', remaining: { $sum: 1 } } },
+    ]),
+  ]);
+  const contractMap = new Map(contracts.map((item: any) => [item._id.toString(), item]));
+  const remainingMap = new Map(remainingAgg.map((item: any) => [item._id.toString(), item.remaining]));
+
+  const sortField = ['totalAmount', 'balanceAmount', 'installmentAmount'].includes(String(request.query.sortBy)) ? String(request.query.sortBy) : 'dueDate';
+  const sortOrder = request.query.sortOrder === 'desc' ? -1 : 1;
+
+  const rows = grouped.map((item: any) => {
+    const contract: any = contractMap.get(item._id?.toString());
+    if (!contract) return undefined;
+    const installment = Array.isArray(contract.paymentPlanSnapshot) ? contract.paymentPlanSnapshot.find((plan: any) => plan?.id && String(plan.id) === String(item.nextPlanInstallmentId)) : undefined;
+    return {
+      id: contract._id.toString(), href: `/admin/contracts/${contract._id}`,
+      number: contract.contractNumber, customer: entityName(contract.customerId), event: entityName(contract.eventId, 'Sin evento'),
+      eventDate: contract.eventId?.eventDate, salon: entityName(contract.salonId, 'Sin salón'),
+      totalAmount: contract.totalAmount ?? 0, paidAmount: contract.paidAmount ?? 0, balanceAmount: contract.balanceAmount ?? 0,
+      installmentsRemaining: remainingMap.get(item._id?.toString()) ?? item.dueCount,
+      installmentAmount: item.nextAmount ?? 0,
+      paymentWindow: formatPaymentWindow(installment?.paymentWindowStart, installment?.paymentWindowEnd ?? item.nextDueDate),
+      notes: installment?.notes || item.nextNotes || contract.observations || 'Sin observaciones',
+      dueDate: item.nextDueDate,
+    };
+  }).filter(Boolean) as any[];
+  rows.sort((a: any, b: any) => {
+    const left = sortField === 'dueDate' ? new Date(a.dueDate ?? 0).getTime() : Number(a[sortField] ?? 0);
+    const right = sortField === 'dueDate' ? new Date(b.dueDate ?? 0).getTime() : Number(b[sortField] ?? 0);
+    return (left - right) * sortOrder;
+  });
+
+  const totalItems = rows.length;
+  const pageRows = exportAll ? rows : rows.slice(skip, skip + limit);
+  return {
+    columns: definition.columns,
+    rows: pageRows,
+    summary: [
+      { id: 'clients', label: 'Clientes con vencimiento', value: totalItems, format: 'number' },
+      { id: 'dueAmount', label: 'A cobrar en el período', value: rows.reduce((sum, row) => sum + Number(row.installmentAmount || 0), 0), format: 'currency' },
+      { id: 'balance', label: 'Saldo pendiente total', value: rows.reduce((sum, row) => sum + Number(row.balanceAmount || 0), 0), format: 'currency' },
+    ],
+    breakdowns: {},
+    meta: commonMeta(definition, request, totalItems, page, limit, 'dueDate'),
+  };
+}
+
 async function expensesReport(request: Request, definition: ReportDefinition, exportAll: boolean) {
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
@@ -365,6 +468,7 @@ export async function getReport(request: Request, key: string, exportAll = false
   if (key === 'events') return eventsReport(request, definition, exportAll);
   if (key === 'contracts') return contractsReport(request, definition, exportAll);
   if (key === 'payments') return paymentsReport(request, definition, exportAll);
+  if (key === 'payment-control') return paymentControlReport(request, definition, exportAll);
   if (key === 'expenses') return expensesReport(request, definition, exportAll);
   throw new ApiError(404, 'REPORT_NOT_FOUND');
 }

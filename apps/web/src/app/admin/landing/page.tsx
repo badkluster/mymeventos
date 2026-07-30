@@ -9,6 +9,7 @@ import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
 import { CloudinaryUpload } from '@/components/cloudinary-upload';
 import { api } from '@/lib/api';
+import { cloudinaryImageUrl } from '@/lib/public-landing';
 
 type LandingSettings = Record<string, string | boolean | undefined>;
 type LandingItem = Record<string, string | number | boolean | string[] | undefined> & { _id?: string; title?: string; active?: boolean; displayOrder?: number };
@@ -145,8 +146,9 @@ function VideoUploadField({ label = 'Video', value, onChange }: { label?: string
       </div>
     </div>
     {value ? <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 bg-black">
-      <video src={value} controls className="h-36 w-full object-contain" />
+      <video src={cloudinaryImageUrl(value)} controls className="h-36 w-full object-contain" />
       <p className="truncate bg-white px-3 py-2 text-xs text-zinc-500">{value}</p>
+      <p className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-400">Formatos como .mov (HEVC) pueden no reproducirse en todos los navegadores; si esta previsualización no se ve, subí el video como .mp4 (H.264) o .webm.</p>
     </div> : <p className="mt-3 rounded-xl border border-dashed border-zinc-300 px-3 py-4 text-sm text-zinc-500">Sin video cargado.</p>}
   </div>;
 }

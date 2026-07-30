@@ -11,6 +11,9 @@ const sectionNames: Record<string, string> = {
   savory: 'Producción salada', sweet: 'Producción dulce', beverages: 'Bebidas', cake: 'Tortas',
   bakery: 'Panadería', kitchen: 'Cocina', bar: 'Barra', miscellaneous: 'Otros',
 };
+const sectionOrderByType: Record<string, number> = {
+  savory: 0, sweet: 1, beverages: 2, cake: 3, bakery: 4, kitchen: 5, bar: 6, miscellaneous: 7,
+};
 
 export function normalizeProductName(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('es-AR').replace(/\s+/g, ' ');
@@ -283,21 +286,79 @@ export async function refreshPlanStatus(planId: string) {
 }
 
 export async function consolidatedProduction(_request: Request, from: Date, to: Date, salonMatch: Record<string, unknown>) {
-  const plans: any[] = await ProductionPlan.find({ deletedAt: null, isCurrent: true, ...salonMatch, eventDate: { $gte: from, $lt: to }, status: { $nin: ['cancelled'] } }).select('_id').lean();
+  const plans: any[] = await ProductionPlan.find({ deletedAt: null, isCurrent: true, ...salonMatch, eventDate: { $gte: from, $lt: to }, status: { $nin: ['cancelled'] } })
+    .select('_id eventId eventDate customerId')
+    .populate('eventId', 'eventName eventType')
+    .populate('customerId', 'fullName')
+    .sort({ eventDate: 1 })
+    .lean();
   const planIds = plans.map((plan) => plan._id);
-  const rows: any[] = await ProductionItem.aggregate([
-    { $match: { deletedAt: null, productionPlanId: { $in: planIds }, status: { $ne: 'cancelled' } } },
-    { $group: { _id: { productId: '$productId', name: '$normalizedProductName', unit: '$unit' }, productName: { $first: '$productNameSnapshot' }, plannedQuantity: { $sum: '$plannedQuantity' }, completedQuantity: { $sum: '$completedQuantity' }, events: { $addToSet: '$productionPlanId' }, pendingItems: { $sum: { $cond: [{ $in: ['$status', ['pending', 'in_progress', 'blocked']] }, 1, 0] } } } },
-    { $sort: { productName: 1 } },
-  ]);
-  const productIds = rows.map((row) => row._id.productId).filter(Boolean);
+  const planById = new Map(plans.map((plan) => [plan._id.toString(), plan]));
+
+  const sections: any[] = await ProductionSection.find({ productionPlanId: { $in: planIds }, deletedAt: null }).select('productionPlanId type').lean();
+  const sectionTypeById = new Map(sections.map((section) => [section._id.toString(), section.type]));
+
+  const items: any[] = await ProductionItem.find({ deletedAt: null, productionPlanId: { $in: planIds }, status: { $ne: 'cancelled' } })
+    .select('productId normalizedProductName productNameSnapshot unit plannedQuantity completedQuantity status productionPlanId sectionId')
+    .lean();
+
+  type EventBreakdown = { planId: string; eventId?: string; eventName?: string; eventType?: string; customerName?: string; eventDate: Date; plannedQuantity: number; completedQuantity: number };
+  type Bucket = {
+    sectionType: string; productId?: string; productName: string; unit: string;
+    plannedQuantity: number; completedQuantity: number; pendingItems: number;
+    planIds: Set<string>; byEvent: Map<string, EventBreakdown>;
+  };
+  const buckets = new Map<string, Bucket>();
+
+  for (const item of items) {
+    const sectionType = sectionTypeById.get(item.sectionId?.toString()) || 'miscellaneous';
+    const key = `${sectionType}|${item.productId ? item.productId.toString() : normalizeProductName(item.normalizedProductName)}|${item.unit}`;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = { sectionType, productId: item.productId?.toString(), productName: item.productNameSnapshot, unit: item.unit, plannedQuantity: 0, completedQuantity: 0, pendingItems: 0, planIds: new Set(), byEvent: new Map() };
+      buckets.set(key, bucket);
+    }
+    bucket.plannedQuantity += item.plannedQuantity;
+    bucket.completedQuantity += item.completedQuantity;
+    if (['pending', 'in_progress', 'blocked'].includes(item.status)) bucket.pendingItems += 1;
+    const planId = item.productionPlanId.toString();
+    bucket.planIds.add(planId);
+    const plan = planById.get(planId);
+    const eventBreakdown = bucket.byEvent.get(planId) ?? {
+      planId, eventId: plan?.eventId?._id?.toString(), eventName: plan?.eventId?.eventName, eventType: plan?.eventId?.eventType,
+      customerName: plan?.customerId?.fullName, eventDate: plan?.eventDate, plannedQuantity: 0, completedQuantity: 0,
+    };
+    eventBreakdown.plannedQuantity += item.plannedQuantity;
+    eventBreakdown.completedQuantity += item.completedQuantity;
+    bucket.byEvent.set(planId, eventBreakdown);
+  }
+
+  const productIds = [...buckets.values()].map((bucket) => bucket.productId).filter(Boolean);
   const inventory: any[] = await InventoryItem.aggregate([
     { $match: { deletedAt: null, active: true, catalogItemId: { $in: productIds }, ...salonMatch } },
     { $group: { _id: '$catalogItemId', available: { $sum: { $max: [0, { $subtract: ['$currentQuantity', '$reservedQuantity'] }] } } } },
   ]);
   const inventoryMap = new Map(inventory.map((item) => [item._id.toString(), item.available]));
-  return rows.map((row) => {
-    const available = row._id.productId ? Number(inventoryMap.get(row._id.productId.toString()) ?? 0) : 0;
-    return { productId: row._id.productId, productName: row.productName, unit: row._id.unit, plannedQuantity: row.plannedQuantity, completedQuantity: row.completedQuantity, eventCount: row.events.length, pendingItems: row.pendingItems, availableQuantity: available, missingQuantity: Math.max(0, row.plannedQuantity - available), toBuyQuantity: Math.max(0, row.plannedQuantity - available), toProduceQuantity: Math.max(0, row.plannedQuantity - row.completedQuantity) };
+
+  const rows = [...buckets.values()].map((bucket) => {
+    const available = bucket.productId ? Number(inventoryMap.get(bucket.productId) ?? 0) : 0;
+    return {
+      sectionType: bucket.sectionType, productId: bucket.productId, productName: bucket.productName, unit: bucket.unit,
+      plannedQuantity: bucket.plannedQuantity, completedQuantity: bucket.completedQuantity, eventCount: bucket.planIds.size, pendingItems: bucket.pendingItems,
+      availableQuantity: available, missingQuantity: Math.max(0, bucket.plannedQuantity - available), toBuyQuantity: Math.max(0, bucket.plannedQuantity - available),
+      toProduceQuantity: Math.max(0, bucket.plannedQuantity - bucket.completedQuantity),
+      byEvent: [...bucket.byEvent.values()].sort((left, right) => new Date(left.eventDate).getTime() - new Date(right.eventDate).getTime()),
+    };
   });
+
+  const sectionsOut = [...new Set(rows.map((row) => row.sectionType))]
+    .sort((left, right) => (sectionOrderByType[left] ?? 99) - (sectionOrderByType[right] ?? 99))
+    .map((type) => {
+      const sectionRows = rows.filter((row) => row.sectionType === type).sort((left, right) => left.productName.localeCompare(right.productName, 'es'));
+      const events = [...new Map(sectionRows.flatMap((row) => row.byEvent).map((event) => [event.planId, event])).values()]
+        .sort((left, right) => new Date(left.eventDate).getTime() - new Date(right.eventDate).getTime());
+      return { type, name: sectionNames[type] ?? 'Otros', events, items: sectionRows };
+    });
+
+  return { sections: sectionsOut, flat: rows };
 }

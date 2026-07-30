@@ -110,7 +110,10 @@ async function upsertDevice(userId: string, device: z.infer<typeof deviceFields>
   );
 }
 
-router.post('/login', validateRequest(loginSchema), asyncHandler(async (request, response) => {
+// Limits password guesses per IP without coupling legitimate mobile sessions to a
+// device identifier (which is client-controlled). This mirrors the protection on
+// the public password-recovery routes while leaving token refreshes unaffected.
+router.post('/login', publicRateLimit({ windowMs: 15 * 60_000, max: 10 }), validateRequest(loginSchema), asyncHandler(async (request, response) => {
   const identifier = normalizeUserEmail(request.body.username) ?? request.body.username.trim().toLowerCase();
   const user: any = await User.findOne({ deletedAt: null, $or: [{ username: identifier }, { normalizedEmail: identifier }] }).select('+passwordHash');
   const credentialsValid = user?.passwordHash ? await verifyPassword(request.body.password, user.passwordHash) : false;

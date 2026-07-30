@@ -9,7 +9,7 @@ import { sendSuccess } from '../../utils/api';
 import { ApiError } from '../../middlewares/errorHandler';
 import { writeAuditLog } from '../audit/audit.service';
 import { Contract, Event, Payment } from '../crm/crm.models';
-import { Expense, ExpenseAllocation, ExpenseCategory } from '../operations/operations.models';
+import { Expense, ExpenseAllocation, ExpenseCategory, Supplier } from '../operations/operations.models';
 import { parseReportPeriod, resolveReportScope } from '../reporting/report-filter';
 
 const router = Router();
@@ -136,6 +136,60 @@ router.delete('/:id', requirePermission(Permission.EXPENSES_DELETE), validateReq
   await ExpenseAllocation.updateMany({ expenseId: expense._id, deletedAt: null }, { deletedAt: new Date(), deletedBy: request.user!.id, updatedBy: request.user!.id });
   await writeAuditLog(request, 'EXPENSE_DELETE', 'Expense', expense._id.toString(), { amount: expense.amount });
   return sendSuccess(response, { deleted: true });
+}));
+
+router.get('/by-supplier', requirePermission(Permission.EXPENSES_VIEW), asyncHandler(async (request, response) => {
+  const period = parseReportPeriod(request.query);
+  const scope = resolveReportScope(request);
+  const match: any = { deletedAt: null, ...scope.match(), date: { $gte: period.from, $lt: period.toExclusive }, status: { $ne: ExpenseStatus.CANCELLED } };
+  if (request.query.categoryId) match.categoryId = String(request.query.categoryId);
+  const groups: any[] = await Expense.aggregate([
+    { $match: match },
+    { $group: {
+      _id: '$supplierId',
+      initialEstimatedAmount: { $sum: '$initialEstimatedAmount' },
+      finalAmount: { $sum: '$finalAmount' },
+      additionalAmount: { $sum: '$additionalAmount' },
+      taxAmount: { $sum: '$taxAmount' },
+      amount: { $sum: '$amount' },
+      paidAmount: { $sum: { $cond: [{ $eq: ['$status', ExpenseStatus.PAID] }, '$amount', 0] } },
+      pendingAmount: { $sum: { $cond: [{ $eq: ['$status', ExpenseStatus.PENDING] }, '$amount', 0] } },
+      expenseCount: { $sum: 1 },
+    } },
+  ]);
+  const supplierIds = groups.map((group) => group._id).filter(Boolean);
+  const suppliers = await Supplier.find({ _id: { $in: supplierIds } }).select('name businessName category').lean();
+  const supplierMap = new Map(suppliers.map((supplier: any) => [supplier._id.toString(), supplier]));
+  const rows = groups.map((group) => {
+    const supplier: any = group._id ? supplierMap.get(group._id.toString()) : undefined;
+    return {
+      supplierId: group._id ? group._id.toString() : null,
+      supplierName: supplier?.name || 'Sin proveedor asignado',
+      supplierBusinessName: supplier?.businessName || null,
+      supplierCategory: supplier?.category || null,
+      initialEstimatedAmount: group.initialEstimatedAmount,
+      finalAmount: group.finalAmount,
+      additionalAmount: group.additionalAmount,
+      taxAmount: group.taxAmount,
+      amount: group.amount,
+      deviation: Number(group.finalAmount || 0) - Number(group.initialEstimatedAmount || 0),
+      paidAmount: group.paidAmount,
+      pendingAmount: group.pendingAmount,
+      expenseCount: group.expenseCount,
+    };
+  }).sort((a, b) => b.amount - a.amount);
+  const summary = rows.reduce((result, row) => ({
+    initialEstimatedAmount: result.initialEstimatedAmount + row.initialEstimatedAmount,
+    finalAmount: result.finalAmount + row.finalAmount,
+    additionalAmount: result.additionalAmount + row.additionalAmount,
+    taxAmount: result.taxAmount + row.taxAmount,
+    amount: result.amount + row.amount,
+    deviation: result.deviation + row.deviation,
+    paidAmount: result.paidAmount + row.paidAmount,
+    pendingAmount: result.pendingAmount + row.pendingAmount,
+    expenseCount: result.expenseCount + row.expenseCount,
+  }), { initialEstimatedAmount: 0, finalAmount: 0, additionalAmount: 0, taxAmount: 0, amount: 0, deviation: 0, paidAmount: 0, pendingAmount: 0, expenseCount: 0 });
+  return sendSuccess(response, { items: rows, summary, period: { from: period.fromDate, to: period.toDate } });
 }));
 
 router.get('/profitability/events', requirePermission(Permission.REPORTS_PROFITABILITY_READ), asyncHandler(async (request, response) => {

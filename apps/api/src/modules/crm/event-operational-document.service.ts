@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
 
-export type OperationalDocumentType = 'timeline' | 'logistics' | 'guest_list';
+export type OperationalDocumentType = 'timeline' | 'logistics' | 'guest_list' | 'tableware';
 
 const page = { width: 595.28, height: 841.89, left: 42, right: 553, bottom: 790 };
 const color = { ink: '#101827', gold: '#b8965a', cream: '#fbf8f1', card: '#f4f6f8', muted: '#667085', line: '#dfe3e8', white: '#ffffff' };
@@ -31,12 +31,12 @@ function date(value?: Date | string): string {
 }
 
 function documentTitle(type: OperationalDocumentType): string {
-  return type === 'timeline' ? 'Cronograma operativo' : type === 'guest_list' ? 'Control de mesas y puerta' : 'Logística y coordinación interna';
+  return type === 'timeline' ? 'Cronograma operativo' : type === 'guest_list' ? 'Control de mesas y puerta' : type === 'tableware' ? 'Reserva de vajilla' : 'Logística y coordinación interna';
 }
 
 function fileStem(event: any, type: OperationalDocumentType): string {
   const source = String(event.eventName || event.eventType || 'evento').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/(^-|-$)/g, '').toLowerCase() || 'evento';
-  const prefix = type === 'timeline' ? 'cronograma' : type === 'guest_list' ? 'control-ingreso-mesas' : 'logistica';
+  const prefix = type === 'timeline' ? 'cronograma' : type === 'guest_list' ? 'control-ingreso-mesas' : type === 'tableware' ? 'reserva-vajilla' : 'logistica';
   return `${prefix}-${source}`;
 }
 
@@ -302,6 +302,45 @@ function logistics(document: PDFKit.PDFDocument, event: any): void {
   });
 }
 
+const tablewareColumns = [
+  { label: 'Artículo', x: page.left + 12, width: 168 },
+  { label: 'Categoría', x: page.left + 184, width: 100 },
+  { label: 'Cantidad', x: page.left + 288, width: 55 },
+  { label: 'Unidad', x: page.left + 347, width: 65 },
+  { label: 'Notas', x: page.left + 416, width: 95 }
+];
+
+function tablewareTable(document: PDFKit.PDFDocument, event: any, rows: any[]): void {
+  const drawHeader = () => {
+    ensure(document, event, 'tableware', 25);
+    const y = document.y;
+    document.roundedRect(page.left, y, page.right - page.left, 22, 5).fill(color.ink);
+    tablewareColumns.forEach((column) => document.font('Helvetica-Bold').fontSize(6.7).fillColor(color.white).text(column.label.toUpperCase(), column.x, y + 8, { width: column.width, ellipsis: true }));
+    document.y = y + 27;
+  };
+  drawHeader();
+  rows.forEach((row, index) => {
+    if (document.y + 22 > page.bottom - 30) { document.addPage(); header(document, event, 'tableware'); document.y = 103; drawHeader(); }
+    const y = document.y;
+    document.roundedRect(page.left, y, page.right - page.left, 20, 4).fill(index % 2 ? color.cream : color.card);
+    const values = [text(row.itemName), text(row.category, '—'), String(row.quantity ?? '—'), text(row.unit, '—'), text(row.notes, '—')];
+    tablewareColumns.forEach((column, columnIndex) => document.font(columnIndex === 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(8).fillColor(color.ink).text(values[columnIndex], column.x, y + 6, { width: column.width, height: 14, ellipsis: true }));
+    document.y = y + 24;
+  });
+}
+
+function tableware(document: PDFKit.PDFDocument, event: any): void {
+  const allocations = Array.isArray(event.tablewareAllocations) ? event.tablewareAllocations : [];
+  const salonRows = allocations.filter((item: any) => item.source === 'salon_stock');
+  const externalRows = allocations.filter((item: any) => item.source === 'external');
+  section(document, event, 'tableware', 'Vajilla del salón', `${salonRows.length} artículo${salonRows.length === 1 ? '' : 's'}`);
+  if (salonRows.length) tablewareTable(document, event, salonRows);
+  else { document.roundedRect(page.left, document.y, page.right - page.left, 45, 8).fill(color.cream); document.font('Helvetica').fontSize(9).fillColor(color.muted).text('No se reservó vajilla del stock propio del salón para este evento.', page.left + 15, document.y + 17); document.y += 55; }
+  section(document, event, 'tableware', 'Vajilla adicional / externa', `${externalRows.length} artículo${externalRows.length === 1 ? '' : 's'}`);
+  if (externalRows.length) tablewareTable(document, event, externalRows);
+  else { document.roundedRect(page.left, document.y, page.right - page.left, 45, 8).fill(color.cream); document.font('Helvetica').fontSize(9).fillColor(color.muted).text('No se cargó vajilla adicional o externa para este evento.', page.left + 15, document.y + 17); document.y += 55; }
+}
+
 export async function generateOperationalPdf(event: any, type: OperationalDocumentType): Promise<{ buffer: Buffer; fileName: string }> {
   const document = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true, info: { Title: `${documentTitle(type)} · ${text(event.eventName || event.eventType, 'Evento')}`, Author: 'M&M Eventos', Subject: documentTitle(type) } });
   header(document, event, type);
@@ -310,6 +349,7 @@ export async function generateOperationalPdf(event: any, type: OperationalDocume
   else {
     eventDetails(document, event, type);
     if (type === 'timeline') { timeline(document, event); guestList(document, event); }
+    else if (type === 'tableware') tableware(document, event);
     else logistics(document, event);
   }
   const pages = document.bufferedPageRange();
@@ -331,6 +371,18 @@ function guestListWordHtml(event: any): string {
     ...(guests.some((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) ? [{ title: 'Sin mesa asignada', capacity: undefined, notes: '', guests: guests.filter((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) }] : [])
   ];
   return `<h2>Invitados y mesas</h2><p class="staff-hint">${guests.length} invitado${guests.length === 1 ? '' : 's'} cargado${guests.length === 1 ? '' : 's'} para la operación.</p>${entries.map((entry: any) => `<section class="note"><h3>${escapeHtml(`${entry.title}${entry.audience ? ` · ${entry.audience}` : ''}${entry.capacity ? ` · ${entry.guests.length}/${entry.capacity}` : ` · ${entry.guests.length}`}`)}</h3>${entry.notes ? `<small>${escapeHtml(entry.notes)}</small>` : ''}${entry.guests.length ? `<ul class="guest-items">${entry.guests.map((guest: any) => { const detail = [guestAgeGroupLabels[guest.ageGroup] ?? '', text(guest.meal, ''), dietaryPreferenceLabels[guest.dietaryPreference] ?? '', text(guest.notes, '')].filter(Boolean).join(' · '); return `<li><b>${escapeHtml(guest.fullName)}</b>${detail ? ` <span>· ${escapeHtml(detail)}</span>` : ''}</li>`; }).join('')}</ul>` : '<p>Sin invitados asignados.</p>'}</section>`).join('')}`;
+}
+
+function tablewareRowsWordHtml(rows: any[], emptyText: string): string {
+  if (!rows.length) return `<p class="empty">${escapeHtml(emptyText)}</p>`;
+  return `<table><thead><tr><th>Artículo</th><th>Categoría</th><th>Cantidad</th><th>Unidad</th><th>Notas</th></tr></thead><tbody>${rows.map((row: any) => `<tr><td><b>${escapeHtml(text(row.itemName))}</b></td><td>${escapeHtml(text(row.category, '—'))}</td><td>${escapeHtml(String(row.quantity ?? '—'))}</td><td>${escapeHtml(text(row.unit, '—'))}</td><td>${escapeHtml(text(row.notes, '—'))}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function tablewareWordHtml(event: any): string {
+  const allocations = Array.isArray(event.tablewareAllocations) ? event.tablewareAllocations : [];
+  const salonRows = allocations.filter((item: any) => item.source === 'salon_stock');
+  const externalRows = allocations.filter((item: any) => item.source === 'external');
+  return `<h2>Vajilla del salón</h2>${tablewareRowsWordHtml(salonRows, 'No se reservó vajilla del stock propio del salón para este evento.')}<h2>Vajilla adicional / externa</h2>${tablewareRowsWordHtml(externalRows, 'No se cargó vajilla adicional o externa para este evento.')}`;
 }
 
 function guestEntryControlWordHtml(event: any): string {
@@ -360,6 +412,8 @@ export function generateOperationalWord(event: any, type: OperationalDocumentTyp
     })()
     : type === 'guest_list'
       ? guestEntryControlWordHtml(event)
+      : type === 'tableware'
+      ? tablewareWordHtml(event)
       : (() => {
       const logistics = event.resourcePlanSnapshot?.logistics ?? {};
       const entries = logisticSections.filter(([, key]) => text(logistics[key], '') !== '');

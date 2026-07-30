@@ -120,7 +120,7 @@ El evento guarda:
 - `POST /api/events/:id/operational-documents/:documentType/export`
 - `POST /api/events/:id/operational-documents/:documentType/email`
 
-`documentType` admite `timeline`, `logistics` y `guest_list`. El último genera un control de ingreso por mesa, con casilla de verificación para cada invitado y sus observaciones operativas.
+`documentType` admite `timeline`, `logistics`, `guest_list` y `tableware`. `guest_list` genera un control de ingreso por mesa, con casilla de verificación para cada invitado y sus observaciones operativas. `tableware` (agregado 2026-07-29) genera la reserva de vajilla del evento: vajilla propia del salón asignada vía `EventTablewareAllocation` (`source: 'salon_stock'`) y vajilla adicional/externa (`source: 'external'`), en dos tablas separadas — no depende de `resourcePlanSnapshot.inventoryItems` (que mezcla vajilla reservada con ítems de mantelería/equipos cargados a mano).
 
 Endpoints públicos de invitados:
 

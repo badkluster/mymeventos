@@ -26,7 +26,7 @@ vi.mock('../src/modules/salons/salon.model', () => ({
   Salon: { find: mocks.salonFind, findOne: mocks.salonFindOne, findOneAndUpdate: mocks.salonFindOneAndUpdate, exists: mocks.salonExists, create: vi.fn() }
 }));
 vi.mock('../src/modules/salons/salonStockItem.model', () => ({
-  salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'],
+  salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'LINENS', 'CLEANING', 'MINOR_EQUIPMENT', 'MISCELLANEOUS'],
   SalonStockItem: { find: mocks.stockFind, create: mocks.stockCreate, findOneAndUpdate: mocks.stockFindOneAndUpdate }
 }));
 vi.mock('../src/modules/crm/crm.models', () => ({

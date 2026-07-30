@@ -94,6 +94,37 @@ body { background: var(--background); color: var(--foreground); font-family: Ari
 .dark [data-admin-shell] select,
 .dark [data-admin-shell] textarea { color-scheme: dark; }
 
+/* Dashboard data-viz tokens: fixed categorical/ordinal/status roles, not decorative. */
+.mym-dashboard {
+  --chart-blue: #2a78d6;
+  --chart-orange: #eb6834;
+  --chart-aqua: #1baf7a;
+  --chart-line-muted: #c3c2b7;
+  --chart-good: #0ca30c;
+  --chart-warning: #fab219;
+  --chart-serious: #ec835a;
+  --chart-critical: #d03b3b;
+  --chart-ordinal-1: #86b6ef;
+  --chart-ordinal-2: #5598e7;
+  --chart-ordinal-3: #2a78d6;
+  --chart-ordinal-4: #1c5cab;
+  --chart-ordinal-5: #104281;
+}
+.dark .mym-dashboard {
+  --chart-blue: #3987e5;
+  --chart-orange: #d95926;
+  --chart-aqua: #199e70;
+  --chart-line-muted: #4b4c53;
+  --chart-ordinal-1: #9ec5f4;
+  --chart-ordinal-2: #6da7ec;
+  --chart-ordinal-3: #3987e5;
+  --chart-ordinal-4: #256abf;
+  --chart-ordinal-5: #184f95;
+}
+
+@keyframes mym-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.mym-dashboard .mym-rise { animation: mym-rise .45s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
 button:not(:disabled),
 [role="button"]:not([aria-disabled="true"]),
 a[href],

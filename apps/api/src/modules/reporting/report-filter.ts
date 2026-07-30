@@ -28,7 +28,7 @@ function dateAtArgentinaMidnight(value: string): Date {
   return new Date(`${value}T03:00:00.000Z`);
 }
 
-function addDays(value: string, days: number): string {
+export function addDays(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
