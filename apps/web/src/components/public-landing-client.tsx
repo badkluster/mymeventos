@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { FormEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, type Variants } from 'framer-motion';
+import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, type Variants } from 'framer-motion';
 import { ArrowRight, Baby, BriefcaseBusiness, CakeSlice, CalendarDays, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Crown, ExternalLink, Gift, GlassWater, GraduationCap, Heart, LogIn, MapPin, Menu, MessageCircle, Music, PackageCheck, PartyPopper, Send, Sparkles, Star, Utensils, Users, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { brandAssets } from '@/lib/brand-assets';
@@ -19,9 +19,9 @@ type SalonManager = { _id?: string; firstName?: string; lastName?: string; fullN
 type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; province?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; manager?: SalonManager; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
 type Package = { _id: string; name: string; salonId?: string; salonName?: string; description?: string; notes?: string; durationHours?: number; startTime?: string; endTime?: string; pricingMode?: 'per_person' | 'fixed'; pricePerPerson?: number; finalPricePerPerson?: number; fixedPrice?: number; finalFixedPrice?: number; depositAmount?: number; paymentTerms?: string; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
 type LandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
-type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
-type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[] };
-const emptyLanding: LandingPayload = { salons: [], packages: [], promotions: [], gallery: [], testimonials: [], faqs: [], serviceBlocks: [], eventTypes: [] };
+type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroVideoUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
+type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[]; storySteps: LandingItem[] };
+const emptyLanding: LandingPayload = { salons: [], packages: [], promotions: [], gallery: [], testimonials: [], faqs: [], serviceBlocks: [], eventTypes: [], storySteps: [] };
 
 const fallbackHero = 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1800&q=80';
 const fallbackGallery = [
@@ -46,6 +46,12 @@ const fallbackEventTypes = [
   { title: 'Empresariales', icon: 'BriefcaseBusiness' },
   { title: 'Infantiles', icon: 'Baby' },
 ].map((item) => ({ ...item, description: 'Propuestas a medida para celebrar sin preocuparte.' }));
+const fallbackStorySteps = [
+  { title: 'Nos contás tu idea', description: 'Escuchamos lo que soñás para tu evento.', imageUrl: '/images/story/step-1.jpg' },
+  { title: 'Te asesoramos', description: 'Te guiamos para elegir salón, menú y servicios.', imageUrl: '/images/story/step-2.jpg' },
+  { title: 'Armamos tu propuesta', description: 'Diseñamos una propuesta clara y personalizada.', imageUrl: '/images/story/step-3.jpg' },
+  { title: 'Reservás tu fecha', description: 'Confirmás y asegurás tu fecha.', imageUrl: '/images/story/step-4.jpg' },
+];
 const fallbackFaqs = [
   { question: '¿Con cuánta anticipación debo reservar?', answer: 'Recomendamos consultar cuanto antes para asegurar disponibilidad y congelar condiciones comerciales.' },
   { question: '¿Puedo visitar el salón antes del evento?', answer: 'Sí, coordinamos una visita para que conozcas el espacio y revisemos tu idea en detalle.' },
@@ -267,9 +273,9 @@ const imageRevealVariants: Variants = {
   hidden: { opacity: 0, scale: 1.05 },
   visible: { opacity: 1, scale: 1, transition: { duration: 0.45, ease: smoothEase } },
 };
+const displayFont = { fontFamily: 'var(--font-display)' } as const;
 const ctaFocusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8cdd3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]';
 
-const numberPop = (index: number): Variants => ({ hidden: { scale: 0.9 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.03 } } });
 const underlineGrow = (delayBase: number, index: number, delayStep: number): Variants => ({ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.3, delay: delayBase + index * delayStep, ease: smoothEase } } });
 const iconPop = (index: number): Variants => ({ hidden: { scale: 0.92, rotate: -4 }, visible: { scale: 1, rotate: 0, transition: { ...softSpring, delay: index * 0.025 } } });
 const badgePop = (index: number): Variants => ({ hidden: { scale: 0.92 }, visible: { scale: 1, transition: { ...softSpring, delay: index * 0.02 } } });
@@ -284,10 +290,12 @@ function AnimatedGrid({ children, className }: { children: React.ReactNode; clas
   return <motion.div className={className} variants={listVariants}>{children}</motion.div>;
 }
 
-function SectionTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
+function SectionTitle({ eyebrow, title, subtitle, display }: { eyebrow: string; title: string; subtitle?: string; display?: boolean }) {
   return <motion.div className="mx-auto mb-10 max-w-3xl text-center md:mb-12" variants={titleVariants}>
-    <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#dbe1e8]">{eyebrow}</p>
-    <h2 className="mt-4 text-3xl font-semibold text-white md:text-5xl">{title}</h2>
+    <p className={`text-xs font-semibold uppercase tracking-[0.42em] ${display ? 'text-[#dcdcdf]' : 'text-[#dbe1e8]'}`}>{eyebrow}</p>
+    {display
+      ? <h2 style={displayFont} className="mt-4 text-3xl font-medium italic text-white md:text-5xl">{title}</h2>
+      : <h2 className="mt-4 text-3xl font-semibold text-white md:text-5xl">{title}</h2>}
     {subtitle ? <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-zinc-300 md:text-lg">{subtitle}</p> : null}
   </motion.div>;
 }
@@ -610,11 +618,46 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
   const [packagesRevealed, setPackagesRevealed] = useState(false);
   const mobileMenuRef = useRef<HTMLElement | null>(null);
   const socialPanelRef = useRef<HTMLElement | null>(null);
+  const heroRef = useRef<HTMLElement | null>(null);
+  const [storyStep, setStoryStep] = useState(0);
+  const storyRowRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   const { scrollY } = useScroll();
   useMotionValueEvent(scrollY, 'change', (latest) => setScrolled(latest > 24));
+  const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const heroImageScale = useTransform(heroProgress, [0, 1], [1, 1.18]);
+  const heroImageY = useTransform(heroProgress, [0, 1], ['0%', '14%']);
   useDialogA11y(mobileOpen, () => setMobileOpen(false), mobileMenuRef);
   useDialogA11y(Boolean(socialNetwork), () => setSocialNetwork(null), socialPanelRef);
+
+  // Picks whichever step row's center sits closest to the viewport center on every scroll
+  // position, instead of reacting to a narrow "entered the viewport" crossing — a fast
+  // scroll/fling can skip a thin trigger band entirely, silently jumping over a step.
+  useEffect(() => {
+    let frame = 0;
+    const evaluate = () => {
+      frame = 0;
+      const center = window.innerHeight / 2;
+      let closestIndex = 0;
+      let closestDistance = Infinity;
+      storyRowRefs.current.forEach((row, index) => {
+        if (!row) return;
+        const rect = row.getBoundingClientRect();
+        const distance = Math.abs(rect.top + rect.height / 2 - center);
+        if (distance < closestDistance) { closestDistance = distance; closestIndex = index; }
+      });
+      setStoryStep(closestIndex);
+    };
+    const onScroll = () => { if (!frame) frame = window.requestAnimationFrame(evaluate); };
+    evaluate();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
 
   useEffect(() => {
     if (initialLanding) return;
@@ -647,6 +690,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
   const heroImage = cloudinaryImageUrl(settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' }), 1920);
   const serviceBlocks = landing.serviceBlocks.length ? landing.serviceBlocks : fallbackServices;
   const eventTypes = landing.eventTypes.length ? landing.eventTypes : fallbackEventTypes;
+  const storySteps: LandingItem[] = landing.storySteps.length ? landing.storySteps : fallbackStorySteps;
   const faqs: LandingItem[] = landing.faqs.length ? landing.faqs : fallbackFaqs;
   const gallery: LandingItem[] = landing.gallery.length ? landing.gallery.map((item) => ({ ...item, imageUrl: item.imageUrl ? cloudinaryImageUrl(item.imageUrl) : item.imageUrl })) : fallbackGallery.map((imageUrl, index) => ({ title: `Momento M&M ${index + 1}`, imageUrl, category: 'Momentos' }));
   const packages = useMemo(() => landing.packages.length ? landing.packages : salons.flatMap((salon) => (salon.packages ?? []).map((item) => ({ ...item, salonName: titleForSalon(salon) }))), [landing.packages, salons]);
@@ -780,35 +824,69 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
       </div></Portal> : null}
     </header>
 
-    <section id="inicio" data-analytics-section="hero" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
-      <motion.img src={heroImage} alt="Salón M&M preparado para evento" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover will-change-transform" initial={shouldReduceMotion ? false : { opacity: 0.7, scale: 1.09 }} animate={shouldReduceMotion ? undefined : { opacity: 1, scale: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(5,5,5,1),rgba(5,5,5,.08)_38%,rgba(5,5,5,.64))]" />
-      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen [animation:hero-sheen_16s_ease-in-out_infinite] bg-[radial-gradient(55%_55%_at_25%_15%,rgba(200,205,211,.18),transparent_60%)]" />
+    <section ref={heroRef as React.RefObject<HTMLElement>} id="inicio" data-analytics-section="hero" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
+      {settings.heroVideoUrl
+        ? <motion.video src={settings.heroVideoUrl} poster={heroImage} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover will-change-transform" style={shouldReduceMotion ? undefined : { scale: heroImageScale, y: heroImageY }} initial={shouldReduceMotion ? false : { opacity: 0.7 }} animate={shouldReduceMotion ? undefined : { opacity: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />
+        : <motion.img src={heroImage} alt="Salón M&M preparado para evento" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover will-change-transform" style={shouldReduceMotion ? undefined : { scale: heroImageScale, y: heroImageY }} initial={shouldReduceMotion ? false : { opacity: 0.7 }} animate={shouldReduceMotion ? undefined : { opacity: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />}
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(7,7,7,1),rgba(7,7,7,.08)_38%,rgba(7,7,7,.64))]" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen [animation:hero-sheen_16s_ease-in-out_infinite] bg-[radial-gradient(55%_55%_at_25%_15%,rgba(229,229,231,.18),transparent_60%)]" />
+      <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
       <div className="relative mx-auto grid min-h-[calc(92vh-5rem)] max-w-7xl content-center px-4 py-12 md:min-h-[calc(92vh-6rem)] md:px-8 md:py-16">
         <motion.div initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : 'visible'} variants={listVariants} className="min-w-0 max-w-3xl">
-          <motion.p variants={cardVariants} className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f1f5f9] sm:text-xs sm:tracking-[0.42em]">M&M Eventos</motion.p>
+          <motion.p variants={cardVariants} className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f2f2f4] sm:text-xs sm:tracking-[0.42em]">M&M Eventos</motion.p>
           <motion.h1 variants={cardVariants} className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</motion.h1>
           <motion.p variants={cardVariants} className="mt-6 max-w-xl text-sm leading-7 text-zinc-200 sm:text-base md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</motion.p>
-          <motion.div variants={cardVariants} className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><motion.button type="button" onClick={() => scrollTo('contacto')} whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.02 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_0_rgba(200,205,211,0)] transition hover:bg-[#e5e7eb] hover:shadow-[0_8px_30px_rgba(200,205,211,.25)] sm:px-6 ${ctaFocusRing}`}>{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button><motion.button type="button" onClick={() => scrollTo('salones')} whileHover={shouldReduceMotion ? undefined : { y: -3 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#c8cdd3] hover:text-[#f1f5f9] sm:px-6 ${ctaFocusRing}`}>{settings.heroSecondaryCtaLabel || 'Ver salones'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button></motion.div>
-          <motion.div variants={listVariants} className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => setSelectedSalon(salon)} whileHover={shouldReduceMotion ? undefined : { y: -2, borderColor: 'rgba(200,205,211,.8)' }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#c8cdd3]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f1f5f9]" /><span className="truncate">{heroLocationForSalon(salon)}</span></motion.button>)}</motion.div>
+          <motion.div variants={cardVariants} className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><motion.button type="button" onClick={() => scrollTo('contacto')} whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.02 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg bg-[#e5e5e7] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_0_rgba(200,205,211,0)] transition hover:bg-[#f4f4f5] hover:shadow-[0_8px_30px_rgba(200,205,211,.25)] sm:px-6 ${ctaFocusRing}`}>{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button><motion.button type="button" onClick={() => scrollTo('salones')} whileHover={shouldReduceMotion ? undefined : { y: -3 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#e5e5e7] hover:text-[#f2f2f4] sm:px-6 ${ctaFocusRing}`}>{settings.heroSecondaryCtaLabel || 'Ver salones'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button></motion.div>
+          <motion.div variants={listVariants} className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => setSelectedSalon(salon)} whileHover={shouldReduceMotion ? undefined : { y: -2, borderColor: 'rgba(200,205,211,.8)' }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#e5e5e7]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#e5e5e7] hover:bg-[#e5e5e7]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f2f2f4]" /><span className="truncate">{heroLocationForSalon(salon)}</span></motion.button>)}</motion.div>
         </motion.div>
       </div>
-      <motion.button type="button" onClick={() => scrollTo('salones')} aria-label="Ver más contenido" initial={shouldReduceMotion ? false : { opacity: 0 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: [0, 8, 0] }} transition={shouldReduceMotion ? undefined : { opacity: { delay: 0.6, duration: 0.4 }, y: { delay: 1, duration: 1.8, repeat: Infinity, ease: 'easeInOut' } }} className={`absolute bottom-6 left-1/2 hidden -translate-x-1/2 rounded-full border border-white/20 bg-black/30 p-2 text-white backdrop-blur transition hover:border-[#c8cdd3] hover:text-[#c8cdd3] md:grid ${ctaFocusRing}`}>
+      <motion.button type="button" onClick={() => scrollTo('salones')} aria-label="Ver más contenido" initial={shouldReduceMotion ? false : { opacity: 0 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: [0, 8, 0] }} transition={shouldReduceMotion ? undefined : { opacity: { delay: 0.6, duration: 0.4 }, y: { delay: 1, duration: 1.8, repeat: Infinity, ease: 'easeInOut' } }} className={`absolute bottom-6 left-1/2 hidden -translate-x-1/2 rounded-full border border-white/20 bg-black/30 p-2 text-white backdrop-blur transition hover:border-[#e5e5e7] hover:text-[#e5e5e7] md:grid ${ctaFocusRing}`}>
         <ChevronDown className="h-5 w-5" />
       </motion.button>
     </section>
 
     <AnimatedSection id="salones" data-analytics-section="salons" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
-      <SectionTitle eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones totalmente equipados, listos para llevar adelante tu evento" />
-      <AnimatedGrid className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.01 }} transition={softSpring} className="group flex h-full min-h-[470px] flex-col overflow-hidden rounded-2xl border border-[#c8cdd3]/25 bg-[#10100f] shadow-2xl shadow-black/30">
-        <motion.div variants={imageRevealVariants} className="relative h-56 shrink-0 overflow-hidden"><img src={cloudinaryImageUrl(imageForSalon(salon), 900)} alt={titleForSalon(salon)} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025]" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /></motion.div>
-        <div className="flex flex-1 flex-col p-5"><h3 className="truncate text-xl font-semibold" title={titleForSalon(salon)}>{titleForSalon(salon)}</h3><div className="mt-3 grid min-h-9 grid-cols-2 gap-3 text-sm text-zinc-200"><span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={locationForSalon(salon)}>{heroLocationForSalon(salon)}</span></span><span className="inline-flex min-w-0 items-center gap-1"><Users className="h-3.5 w-3.5 shrink-0 text-[#dbe1e8]" /><span className="truncate" title={capacityForSalon(salon)}>{capacityForSalon(salon)}</span></span></div><p className="mt-4 line-clamp-2 min-h-12 text-base leading-7 text-zinc-300">{descriptionForSalon(salon)}</p><div className="mt-auto grid grid-cols-2 gap-2 pt-6"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold transition hover:border-[#c8cdd3]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#c8cdd3] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto</button></div></div>
+      <SectionTitle display eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones totalmente equipados, listos para llevar adelante tu evento" />
+      <AnimatedGrid className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -6 }} transition={softSpring} className="group relative flex h-[58vh] min-h-[420px] flex-col justify-end overflow-hidden rounded-2xl border border-white/10">
+        <img src={cloudinaryImageUrl(imageForSalon(salon), 900)} alt={titleForSalon(salon)} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+        <div className="relative p-6">
+          <h3 style={displayFont} className="text-2xl font-medium italic text-white">{titleForSalon(salon)}</h3>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-200"><span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#dcdcdf]" />{heroLocationForSalon(salon)}</span><span className="inline-flex min-w-0 items-center gap-1.5"><Users className="h-3.5 w-3.5 shrink-0 text-[#dcdcdf]" />{capacityForSalon(salon)}</span></div>
+          <p className="mt-3 line-clamp-2 text-sm leading-6 text-zinc-300">{descriptionForSalon(salon)}</p>
+          <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/25 px-3 py-2.5 text-sm font-semibold text-white transition hover:border-[#e5e5e7]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#e5e5e7] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#f4f4f5]">Pedir presupuesto</button></div>
+        </div>
       </motion.article>)}</AnimatedGrid>
     </AnimatedSection>
 
-    <AnimatedSection className="border-y border-[#c8cdd3]/15 bg-[#0b0b0c] px-5 py-12 md:px-8">
-      <AnimatedGrid className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">{['Nos contás tu idea', 'Te asesoramos', 'Armamos tu propuesta', 'Reservás tu fecha'].map((step, index) => <motion.div key={step} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className="relative flex items-center gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] p-5"><motion.span className="text-3xl font-semibold text-[#dbe1e8]" variants={numberPop(index)}>{index + 1}</motion.span><div><h3 className="text-base font-semibold">{step}</h3><p className="mt-1 text-sm leading-6 text-zinc-300">{['Escuchamos lo que soñás para tu evento.', 'Te guiamos para elegir salón, menú y servicios.', 'Diseñamos una propuesta clara y personalizada.', 'Confirmás y asegurás tu fecha.'][index]}</p></div><motion.span aria-hidden className="absolute inset-x-0 bottom-0 h-px origin-left bg-gradient-to-r from-transparent via-[#c8cdd3]/60 to-transparent" variants={underlineGrow(0.08, index, 0.04)} /></motion.div>)}</AnimatedGrid>
-    </AnimatedSection>
+    <section data-analytics-section="story" className="relative border-y border-white/10 bg-[#050505] px-5 py-20 md:px-8 md:py-28">
+      <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
+      <div className="relative mx-auto grid max-w-7xl gap-12 md:grid-cols-2 md:items-start md:gap-16">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#dcdcdf]">Cómo trabajamos</p>
+          <h2 style={displayFont} className="mt-4 text-3xl font-medium italic text-white md:text-5xl">De la idea a la fiesta</h2>
+          <div className="mt-10 space-y-0">{storySteps.map((step, index) => {
+            const active = index === storyStep;
+            const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
+            return <div key={step._id || step.title || index} ref={(el) => { storyRowRefs.current[index] = el; }} className={`border-l-2 py-6 pl-5 transition-colors duration-300 ${active ? 'border-white/70' : 'border-white/10'}`}>
+              <div className="flex items-baseline gap-3">
+                <span className={`text-xl font-semibold transition-colors duration-300 ${active ? 'text-white' : 'text-white/25'}`}>{String(index + 1).padStart(2, '0')}</span>
+                <h3 className={`text-lg font-semibold transition-colors duration-300 ${active ? 'text-white' : 'text-white/45'}`}>{step.title}</h3>
+              </div>
+              <p className={`mt-1 pl-9 text-sm leading-6 transition-colors duration-300 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{step.description}</p>
+              <div className="mt-4 overflow-hidden rounded-xl md:hidden"><img src={cloudinaryImageUrl(stepImage, 700)} alt="" loading="lazy" decoding="async" className="h-48 w-full object-cover" /></div>
+            </div>;
+          })}</div>
+        </div>
+        <div className="relative hidden aspect-[4/5] overflow-hidden rounded-2xl border border-white/15 md:sticky md:top-28 md:block">
+          {storySteps.map((step, index) => {
+            const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
+            return <img key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 900)} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-opacity duration-700" style={{ opacity: index === storyStep ? 1 : 0 }} />;
+          })}
+          <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+        </div>
+      </div>
+    </section>
 
     <AnimatedSection id="paquetes" data-analytics-section="packages" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24" variants={sectionVariantsSync} onViewportEnter={() => setPackagesRevealed(true)}>
       <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, descubrilos." />
@@ -947,6 +1025,22 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Landi
             </motion.article>;
           })}
         </AnimatedGrid>
+      </div>
+    </AnimatedSection>
+
+    <AnimatedSection data-analytics-section="closing-cta" className="relative flex min-h-[70vh] items-center overflow-hidden px-5 py-24 md:px-8">
+      <motion.img variants={imageRevealVariants} src={cloudinaryImageUrl(gallery[2]?.imageUrl || gallery[0]?.imageUrl || heroImage, 1800)} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+      <div aria-hidden className="absolute inset-0 bg-[linear-gradient(0deg,rgba(7,7,7,.96),rgba(7,7,7,.72)_55%,rgba(7,7,7,.4))]" />
+      <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
+      <div className="relative mx-auto max-w-3xl text-center">
+        <motion.p variants={cardVariants} className="text-xs font-semibold uppercase tracking-[0.42em] text-[#dcdcdf]">M&M Eventos</motion.p>
+        <motion.h2 variants={cardVariants} style={displayFont} className="mt-5 text-balance text-4xl font-medium italic leading-[1.08] text-white md:text-6xl">Tu evento merece un lugar así de memorable.</motion.h2>
+        <motion.p variants={cardVariants} className="mx-auto mt-6 max-w-xl text-base leading-7 text-zinc-300 md:text-lg">Contanos tu fecha y armamos, sin cargo, una propuesta a tu medida.</motion.p>
+        <motion.div variants={cardVariants} className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <button type="button" onClick={() => scrollTo('contacto')} className={`inline-flex items-center justify-center gap-2 rounded-lg bg-[#e5e5e7] px-6 py-3.5 text-sm font-semibold text-black transition hover:bg-[#f4f4f5] ${ctaFocusRing}`}>Pedir presupuesto <ArrowRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => scrollTo('ubicaciones')} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-[#e5e5e7] hover:text-[#f2f2f4] ${ctaFocusRing}`}>Ver disponibilidad <MapPin className="h-4 w-4" /></button>
+        </motion.div>
+        <motion.button variants={cardVariants} type="button" onClick={() => setSocialNetwork('whatsapp')} className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-zinc-300 transition hover:text-white"><WhatsAppIcon className="h-4 w-4" />O escribinos directamente por WhatsApp</motion.button>
       </div>
     </AnimatedSection>
 

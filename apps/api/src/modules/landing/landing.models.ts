@@ -14,6 +14,7 @@ const landingSettingsSchema = new Schema({
   heroTitle: { type: String, default: 'Tu evento, en el lugar que siempre soñaste' },
   heroSubtitle: { type: String, default: 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.' },
   heroImageUrl: String,
+  heroVideoUrl: String,
   heroPrimaryCtaLabel: { type: String, default: 'Solicitá presupuesto' },
   heroSecondaryCtaLabel: { type: String, default: 'Ver salones' },
   whatsappNumber: String,
@@ -92,6 +93,13 @@ const eventTypeSchema = new Schema({
   ...base,
 }, { timestamps: true });
 
+const storyStepSchema = new Schema({
+  title: { type: String, required: true, trim: true },
+  description: String,
+  imageUrl: String,
+  ...base,
+}, { timestamps: true });
+
 export const LandingSettings = models.LandingSettings || model('LandingSettings', landingSettingsSchema);
 export const LandingPromotion = models.LandingPromotion || model('LandingPromotion', promotionSchema);
 export const LandingGalleryItem = models.LandingGalleryItem || model('LandingGalleryItem', galleryItemSchema);
@@ -99,3 +107,4 @@ export const LandingTestimonial = models.LandingTestimonial || model('LandingTes
 export const LandingFaq = models.LandingFaq || model('LandingFaq', faqSchema);
 export const LandingServiceBlock = models.LandingServiceBlock || model('LandingServiceBlock', serviceBlockSchema);
 export const LandingEventType = models.LandingEventType || model('LandingEventType', eventTypeSchema);
+export const LandingStoryStep = models.LandingStoryStep || model('LandingStoryStep', storyStepSchema);

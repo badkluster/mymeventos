@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Event, PackageTemplate, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
-import { LandingEventType, LandingFaq, LandingGalleryItem, LandingPromotion, LandingServiceBlock, LandingSettings, LandingTestimonial } from '../landing/landing.models';
+import { LandingEventType, LandingFaq, LandingGalleryItem, LandingPromotion, LandingServiceBlock, LandingSettings, LandingStoryStep, LandingTestimonial } from '../landing/landing.models';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
@@ -127,7 +127,7 @@ function activeNowQuery() {
 }
 
 router.get('/landing', asyncHandler(async (_request, response) => {
-  const [settings, salons, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes] = await Promise.all([
+  const [settings, salons, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes, storySteps] = await Promise.all([
     LandingSettings.findOne({ key: 'default', active: true, deletedAt: null }).lean(),
     publicSalons(),
     LandingPromotion.find({ ...activeNowQuery(), visibleOnHome: true }).sort({ displayOrder: 1, createdAt: -1 }).limit(8).lean(),
@@ -136,9 +136,10 @@ router.get('/landing', asyncHandler(async (_request, response) => {
     LandingFaq.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).lean(),
     LandingServiceBlock.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
     LandingEventType.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
+    LandingStoryStep.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
   ]);
   const packages = salons.flatMap((salon: any) => (salon.packages ?? []).map((item: any) => ({ ...item, salonId: salon._id, salonName: salon.publicTitle || salon.name })));
-  return sendSuccess(response, { settings, salons, packages, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes });
+  return sendSuccess(response, { settings, salons, packages, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes, storySteps });
 }));
 
 router.get('/salons', asyncHandler(async (_request, response) => {

@@ -58,7 +58,7 @@ export type PublicSalon = {
   packages?: PublicPackage[];
 };
 export type PublicLanding = {
-  settings?: { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
+  settings?: { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroVideoUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
   salons: PublicSalon[];
   packages: PublicPackage[];
   promotions: PublicLandingItem[];
@@ -67,6 +67,7 @@ export type PublicLanding = {
   faqs: PublicLandingItem[];
   serviceBlocks: PublicLandingItem[];
   eventTypes: PublicLandingItem[];
+  storySteps: PublicLandingItem[];
 };
 
 type ApiEnvelope<T> = { success: boolean; data?: T };

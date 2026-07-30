@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { Fraunces } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from '@/components/theme-provider';
 import { brandAssets } from '@/lib/brand-assets';
 import { AnalyticsTracker } from '@/components/analytics-tracker';
+
+const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-display', style: ['normal', 'italic'] });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mymeventos-api-ashy.vercel.app';
 
@@ -29,7 +32,7 @@ export default function RootLayout({
     <html
       lang="es"
       suppressHydrationWarning
-      className="h-full antialiased"
+      className={`h-full antialiased ${fraunces.variable}`}
     >
       <body className="min-h-full flex flex-col"><ThemeProvider>{children}<AnalyticsTracker /></ThemeProvider></body>
     </html>

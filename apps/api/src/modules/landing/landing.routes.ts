@@ -8,6 +8,7 @@ import {
   LandingPromotion,
   LandingServiceBlock,
   LandingSettings,
+  LandingStoryStep,
   LandingTestimonial,
 } from './landing.models';
 import { requireAuth, requirePermission } from '../../middlewares/auth';
@@ -24,6 +25,7 @@ const settingsBody = z.object({
   heroTitle: z.string().trim().min(2).optional(),
   heroSubtitle: z.string().trim().optional(),
   heroImageUrl: z.string().trim().optional().or(z.literal('')),
+  heroVideoUrl: z.string().trim().optional().or(z.literal('')),
   heroPrimaryCtaLabel: z.string().trim().optional(),
   heroSecondaryCtaLabel: z.string().trim().optional(),
   whatsappNumber: z.string().trim().optional().or(z.literal('')),
@@ -108,6 +110,14 @@ const eventTypeBody = z.object({
   displayOrder: z.coerce.number().optional(),
 });
 
+const storyStepBody = z.object({
+  title: z.string().trim().min(2),
+  description: z.string().trim().optional(),
+  imageUrl: z.string().trim().optional().or(z.literal('')),
+  active: z.boolean().optional(),
+  displayOrder: z.coerce.number().optional(),
+});
+
 const resources = {
   promotions: { model: LandingPromotion, body: promotionBody, entity: 'LandingPromotion' },
   gallery: { model: LandingGalleryItem, body: galleryBody, entity: 'LandingGalleryItem' },
@@ -115,6 +125,7 @@ const resources = {
   faqs: { model: LandingFaq, body: faqBody, entity: 'LandingFaq' },
   services: { model: LandingServiceBlock, body: serviceBody, entity: 'LandingServiceBlock' },
   'event-types': { model: LandingEventType, body: eventTypeBody, entity: 'LandingEventType' },
+  'story-steps': { model: LandingStoryStep, body: storyStepBody, entity: 'LandingStoryStep' },
 } as const;
 
 type ResourceName = keyof typeof resources;
@@ -146,7 +157,7 @@ router.use(requireAuth);
 router.use(requirePermission(Permission.LANDING_READ));
 
 router.get('/', asyncHandler(async (_request, response) => {
-  const [settings, promotions, gallery, testimonials, faqs, services, eventTypes] = await Promise.all([
+  const [settings, promotions, gallery, testimonials, faqs, services, eventTypes, storySteps] = await Promise.all([
     LandingSettings.findOne({ key: 'default', deletedAt: null }).lean(),
     LandingPromotion.find({ deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).lean(),
     LandingGalleryItem.find({ deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).lean(),
@@ -154,8 +165,9 @@ router.get('/', asyncHandler(async (_request, response) => {
     LandingFaq.find({ deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).lean(),
     LandingServiceBlock.find({ deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).lean(),
     LandingEventType.find({ deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).lean(),
+    LandingStoryStep.find({ deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).lean(),
   ]);
-  return sendSuccess(response, { settings, promotions, gallery, testimonials, faqs, services, eventTypes });
+  return sendSuccess(response, { settings, promotions, gallery, testimonials, faqs, services, eventTypes, storySteps });
 }));
 
 router.patch('/settings', requirePermission(Permission.LANDING_UPDATE), validateRequest(z.object({ body: settingsBody, params: z.object({}), query: z.object({}) })), asyncHandler(async (request, response) => {

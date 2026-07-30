@@ -12,9 +12,9 @@ import { api } from '@/lib/api';
 
 type LandingSettings = Record<string, string | boolean | undefined>;
 type LandingItem = Record<string, string | number | boolean | string[] | undefined> & { _id?: string; title?: string; active?: boolean; displayOrder?: number };
-type LandingData = { settings?: LandingSettings; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; services: LandingItem[]; eventTypes: LandingItem[] };
-type ResourceKey = 'promotions' | 'gallery' | 'testimonials' | 'faqs' | 'services' | 'event-types';
-type LandingDataCollectionKey = Exclude<ResourceKey, 'event-types'> | 'eventTypes';
+type LandingData = { settings?: LandingSettings; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; faqs: LandingItem[]; services: LandingItem[]; eventTypes: LandingItem[]; storySteps: LandingItem[] };
+type ResourceKey = 'promotions' | 'gallery' | 'testimonials' | 'faqs' | 'services' | 'event-types' | 'story-steps';
+type LandingDataCollectionKey = Exclude<ResourceKey, 'event-types' | 'story-steps'> | 'eventTypes' | 'storySteps';
 
 const tabs: Array<{ key: ResourceKey | 'settings'; label: string }> = [
   { key: 'settings', label: 'Hero' },
@@ -24,6 +24,7 @@ const tabs: Array<{ key: ResourceKey | 'settings'; label: string }> = [
   { key: 'testimonials', label: 'Testimonios' },
   { key: 'services', label: 'Servicios' },
   { key: 'event-types', label: 'Tipos de evento' },
+  { key: 'story-steps', label: 'Cómo trabajamos' },
 ];
 
 const resourceTitles: Record<ResourceKey, string> = {
@@ -33,6 +34,7 @@ const resourceTitles: Record<ResourceKey, string> = {
   faqs: 'pregunta frecuente',
   services: 'servicio',
   'event-types': 'tipo de evento',
+  'story-steps': 'paso de "Cómo trabajamos"',
 };
 
 const emptyForms: Record<ResourceKey, LandingItem> = {
@@ -42,12 +44,13 @@ const emptyForms: Record<ResourceKey, LandingItem> = {
   faqs: { question: '', answer: '', category: '', active: true, displayOrder: 0 },
   services: { title: '', description: '', icon: 'Sparkles', section: 'services', active: true, displayOrder: 0 },
   'event-types': { title: '', description: '', icon: 'Sparkles', imageUrl: '', active: true, displayOrder: 0 },
+  'story-steps': { title: '', description: '', imageUrl: '', active: true, displayOrder: 0 },
 };
 
 const settingsSections: Array<{
   title: string;
   description: string;
-  fields: Array<{ key: string; label: string; helper?: string; type?: 'text' | 'textarea' | 'image'; span?: boolean }>;
+  fields: Array<{ key: string; label: string; helper?: string; type?: 'text' | 'textarea' | 'image' | 'video'; span?: boolean }>;
 }> = [
   {
     title: 'Contenido principal',
@@ -58,6 +61,7 @@ const settingsSections: Array<{
       { key: 'heroPrimaryCtaLabel', label: 'Botón principal' },
       { key: 'heroSecondaryCtaLabel', label: 'Botón secundario' },
       { key: 'heroImageUrl', label: 'Imagen principal', helper: 'Imagen de fondo del hero.', type: 'image', span: true },
+      { key: 'heroVideoUrl', label: 'Video de fondo (opcional)', helper: 'Si se carga un video, reemplaza a la imagen como fondo del hero.', type: 'video', span: true },
     ],
   },
   {
@@ -91,7 +95,9 @@ function itemImage(item: LandingItem) {
 }
 
 function dataKeyFor(tab: ResourceKey): LandingDataCollectionKey {
-  return tab === 'event-types' ? 'eventTypes' : tab;
+  if (tab === 'event-types') return 'eventTypes';
+  if (tab === 'story-steps') return 'storySteps';
+  return tab;
 }
 
 const clearableItemFields = new Set(['imageUrl']);
@@ -126,10 +132,29 @@ function ImageUploadField({ label = 'Imagen', value, required, onChange }: { lab
   </div>;
 }
 
+function VideoUploadField({ label = 'Video', value, onChange }: { label?: string; value?: string; onChange: (value: string) => void }) {
+  return <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className="text-sm font-medium text-zinc-800">{label}</p>
+        <p className="mt-1 text-xs text-zinc-500">Subí el video a Cloudinary para usarlo en la landing.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <CloudinaryUpload context="general" accept="video/*" label={value ? 'Cambiar video' : 'Subir video'} onUploaded={(asset) => onChange(asset.secureUrl || asset.url)} />
+        {value ? <Button type="button" variant="danger" onClick={() => onChange('')}><Trash2 className="mr-2 h-4 w-4" />Quitar video</Button> : null}
+      </div>
+    </div>
+    {value ? <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 bg-black">
+      <video src={value} controls className="h-36 w-full object-contain" />
+      <p className="truncate bg-white px-3 py-2 text-xs text-zinc-500">{value}</p>
+    </div> : <p className="mt-3 rounded-xl border border-dashed border-zinc-300 px-3 py-4 text-sm text-zinc-500">Sin video cargado.</p>}
+  </div>;
+}
+
 export default function LandingAdminPage() {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<ResourceKey | 'settings'>('settings');
-  const [data, setData] = useState<LandingData>({ promotions: [], gallery: [], testimonials: [], faqs: [], services: [], eventTypes: [] });
+  const [data, setData] = useState<LandingData>({ promotions: [], gallery: [], testimonials: [], faqs: [], services: [], eventTypes: [], storySteps: [] });
   const [settings, setSettings] = useState<LandingSettings>({});
   const [editing, setEditing] = useState<LandingItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -263,6 +288,12 @@ export default function LandingAdminPage() {
       <NumberField label="Orden de aparición" placeholder="Ej.: 1" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
       <Textarea placeholder="Descripción" value={String(form.description ?? '')} onChange={(event) => set('description', event.target.value)} />
     </>;
+    if (tab === 'story-steps') return <>
+      <Input required placeholder="Título del paso" value={String(form.title ?? '')} onChange={(event) => set('title', event.target.value)} />
+      <NumberField label="Orden de aparición" placeholder="Ej.: 1" value={Number(form.displayOrder ?? 0)} onChange={(event) => set('displayOrder', event.target.value)} />
+      <Textarea placeholder="Descripción" value={String(form.description ?? '')} onChange={(event) => set('description', event.target.value)} />
+      <div className="md:col-span-2"><ImageUploadField label="Imagen del paso" value={String(form.imageUrl ?? '')} onChange={(value) => set('imageUrl', value)} /></div>
+    </>;
     return <>
       <Input required placeholder="Título" value={String(form.title ?? '')} onChange={(event) => set('title', event.target.value)} />
       <Textarea placeholder="Descripción" value={String(form.description ?? '')} onChange={(event) => set('description', event.target.value)} />
@@ -299,6 +330,7 @@ export default function LandingAdminPage() {
             const value = String(settings[field.key] ?? '');
             const className = field.span ? 'md:col-span-2' : '';
             if (field.type === 'image') return <div key={field.key} className={className}><ImageUploadField label={field.label} value={value} onChange={(nextValue) => setSettings((current) => ({ ...current, [field.key]: nextValue }))} />{field.helper ? <p className="mt-2 text-xs text-zinc-500">{field.helper}</p> : null}</div>;
+            if (field.type === 'video') return <div key={field.key} className={className}><VideoUploadField label={field.label} value={value} onChange={(nextValue) => setSettings((current) => ({ ...current, [field.key]: nextValue }))} />{field.helper ? <p className="mt-2 text-xs text-zinc-500">{field.helper}</p> : null}</div>;
             return <label key={field.key} className={className}>
               <span className="text-sm font-medium text-zinc-800">{field.label}</span>
               {field.helper ? <span className="mt-1 block text-xs text-zinc-500">{field.helper}</span> : null}
