@@ -1,6 +1,8 @@
 {
   "name": "@mym/mobile",
   "version": "1.0.0",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -8,16 +10,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "eas:init": "npx --yes eas-cli@21.3.0 init",
-    "eas:configure": "npx --yes eas-cli@21.3.0 build:configure",
-    "build": "npx --yes eas-cli@21.3.0 build --platform android --profile apk",
-    "build:apk": "npx --yes eas-cli@21.3.0 build --platform android --profile apk",
-    "build:preview": "npx --yes eas-cli@21.3.0 build --platform android --profile preview",
-    "build:android:store": "npx --yes eas-cli@21.3.0 build --platform android --profile production",
-    "build:ios:store": "npx --yes eas-cli@21.3.0 build --platform ios --profile production",
-    "build:stores": "npx --yes eas-cli@21.3.0 build --platform all --profile production",
-    "submit:android": "npx --yes eas-cli@21.3.0 submit --platform android --profile production",
-    "submit:ios": "npx --yes eas-cli@21.3.0 submit --platform ios --profile production",
+    "build": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk.ps1",
+    "build:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-apk.ps1",
     "postinstall": "cd ../.. && pnpm --filter @mym/shared build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest"
@@ -58,6 +52,5 @@
     "jest-expo": "~57.0.2",
     "react-test-renderer": "19.2.3",
     "typescript": "^6.0.3"
-  },
-  "private": true
+  }
 }
