@@ -1,126 +1,83 @@
-# M&M Eventos Staff — builds móviles
+# M&M Eventos Staff — APK local
 
-La aplicación usa Expo SDK 57 y EAS Build. Los comandos de EAS deben ejecutarse desde `apps/mobile`, porque esta aplicación vive dentro de un monorepo PNPM.
+La aplicación móvil se compila directamente en Windows, sin EAS Build, sin login de Expo y sin subir el código a un servicio externo.
 
-## Preparación inicial
+## Requisitos locales
 
-Instalar las dependencias desde la raíz del repositorio:
+Antes del primer build deben estar instalados:
 
-```bash
+- Node.js y PNPM/Corepack.
+- Java JDK 17 o compatible con la versión de Android Gradle Plugin utilizada por Expo SDK 57.
+- Android Studio con Android SDK instalado.
+
+El script detecta automáticamente el SDK en `ANDROID_SDK_ROOT`, `ANDROID_HOME` o `%LOCALAPPDATA%\Android\Sdk`.
+
+## Instalar dependencias
+
+Desde la raíz del monorepo:
+
+```powershell
 corepack enable
 pnpm install
 ```
 
-Luego ingresar a la aplicación móvil e iniciar sesión en Expo:
-
-```bash
-cd apps/mobile
-npx eas-cli@21.3.0 login
-```
-
-En la primera ejecución, EAS solicitará crear o vincular el proyecto y agregará un `projectId` válido a la configuración Expo. También puede hacerse de forma explícita:
-
-```bash
-yarn eas:init
-```
-
-Cuando EAS pregunte por las credenciales Android, se recomienda permitir que Expo genere y administre el keystore remoto. Ese mismo keystore debe conservarse para todas las actualizaciones futuras publicadas con `com.mymeventos.staff`.
-
-## Generar una APK productiva instalable
+## Generar la APK
 
 Desde `apps/mobile`:
 
-```bash
+```powershell
 yarn build
 ```
 
-El comando usa el perfil `apk`, compila en EAS Cloud y devuelve un enlace para descargar una APK release firmada, instalable directamente en un teléfono Android.
+El comando realiza automáticamente:
 
-Comando equivalente:
+1. Compilación de `@mym/shared`.
+2. `expo prebuild --platform android --clean`.
+3. `gradlew app:assembleRelease`.
+4. Copia del resultado final a:
 
-```bash
-yarn build:apk
+```text
+apps/mobile/release/mym-eventos-staff.apk
 ```
 
-## Cambiar rápidamente la URL del backend
-
-Para APK, AAB e iOS, editar una sola propiedad en `apps/mobile/eas.json`:
-
-```json
-{
-  "build": {
-    "base": {
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://www.mymsalones.com.ar/api"
-      }
-    }
-  }
-}
-```
-
-Los perfiles `preview`, `apk` y `production` heredan esta URL. Debe incluir `/api`, no terminar en `/` y usar HTTPS para builds productivas.
-
-Para desarrollo local, copiar `.env.example` como `.env.local`:
-
-```bash
-cp .env.example .env.local
-```
-
-En Windows PowerShell:
+También puede ejecutarse desde la raíz:
 
 ```powershell
-Copy-Item .env.example .env.local
-```
-
-En un teléfono físico, reemplazar la URL local por la IP LAN de la computadora:
-
-```env
-EXPO_PUBLIC_API_URL=http://192.168.1.20:3001/api
-```
-
-## Builds para las tiendas
-
-Google Play requiere AAB, no APK:
-
-```bash
-yarn build:android:store
-```
-
-iOS / App Store Connect:
-
-```bash
-yarn build:ios:store
-```
-
-Ambas plataformas:
-
-```bash
-yarn build:stores
-```
-
-El perfil `production` usa incremento remoto automático de `versionCode` y `buildNumber` para que cada entrega sea aceptada como una versión nueva.
-
-## Envío a las tiendas
-
-Luego de configurar las credenciales de Google Play Console o App Store Connect:
-
-```bash
-yarn submit:android
-yarn submit:ios
-```
-
-Android queda configurado para subir inicialmente al track interno como borrador, evitando una publicación pública accidental.
-
-## Nota sobre Yarn y PNPM
-
-El monorepo está administrado por PNPM. `yarn build` es un alias solicitado para ejecutar la compilación móvil desde `apps/mobile`; no debe ejecutarse desde la raíz. Si Corepack impide usar Yarn porque detecta el gestor del monorepo, el comando nativo equivalente es:
-
-```bash
-pnpm run build
-```
-
-También puede iniciarse desde la raíz con:
-
-```bash
 pnpm build:mobile:apk
 ```
+
+## Cambiar rápidamente el backend
+
+Editar una sola línea:
+
+```text
+apps/mobile/.env.production
+```
+
+Ejemplo:
+
+```env
+EXPO_PUBLIC_API_URL=https://www.mymsalones.com.ar/api
+```
+
+La URL debe usar HTTPS y no terminar en `/`. Después de modificarla, volver a ejecutar:
+
+```powershell
+yarn build
+```
+
+También se puede sobrescribir solamente para una ejecución:
+
+```powershell
+yarn build -ApiUrl "https://otro-backend.example.com/api"
+```
+
+## Yarn dentro del monorepo
+
+La raíz continúa usando PNPM. `apps/mobile/package.json` declara Yarn de forma local para que Corepack permita ejecutar `yarn build` dentro de esa carpeta sin modificar el gestor del resto del proyecto.
+
+## Sobre la firma
+
+Esta APK release es autónoma e instalable directamente en un teléfono Android. El proyecto nativo generado por Expo utiliza la clave de desarrollo local para firmarla.
+
+Para publicar una versión definitiva en Google Play debe configurarse una upload key propia y generarse un AAB firmado. Esa credencial debe conservarse para todas las actualizaciones futuras de `com.mymeventos.staff`.
