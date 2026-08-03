@@ -719,7 +719,14 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       : packages.filter((item) => item.salonId === selectedPackageSalon._id || item.salonName === titleForSalon(selectedPackageSalon));
     return salonPackages;
   }, [packages, selectedPackageSalon]);
-  const contactPackages = useMemo(() => selectedSalonId ? packages.filter((item) => item.salonId === selectedSalonId || displaySalons.find((salon) => salon._id === selectedSalonId)?.packages?.some((salonPackage) => salonPackage._id === item._id)) : [], [displaySalons, packages, selectedSalonId]);
+  const contactPackages = useMemo(() => {
+    if (!selectedSalonId) return [];
+    const selectedSalon = displaySalons.find((salon) => salon._id === selectedSalonId);
+    const salonPackages = selectedSalon?.packages?.length
+      ? selectedSalon.packages
+      : packages.filter((item) => item.salonId === selectedSalonId);
+    return [...new Map(salonPackages.map((item) => [String(item._id), item])).values()];
+  }, [displaySalons, packages, selectedSalonId]);
   const heroSalons = useMemo(() => {
     const seen = new Set<string>();
     return displaySalons.filter((salon) => {
