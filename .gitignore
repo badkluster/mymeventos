@@ -17,6 +17,8 @@ build
 # misc
 .DS_Store
 *.pem
+*.jks
+*.keystore
 
 # debug
 npm-debug.log*
@@ -32,6 +34,9 @@ yarn-error.log*
 
 # expo
 .expo/
+/apps/mobile/android/
+/apps/mobile/ios/
+/apps/mobile/release/
 
 # typescript
 *.tsbuildinfo
