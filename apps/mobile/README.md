@@ -1,25 +1,16 @@
-# M&M Eventos Staff — APK local
+# M&M Eventos Staff - APK local
 
-La aplicación móvil se compila directamente en Windows, sin EAS Build, sin login de Expo y sin subir el código a un servicio externo.
+La aplicacion movil se compila directamente en Windows, sin EAS Build, sin login de Expo y sin subir el codigo a un servicio externo.
 
 ## Requisitos locales
 
 Antes del primer build deben estar instalados:
 
 - Node.js y PNPM/Corepack.
-- Java JDK 17 o compatible con la versión de Android Gradle Plugin utilizada por Expo SDK 57.
+- Java JDK 17 o compatible con Android Gradle Plugin.
 - Android Studio con Android SDK instalado.
 
-El script detecta automáticamente el SDK en `ANDROID_SDK_ROOT`, `ANDROID_HOME` o `%LOCALAPPDATA%\Android\Sdk`.
-
-## Instalar dependencias
-
-Desde la raíz del monorepo:
-
-```powershell
-corepack enable
-pnpm install
-```
+El script detecta automaticamente el SDK en `ANDROID_SDK_ROOT`, `ANDROID_HOME` o `%LOCALAPPDATA%\Android\Sdk`.
 
 ## Generar la APK
 
@@ -29,26 +20,53 @@ Desde `apps/mobile`:
 yarn build
 ```
 
-El comando realiza automáticamente:
+El comando realiza automaticamente:
 
-1. Compilación de `@mym/shared`.
-2. `expo prebuild --platform android --clean`.
-3. `gradlew app:assembleRelease`.
-4. Copia del resultado final a:
+1. Instala/verifica las dependencias PNPM con estructura hoisted.
+2. Compila `@mym/shared`.
+3. Ejecuta `expo prebuild --platform android --clean`.
+4. Ejecuta `gradlew app:assembleRelease`.
+5. Copia el resultado final a:
 
 ```text
 apps/mobile/release/mym-eventos-staff.apk
 ```
 
-También puede ejecutarse desde la raíz:
+Tambien puede ejecutarse desde la raiz:
 
 ```powershell
 pnpm build:mobile:apk
 ```
 
-## Cambiar rápidamente el backend
+## Solucion aplicada para Windows y PNPM
 
-Editar una sola línea:
+React Native, CMake y algunas dependencias nativas pueden superar el limite de longitud de rutas de Windows cuando PNPM usa su instalacion aislada dentro de una carpeta profunda.
+
+El proyecto utiliza `nodeLinker: hoisted` y el script monta temporalmente la raiz del repositorio en una letra de unidad corta mediante `subst`. La unidad se elimina automaticamente cuando termina el build, incluso si ocurre un error.
+
+Expo SDK 52+ configura Metro automaticamente para monorepos, por lo que `metro.config.js` no modifica manualmente `watchFolders` ni `nodeModulesPaths`.
+
+## Primer build despues de cambiar la estrategia PNPM
+
+El primer `yarn build` puede tardar mas porque PNPM debe reorganizar `node_modules`. Los siguientes builds reutilizan las dependencias instaladas.
+
+Si PNPM informa que `node_modules` fue creado con otra estrategia, ejecutar desde la raiz:
+
+```powershell
+Remove-Item node_modules -Recurse -Force
+pnpm install --frozen-lockfile
+```
+
+Luego volver a ejecutar:
+
+```powershell
+cd apps\mobile
+yarn build
+```
+
+## Cambiar rapidamente el backend
+
+Editar una sola linea:
 
 ```text
 apps/mobile/.env.production
@@ -60,24 +78,20 @@ Ejemplo:
 EXPO_PUBLIC_API_URL=https://www.mymsalones.com.ar/api
 ```
 
-La URL debe usar HTTPS y no terminar en `/`. Después de modificarla, volver a ejecutar:
+La URL debe usar HTTPS y no terminar en `/`. Despues de modificarla, volver a ejecutar:
 
 ```powershell
 yarn build
 ```
 
-También se puede sobrescribir solamente para una ejecución:
+Tambien se puede sobrescribir solamente para una ejecucion:
 
 ```powershell
 yarn build -ApiUrl "https://otro-backend.example.com/api"
 ```
 
-## Yarn dentro del monorepo
-
-La raíz continúa usando PNPM. `apps/mobile/package.json` declara Yarn de forma local para que Corepack permita ejecutar `yarn build` dentro de esa carpeta sin modificar el gestor del resto del proyecto.
-
 ## Sobre la firma
 
-Esta APK release es autónoma e instalable directamente en un teléfono Android. El proyecto nativo generado por Expo utiliza la clave de desarrollo local para firmarla.
+Esta APK release es autonoma e instalable directamente en un telefono Android. El proyecto nativo generado por Expo utiliza la clave de desarrollo local para firmarla.
 
-Para publicar una versión definitiva en Google Play debe configurarse una upload key propia y generarse un AAB firmado. Esa credencial debe conservarse para todas las actualizaciones futuras de `com.mymeventos.staff`.
+Para publicar una version definitiva en Google Play debe configurarse una upload key propia y generarse un AAB firmado. Esa credencial debe conservarse para todas las actualizaciones futuras de `com.mymeventos.staff`.
