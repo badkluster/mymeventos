@@ -135,12 +135,8 @@ if (Test-Path $PreferredApk) {
   $GeneratedApk = Get-Item $PreferredApk
 }
 else {
-  $GeneratedApk = Get-ChildItem \
-      -Path (Join-Path $AndroidRoot "app\build\outputs\apk") \
-      -Filter "*.apk" \
-      -File \
-      -Recurse \
-      -ErrorAction SilentlyContinue |
+  $ApkOutputRoot = Join-Path $AndroidRoot "app\build\outputs\apk"
+  $GeneratedApk = Get-ChildItem -Path $ApkOutputRoot -Filter "*.apk" -File -Recurse -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -notmatch 'unaligned|unsigned' } |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
@@ -166,4 +162,4 @@ Write-Host "==============================================="
 Write-Host "Archivo: $DestinationApk"
 Write-Host "Tamaño:  $SizeMb MB"
 Write-Host "Backend: $ApiUrl"
-Write-Host "==============================================="
+Write-Host "==============================================="n
