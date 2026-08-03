@@ -1,6 +1,7 @@
+import { API_BASE_URL } from '../config/environment';
 import { loadTokens, saveTokens, clearTokens } from './secureStorage';
 
-const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+const baseUrl = API_BASE_URL;
 const REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 60_000;
 
