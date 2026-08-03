@@ -10,8 +10,14 @@ $SourceRepoRoot = (Resolve-Path (Join-Path $SourceMobileRoot "..\..")).Path
 $ReleaseDirectory = Join-Path $SourceMobileRoot "release"
 $LogDirectory = Join-Path $ReleaseDirectory "logs"
 $ProductionEnvFile = Join-Path $SourceMobileRoot ".env.production"
-$MappedDrive = $null
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$BuildRepoRoot = Join-Path $env:USERPROFILE ".mym-apk-build"
+$BuildMobileRoot = Join-Path $BuildRepoRoot "apps\mobile"
+$AndroidRoot = Join-Path $BuildMobileRoot "android"
+$BundleCheckDirectory = Join-Path $BuildMobileRoot ".expo-release-check"
+$BundleLog = Join-Path $LogDirectory "bundle-$Timestamp.log"
+$GradleLog = Join-Path $LogDirectory "gradle-$Timestamp.log"
+$BuildSucceeded = $false
 
 function Assert-Command {
   param([string]$Name)
@@ -22,10 +28,13 @@ function Assert-Command {
 }
 
 function Assert-ExitCode {
-  param([string]$Step)
+  param(
+    [string]$Step,
+    [int]$ExitCode = $LASTEXITCODE
+  )
 
-  if ($LASTEXITCODE -ne 0) {
-    throw "$Step failed with exit code $LASTEXITCODE."
+  if ($ExitCode -ne 0) {
+    throw "$Step failed with exit code $ExitCode."
   }
 }
 
@@ -45,28 +54,10 @@ function Read-ApiUrlFromEnvFile {
   return $null
 }
 
-function Mount-ShortWorkspacePath {
-  param([string]$TargetPath)
-
-  foreach ($Letter in @('M', 'N', 'R', 'S', 'T', 'U', 'V')) {
-    $Drive = "${Letter}:"
-    if (Test-Path "${Drive}\") {
-      continue
-    }
-
-    & subst.exe $Drive $TargetPath
-    if ($LASTEXITCODE -eq 0 -and (Test-Path "${Drive}\")) {
-      return $Drive
-    }
-  }
-
-  return $null
-}
-
 function Show-FailureSummary {
   param(
     [string]$LogPath,
-    [int]$TailLines = 180
+    [int]$TailLines = 220
   )
 
   Write-Host ""
@@ -87,14 +78,15 @@ function Show-FailureSummary {
     'TypeError',
     'ReferenceError',
     'Caused by:',
-    'Exception'
+    'Exception',
+    'Process.*finished with non-zero exit value'
   )
 
-  $Matches = Select-String -Path $LogPath -Pattern $Patterns -Context 3, 12 -ErrorAction SilentlyContinue
+  $Matches = Select-String -Path $LogPath -Pattern $Patterns -Context 4, 16 -ErrorAction SilentlyContinue
 
   if ($Matches) {
     $Matches |
-      Select-Object -Last 12 |
+      Select-Object -Last 16 |
       ForEach-Object {
         $_.Context.PreContext | ForEach-Object { Write-Host $_ }
         Write-Host $_.Line
@@ -109,13 +101,39 @@ function Show-FailureSummary {
 
   Write-Host ""
   Write-Host "Full log: $LogPath"
+  Write-Host "Temporary workspace: $BuildRepoRoot"
   Write-Host "==============================================="
+}
+
+function Invoke-CmdLogged {
+  param(
+    [string]$CommandLine,
+    [string]$LogPath
+  )
+
+  # Windows PowerShell 5.1 can turn native stderr into a terminating
+  # NativeCommandError when ErrorActionPreference is Stop. Run through cmd.exe
+  # and merge stderr into stdout before PowerShell receives the stream.
+  $PreviousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+
+  try {
+    & cmd.exe /d /s /c "$CommandLine 2>&1" |
+      Tee-Object -FilePath $LogPath |
+      ForEach-Object { Write-Host $_ }
+
+    return $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $PreviousErrorActionPreference
+  }
 }
 
 Assert-Command "node"
 Assert-Command "java"
 Assert-Command "pnpm"
-Assert-Command "subst.exe"
+Assert-Command "robocopy.exe"
+Assert-Command "cmd.exe"
 
 $SdkCandidates = @()
 
@@ -167,55 +185,74 @@ elseif ($env:NODE_OPTIONS -notmatch 'max-old-space-size') {
   $env:NODE_OPTIONS = "$($env:NODE_OPTIONS) --max-old-space-size=4096"
 }
 
+New-Item -ItemType Directory -Path $ReleaseDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
-$BundleLog = Join-Path $LogDirectory "bundle-$Timestamp.log"
-$GradleLog = Join-Path $LogDirectory "gradle-$Timestamp.log"
 
 try {
-  $MappedDrive = Mount-ShortWorkspacePath -TargetPath $SourceRepoRoot
-
-  if ($MappedDrive) {
-    $BuildRepoRoot = "${MappedDrive}\"
-    Write-Host "Using short Windows build path: $BuildRepoRoot"
-  }
-  else {
-    $BuildRepoRoot = $SourceRepoRoot
-    Write-Warning "No free drive letter was available for a short build path."
-  }
-
-  $BuildMobileRoot = Join-Path $BuildRepoRoot "apps\mobile"
-  $AndroidRoot = Join-Path $BuildMobileRoot "android"
-  $BundleCheckDirectory = Join-Path $BuildMobileRoot ".expo-release-check"
-
   Write-Host ""
   Write-Host "==============================================="
   Write-Host "M&M Eventos Staff - Local Android APK build"
   Write-Host "==============================================="
   Write-Host "Backend: $ApiUrl"
   Write-Host "Android SDK: $AndroidSdk"
+  Write-Host "Source root: $SourceRepoRoot"
   Write-Host "Build root: $BuildRepoRoot"
   Write-Host ""
 
+  Write-Host "1/6 - Preparing short local build workspace..."
+
+  New-Item -ItemType Directory -Path $BuildRepoRoot -Force | Out-Null
+
+  & robocopy.exe `
+    $SourceRepoRoot `
+    $BuildRepoRoot `
+    /MIR `
+    /R:2 `
+    /W:1 `
+    /NFL `
+    /NDL `
+    /NJH `
+    /NJS `
+    /NP `
+    /XD `
+      ".git" `
+      "node_modules" `
+      ".next" `
+      ".expo" `
+      ".expo-release-check" `
+      "android" `
+      "release" `
+      "dist" `
+      "build" `
+      "coverage"
+
+  $RoboCopyExitCode = $LASTEXITCODE
+
+  if ($RoboCopyExitCode -ge 8) {
+    throw "Robocopy failed with exit code $RoboCopyExitCode."
+  }
+
   Push-Location $BuildRepoRoot
   try {
-    Write-Host "1/5 - Installing hoisted PNPM dependencies..."
+    Write-Host ""
+    Write-Host "2/6 - Installing hoisted PNPM dependencies..."
     & pnpm install --frozen-lockfile
     Assert-ExitCode "PNPM install"
 
     Write-Host ""
-    Write-Host "2/5 - Building shared package..."
+    Write-Host "3/6 - Building shared package..."
     & pnpm --filter "@mym/shared" build
     Assert-ExitCode "Shared package build"
 
     Write-Host ""
-    Write-Host "3/5 - Validating the Android JavaScript bundle..."
+    Write-Host "4/6 - Validating the Android JavaScript bundle..."
+
     if (Test-Path $BundleCheckDirectory) {
       Remove-Item -Path $BundleCheckDirectory -Recurse -Force
     }
 
-    & pnpm --filter "@mym/mobile" exec expo export --platform android --output-dir $BundleCheckDirectory --clear 2>&1 |
-      Tee-Object -FilePath $BundleLog
-    $BundleExitCode = $LASTEXITCODE
+    $BundleCommand = "pnpm --filter `"@mym/mobile`" exec expo export --platform android --output-dir `"$BundleCheckDirectory`" --clear"
+    $BundleExitCode = Invoke-CmdLogged -CommandLine $BundleCommand -LogPath $BundleLog
 
     if ($BundleExitCode -ne 0) {
       Show-FailureSummary -LogPath $BundleLog
@@ -223,7 +260,7 @@ try {
     }
 
     Write-Host ""
-    Write-Host "4/5 - Generating clean Android native project..."
+    Write-Host "5/6 - Generating clean Android native project..."
     & pnpm --filter "@mym/mobile" exec expo prebuild --platform android --clean --no-install
     Assert-ExitCode "Expo prebuild"
   }
@@ -240,10 +277,10 @@ try {
   Push-Location $AndroidRoot
   try {
     Write-Host ""
-    Write-Host "5/5 - Compiling release APK..."
-    & $GradleWrapper app:assembleRelease --no-daemon --console=plain --stacktrace 2>&1 |
-      Tee-Object -FilePath $GradleLog
-    $GradleExitCode = $LASTEXITCODE
+    Write-Host "6/6 - Compiling release APK..."
+
+    $GradleCommand = "`"$GradleWrapper`" app:assembleRelease --no-daemon --console=plain --stacktrace"
+    $GradleExitCode = Invoke-CmdLogged -CommandLine $GradleCommand -LogPath $GradleLog
 
     if ($GradleExitCode -ne 0) {
       Show-FailureSummary -LogPath $GradleLog
@@ -271,18 +308,14 @@ try {
     throw "Gradle finished, but no signed APK was found."
   }
 
-  New-Item -ItemType Directory -Path $ReleaseDirectory -Force | Out-Null
   Get-ChildItem -Path $ReleaseDirectory -Filter "*.apk" -File -ErrorAction SilentlyContinue |
     Remove-Item -Force
 
   $DestinationApk = Join-Path $ReleaseDirectory "mym-eventos-staff.apk"
   Copy-Item -Path $GeneratedApk.FullName -Destination $DestinationApk -Force
 
-  if (Test-Path $BundleCheckDirectory) {
-    Remove-Item -Path $BundleCheckDirectory -Recurse -Force -ErrorAction SilentlyContinue
-  }
-
   $SizeMb = [Math]::Round((Get-Item $DestinationApk).Length / 1MB, 2)
+  $BuildSucceeded = $true
 
   Write-Host ""
   Write-Host "==============================================="
@@ -296,7 +329,11 @@ try {
   Write-Host "==============================================="
 }
 finally {
-  if ($MappedDrive) {
-    & subst.exe $MappedDrive /D | Out-Null
+  if ($BuildSucceeded -and (Test-Path $BuildRepoRoot)) {
+    Remove-Item -Path $BuildRepoRoot -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  elseif (-not $BuildSucceeded) {
+    Write-Host ""
+    Write-Host "Build workspace preserved for diagnosis: $BuildRepoRoot"
   }
 }
