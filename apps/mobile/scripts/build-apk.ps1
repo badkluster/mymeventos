@@ -162,4 +162,4 @@ Write-Host "==============================================="
 Write-Host "Archivo: $DestinationApk"
 Write-Host "Tamaño:  $SizeMb MB"
 Write-Host "Backend: $ApiUrl"
-Write-Host "==============================================="n
+Write-Host "==============================================="
