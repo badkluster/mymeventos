@@ -1,3 +1,5 @@
+declare const __DEV__: boolean;
+
 const LOCAL_API_URL = 'http://localhost:3001/api';
 const PRODUCTION_API_URL = 'https://www.mymsalones.com.ar/api';
 
