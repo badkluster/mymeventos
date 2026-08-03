@@ -8,8 +8,10 @@ $ErrorActionPreference = "Stop"
 $SourceMobileRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $SourceRepoRoot = (Resolve-Path (Join-Path $SourceMobileRoot "..\..")).Path
 $ReleaseDirectory = Join-Path $SourceMobileRoot "release"
+$LogDirectory = Join-Path $ReleaseDirectory "logs"
 $ProductionEnvFile = Join-Path $SourceMobileRoot ".env.production"
 $MappedDrive = $null
+$Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
 function Assert-Command {
   param([string]$Name)
@@ -46,9 +48,6 @@ function Read-ApiUrlFromEnvFile {
 function Mount-ShortWorkspacePath {
   param([string]$TargetPath)
 
-  # React Native + CMake + pnpm can exceed the Windows object-path limit when
-  # the repository lives in a deeply nested directory. A temporary SUBST drive
-  # keeps every native and Metro path short without copying the repository.
   foreach ($Letter in @('M', 'N', 'R', 'S', 'T', 'U', 'V')) {
     $Drive = "${Letter}:"
     if (Test-Path "${Drive}\") {
@@ -62,6 +61,55 @@ function Mount-ShortWorkspacePath {
   }
 
   return $null
+}
+
+function Show-FailureSummary {
+  param(
+    [string]$LogPath,
+    [int]$TailLines = 180
+  )
+
+  Write-Host ""
+  Write-Host "==============================================="
+  Write-Host "RELEVANT FAILURE OUTPUT"
+  Write-Host "==============================================="
+
+  $Patterns = @(
+    'error:',
+    'ERROR',
+    'FAILURE:',
+    'What went wrong:',
+    'Execution failed for task',
+    'Cannot find module',
+    'Unable to resolve module',
+    'Module not found',
+    'SyntaxError',
+    'TypeError',
+    'ReferenceError',
+    'Caused by:',
+    'Exception'
+  )
+
+  $Matches = Select-String -Path $LogPath -Pattern $Patterns -Context 3, 12 -ErrorAction SilentlyContinue
+
+  if ($Matches) {
+    $Matches |
+      Select-Object -Last 12 |
+      ForEach-Object {
+        $_.Context.PreContext | ForEach-Object { Write-Host $_ }
+        Write-Host $_.Line
+        $_.Context.PostContext | ForEach-Object { Write-Host $_ }
+        Write-Host "-----------------------------------------------"
+      }
+  }
+  else {
+    Get-Content -Path $LogPath -Tail $TailLines -ErrorAction SilentlyContinue |
+      ForEach-Object { Write-Host $_ }
+  }
+
+  Write-Host ""
+  Write-Host "Full log: $LogPath"
+  Write-Host "==============================================="
 }
 
 Assert-Command "node"
@@ -119,6 +167,10 @@ elseif ($env:NODE_OPTIONS -notmatch 'max-old-space-size') {
   $env:NODE_OPTIONS = "$($env:NODE_OPTIONS) --max-old-space-size=4096"
 }
 
+New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+$BundleLog = Join-Path $LogDirectory "bundle-$Timestamp.log"
+$GradleLog = Join-Path $LogDirectory "gradle-$Timestamp.log"
+
 try {
   $MappedDrive = Mount-ShortWorkspacePath -TargetPath $SourceRepoRoot
 
@@ -133,6 +185,7 @@ try {
 
   $BuildMobileRoot = Join-Path $BuildRepoRoot "apps\mobile"
   $AndroidRoot = Join-Path $BuildMobileRoot "android"
+  $BundleCheckDirectory = Join-Path $BuildMobileRoot ".expo-release-check"
 
   Write-Host ""
   Write-Host "==============================================="
@@ -145,17 +198,32 @@ try {
 
   Push-Location $BuildRepoRoot
   try {
-    Write-Host "1/4 - Installing hoisted PNPM dependencies..."
+    Write-Host "1/5 - Installing hoisted PNPM dependencies..."
     & pnpm install --frozen-lockfile
     Assert-ExitCode "PNPM install"
 
     Write-Host ""
-    Write-Host "2/4 - Building shared package..."
+    Write-Host "2/5 - Building shared package..."
     & pnpm --filter "@mym/shared" build
     Assert-ExitCode "Shared package build"
 
     Write-Host ""
-    Write-Host "3/4 - Generating clean Android native project..."
+    Write-Host "3/5 - Validating the Android JavaScript bundle..."
+    if (Test-Path $BundleCheckDirectory) {
+      Remove-Item -Path $BundleCheckDirectory -Recurse -Force
+    }
+
+    & pnpm --filter "@mym/mobile" exec expo export --platform android --output-dir $BundleCheckDirectory --clear 2>&1 |
+      Tee-Object -FilePath $BundleLog
+    $BundleExitCode = $LASTEXITCODE
+
+    if ($BundleExitCode -ne 0) {
+      Show-FailureSummary -LogPath $BundleLog
+      throw "Expo Android bundle validation failed with exit code $BundleExitCode."
+    }
+
+    Write-Host ""
+    Write-Host "4/5 - Generating clean Android native project..."
     & pnpm --filter "@mym/mobile" exec expo prebuild --platform android --clean --no-install
     Assert-ExitCode "Expo prebuild"
   }
@@ -172,9 +240,15 @@ try {
   Push-Location $AndroidRoot
   try {
     Write-Host ""
-    Write-Host "4/4 - Compiling release APK..."
-    & $GradleWrapper app:assembleRelease --no-daemon --console=plain --stacktrace
-    Assert-ExitCode "Gradle assembleRelease"
+    Write-Host "5/5 - Compiling release APK..."
+    & $GradleWrapper app:assembleRelease --no-daemon --console=plain --stacktrace 2>&1 |
+      Tee-Object -FilePath $GradleLog
+    $GradleExitCode = $LASTEXITCODE
+
+    if ($GradleExitCode -ne 0) {
+      Show-FailureSummary -LogPath $GradleLog
+      throw "Gradle assembleRelease failed with exit code $GradleExitCode. Full log: $GradleLog"
+    }
   }
   finally {
     Pop-Location
@@ -204,6 +278,10 @@ try {
   $DestinationApk = Join-Path $ReleaseDirectory "mym-eventos-staff.apk"
   Copy-Item -Path $GeneratedApk.FullName -Destination $DestinationApk -Force
 
+  if (Test-Path $BundleCheckDirectory) {
+    Remove-Item -Path $BundleCheckDirectory -Recurse -Force -ErrorAction SilentlyContinue
+  }
+
   $SizeMb = [Math]::Round((Get-Item $DestinationApk).Length / 1MB, 2)
 
   Write-Host ""
@@ -213,6 +291,8 @@ try {
   Write-Host "File:    $DestinationApk"
   Write-Host "Size:    $SizeMb MB"
   Write-Host "Backend: $ApiUrl"
+  Write-Host "Bundle log: $BundleLog"
+  Write-Host "Gradle log: $GradleLog"
   Write-Host "==============================================="
 }
 finally {
