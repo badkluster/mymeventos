@@ -5,17 +5,17 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$MobileRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$RepoRoot = (Resolve-Path (Join-Path $MobileRoot "..\..")).Path
-$AndroidRoot = Join-Path $MobileRoot "android"
-$ReleaseDirectory = Join-Path $MobileRoot "release"
-$ProductionEnvFile = Join-Path $MobileRoot ".env.production"
+$SourceMobileRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$SourceRepoRoot = (Resolve-Path (Join-Path $SourceMobileRoot "..\..")).Path
+$ReleaseDirectory = Join-Path $SourceMobileRoot "release"
+$ProductionEnvFile = Join-Path $SourceMobileRoot ".env.production"
+$MappedDrive = $null
 
 function Assert-Command {
   param([string]$Name)
 
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-    throw "No se encontró '$Name' en PATH. Revisá los requisitos del README de apps/mobile."
+    throw "Required command '$Name' was not found in PATH."
   }
 }
 
@@ -23,7 +23,7 @@ function Assert-ExitCode {
   param([string]$Step)
 
   if ($LASTEXITCODE -ne 0) {
-    throw "$Step falló con código de salida $LASTEXITCODE."
+    throw "$Step failed with exit code $LASTEXITCODE."
   }
 }
 
@@ -43,9 +43,31 @@ function Read-ApiUrlFromEnvFile {
   return $null
 }
 
+function Mount-ShortWorkspacePath {
+  param([string]$TargetPath)
+
+  # React Native + CMake + pnpm can exceed the Windows object-path limit when
+  # the repository lives in a deeply nested directory. A temporary SUBST drive
+  # keeps every native and Metro path short without copying the repository.
+  foreach ($Letter in @('M', 'N', 'R', 'S', 'T', 'U', 'V')) {
+    $Drive = "${Letter}:"
+    if (Test-Path "${Drive}\") {
+      continue
+    }
+
+    & subst.exe $Drive $TargetPath
+    if ($LASTEXITCODE -eq 0 -and (Test-Path "${Drive}\")) {
+      return $Drive
+    }
+  }
+
+  return $null
+}
+
 Assert-Command "node"
 Assert-Command "java"
 Assert-Command "pnpm"
+Assert-Command "subst.exe"
 
 $SdkCandidates = @()
 
@@ -66,7 +88,7 @@ $AndroidSdk = $SdkCandidates |
   Select-Object -First 1
 
 if (-not $AndroidSdk) {
-  throw "No se encontró Android SDK. Instalá Android Studio o configurá ANDROID_SDK_ROOT/ANDROID_HOME."
+  throw "Android SDK was not found. Install Android Studio or configure ANDROID_SDK_ROOT/ANDROID_HOME."
 }
 
 $env:ANDROID_SDK_ROOT = $AndroidSdk
@@ -83,83 +105,118 @@ if ([string]::IsNullOrWhiteSpace($ApiUrl)) {
 $ApiUrl = $ApiUrl.Trim().TrimEnd('/')
 
 if ($ApiUrl -notmatch '^https://') {
-  throw "La APK release requiere una URL HTTPS. Valor actual: $ApiUrl"
+  throw "Release APK requires an HTTPS API URL. Current value: $ApiUrl"
 }
 
 $env:NODE_ENV = "production"
+$env:CI = "1"
 $env:EXPO_PUBLIC_API_URL = $ApiUrl
 
-Write-Host ""
-Write-Host "==============================================="
-Write-Host "M&M Eventos Staff - Build APK local"
-Write-Host "==============================================="
-Write-Host "Backend: $ApiUrl"
-Write-Host "Android SDK: $AndroidSdk"
-Write-Host ""
+if ([string]::IsNullOrWhiteSpace($env:NODE_OPTIONS)) {
+  $env:NODE_OPTIONS = "--max-old-space-size=4096"
+}
+elseif ($env:NODE_OPTIONS -notmatch 'max-old-space-size') {
+  $env:NODE_OPTIONS = "$($env:NODE_OPTIONS) --max-old-space-size=4096"
+}
 
-Push-Location $RepoRoot
 try {
-  Write-Host "1/3 - Compilando paquete compartido..."
-  & pnpm --filter "@mym/shared" build
-  Assert-ExitCode "La compilación de @mym/shared"
+  $MappedDrive = Mount-ShortWorkspacePath -TargetPath $SourceRepoRoot
+
+  if ($MappedDrive) {
+    $BuildRepoRoot = "${MappedDrive}\"
+    Write-Host "Using short Windows build path: $BuildRepoRoot"
+  }
+  else {
+    $BuildRepoRoot = $SourceRepoRoot
+    Write-Warning "No free drive letter was available for a short build path."
+  }
+
+  $BuildMobileRoot = Join-Path $BuildRepoRoot "apps\mobile"
+  $AndroidRoot = Join-Path $BuildMobileRoot "android"
 
   Write-Host ""
-  Write-Host "2/3 - Generando proyecto Android nativo..."
-  & pnpm --filter "@mym/mobile" exec expo prebuild --platform android --clean --no-install
-  Assert-ExitCode "Expo Prebuild"
-}
-finally {
-  Pop-Location
-}
-
-$GradleWrapper = Join-Path $AndroidRoot "gradlew.bat"
-
-if (-not (Test-Path $GradleWrapper)) {
-  throw "Expo no generó android/gradlew.bat. Revisá la salida de prebuild."
-}
-
-Push-Location $AndroidRoot
-try {
+  Write-Host "==============================================="
+  Write-Host "M&M Eventos Staff - Local Android APK build"
+  Write-Host "==============================================="
+  Write-Host "Backend: $ApiUrl"
+  Write-Host "Android SDK: $AndroidSdk"
+  Write-Host "Build root: $BuildRepoRoot"
   Write-Host ""
-  Write-Host "3/3 - Compilando APK release..."
-  & $GradleWrapper app:assembleRelease --no-daemon
-  Assert-ExitCode "Gradle assembleRelease"
+
+  Push-Location $BuildRepoRoot
+  try {
+    Write-Host "1/4 - Installing hoisted PNPM dependencies..."
+    & pnpm install --frozen-lockfile
+    Assert-ExitCode "PNPM install"
+
+    Write-Host ""
+    Write-Host "2/4 - Building shared package..."
+    & pnpm --filter "@mym/shared" build
+    Assert-ExitCode "Shared package build"
+
+    Write-Host ""
+    Write-Host "3/4 - Generating clean Android native project..."
+    & pnpm --filter "@mym/mobile" exec expo prebuild --platform android --clean --no-install
+    Assert-ExitCode "Expo prebuild"
+  }
+  finally {
+    Pop-Location
+  }
+
+  $GradleWrapper = Join-Path $AndroidRoot "gradlew.bat"
+
+  if (-not (Test-Path $GradleWrapper)) {
+    throw "Expo did not generate android/gradlew.bat."
+  }
+
+  Push-Location $AndroidRoot
+  try {
+    Write-Host ""
+    Write-Host "4/4 - Compiling release APK..."
+    & $GradleWrapper app:assembleRelease --no-daemon --console=plain --stacktrace
+    Assert-ExitCode "Gradle assembleRelease"
+  }
+  finally {
+    Pop-Location
+  }
+
+  $PreferredApk = Join-Path $AndroidRoot "app\build\outputs\apk\release\app-release.apk"
+
+  if (Test-Path $PreferredApk) {
+    $GeneratedApk = Get-Item $PreferredApk
+  }
+  else {
+    $ApkOutputRoot = Join-Path $AndroidRoot "app\build\outputs\apk"
+    $GeneratedApk = Get-ChildItem -Path $ApkOutputRoot -Filter "*.apk" -File -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -notmatch 'unaligned|unsigned' } |
+      Sort-Object LastWriteTime -Descending |
+      Select-Object -First 1
+  }
+
+  if (-not $GeneratedApk) {
+    throw "Gradle finished, but no signed APK was found."
+  }
+
+  New-Item -ItemType Directory -Path $ReleaseDirectory -Force | Out-Null
+  Get-ChildItem -Path $ReleaseDirectory -Filter "*.apk" -File -ErrorAction SilentlyContinue |
+    Remove-Item -Force
+
+  $DestinationApk = Join-Path $ReleaseDirectory "mym-eventos-staff.apk"
+  Copy-Item -Path $GeneratedApk.FullName -Destination $DestinationApk -Force
+
+  $SizeMb = [Math]::Round((Get-Item $DestinationApk).Length / 1MB, 2)
+
+  Write-Host ""
+  Write-Host "==============================================="
+  Write-Host "APK GENERATED SUCCESSFULLY"
+  Write-Host "==============================================="
+  Write-Host "File:    $DestinationApk"
+  Write-Host "Size:    $SizeMb MB"
+  Write-Host "Backend: $ApiUrl"
+  Write-Host "==============================================="
 }
 finally {
-  Pop-Location
+  if ($MappedDrive) {
+    & subst.exe $MappedDrive /D | Out-Null
+  }
 }
-
-$PreferredApk = Join-Path $AndroidRoot "app\build\outputs\apk\release\app-release.apk"
-
-if (Test-Path $PreferredApk) {
-  $GeneratedApk = Get-Item $PreferredApk
-}
-else {
-  $ApkOutputRoot = Join-Path $AndroidRoot "app\build\outputs\apk"
-  $GeneratedApk = Get-ChildItem -Path $ApkOutputRoot -Filter "*.apk" -File -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -notmatch 'unaligned|unsigned' } |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
-}
-
-if (-not $GeneratedApk) {
-  throw "Gradle terminó, pero no se encontró una APK firmada en android/app/build/outputs/apk."
-}
-
-New-Item -ItemType Directory -Path $ReleaseDirectory -Force | Out-Null
-Get-ChildItem -Path $ReleaseDirectory -Filter "*.apk" -File -ErrorAction SilentlyContinue |
-  Remove-Item -Force
-
-$DestinationApk = Join-Path $ReleaseDirectory "mym-eventos-staff.apk"
-Copy-Item -Path $GeneratedApk.FullName -Destination $DestinationApk -Force
-
-$SizeMb = [Math]::Round((Get-Item $DestinationApk).Length / 1MB, 2)
-
-Write-Host ""
-Write-Host "==============================================="
-Write-Host "APK GENERADA CORRECTAMENTE"
-Write-Host "==============================================="
-Write-Host "Archivo: $DestinationApk"
-Write-Host "Tamaño:  $SizeMb MB"
-Write-Host "Backend: $ApiUrl"
-Write-Host "==============================================="
