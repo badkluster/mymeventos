@@ -29,16 +29,17 @@ pnpm dev            # todas las apps en paralelo
 pnpm dev:web / dev:api / dev:mobile
 pnpm build / pnpm lint / pnpm typecheck / pnpm test   # -r sobre los workspaces (apps/web no tiene script test)
 
-pnpm --filter @mym/api test        # vitest run (requiere Mongo local)
-pnpm --filter @mym/api seed        # seed de base de datos
-pnpm --filter @mym/api seed:mobile-attendance   # usuarios + jornadas demo para probar la app de personal
-pnpm --filter @mym/api reset:admin-password   # solo local, bloqueado en producción
+pnpm --filter @mym/api test        # vitest run (sin usar una base persistente/remota)
 pnpm --filter @mym/web typecheck
 pnpm --filter @mym/mobile start / typecheck / test   # Expo dev server / tsc / jest (ver docs/MOBILE_STAFF_APP.md)
 pnpm --filter @mym/shared build    # reconstruir antes de que api/web/mobile recojan cambios de tipos/enums
 ```
 
 Usar siempre el nombre de paquete con scope (`@mym/api`, `@mym/web`, `@mym/mobile`, `@mym/shared`), no `api`/`web` a secas.
+
+## Protección de datos (obligatoria)
+
+Antes de cualquier intervención que pudiera modificar datos, leer y cumplir [`AGENTS.md`](AGENTS.md). Ningún agente puede sembrar, resetear, importar, restaurar, borrar ni actualizar datos directamente en bases locales, de testing, staging o producción sin autorización explícita del usuario para ese entorno y alcance en la conversación actual.
 
 ## Reglas críticas de dominio
 

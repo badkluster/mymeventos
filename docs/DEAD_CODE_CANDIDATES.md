@@ -6,7 +6,7 @@ Fecha: 2026-07-27. Las decisiones se basan en búsqueda global, grafo de imports
 
 | Archivo / símbolo | Motivo y evidencia | Riesgo / consumidores revisados | Decisión |
 | --- | --- | --- | --- |
-| `apps/web/src/features/landing/data/landing-data.ts` | Archivo de datos estático sin import, export consumido, import dinámico, ruta Next ni referencia de configuración. Sus strings estaban duplicados en seed/SEO, no era una fuente de verdad. | Se buscaron nombre, exports, strings, docs, CI y configuración; ningún consumidor. Riesgo bajo. | Eliminado. |
+| `apps/web/src/features/landing/data/landing-data.ts` | Archivo de datos estático sin import, export consumido, import dinámico, ruta Next ni referencia de configuración. Sus strings estaban duplicados en SEO, no era una fuente de verdad. | Se buscaron nombre, exports, strings, docs, CI y configuración; ningún consumidor. Riesgo bajo. | Eliminado. |
 | `apps/web/src/app/admin/contracts/[id]/page.tsx`: estados/acciones de pagos y `GET /contracts/:id/payments` | ESLint identificó los símbolos privados sin uso; no existía tab ni JSX que los renderizara. | Se revisó el archivo completo, tipos y endpoint. El flujo real de pagos permanece en evento/pagos. Riesgo bajo. | Eliminado. |
 | Imports/directivas sin uso en 9 archivos web | ESLint y búsqueda de símbolo confirmaron cero lecturas. | Sin export público ni convención de framework. Riesgo bajo. | Eliminados. |
 
@@ -32,6 +32,6 @@ Fecha: 2026-07-27. Las decisiones se basan en búsqueda global, grafo de imports
 
 | Elemento | Motivo | Consumidores/riesgo | Decisión |
 | --- | --- | --- | --- |
-| Modelos Mongoose, seeds, migraciones y scripts operativos | Pueden requerirse por datos persistidos o ejecución manual. | MongoDB, operaciones y despliegue. | Conservar. |
+| Modelos Mongoose y scripts operativos | Pueden requerirse por datos persistidos o ejecución manual. No se incluyen seeds, fixtures ni cargadores de datos; cualquier operación directa sobre datos está sujeta a `AGENTS.md`. | MongoDB, operaciones y despliegue. | Conservar solo con autorización explícita. |
 | Auth, roles, permisos, tokens, pagos, QR, webhooks, PDFs, correo, uploads | Son contratos públicos o controles de seguridad. | Web, móvil, Mercado Pago, Cloudinary, SMTP/Resend y clientes externos. | Conservar; solo se corrigió autorización de uploads con pruebas. |
 | `.github/workflows/*`, `vercel.json`, variables de entorno | Activan cron/despliegue fuera del build local. | GitHub Actions, Vercel y producción. | Conservar. |

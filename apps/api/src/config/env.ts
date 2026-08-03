@@ -39,8 +39,7 @@ const environmentSchema = z.object({
   MOBILE_DEEP_LINK_SCHEME: z.string().default('mymeventos'),
   ATTENDANCE_DEFAULT_TIMEZONE: z.string().default('America/Argentina/Buenos_Aires'),
   ATTENDANCE_DEFAULT_LOCATION_ACCURACY_METERS: z.coerce.number().positive().default(50),
-  ATTENDANCE_DEFAULT_GEOFENCE_RADIUS_METERS: z.coerce.number().positive().default(150),
-  SEED_ADMIN_USERNAME: z.string().optional(), SEED_ADMIN_EMAIL: z.string().optional(), SEED_ADMIN_PASSWORD: z.string().optional()
+  ATTENDANCE_DEFAULT_GEOFENCE_RADIUS_METERS: z.coerce.number().positive().default(150)
 });
 
 const testDefaults = {
@@ -51,7 +50,7 @@ const testDefaults = {
 
 export type Environment = z.infer<typeof environmentSchema>;
 const environmentValues = process.env.NODE_ENV === 'test'
-  ? { ...testDefaults, ...process.env, SEED_ADMIN_USERNAME: undefined, SEED_ADMIN_EMAIL: undefined, SEED_ADMIN_PASSWORD: undefined }
+  ? { ...testDefaults, ...process.env }
   : process.env;
 const parsedEnvironment = environmentSchema.safeParse(environmentValues);
 if (!parsedEnvironment.success) {

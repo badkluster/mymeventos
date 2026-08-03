@@ -16,13 +16,11 @@ Las rutas protegidas requieren autenticación y permisos de `@mym/shared`. Un us
 
 ## Variables de entorno
 
-Copiar `apps/api/.env.example` a `apps/api/.env` y definir al menos `MONGODB_URI`, `CORS_ORIGIN`, `ACCESS_TOKEN_SECRET` y `REFRESH_TOKEN_SECRET`. Los secretos deben tener 32 caracteres o más. También se documentan configuración SMTP, Cloudinary, cookies y credenciales de seed.
+Copiar `apps/api/.env.example` a `apps/api/.env` y definir al menos `MONGODB_URI`, `CORS_ORIGIN`, `ACCESS_TOKEN_SECRET` y `REFRESH_TOKEN_SECRET`. Los secretos deben tener 32 caracteres o más. También se documentan configuración SMTP, Cloudinary y cookies.
 
-## Ejecución y seed
+## Ejecución y protección de datos
 
-Ejecutar `pnpm --filter @mym/api dev` para desarrollo y `pnpm --filter @mym/api seed` para crear el administrador, los salones San Carlos, Villa Elisa y La Plata, y la configuración inicial. El seed exige `SEED_ADMIN_USERNAME`, `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`; no incorpora credenciales de producción.
-
-Para restablecer localmente la contraseña de un administrador, definir `RESET_ADMIN_USERNAME` y `RESET_ADMIN_PASSWORD` (mínimo 12 caracteres) y ejecutar `pnpm --filter @mym/api reset:admin-password`. El script se bloquea si `NODE_ENV=production` y no expone un endpoint HTTP.
+Ejecutar `pnpm --filter @mym/api dev` para desarrollo. El repositorio no incluye seeds, fixtures ni cargadores de datos. Consultar [`AGENTS.md`](../AGENTS.md) antes de cualquier operación que pueda modificar datos.
 
 ## Endpoints
 

@@ -89,10 +89,6 @@ Backend nuevo, sin tocar el auth/permite web existente (ver `docs/MOBILE_AUTHENT
 ```bash
 pnpm install
 pnpm --filter @mym/api dev            # backend en :3001
-pnpm --filter @mym/api seed            # datos base (salones, paquetes, admin)
-pnpm --filter @mym/api seed:mobile-attendance   # usuarios y jornadas demo (ver docs/MOBILE_QA.md)
 cp apps/mobile/.env.example apps/mobile/.env    # ajustar EXPO_PUBLIC_API_URL a tu IP de LAN si usás un dispositivo físico
 pnpm --filter @mym/mobile start
 ```
-
-Credenciales demo (ver `apps/api/src/scripts/seedMobileAttendance.ts`): `mesero.demo` / `MymDemo123!` (acceso móvil habilitado, con jornada activa y jornada completada con incidencia y corrección pendientes).
