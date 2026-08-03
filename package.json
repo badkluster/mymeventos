@@ -10,9 +10,7 @@
     "dev:mobile": "pnpm --filter @mym/mobile run start",
     "dev:mobile:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-mobile-android.ps1",
     "build": "pnpm --filter @mym/shared build && pnpm --filter @mym/api build && pnpm --filter @mym/web build",
-    "build:mobile:apk": "pnpm --dir apps/mobile run build",
-    "build:mobile:android:store": "pnpm --dir apps/mobile run build:android:store",
-    "build:mobile:ios:store": "pnpm --dir apps/mobile run build:ios:store",
+    "build:mobile:apk": "pnpm --filter @mym/mobile run build",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test"
