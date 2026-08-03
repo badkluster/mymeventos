@@ -100,12 +100,12 @@ Write-Host ""
 Push-Location $RepoRoot
 try {
   Write-Host "1/3 - Compilando paquete compartido..."
-  & pnpm --filter @mym/shared build
+  & pnpm --filter "@mym/shared" build
   Assert-ExitCode "La compilación de @mym/shared"
 
   Write-Host ""
   Write-Host "2/3 - Generando proyecto Android nativo..."
-  & pnpm --filter @mym/mobile exec expo prebuild --platform android --clean --no-install
+  & pnpm --filter "@mym/mobile" exec expo prebuild --platform android --clean --no-install
   Assert-ExitCode "Expo Prebuild"
 }
 finally {
