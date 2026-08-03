@@ -65,6 +65,7 @@ export function OverduePaymentContact({ target, iconOnly = false, label = 'Conta
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [whatsappMessage, setWhatsappMessage] = useState('');
+  const [scheduleFollowUp, setScheduleFollowUp] = useState(true);
   const canContact = userCanAccess(user, [Permission.PAYMENTS_CREATE]);
 
   const openPreview = async () => {
@@ -86,7 +87,7 @@ export function OverduePaymentContact({ target, iconOnly = false, label = 'Conta
   const sendEmail = async () => {
     setSending('email');
     try {
-      await api.post('/payment-collections/send-email', { target, subject: emailSubject, message: emailMessage });
+      await api.post('/payment-collections/send-email', { target, subject: emailSubject, message: emailMessage, scheduleFollowUp });
       showToast({ message: 'El recordatorio de pago se envió por email.', variant: 'success' });
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudo enviar el email.', variant: 'error' });
@@ -99,7 +100,7 @@ export function OverduePaymentContact({ target, iconOnly = false, label = 'Conta
     const draftWindow = window.open('', '_blank');
     setSending('whatsapp');
     try {
-      const response = await api.post<{ whatsappUrl: string }>('/payment-collections/open-whatsapp', { target, message: whatsappMessage });
+      const response = await api.post<{ whatsappUrl: string }>('/payment-collections/open-whatsapp', { target, message: whatsappMessage, scheduleFollowUp });
       let opened = false;
       if (draftWindow) {
         draftWindow.opener = null;
@@ -127,6 +128,7 @@ export function OverduePaymentContact({ target, iconOnly = false, label = 'Conta
       {contact ? <div className="space-y-6 p-5 sm:p-8">
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><p className="font-semibold">{contact.obligation.label}</p><p className="mt-1">Saldo: {money(contact.obligation.amount)} · vencido el {formatDate(contact.obligation.dueDate)}{contact.obligation.eventName ? ` · ${contact.obligation.eventName}` : ''}</p></div>
         <div className="grid gap-3 text-sm sm:grid-cols-2"><p className="rounded-xl bg-zinc-50 px-3 py-2"><span className="text-zinc-500">Cliente: </span><span className="font-medium text-zinc-900">{contact.customer.fullName}</span></p><p className="rounded-xl bg-zinc-50 px-3 py-2"><span className="text-zinc-500">Email: </span><span className="font-medium text-zinc-900">{contact.customer.email || 'No registrado'}</span></p><p className="rounded-xl bg-zinc-50 px-3 py-2 sm:col-span-2"><span className="text-zinc-500">WhatsApp: </span><span className="font-medium text-zinc-900">{contact.customer.phone || 'No registrado'}</span></p></div>
+        <label className="flex items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2.5 text-sm text-zinc-700"><input type="checkbox" checked={scheduleFollowUp} onChange={(event) => setScheduleFollowUp(event.target.checked)} />Reintentar automáticamente: si en 3 días sigue sin pagarse, me avisan de nuevo</label>
         <section className="space-y-3 rounded-2xl border border-zinc-200 p-4"><div><h3 className="font-semibold text-zinc-950">Email</h3><p className="mt-1 text-sm text-zinc-500">Al confirmar, el email se envía inmediatamente y queda auditado.</p></div><label className="block text-sm font-medium text-zinc-700">Asunto<Input className="mt-1.5" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label><label className="block text-sm font-medium text-zinc-700">Mensaje<Textarea className="mt-1.5" value={emailMessage} onChange={(event) => setEmailMessage(event.target.value)} /></label><div className="flex justify-end"><Button disabled={!contact.customer.email || !emailSubject.trim() || !emailMessage.trim() || sending !== null} onClick={() => void sendEmail()}>{sending === 'email' ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}{sending === 'email' ? 'Enviando...' : 'Enviar email ahora'}</Button></div>{!contact.customer.email ? <p className="text-sm text-amber-700">El cliente no tiene un email registrado.</p> : null}</section>
         <section className="space-y-3 rounded-2xl border border-zinc-200 p-4"><div><h3 className="font-semibold text-zinc-950">WhatsApp</h3><p className="mt-1 text-sm text-zinc-500">Se abrirá el texto precompletado en WhatsApp. Revisalo allí antes de enviarlo.</p></div><label className="block text-sm font-medium text-zinc-700">Mensaje<Textarea className="mt-1.5" value={whatsappMessage} onChange={(event) => setWhatsappMessage(event.target.value)} /></label><div className="flex justify-end"><Button variant="secondary" disabled={!contact.customer.phone || !whatsappMessage.trim() || sending !== null} onClick={() => void openWhatsApp()}>{sending === 'whatsapp' ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}{sending === 'whatsapp' ? 'Abriendo...' : 'Abrir borrador de WhatsApp'}</Button></div>{!contact.customer.phone ? <p className="text-sm text-amber-700">El cliente no tiene un número de WhatsApp registrado.</p> : null}</section>
       </div> : null}

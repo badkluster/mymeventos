@@ -10,6 +10,24 @@ import { api } from "@/lib/api";
 import { Button, Input, PageHeader } from "@/components/ui/primitives";
 import type { CheckInResult } from "./types";
 import { ticketLabel } from "./ticket-labels";
+const resultTitle: Record<string, string> = {
+  valid: "Entrada válida",
+  already_checked_in: "Entrada ya utilizada",
+  expired: "Entrada vencida",
+  wrong_publication: "Entrada de otra publicación",
+  cancelled: "Entrada cancelada",
+  refunded: "Entrada reembolsada",
+  transferred: "Entrada transferida",
+  invalid: "Entrada inválida",
+};
+const resultHint: Record<string, string> = {
+  expired: "El código dejó de ser válido según la ventana configurada para esta publicación.",
+  wrong_publication: "Este código pertenece a otra publicación de entradas — no corresponde a este evento.",
+  cancelled: "Esta entrada fue cancelada y no debe permitir el ingreso.",
+  refunded: "Esta entrada fue reembolsada y no debe permitir el ingreso.",
+  transferred: "Esta entrada fue transferida — verificá la identidad de quien la presenta.",
+  invalid: "Verificá el código e intentá nuevamente.",
+};
 type BarcodeDetectorLike = {
   detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
 };
@@ -210,7 +228,7 @@ export function TicketCheckIn({ publicationId }: { publicationId: string }) {
       </div>
       {result ? (
         <article
-          className={`rounded-2xl border p-6 ${result.valid ? "border-emerald-200 bg-emerald-50" : result.alreadyUsed ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}
+          className={`rounded-2xl border p-6 ${result.valid ? "border-emerald-200 bg-emerald-50" : result.alreadyUsed || result.status === "expired" ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}
         >
           <div className="flex gap-3">
             {result.valid ? (
@@ -220,16 +238,13 @@ export function TicketCheckIn({ publicationId }: { publicationId: string }) {
             )}
             <div>
               <h2 className="text-xl font-semibold">
-                {result.valid
-                  ? "Entrada válida"
-                  : result.alreadyUsed
-                    ? "Entrada ya utilizada"
-                    : "Entrada inválida"}
+                {result.status ? (resultTitle[result.status] ?? "Entrada inválida") : "Entrada inválida"}
               </h2>
               <p className="mt-1 text-sm">
                 {result.message ||
                   result.ticket?.attendeeName ||
                   result.ticket?.ticketCode ||
+                  (result.status ? resultHint[result.status] : undefined) ||
                   "Verificá el código e intentá nuevamente."}
               </p>
               {result.ticket ? (

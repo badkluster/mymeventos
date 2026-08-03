@@ -1,0 +1,699 @@
+<title>Mapa de automatizaciones — M&amp;M Eventos</title>
+<style>
+  :root {
+    --bg: #EAEDEC;
+    --bg-elevated: #F5F6F5;
+    --card: #FFFFFF;
+    --ink: #16211D;
+    --ink-soft: #52635D;
+    --line: #D3DAD7;
+    --accent: #7C2E3C;
+    --accent-ink: #FFFFFF;
+
+    --masthead-bg: #16211D;
+    --masthead-ink: #F2F4F2;
+    --masthead-soft: #B9C4BF;
+    --masthead-accent: #E7A9B4;
+
+    --status-vigente: #2D6E60;
+    --status-vigente-bg: rgba(45,110,96,0.12);
+    --status-asistido: #5B6A65;
+    --status-asistido-bg: rgba(91,106,101,0.14);
+    --status-propuesta: #7C2E3C;
+    --status-propuesta-bg: rgba(124,46,60,0.10);
+
+    --priority-alta: #B4383B;
+    --priority-media: #C1812E;
+    --priority-baja: #2D6E60;
+
+    --font-display: Georgia, 'Iowan Old Style', 'Apple Garamond', Baskerville, 'Times New Roman', serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121615;
+      --bg-elevated: #171C1B;
+      --card: #1B211F;
+      --ink: #E7ECEA;
+      --ink-soft: #93A19C;
+      --line: #2A3230;
+      --accent: #D98A98;
+      --accent-ink: #16211D;
+
+      --masthead-bg: #0C0F0E;
+      --masthead-ink: #EDF1EF;
+      --masthead-soft: #8FA09A;
+      --masthead-accent: #E7A9B4;
+
+      --status-vigente: #5FBBA6;
+      --status-vigente-bg: rgba(95,187,166,0.16);
+      --status-asistido: #9AA8A3;
+      --status-asistido-bg: rgba(154,168,163,0.14);
+      --status-propuesta: #E38FA0;
+      --status-propuesta-bg: rgba(227,143,160,0.14);
+
+      --priority-alta: #E27274;
+      --priority-media: #E0A458;
+      --priority-baja: #5FBBA6;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #121615;
+    --bg-elevated: #171C1B;
+    --card: #1B211F;
+    --ink: #E7ECEA;
+    --ink-soft: #93A19C;
+    --line: #2A3230;
+    --accent: #D98A98;
+    --accent-ink: #16211D;
+    --masthead-bg: #0C0F0E;
+    --masthead-ink: #EDF1EF;
+    --masthead-soft: #8FA09A;
+    --masthead-accent: #E7A9B4;
+    --status-vigente: #5FBBA6;
+    --status-vigente-bg: rgba(95,187,166,0.16);
+    --status-asistido: #9AA8A3;
+    --status-asistido-bg: rgba(154,168,163,0.14);
+    --status-propuesta: #E38FA0;
+    --status-propuesta-bg: rgba(227,143,160,0.14);
+    --priority-alta: #E27274;
+    --priority-media: #E0A458;
+    --priority-baja: #5FBBA6;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #EAEDEC;
+    --bg-elevated: #F5F6F5;
+    --card: #FFFFFF;
+    --ink: #16211D;
+    --ink-soft: #52635D;
+    --line: #D3DAD7;
+    --accent: #7C2E3C;
+    --accent-ink: #FFFFFF;
+    --masthead-bg: #16211D;
+    --masthead-ink: #F2F4F2;
+    --masthead-soft: #B9C4BF;
+    --masthead-accent: #E7A9B4;
+    --status-vigente: #2D6E60;
+    --status-vigente-bg: rgba(45,110,96,0.12);
+    --status-asistido: #5B6A65;
+    --status-asistido-bg: rgba(91,106,101,0.14);
+    --status-propuesta: #7C2E3C;
+    --status-propuesta-bg: rgba(124,46,60,0.10);
+    --priority-alta: #B4383B;
+    --priority-media: #C1812E;
+    --priority-baja: #2D6E60;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+  code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .masthead { background: var(--masthead-bg); color: var(--masthead-ink); }
+  .masthead-inner { max-width: 880px; margin: 0 auto; padding: 3rem 1.5rem 2.4rem; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--masthead-accent); margin: 0 0 0.9rem;
+  }
+  .masthead h1 { font-size: clamp(2rem, 4vw, 2.7rem); font-weight: 600; letter-spacing: -0.01em; }
+  .lede { font-size: 1.08rem; color: var(--masthead-soft); max-width: 62ch; margin: 0.9rem 0 0; }
+  .masthead-meta { display: flex; flex-wrap: wrap; gap: 1.6rem 2.4rem; margin: 1.8rem 0 0; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.14); }
+  .masthead-meta dt { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--masthead-soft); margin: 0; }
+  .masthead-meta dd { margin: 0.25rem 0 0; font-size: 0.94rem; }
+
+  .filterbar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .filterbar-inner {
+    max-width: 880px; margin: 0 auto; padding: 0.7rem 1.5rem;
+    display: flex; flex-wrap: wrap; gap: 0.8rem 1.5rem; align-items: center; justify-content: space-between;
+  }
+  .status-filters { display: flex; gap: 0.4rem; }
+  .status-filters button {
+    font-family: var(--font-body); font-size: 0.82rem; font-weight: 600;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
+    border-radius: 999px; padding: 0.35rem 0.85rem; cursor: pointer;
+  }
+  .status-filters button.is-active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .jump-links { display: flex; gap: 1.1rem; overflow-x: auto; font-size: 0.82rem; white-space: nowrap; }
+  .jump-links a { color: var(--ink-soft); text-decoration: none; }
+  .jump-links a:hover { color: var(--accent); }
+
+  main { max-width: 880px; margin: 0 auto; padding: 2.6rem 1.5rem 4rem; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 3rem; }
+  .stat { background: var(--card); padding: 1.1rem 1.2rem; }
+  .stat .n { font-family: var(--font-display); font-size: 2rem; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.2rem; }
+
+  section.domain { margin-bottom: 3.2rem; scroll-margin-top: 4.2rem; }
+  section.domain > h2 { font-size: 1.5rem; font-weight: 600; scroll-margin-top: 4.2rem; }
+  .section-intro { color: var(--ink-soft); max-width: 66ch; margin: 0.6rem 0 1.6rem; }
+  h3.subhead {
+    font-family: var(--font-body); font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--ink-soft); margin: 2rem 0 0.9rem; scroll-margin-top: 4.2rem;
+  }
+  h3.subhead:first-of-type { margin-top: 0; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 1.4rem; background: var(--bg-elevated); border: 1px solid var(--line);
+    border-radius: 10px; padding: 1rem 1.3rem; margin-bottom: 2.6rem; font-size: 0.85rem; color: var(--ink-soft);
+  }
+  .legend b { color: var(--ink); font-weight: 600; }
+  .legend .item { display: flex; align-items: center; gap: 0.5rem; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 1.2rem 1.35rem; margin-bottom: 0.9rem; scroll-margin-top: 4.2rem; }
+  .card[data-status="vigente"] { border-left-color: var(--status-vigente); }
+  .card[data-status="asistido"] { border-left-color: var(--status-asistido); }
+  .card[data-status="propuesta"] { border-left-color: var(--status-propuesta); }
+  .card.is-hidden { display: none; }
+
+  .card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 0.8rem; margin-bottom: 0.55rem; }
+  .card-head h4 { font-size: 1.05rem; font-weight: 600; flex: 1 1 auto; min-width: 12ch; }
+  .chip { font-family: var(--font-body); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 999px; padding: 0.2rem 0.6rem; white-space: nowrap; }
+  .chip--vigente { background: var(--status-vigente-bg); color: var(--status-vigente); }
+  .chip--asistido { background: var(--status-asistido-bg); color: var(--status-asistido); }
+  .chip--propuesta { background: var(--status-propuesta-bg); color: var(--status-propuesta); }
+
+  .card p.desc { margin: 0 0 0.85rem; max-width: 68ch; }
+  .card p.how { margin: 0 0 0.9rem; max-width: 68ch; color: var(--ink-soft); font-size: 0.92rem; font-style: italic; }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem 1.2rem; margin: 0; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+  .facts dt { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin: 0; }
+  .facts dd { margin: 0.2rem 0 0; font-size: 0.87rem; }
+  .facts dd code { font-size: 0.82rem; color: var(--ink-soft); }
+
+  .meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.9rem 1.4rem; margin-top: 0.9rem; padding-top: 0.85rem; border-top: 1px solid var(--line); font-size: 0.82rem; }
+  .priority { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--ink-soft); }
+  .priority::before { content: ''; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--dot); flex: none; }
+  .priority[data-p="alta"] { --dot: var(--priority-alta); }
+  .priority[data-p="media"] { --dot: var(--priority-media); }
+  .priority[data-p="baja"] { --dot: var(--priority-baja); }
+  .effort { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--ink-soft); }
+  .effort .bars { display: inline-flex; gap: 2px; }
+  .effort .bars span { width: 5px; height: 11px; border-radius: 1px; background: var(--line); }
+  .effort .bars span.on { background: var(--ink-soft); }
+  .ref-link { font-size: 0.82rem; text-decoration: none; }
+  .ref-link:hover { text-decoration: underline; }
+
+  #notas { background: var(--bg-elevated); border: 1px solid var(--line); border-radius: 10px; padding: 1.6rem 1.8rem; }
+  #notas h2 { font-size: 1.2rem; margin-bottom: 0.8rem; }
+  #notas ul { margin: 0.6rem 0 0; padding-left: 1.2rem; color: var(--ink-soft); font-size: 0.92rem; }
+  #notas li { margin-bottom: 0.4rem; }
+
+  footer { text-align: center; padding: 2rem 1.5rem 3rem; color: var(--ink-soft); font-size: 0.82rem; }
+
+  @media (max-width: 640px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .filterbar-inner { flex-direction: column; align-items: stretch; }
+    .jump-links { order: 2; }
+  }
+</style>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <p class="eyebrow">M&amp;M Eventos · Informe técnico</p>
+    <h1>Mapa de automatizaciones</h1>
+    <p class="lede">Qué corre solo hoy en el repositorio, qué existe pero todavía depende de un clic humano, y veinticuatro propuestas priorizadas para cerrar el resto del circuito: alertas de evento, resumen diario, cobranza a clientes, leads, producción y personal.</p>
+    <dl class="masthead-meta">
+      <div><dt>Repositorio</dt><dd>mymeventos — monorepo pnpm (apps/api, apps/web, apps/mobile)</dd></div>
+      <div><dt>Corte</dt><dd>2026-08-03</dd></div>
+      <div><dt>Método</dt><dd>Lectura directa del código (rutas, servicios, workflows), no solo de la documentación</dd></div>
+    </dl>
+  </div>
+</header>
+
+<nav class="filterbar" id="filterbar">
+  <div class="filterbar-inner">
+    <div class="status-filters" role="group" aria-label="Filtrar por estado">
+      <button data-filter="all" class="is-active" type="button">Todo</button>
+      <button data-filter="vigente" type="button">Vigente</button>
+      <button data-filter="asistido" type="button">Asistido</button>
+      <button data-filter="propuesta" type="button">Propuesta</button>
+    </div>
+    <div class="jump-links">
+      <a href="#sec-vigente">Vigente</a>
+      <a href="#sec-calendario">Calendario</a>
+      <a href="#sec-pagos">Pagos</a>
+      <a href="#sec-leads">Leads/Presupuestos</a>
+      <a href="#sec-produccion">Producción/Cierre</a>
+      <a href="#sec-marketing">Marketing</a>
+      <a href="#sec-personal">Personal</a>
+      <a href="#sec-tecnico">Técnico</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+
+  <section class="stats" id="resumen">
+    <div class="stat"><div class="n">3</div><div class="l">automatizaciones 100% cron (sin ningún clic)</div></div>
+    <div class="stat"><div class="n">4</div><div class="l">sincronizaciones automáticas al guardar/pagar/aprobar</div></div>
+    <div class="stat"><div class="n">3</div><div class="l">flujos existentes que hoy exigen un clic humano</div></div>
+    <div class="stat"><div class="n">24</div><div class="l">propuestas nuevas, priorizadas por dominio</div></div>
+  </section>
+
+  <div class="legend">
+    <span><b>Cómo leer esto:</b></span>
+    <span class="item"><span class="chip chip--vigente">Vigente</span> corre solo, sin intervención</span>
+    <span class="item"><span class="chip chip--asistido">Asistido</span> existe, pero un humano dispara/confirma cada vez</span>
+    <span class="item"><span class="chip chip--propuesta">Propuesta</span> no existe todavía</span>
+    <span class="item"><span class="priority" data-p="alta">Prioridad alta</span></span>
+    <span class="item"><span class="priority" data-p="media">media</span></span>
+    <span class="item"><span class="priority" data-p="baja">baja</span></span>
+  </div>
+
+  <section class="domain" id="sec-vigente">
+    <h2>Lo que ya corre solo hoy</h2>
+    <p class="section-intro">Verificado leyendo el código real, no la documentación de alto nivel. Tres automatizaciones son 100% cron (GitHub Actions como reloj real, Vercel Cron como red de seguridad de baja frecuencia); cuatro más son sincronizaciones automáticas disparadas por una acción dentro del mismo request. Se agregan al final tres flujos que existen pero siguen dependiendo de que alguien haga clic.</p>
+
+    <h3 class="subhead">Por cron — GitHub Actions</h3>
+
+    <article class="card" data-status="vigente" id="v-marketing-cron">
+      <div class="card-head"><span class="chip chip--vigente">Vigente</span><h4>Envío por lotes de campañas de Marketing</h4></div>
+      <p class="desc">Procesa <code>MarketingCampaign</code> en lotes de a 25 destinatarios, con lock Mongo por campaña y por destinatario (2&nbsp;min) para que dos corridas no se pisen, hasta 3 reintentos por destinatario y proveedor Resend real (o mock explícito sin <code>RESEND_API_KEY</code>).</p>
+      <dl class="facts">
+        <div><dt>Disparador</dt><dd><code>cron */10 * * * *</code> + fallback Vercel diario 06:00&nbsp;UTC</dd></div>
+        <div><dt>Endpoint</dt><dd><code>POST /api/marketing/process</code></dd></div>
+        <div><dt>Destinatario final</dt><dd>Leads/clientes de la audiencia segmentada</dd></div>
+        <div><dt>Referencia</dt><dd><code>marketing-campaign.service.ts:215-361</code></dd></div>
+      </dl>
+    </article>
+
+    <article class="card" data-status="vigente" id="v-tickets-cron">
+      <div class="card-head"><span class="chip chip--vigente">Vigente</span><h4>Automatización de entradas digitales</h4></div>
+      <p class="desc">Vence reservas de <code>TicketOrder</code> impagas y libera cupo, reintenta emails de ciclo de vida (pago pendiente, rechazado, abandono, reembolso) con backoff exponencial hasta 24&nbsp;h, y envía recordatorios de evento próximo a 48&nbsp;h y 24&nbsp;h antes.</p>
+      <dl class="facts">
+        <div><dt>Disparador</dt><dd><code>cron */5 * * * *</code> — único scheduler, sin respaldo en Vercel</dd></div>
+        <div><dt>Endpoint</dt><dd><code>POST /api/tickets/process</code></dd></div>
+        <div><dt>Destinatario final</dt><dd>Comprador de la entrada</dd></div>
+        <div><dt>Referencia</dt><dd><code>ticket.service.ts:426-555</code></dd></div>
+      </dl>
+    </article>
+
+    <article class="card" data-status="vigente" id="v-financial-cron">
+      <div class="card-head"><span class="chip chip--vigente">Vigente</span><h4>Recordatorios financieros internos</h4></div>
+      <p class="desc">Genera <code>CalendarItem</code> tipo <code>payment_window</code> por cuota/pago pendiente en D-7, D-3, D0, D+1, D+3, D+7, y por saldo de contrato en D-15 del evento. Al vencer cada aviso, revalida que siga vigente y notifica in-app + email a un destinatario <b>interno</b> (responsable del lead → gerente de salón → ADMIN/MANAGER de respaldo).</p>
+      <p class="how">Nunca llega al cliente ni por WhatsApp — es deliberadamente un aviso operativo interno, distinto de la cobranza al cliente (ver <a href="#a-payment-collection">Contacto de cobro</a>).</p>
+      <dl class="facts">
+        <div><dt>Disparador</dt><dd><code>cron */10 * * * *</code> + fallback Vercel diario 08:00&nbsp;UTC</dd></div>
+        <div><dt>Endpoint</dt><dd><code>POST /api/internal/calendar-tick</code></dd></div>
+        <div><dt>Destinatario final</dt><dd>Interno — nunca el cliente</dd></div>
+        <div><dt>Referencia</dt><dd><code>financial-reminders.service.ts:31-45, 543-601</code></dd></div>
+      </dl>
+    </article>
+
+    <h3 class="subhead">Por acción del usuario — automático dentro del mismo request</h3>
+
+    <article class="card" data-status="vigente" id="v-event-alert-sync">
+      <div class="card-head"><span class="chip chip--vigente">Vigente</span><h4>Sync de alertas de evento → Calendario</h4></div>
+      <p class="desc">Al guardar la pestaña "Tareas" de un evento, cada alerta de <code>resourcePlanSnapshot.alerts</code> se refleja (upsert/soft-delete) como <code>CalendarItem</code> tipo <code>reminder</code>.</p>
+      <p class="how">Es sincronización pura: no genera ningún título ni fecha por su cuenta. El botón "Agregar alerta" inserta una fila vacía — el usuario escribe cada alerta a mano, sin plantilla. Si no se carga nada, no se sincroniza nada. Ver propuesta <a href="#s-alert-templates">plantillas automáticas</a>.</p>
+      <dl class="facts">
+        <div><dt>Disparador</dt><dd>Guardar plan de tareas (create/update de evento)</dd></div>
+        <div><dt>Genera contenido</dt><dd>No — solo refleja lo ya escrito</dd></div>
+        <div><dt>Referencia</dt><dd><code>event-alert-calendar-sync.service.ts:27-72</code>, <code>events.routes.ts:533,881</code></dd></div>
+      </dl>
+    </article>
+
+    <article class="card" data-status="vigente" id="v-quote-request-notif">
+      <div class="card-head"><span class="chip chip--vigente">Vigente</span><h4>Notificación de nueva solicitud de presupuesto</h4></div>
+      <p class="desc">Es la única notificación in-app del sistema disparada por una acción de negocio (no por cron). Al crear una <code>QuoteRequest</code> (landing pública o alta manual), notifica a ADMIN/MANAGER + gerente del salón de interés, in-app <b>y por email</b>.</p>
+      <dl class="facts">
+        <div><dt>Disparador</dt><dd>Alta de <code>QuoteRequest</code></dd></div>
+        <div><dt>Canal</dt><dd>In-app + email con logo institucional</dd></div>
+        <div><dt>Referencia</dt><dd><code>quote-request-notifications.service.ts:118-166</code></dd></div>
+      </dl>
+    </article>
+
+    <article class="card" data-status="vigente" id="v-ticket-payment-sync">
+      <div class="card-head"><span class="chip chip--vigente">Vigente</span><h4>Pago de entrada → registro automático en Pagos</h4></div>
+      <p class="desc">Al aprobarse una orden (webhook Mercado Pago o marcado manual), crea un <code>Payment</code> de solo lectura con <code>source: 'ticket_order'</code>; el reembolso sincroniza estado/monto en el mismo registro. Idempotente por <code>ticketOrderId</code>.</p>
+      <dl class="facts">
+        <div><dt>Disparador</dt><dd><code>markOrderPaid</code> / <code>refundTicketOrder</code></dd></div>
+        <div><dt>Efecto</dt><dd>Aparece en Pagos con badge "Entrada digital"</dd></div>
+        <div><dt>Referencia</dt><dd><code>ticket.service.ts:729-790</code>, <code>payments.service.ts:261-293</code></dd></div>
+      </dl>
+    </article>
+
+    <article class="card" data-status="vigente" id="v-payroll-expense">
+      <div class="card-head"><span class="chip chip--vigente">Vigente</span><h4>Liquidación pagada → Expense automático</h4></div>
+      <p class="desc">Genera un <code>Expense</code> de categoría "Sueldos y jornales" (con <code>ExpenseAllocation</code> por evento) a partir de las <code>WorkSession</code> de la liquidación, idempotente por <code>sourceType: 'PAYROLL'</code>.</p>
+      <p class="how">Ojo: ocurre al marcar la liquidación como <b>pagada</b>, no al <b>aprobarla</b> — corrige una imprecisión que circulaba en la documentación del proyecto.</p>
+      <dl class="facts">
+        <div><dt>Disparador</dt><dd>Clic "Marcar pagada" (no "Aprobar")</dd></div>
+        <div><dt>Efecto</dt><dd>Conecta directo con el reporte de rentabilidad</dd></div>
+        <div><dt>Referencia</dt><dd><code>payroll.service.ts:596-606, 547-594</code></dd></div>
+      </dl>
+    </article>
+
+    <h3 class="subhead">Existe, pero requiere un clic humano cada vez</h3>
+
+    <article class="card" data-status="asistido" id="a-payment-collection">
+      <div class="card-head"><span class="chip chip--asistido">Asistido</span><h4>Contacto de cobro por vencimiento</h4></div>
+      <p class="desc">El operador previsualiza y edita un mensaje de cobro; el email solo sale si confirma "Enviar ahora", y WhatsApp solo abre un borrador <code>wa.me</code> para que lo envíe a mano. Requiere <code>PAYMENTS_CREATE</code> y sesión real — no hay secreto de cron detrás.</p>
+      <dl class="facts">
+        <div><dt>Requiere</dt><dd>Operador autenticado, confirmación explícita por envío</dd></div>
+        <div><dt>Auditoría</dt><dd><code>PAYMENT_COLLECTION_EMAIL_SENT</code> / <code>_WHATSAPP_DRAFT_PREPARED</code></dd></div>
+        <div><dt>Referencia</dt><dd><code>payment-collection.routes.ts:1-16</code></dd></div>
+      </dl>
+    </article>
+
+    <article class="card" data-status="asistido" id="a-production-generation">
+      <div class="card-head"><span class="chip chip--asistido">Asistido</span><h4>Generación del plan de producción</h4></div>
+      <p class="desc">El <b>cálculo</b> sí es automático una vez disparado (cruza <code>ProductionRule</code> por salón/tipo con los datos reales del evento), pero el <b>disparo</b> siempre es un clic: nadie genera producción solo por crear o confirmar un evento.</p>
+      <dl class="facts">
+        <div><dt>Requiere</dt><dd>Entrar a <code>/admin/production</code> y confirmar el evento</dd></div>
+        <div><dt>Ventana de candidatos</dt><dd>Eventos próximos sin plan vigente (120 días)</dd></div>
+        <div><dt>Referencia</dt><dd><code>production.routes.ts:66-86</code>, <code>production.service.ts:193-250</code></dd></div>
+      </dl>
+    </article>
+
+    <article class="card" data-status="asistido" id="a-event-closure">
+      <div class="card-head"><span class="chip chip--asistido">Asistido</span><h4>Checklist de cierre de evento</h4></div>
+      <p class="desc">El cierre en 3 niveles (operativo/financiero/administrativo) existe y se calcula al abrir la pantalla, pero no dispara ningún aviso: si un evento pasado queda sin cerrar, nadie se entera salvo que alguien entre a revisarlo a mano.</p>
+      <dl class="facts">
+        <div><dt>Automatización real</dt><dd>Ninguna — 0 referencias a Notification/CalendarItem/cron</dd></div>
+        <div><dt>Único acceso</dt><dd><code>/admin/events/[id]/closure</code>, sin widget en ningún dashboard</dd></div>
+        <div><dt>Referencia</dt><dd><code>event-closure.routes.ts</code> (149 líneas, sin envíos)</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <section class="domain" id="sec-calendario">
+    <h2>Propuestas · Calendario y alertas de evento</h2>
+    <p class="section-intro">Lo que pediste primero: que crear un evento deje solas las alertas típicas, y que esas alertas efectivamente avisen a alguien en su fecha — hoy ninguna de las dos cosas pasa.</p>
+
+    <article class="card" data-status="propuesta" data-priority="alta" data-effort="2" id="s-alert-templates">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Plantillas automáticas de alertas al crear/confirmar un evento</h4></div>
+      <p class="desc">Reglas configurables (mismo patrón que <code>ProductionRule</code>: por salón/tipo de evento) que precarguen automáticamente el plan de tareas al crear o confirmar un evento. Ejemplos concretos que pediste:</p>
+      <p class="desc" style="margin-top:-0.4rem"><code>D-15</code> "Revisar lista de invitados definitiva" · <code>D-10</code> "Coordinar una reunión con {cliente} para el evento {evento}" · <code>D-7</code> "Revisar cronograma del evento con el salón" · <code>D-3</code> "Confirmar cantidad final de invitados con producción" · <code>D-1</code> "Confirmar llegada de proveedores y montaje" · <code>D+2</code> "Iniciar cierre operativo del evento".</p>
+      <p class="how">No reemplaza <code>EventTasksEditor</code>: lo precarga editable. El usuario sigue pudiendo borrar, mover o agregar alertas a mano, igual que hoy.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="alta">Prioridad alta</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span class="on"></span><span></span></span>Esfuerzo medio</span>
+        <a class="ref-link" href="#v-event-alert-sync">→ Mejora de: Sync alertas evento→calendario</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="alta" data-effort="2" id="s-alert-dispatch">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Disparo real de la alerta en su fecha y hora</h4></div>
+      <p class="desc">Hoy ningún cron recorre <code>CalendarItem</code> de tipo <code>reminder</code>/<code>alert</code>/<code>note</code>/<code>task</code>/<code>meeting</code> — solo <code>payment_window</code> tiene motor propio. Extender el mismo patrón (<code>calendar-tick</code> genérico, endpoint interno + secreto + GitHub Actions cada 10&nbsp;min) para que, al llegar <code>remindAt</code>, se envíe notificación in-app + email a quien creó el ítem (<code>createdBy</code>), tal como pediste.</p>
+      <p class="how">Reutiliza exactamente el lock/idempotencia por <code>automationKey</code> ya probado en recordatorios financieros — no hace falta inventar mecanismo nuevo, solo un segundo "tipo" de obligación para el mismo tick.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="alta">Prioridad alta</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span class="on"></span><span></span></span>Esfuerzo medio</span>
+        <a class="ref-link" href="#v-financial-cron">→ Mejora de: Recordatorios financieros (mismo patrón de tick)</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="alta" data-effort="2" id="s-daily-digest">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Resumen ejecutivo diario (Admin / Manager / Encargado de salón)</h4></div>
+      <p class="desc">Un cron diario (ej. 07:00 hora local) que arme y envíe por email un resumen de: eventos de hoy, alertas/recordatorios de hoy, pagos vencidos hoy y cierres de evento pendientes — filtrado por salón para el encargado de salón, completo para Admin/Manager.</p>
+      <p class="how">Mismo patrón validado 3 veces en este repo: endpoint interno + secreto + GitHub Actions. No requiere infraestructura nueva, solo un endpoint que arme el digest en vez de accionar sobre una obligación puntual.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="alta">Prioridad alta</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span class="on"></span><span></span></span>Esfuerzo medio</span>
+      </div>
+    </article>
+  </section>
+
+  <section class="domain" id="sec-pagos">
+    <h2>Propuestas · Pagos y cobranza con clientes</h2>
+    <p class="section-intro">Hoy el único aviso automático de pagos es 100% interno. Nada le llega al cliente salvo que un operador confirme el envío manual. Estas propuestas cierran ese lado del circuito.</p>
+
+    <article class="card" data-status="propuesta" data-priority="alta" data-effort="2" id="s-client-payment-reminders">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Recordatorios de pago automáticos AL CLIENTE</h4></div>
+      <p class="desc">Extender el motor de recordatorios financieros con un canal cliente opt-in por contrato: D-5, D-1, D0 y D+1 sobre cada cuota pendiente, por email (y borrador <code>wa.me</code> para el operador si se prefiere no automatizar WhatsApp).</p>
+      <p class="how">Reusa <code>automationKey</code>/lock/reintento del cron financiero existente; solo agrega un destinatario "cliente" y una plantilla de mensaje distinta a la interna.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="alta">Prioridad alta</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span class="on"></span><span></span></span>Esfuerzo medio</span>
+        <a class="ref-link" href="#v-financial-cron">→ Mejora de: Recordatorios financieros internos</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="1" id="s-schedule-collection">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Programar el contacto de cobro en vez de solo "enviar ahora"</h4></div>
+      <p class="desc">Sumar una casilla "enviar automáticamente si el pago no se registra a tiempo" al flujo de contacto de cobro existente, delegándolo al mismo tick financiero cuando se cumpla la condición.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+        <a class="ref-link" href="#a-payment-collection">→ Mejora de: Contacto de cobro por vencimiento</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="1" id="s-balance-client-reminder">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Aviso de saldo de contrato al cliente antes del evento</h4></div>
+      <p class="desc">Hoy el saldo a D-15 solo genera aviso interno. Sumar un aviso equivalente al cliente (email) recordando el saldo pendiente antes de la fecha del evento.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+        <a class="ref-link" href="#v-financial-cron">→ Mejora de: Recordatorios financieros internos</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="baja" data-effort="1" id="s-post-event-survey">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Encuesta o pedido de reseña post-evento</h4></div>
+      <p class="desc">A D+2 o D+7 de finalizado el evento, email automático al cliente agradeciendo y pidiendo feedback/reseña — reutilizando el motor de campañas de Marketing en vez de construir un canal de email nuevo.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="baja">Prioridad baja</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+      </div>
+    </article>
+  </section>
+
+  <section class="domain" id="sec-leads">
+    <h2>Propuestas · Leads y presupuestos</h2>
+    <p class="section-intro">El único punto de negocio con notificación automática hoy es la solicitud de presupuesto entrante. Todo lo que pasa después (seguimiento, vencimiento) es silencio total.</p>
+
+    <article class="card" data-status="propuesta" data-priority="alta" data-effort="1" id="s-lead-followup">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Alerta de lead/solicitud sin atender</h4></div>
+      <p class="desc">Si una <code>QuoteRequest</code> sigue sin "tomarse" después de X horas, escalar aviso in-app + email al gerente del salón y, pasado un segundo umbral, a Admin/Manager.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="alta">Prioridad alta</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+        <a class="ref-link" href="#v-quote-request-notif">→ Mejora de: Notificación de nueva solicitud de presupuesto</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="1" id="s-quote-expiration">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Expiración automática de presupuestos vencidos</h4></div>
+      <p class="desc"><code>Quote.status</code> ya admite <code>expired</code> y existe <code>validUntil</code>, pero nada compara la fecha y cambia el estado solo — hoy es 100% manual. Sumar el cambio automático de estado + aviso interno al vendedor cuando vence.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="1" id="s-quote-client-notice">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Aviso al cliente antes de que expire su presupuesto</h4></div>
+      <p class="desc">"Tu presupuesto vence en 3 días" — email automático antes del vencimiento, con link para renovar interés o pedir una extensión.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+        <a class="ref-link" href="#s-quote-expiration">→ Depende de: Expiración automática de presupuestos</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="1" id="s-quote-internal-followup">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Seguimiento interno de presupuesto enviado sin respuesta</h4></div>
+      <p class="desc">A los N días de un <code>Quote</code> en estado "enviado" sin aceptar/rechazar, recordatorio interno al vendedor asignado para reforzar el contacto — mismo patrón de tick que el resto.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+      </div>
+    </article>
+  </section>
+
+  <section class="domain" id="sec-produccion">
+    <h2>Propuestas · Producción, stock y cierre de evento</h2>
+    <p class="section-intro">Tres flujos operativos reales que hoy dependen enteramente de que alguien se acuerde de entrar a revisarlos.</p>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="1" id="s-closure-reminder">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Recordatorio de cierre de evento pendiente</h4></div>
+      <p class="desc">A D+1 y D+7 de finalizado un evento sin cierre operativo/financiero/administrativo completo, aviso interno al responsable del evento y al gerente de salón.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+        <a class="ref-link" href="#a-event-closure">→ Mejora de: Checklist de cierre de evento</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="2" id="s-production-trigger-reminder">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Aviso de "falta generar producción" antes del evento</h4></div>
+      <p class="desc">Si a X días del evento no existe un <code>ProductionPlan</code> vigente, recordatorio interno — sin forzar la generación automática (que sigue siendo una decisión humana deliberada de qué reglas aplicar).</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span class="on"></span><span></span></span>Esfuerzo medio</span>
+        <a class="ref-link" href="#a-production-generation">→ Mejora de: Generación del plan de producción</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="2" id="s-tableware-overbooking">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Alerta de sobre-reserva de vajilla/stock de salón</h4></div>
+      <p class="desc">Si dos eventos superpuestos en fecha reservan más <code>SalonStockItem</code> del disponible físico del salón, avisar al gerente de salón antes de que sea un problema el día del evento.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span class="on"></span><span></span></span>Esfuerzo medio</span>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="baja" data-effort="2" id="s-inventory-low-stock">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Alerta de stock bajo (Inventario)</h4></div>
+      <p class="desc">Backend de <code>catalog</code>/<code>inventory</code>/<code>consumption-rules</code> ya existe pero no está montado en rutas. Si se retoma esa integración, un umbral mínimo por <code>InventoryItem</code> con aviso automático es la automatización natural a sumar en el mismo trabajo.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="baja">Prioridad baja — depende de montar Operaciones primero</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span class="on"></span><span></span></span>Esfuerzo medio</span>
+      </div>
+    </article>
+  </section>
+
+  <section class="domain" id="sec-marketing">
+    <h2>Propuestas · Marketing y fidelización</h2>
+    <p class="section-intro">El motor de campañas (segmentación, lotes, Resend real) ya está construido — estas propuestas lo reutilizan para casos puntuales en vez de crear un canal de email nuevo.</p>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="1" id="s-birthday-campaign">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Recordatorio de cumpleaños/aniversario de cliente</h4></div>
+      <p class="desc">Audiencia dinámica por fecha (cumpleaños del mes) disparando una campaña corta vía el motor de Marketing existente.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+        <a class="ref-link" href="#v-marketing-cron">→ Reusa: motor de campañas de Marketing</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="baja" data-effort="1" id="s-reengagement">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Reactivación de audiencia inactiva</h4></div>
+      <p class="desc">Segmento automático de leads/clientes sin interacción en N meses, con una campaña de re-enganche periódica.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="baja">Prioridad baja</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+        <a class="ref-link" href="#v-marketing-cron">→ Reusa: motor de campañas de Marketing</a>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="2" id="s-lifecycle-campaign">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Campaña disparada por evento de ciclo de vida</h4></div>
+      <p class="desc">"Gracias por tu compra" tras una entrada digital, "gracias por elegirnos" tras el cierre de un evento — usando el mismo <code>MarketingCampaign</code>/plantilla en vez de un email suelto hardcodeado.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span class="on"></span><span></span></span>Esfuerzo medio</span>
+      </div>
+    </article>
+  </section>
+
+  <section class="domain" id="sec-personal">
+    <h2>Propuestas · Personal y asistencia</h2>
+    <p class="section-intro">La app móvil de personal ya cubre fichaje/incidencias/correcciones en tiempo real; estas propuestas cierran el lado "recordatorio" que hoy no existe.</p>
+
+    <article class="card" data-status="propuesta" data-priority="media" data-effort="1" id="s-shift-reminder">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Recordatorio de turno del día siguiente</h4></div>
+      <p class="desc">Push/notificación in-app la noche anterior a quien tenga <code>EventStaffAssignment</code> para el día siguiente — aplicable el día que se decida exponer Turnos en la navegación móvil.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="media">Prioridad media</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="alta" data-effort="1" id="s-open-session-alert">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Alerta de jornada abierta sin fichaje de salida</h4></div>
+      <p class="desc">Si un <code>WorkSession</code> queda abierto más de X horas sin marcación de salida, aviso al gerente de salón para revisar/corregir antes de que distorsione la liquidación.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="alta">Prioridad alta</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="baja" data-effort="1" id="s-payroll-pending-alert">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Aviso de liquidación pendiente de generar</h4></div>
+      <p class="desc">Al cerrar el período de liquidación, recordatorio interno si quedó personal con jornadas aprobadas sin liquidación creada.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="baja">Prioridad baja</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+        <a class="ref-link" href="#v-payroll-expense">→ Complementa: Liquidación pagada → Expense automático</a>
+      </div>
+    </article>
+  </section>
+
+  <section class="domain" id="sec-tecnico">
+    <h2>Propuestas · Técnicas y mantenimiento</h2>
+    <p class="section-intro">Detalles menores encontrados durante la investigación de código que conviene resolver junto con lo anterior.</p>
+
+    <article class="card" data-status="propuesta" data-priority="baja" data-effort="1" id="s-dead-code">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Resolver <code>notification.service.ts#createNotifications</code></h4></div>
+      <p class="desc">Helper genérico de notificación con envío de email que ningún módulo importa hoy — es código muerto. Conectarlo a los nuevos disparadores de este documento (en vez de duplicar lógica) o eliminarlo si no se usa.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="baja">Prioridad baja</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="alta" data-effort="1" id="s-mobile-rate-limit">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Rate limiting real en el login móvil</h4></div>
+      <p class="desc"><code>/api/mobile/auth/login</code> no tiene límite por IP/usuario (la recuperación de contraseña sí lo tiene) — riesgo ya señalado en la documentación del proyecto, no resuelto todavía.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="alta">Prioridad alta</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+      </div>
+    </article>
+
+    <article class="card" data-status="propuesta" data-priority="baja" data-effort="1" id="s-formalize-pattern">
+      <div class="card-head"><span class="chip chip--propuesta">Propuesta</span><h4>Formalizar el patrón de automatización como plantilla</h4></div>
+      <p class="desc">El trío "endpoint interno protegido por secreto + lock/idempotencia Mongo + GitHub Actions" ya se repitió 3 veces (Marketing, Tickets, Financiero). Documentarlo explícitamente como la plantilla obligatoria para toda automatización nueva de esta lista, para no reinventar el mecanismo cada vez.</p>
+      <div class="meta-row">
+        <span class="priority" data-p="baja">Prioridad baja</span>
+        <span class="effort"><span class="bars"><span class="on"></span><span></span><span></span></span>Esfuerzo bajo</span>
+      </div>
+    </article>
+  </section>
+
+  <section id="notas">
+    <h2>Notas de método y alcance</h2>
+    <ul>
+      <li>Todo lo listado como "Vigente" o "Asistido" fue confirmado leyendo rutas/servicios/workflows reales, con cita de archivo y línea — no se dio por cierto nada que solo apareciera en documentación previa.</li>
+      <li>Las propuestas reutilizan deliberadamente patrones ya probados en este repo (endpoint interno + secreto + GitHub Actions + lock Mongo por <code>automationKey</code>) en vez de proponer infraestructura nueva — coherente con la regla del proyecto de no depender de un plan pago ni de una cola/proceso residente.</li>
+      <li>Prioridad/esfuerzo son una estimación orientativa para ordenar conversación, no un compromiso de sprint — quedan a validar antes de planificar implementación.</li>
+      <li>Este documento no modifica código ni la documentación persistente del proyecto (<code>CLAUDE.md</code> / <code>MYM_EVENTOS_PROJECT_CONTEXT.md</code>); si se decide avanzar con alguna propuesta, corresponde actualizar esos documentos en el mismo cambio, como indica el protocolo de trabajo del repositorio.</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>Generado a partir de una lectura directa del código de mymeventos · 2026-08-03</footer>
+
+<script>
+(function () {
+  var buttons = document.querySelectorAll('.status-filters button');
+  var cards = document.querySelectorAll('.card');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      buttons.forEach(function (b) { b.classList.remove('is-active'); });
+      btn.classList.add('is-active');
+      var filter = btn.getAttribute('data-filter');
+      cards.forEach(function (card) {
+        var status = card.getAttribute('data-status');
+        card.classList.toggle('is-hidden', filter !== 'all' && status !== filter);
+      });
+    });
+  });
+})();
+</script>

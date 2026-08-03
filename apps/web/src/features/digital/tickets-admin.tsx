@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  ScanLine,
   Search,
   Ticket,
   Users,
@@ -258,6 +259,12 @@ export function TicketPublicationsAdmin() {
         description="Gestioná publicaciones, ventas, compradores, ingresos y devoluciones."
         action={
           <div className="flex flex-wrap gap-2">
+            <Link href="/admin/ticket-scanner">
+              <Button variant="secondary">
+                <ScanLine className="mr-2 h-4 w-4" />
+                Escanear entradas
+              </Button>
+            </Link>
             <Link href="/entradas" target="_blank">
               <Button variant="secondary">
                 <ExternalLink className="mr-2 h-4 w-4" />

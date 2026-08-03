@@ -1,6 +1,6 @@
 import { hasAnyPermission, Permission, type Role } from '@mym/shared';
 import type { ComponentType } from 'react';
-import { Activity, BadgeDollarSign, Bell, Building2, CalendarClock, CalendarDays, ChartNoAxesCombined, ChefHat, ClipboardList, Clock3, CreditCard, FileText, Globe2, LayoutDashboard, Mail, Megaphone, ReceiptText, Settings, Ticket, Truck, UserRound, Users, WalletCards } from 'lucide-react';
+import { Activity, BadgeDollarSign, Bell, Building2, CalendarClock, CalendarDays, ChartNoAxesCombined, ChefHat, ClipboardList, Clock3, CreditCard, FileText, Globe2, LayoutDashboard, Mail, Megaphone, ReceiptText, ScanLine, Settings, Ticket, Truck, UserRound, Users, WalletCards } from 'lucide-react';
 import type { SessionUser } from './auth';
 
 export type AdminModule = { href: string; label: string; title: string; description: string; icon: ComponentType<{ className?: string }>; permissions: Permission[] };
@@ -15,6 +15,7 @@ export const adminModules: AdminModule[] = [
   { href: '/admin/contracts', label: 'Contratos', title: 'Contratos', description: 'Contratos formales generados desde eventos.', icon: FileText, permissions: [Permission.CONTRACTS_READ] },
   { href: '/admin/digital-invitations', label: 'Invitaciones Digitales', title: 'Invitaciones Digitales', description: 'Invitaciones, invitados y confirmaciones independientes.', icon: Mail, permissions: [Permission.INVITATIONS_READ] },
   { href: '/admin/digital-tickets', label: 'Entradas Digitales', title: 'Entradas Digitales', description: 'Publicaciones, órdenes, entradas y control de ingreso independientes.', icon: Ticket, permissions: [Permission.TICKETS_READ] },
+  { href: '/admin/ticket-scanner', label: 'Escanear Entradas', title: 'Escanear Entradas', description: 'Control de ingreso por QR para cualquier publicación activa, con validación completa contra el servidor.', icon: ScanLine, permissions: [Permission.TICKETS_VALIDATE] },
   { href: '/admin/payments', label: 'Ingresos', title: 'Ingresos', description: 'Cobros, señas, cuotas, saldos y depósitos asociados a contratos.', icon: CreditCard, permissions: [Permission.PAYMENTS_READ] },
   { href: '/admin/expenses', label: 'Gastos', title: 'Gastos y rentabilidad', description: 'Costos, comprobantes, categorías y margen por evento.', icon: WalletCards, permissions: [Permission.EXPENSES_VIEW] },
   { href: '/admin/payroll', label: 'Liquidación de Sueldos', title: 'Liquidación de Sueldos', description: 'Asistencias aprobadas, perfiles salariales, liquidaciones, adelantos y pagos internos.', icon: BadgeDollarSign, permissions: [Permission.PAYROLL_VIEW, Permission.PAYROLL_READ] },

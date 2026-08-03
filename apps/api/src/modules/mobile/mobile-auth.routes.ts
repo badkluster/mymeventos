@@ -19,6 +19,7 @@ import { writeAuditLog } from '../audit/audit.service';
 import { sendEmail } from '../email/email.service';
 import { getApiMessage } from '../../utils/messages';
 import { publicRateLimit } from '../../middlewares/publicRateLimit';
+import { registerFailedLoginAttempt } from '../../utils/account-lockout';
 
 const router = Router();
 
@@ -119,7 +120,7 @@ router.post('/login', publicRateLimit({ windowMs: 15 * 60_000, max: 10 }), valid
   const credentialsValid = user?.passwordHash ? await verifyPassword(request.body.password, user.passwordHash) : false;
   const locked = Boolean(user?.lockedUntil && user.lockedUntil > new Date());
   if (!user || !credentialsValid || locked) {
-    if (user) await User.updateOne({ _id: user._id }, { $inc: { failedLoginAttempts: 1 } });
+    if (user) await registerFailedLoginAttempt(user._id.toString());
     await writeAuditLog(request, 'AUTH_MOBILE_LOGIN_FAILURE', 'User', user?._id?.toString(), { username: request.body.username });
     throw new ApiError(401, 'INVALID_CREDENTIALS');
   }

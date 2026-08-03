@@ -23,6 +23,7 @@ const customerFields = z.object({
   documentNumber: z.string().trim().optional(),
   address: z.string().trim().optional(),
   occupation: z.string().trim().optional(),
+  birthDate: z.string().trim().optional().or(z.literal('')),
   notes: z.string().trim().optional(),
   sourceLeadId: objectId.optional(),
   salonIds: z.array(objectId).optional()
@@ -109,7 +110,9 @@ router.get('/:id', requirePermission(Permission.CUSTOMERS_READ), validateRequest
 router.patch('/:id', requirePermission(Permission.CUSTOMERS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const customer: any = await Customer.findOne({ _id: request.params.id, deletedAt: null });
   await ensureCustomerAccess(request, customer);
-  Object.assign(customer, request.body, splitName({ ...customer.toObject(), ...request.body }), { email: normalizeEmail(request.body.email ?? customer.email), normalizedEmail: normalizeEmail(request.body.email ?? customer.email), normalizedPhone: normalizePhone(request.body.phone ?? customer.phone), updatedBy: request.user!.id });
+  const patch: Record<string, unknown> = { ...request.body };
+  if ('birthDate' in patch) patch.birthDate = patch.birthDate ? new Date(String(patch.birthDate)) : null;
+  Object.assign(customer, patch, splitName({ ...customer.toObject(), ...patch }), { email: normalizeEmail(request.body.email ?? customer.email), normalizedEmail: normalizeEmail(request.body.email ?? customer.email), normalizedPhone: normalizePhone(request.body.phone ?? customer.phone), updatedBy: request.user!.id });
   await customer.save();
   await writeAuditLog(request, 'CUSTOMER_UPDATE', 'Customer', customer._id.toString());
   return sendSuccess(response, { customer }, 200, getApiMessage('CUSTOMER_UPDATED'));

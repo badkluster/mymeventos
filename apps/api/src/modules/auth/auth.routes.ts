@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { User, buildUserFullName, normalizeUserEmail, normalizeUserPhone } from '../users/user.model'; import { RefreshToken } from './refreshToken.model'; import { validateRequest } from '../../middlewares/validateRequest'; import { asyncHandler } from '../../utils/asyncHandler'; import { ApiError } from '../../middlewares/errorHandler'; import { hashToken, generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../../utils/tokens'; import { hashPassword, verifyPassword } from '../../utils/password'; import { parseDurationMs as duration } from '../../utils/duration'; import { env } from '../../config/env'; import { sendSuccess } from '../../utils/api'; import { loginSchema } from './auth.schemas'; import { requireAuth } from '../../middlewares/auth'; import { writeAuditLog } from '../audit/audit.service';
+import { User, buildUserFullName, normalizeUserEmail, normalizeUserPhone } from '../users/user.model'; import { RefreshToken } from './refreshToken.model'; import { validateRequest } from '../../middlewares/validateRequest'; import { asyncHandler } from '../../utils/asyncHandler'; import { ApiError } from '../../middlewares/errorHandler'; import { hashToken, generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../../utils/tokens'; import { hashPassword, verifyPassword } from '../../utils/password'; import { parseDurationMs as duration } from '../../utils/duration'; import { env } from '../../config/env'; import { sendSuccess } from '../../utils/api'; import { loginSchema } from './auth.schemas'; import { requireAuth } from '../../middlewares/auth'; import { writeAuditLog } from '../audit/audit.service'; import { registerFailedLoginAttempt } from '../../utils/account-lockout';
 const router = Router(); const cookieBase = { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: env.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', path: '/', ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}) };
 const optionalText = z.string().trim().optional().or(z.literal(''));
 const profileSchema = z.object({ body: z.object({ firstName: z.string().trim().min(1), lastName: z.string().trim().min(1), email: z.string().trim().email(), phone: optionalText, documentType: optionalText, documentNumber: optionalText, avatarUrl: z.string().trim().url().optional().or(z.literal('')) }), params: z.object({}), query: z.object({}) });
@@ -20,7 +20,7 @@ router.post('/login', validateRequest(loginSchema), asyncHandler(async (request,
 
   if (invalidCredentials) {
     await Promise.all([
-      user ? User.updateOne({ _id: user._id }, { $inc: { failedLoginAttempts: 1 } }) : Promise.resolve(),
+      user ? registerFailedLoginAttempt(user._id.toString()) : Promise.resolve(),
       writeAuditLog(request, 'AUTH_LOGIN_FAILURE', 'User', user?._id?.toString(), { username: request.body.username, channel: 'web' })
     ]);
     throw new ApiError(401, 'INVALID_CREDENTIALS');

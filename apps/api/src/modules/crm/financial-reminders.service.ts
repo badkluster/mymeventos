@@ -91,11 +91,13 @@ function humanDate(value?: string): string {
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00.000Z`));
 }
 
-function remainingInstallmentAmount(installment: any): number {
+// Exported (unchanged otherwise) so client-payment-reminders.service.ts can reuse the exact same
+// notion of "open installment"/due date instead of re-deriving it and risking drift.
+export function remainingInstallmentAmount(installment: any): number {
   return Math.max(0, Number(installment?.amount ?? 0) - Number(installment?.paidAmount ?? 0));
 }
 
-function isOpenInstallment(installment: any): boolean {
+export function isOpenInstallment(installment: any): boolean {
   return Boolean(installment)
     && !INSTALLMENT_TERMINAL_STATUSES.has(String(installment.status ?? ''))
     && remainingInstallmentAmount(installment) > 0;
@@ -105,7 +107,7 @@ function eventTitle(event: any): string {
   return event?.eventName || event?.eventType || 'Evento sin nombre';
 }
 
-function installmentDueDateKey(installment: any): string | undefined {
+export function installmentDueDateKey(installment: any): string | undefined {
   return dueDateKey(installment?.paymentWindowEnd ?? installment?.dueDate);
 }
 
@@ -295,7 +297,7 @@ async function upsertFinancialCalendarItem(context: ReminderContext): Promise<vo
   }
 }
 
-function planFor(event: any, contract: any): any[] {
+export function planFor(event: any, contract: any): any[] {
   if (Array.isArray(event?.paymentPlanSnapshot) && event.paymentPlanSnapshot.length) return event.paymentPlanSnapshot;
   return Array.isArray(contract?.paymentPlanSnapshot) ? contract.paymentPlanSnapshot : [];
 }

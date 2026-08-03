@@ -16,6 +16,7 @@ import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
 import { findOrCreateCustomer } from './contact-dedupe.service';
 import { buildInitialResourcePlan } from './event-resource-plan';
+import { buildDefaultEventAlerts } from './event-alert-defaults';
 import { createContractFromEvent } from './event-to-contract.service';
 import { convertQuoteToEvent } from './quote-to-event.service';
 import { createPayment, paymentSummary } from './payments.service';
@@ -493,6 +494,17 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
   const commercialSnapshot = commercialSnapshotFromBody(request.body);
   const totalAmount = Number(commercialSnapshot.totalAmount ?? 0);
   const resourcePlanSnapshot = request.body.resourcePlanSnapshot ?? buildInitialResourcePlan({ source: 'manual_event' });
+  // Precarga alertas típicas (revisar invitados, coordinar reunión, etc.) solo cuando el
+  // llamador no mandó su propio plan y ya sabemos la fecha del evento — el usuario sigue
+  // pudiendo editarlas/borrarlas desde la pestaña "Tareas" igual que antes.
+  if (!request.body.resourcePlanSnapshot && request.body.eventDate) {
+    const derivedEventName = request.body.eventName || `${request.body.eventType || 'Evento'} - ${customer.fullName || 'Cliente'}`;
+    resourcePlanSnapshot.alerts = buildDefaultEventAlerts({
+      eventDate: request.body.eventDate,
+      customerName: customer.fullName,
+      eventName: derivedEventName
+    });
+  }
   const event = await Event.create({
     customerId: customer._id,
     salonId,

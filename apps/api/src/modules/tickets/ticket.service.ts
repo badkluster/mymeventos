@@ -1059,6 +1059,38 @@ export async function ticketPublicView(publicToken: string) {
   };
 }
 
+export function findTicketForValidation(publicToken: string) {
+  return DigitalTicket.findOne({
+    $or: [
+      { qrTokenHash: ticketTokenHash(publicToken) },
+      { publicToken },
+      { ticketCode: publicToken },
+    ],
+    deletedAt: null,
+  }).lean();
+}
+
+// Centralizes the full validation procedure so both the scan step and the confirm
+// step agree on the outcome: wrong-event tickets and tickets scanned past the
+// publication's qrConfig.validUntil window are surfaced explicitly instead of
+// falling through to a generic "invalid" (or, for confirm, an unrecognized status
+// string that would fail the TicketAccessAttempt.result enum).
+export function resolveCheckInResult(
+  ticket: any,
+  publicationId: string,
+  publication?: { qrConfig?: { validUntil?: Date | string | null } },
+) {
+  if (!ticket) return "invalid";
+  if (String(ticket.publicationId) !== String(publicationId))
+    return "wrong_publication";
+  if (ticket.status === "checked_in") return "already_checked_in";
+  if (["cancelled", "refunded", "transferred", "expired"].includes(ticket.status))
+    return ticket.status;
+  const validUntil = publication?.qrConfig?.validUntil;
+  if (validUntil && new Date(validUntil).getTime() < Date.now()) return "expired";
+  return ticket.status === "issued" ? "valid" : ticket.status;
+}
+
 export function claimTicketCheckIn(
   publicationId: string,
   publicToken: string,

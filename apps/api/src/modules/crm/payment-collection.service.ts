@@ -1,4 +1,4 @@
-import { Contract, Event, Payment } from './crm.models';
+import { CalendarItem, Contract, Event, Payment } from './crm.models';
 import { ApiError } from '../../middlewares/errorHandler';
 import { sendEmail } from '../email/email.service';
 import { argentinaDateKey, dueDateKey } from '../../utils/argentina-date';
@@ -192,4 +192,50 @@ export function paymentCollectionWhatsAppUrl(contact: PaymentCollectionContact, 
   const phone = contact.customer.phone?.replace(/\D/g, '') ?? '';
   if (phone.length < 8) throw new ApiError(422, 'PAYMENT_COLLECTION_WHATSAPP_MISSING', 'El cliente no tiene un número de WhatsApp válido registrado.');
   return `https://wa.me/${phone}?text=${encodeURIComponent(message.trim())}`;
+}
+
+function collectionTargetKey(target: PaymentCollectionTarget): string {
+  return target.source === 'payment' ? `payment:${target.paymentId}` : `installment:${target.eventId}:${target.installmentId}`;
+}
+
+const DEFAULT_FOLLOW_UP_DAYS = 3;
+
+/**
+ * The "reintentar automáticamente si sigue sin pagarse" checkbox on the manual collection
+ * screen. Distinct from client-payment-reminders.service.ts's blanket opt-in policy: this is a
+ * single, operator-initiated internal follow-up nudge (to the same operator, not the client),
+ * scoped to the one obligation they just contacted the client about. Re-checking the box just
+ * reschedules the same follow-up rather than stacking a new one, since the automationKey is
+ * keyed by the obligation, not by when it was scheduled.
+ */
+export async function schedulePaymentCollectionFollowUp(contact: PaymentCollectionContact, operatorUserId: string, followUpInDays = DEFAULT_FOLLOW_UP_DAYS): Promise<void> {
+  const targetKey = collectionTargetKey(contact.target);
+  const automationKey = `collection_followup:${targetKey}`;
+  const sendAt = new Date(Date.now() + followUpInDays * 86_400_000);
+  await CalendarItem.findOneAndUpdate(
+    { automationKey },
+    {
+      $set: {
+        type: 'reminder',
+        source: 'system',
+        title: `Seguimiento de cobro — ${contact.obligation.label}`,
+        description: `Revisar si ${contact.customer.fullName} ya pagó ${contact.obligation.label} (${money(contact.obligation.amount)}). Si sigue pendiente, contactalo de nuevo.`,
+        startAt: sendAt,
+        allDay: false,
+        status: 'scheduled',
+        priority: 'normal',
+        visibility: 'private',
+        eventId: contact.target.source === 'installment' ? contact.target.eventId : undefined,
+        paymentId: contact.target.source === 'payment' ? contact.target.paymentId : undefined,
+        customerId: contact.customer.id,
+        salonId: contact.salonId,
+        assignedToUserId: operatorUserId,
+        metadata: { collectionFollowUp: true, targetKey, source: contact.target.source },
+        // Reset unconditionally (not $setOnInsert): re-checking the box is a deliberate
+        // reschedule, even if a prior follow-up for this same obligation already fired.
+        notification: { enabled: true, channels: ['system', 'email'], sendAt, status: 'scheduled', attemptCount: 0 }
+      }
+    },
+    { upsert: true, setDefaultsOnInsert: true }
+  );
 }

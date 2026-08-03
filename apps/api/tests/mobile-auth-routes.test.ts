@@ -6,6 +6,7 @@ import { Role } from '@mym/shared';
 const mocks = vi.hoisted(() => ({
   userFindOne: vi.fn(),
   userUpdateOne: vi.fn(),
+  userFindOneAndUpdate: vi.fn(),
   refreshTokenCreate: vi.fn(),
   refreshTokenFindOne: vi.fn(),
   refreshTokenUpdateOne: vi.fn(),
@@ -16,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/modules/users/user.model', () => ({
-  User: { findOne: mocks.userFindOne, updateOne: mocks.userUpdateOne },
+  User: { findOne: mocks.userFindOne, updateOne: mocks.userUpdateOne, findOneAndUpdate: mocks.userFindOneAndUpdate },
   buildUserFullName: (first?: string, last?: string) => [first, last].filter(Boolean).join(' '),
   normalizeUserEmail: (value?: string) => value?.trim().toLowerCase() || undefined,
   normalizeUserPhone: (value?: string) => value
@@ -39,6 +40,7 @@ describe('mobile auth routes', () => {
     vi.resetAllMocks();
     mocks.writeAuditLog.mockResolvedValue(undefined);
     mocks.userUpdateOne.mockResolvedValue({});
+    mocks.userFindOneAndUpdate.mockReturnValue({ select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue({ failedLoginAttempts: 1 }) }) });
     mocks.refreshTokenCreate.mockResolvedValue({});
     mocks.mobileDeviceFindOneAndUpdate.mockResolvedValue({});
   });

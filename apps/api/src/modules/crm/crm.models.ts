@@ -65,6 +65,10 @@ const quoteRequestSchema = new Schema({
 const customerSchema = new Schema({
   firstName: String, lastName: String, fullName: { type: String, index: true }, phone: { type: String, index: true }, normalizedPhone: { type: String, index: true }, email: { type: String, index: true }, normalizedEmail: { type: String, index: true },
   documentNumber: String, address: String, occupation: String,
+  // Optional — feeds birthday-campaigns.service.ts. A customer with no birthDate just never
+  // enters that automation; nothing else reads or requires this field.
+  birthDate: Date,
+  birthdayGreetingSentYear: Number,
   alternativeContacts: [Schema.Types.Mixed], notes: String, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceLeadIds: [{ type: Schema.Types.ObjectId, ref: 'Lead' }],
   createdFromLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, createdFromQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
   salonIds: [{ type: Schema.Types.ObjectId, ref: 'Salon', index: true }],
@@ -298,6 +302,10 @@ const contractSchema = new Schema({
   totalAmount: { type: Number, default: 0 },
   paidAmount: { type: Number, default: 0 },
   balanceAmount: { type: Number, default: 0 },
+  // Gates client-payment-reminders.service.ts: whether cuota/saldo reminders go out to the
+  // customer's own email, on top of the internal-only reminders financial-reminders.service.ts
+  // already sends. Defaults on; toggle off per contract from the same place as "Contacto de cobro".
+  clientReminderOptIn: { type: Boolean, default: true },
   observations: String,
   approvedAt: Date,
   approvedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },

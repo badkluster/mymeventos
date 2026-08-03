@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   resolveContact: vi.fn(),
   sendEmail: vi.fn(),
   whatsappUrl: vi.fn(),
+  scheduleFollowUp: vi.fn(),
   writeAuditLog: vi.fn(),
   canAccessSalon: vi.fn()
 }));
@@ -18,7 +19,8 @@ vi.mock('../src/middlewares/auth', () => ({
 vi.mock('../src/modules/crm/payment-collection.service', () => ({
   resolvePaymentCollectionContact: mocks.resolveContact,
   sendPaymentCollectionEmail: mocks.sendEmail,
-  paymentCollectionWhatsAppUrl: mocks.whatsappUrl
+  paymentCollectionWhatsAppUrl: mocks.whatsappUrl,
+  schedulePaymentCollectionFollowUp: mocks.scheduleFollowUp
 }));
 vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: mocks.writeAuditLog }));
 
@@ -48,6 +50,7 @@ describe('payment collection routes', () => {
     mocks.canAccessSalon.mockReturnValue(true);
     mocks.sendEmail.mockResolvedValue(undefined);
     mocks.whatsappUrl.mockReturnValue('https://wa.me/5491155555555?text=Hola');
+    mocks.scheduleFollowUp.mockResolvedValue(undefined);
     mocks.writeAuditLog.mockResolvedValue(undefined);
   });
 
@@ -75,6 +78,19 @@ describe('payment collection routes', () => {
     expect(mocks.sendEmail).toHaveBeenCalledWith(contact, 'Seguimiento de pago', 'Mensaje editado');
     expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), 'PAYMENT_COLLECTION_EMAIL_SENT', 'Payment', paymentId, expect.objectContaining({ amount: 85_000, dueDate: '2026-07-20' }));
     expect(mocks.writeAuditLog.mock.calls[0][4]).not.toHaveProperty('message');
+  });
+
+  it('schedules a follow-up reminder when the operator checks the box, but not by default', async () => {
+    const withoutCheckbox = await request(app).post('/api/payment-collections/send-email').send({ target: contact.target, subject: 'Seguimiento', message: 'Mensaje' });
+    expect(withoutCheckbox.status).toBe(200);
+    expect(withoutCheckbox.body.data.followUpScheduled).toBe(false);
+    expect(mocks.scheduleFollowUp).not.toHaveBeenCalled();
+
+    const withCheckbox = await request(app).post('/api/payment-collections/send-email').send({ target: contact.target, subject: 'Seguimiento', message: 'Mensaje', scheduleFollowUp: true });
+    expect(withCheckbox.status).toBe(200);
+    expect(withCheckbox.body.data.followUpScheduled).toBe(true);
+    expect(mocks.scheduleFollowUp).toHaveBeenCalledWith(contact, 'user-1');
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), 'PAYMENT_COLLECTION_FOLLOWUP_SCHEDULED', 'Payment', paymentId, expect.anything());
   });
 
   it('returns the WhatsApp draft URL and records it as prepared, not delivered', async () => {

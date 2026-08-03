@@ -401,6 +401,7 @@ const accessSchema = new Schema(
         "already_checked_in",
         "cancelled",
         "refunded",
+        "transferred",
         "expired",
         "wrong_publication",
         "invalid",

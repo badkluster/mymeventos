@@ -10,6 +10,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import {
   paymentCollectionWhatsAppUrl,
   resolvePaymentCollectionContact,
+  schedulePaymentCollectionFollowUp,
   sendPaymentCollectionEmail,
   type PaymentCollectionContact,
   type PaymentCollectionTarget
@@ -29,7 +30,8 @@ const emailSchema = z.object({
   body: z.object({
     target: targetSchema,
     subject: z.string().trim().min(1).max(200).refine((value) => !/[\r\n]/.test(value), 'El asunto no puede incluir saltos de línea.'),
-    message: z.string().trim().min(1).max(5_000)
+    message: z.string().trim().min(1).max(5_000),
+    scheduleFollowUp: z.boolean().optional()
   }),
   params: z.object({}),
   query: z.object({})
@@ -37,7 +39,8 @@ const emailSchema = z.object({
 const whatsappSchema = z.object({
   body: z.object({
     target: targetSchema,
-    message: z.string().trim().min(1).max(5_000)
+    message: z.string().trim().min(1).max(5_000),
+    scheduleFollowUp: z.boolean().optional()
   }),
   params: z.object({}),
   query: z.object({})
@@ -80,14 +83,22 @@ router.post('/send-email', requirePermission(Permission.PAYMENTS_CREATE), valida
   const contact = await resolveAccessibleContact(request, request.body.target);
   await sendPaymentCollectionEmail(contact, request.body.subject, request.body.message);
   await writeAuditLog(request, 'PAYMENT_COLLECTION_EMAIL_SENT', contact.auditEntity.type, contact.auditEntity.id, contactMetadata(contact));
-  return sendSuccess(response, { sent: true });
+  if (request.body.scheduleFollowUp) {
+    await schedulePaymentCollectionFollowUp(contact, request.user!.id);
+    await writeAuditLog(request, 'PAYMENT_COLLECTION_FOLLOWUP_SCHEDULED', contact.auditEntity.type, contact.auditEntity.id, contactMetadata(contact));
+  }
+  return sendSuccess(response, { sent: true, followUpScheduled: Boolean(request.body.scheduleFollowUp) });
 }));
 
 router.post('/open-whatsapp', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(whatsappSchema), asyncHandler(async (request, response) => {
   const contact = await resolveAccessibleContact(request, request.body.target);
   const whatsappUrl = paymentCollectionWhatsAppUrl(contact, request.body.message);
   await writeAuditLog(request, 'PAYMENT_COLLECTION_WHATSAPP_DRAFT_PREPARED', contact.auditEntity.type, contact.auditEntity.id, contactMetadata(contact));
-  return sendSuccess(response, { whatsappUrl });
+  if (request.body.scheduleFollowUp) {
+    await schedulePaymentCollectionFollowUp(contact, request.user!.id);
+    await writeAuditLog(request, 'PAYMENT_COLLECTION_FOLLOWUP_SCHEDULED', contact.auditEntity.type, contact.auditEntity.id, contactMetadata(contact));
+  }
+  return sendSuccess(response, { whatsappUrl, followUpScheduled: Boolean(request.body.scheduleFollowUp) });
 }));
 
 export default router;

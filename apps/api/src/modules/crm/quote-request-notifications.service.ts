@@ -1,11 +1,10 @@
 import { Role } from '@mym/shared';
-import { existsSync } from 'fs';
-import path from 'path';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { Notification } from '../notifications/notification.model';
 import { sendEmail } from '../email/email.service';
 import { env } from '../../config/env';
+import { escapeHtml, logoEmailAttachments, EMAIL_LOGO_CID } from '../email/email-template.util';
 
 type NotifyInput = {
   quoteRequest: any;
@@ -26,28 +25,10 @@ export async function resolveQuoteRequestRecipients(salonIds: string[]): Promise
   return [...new Map(recipients.map((user: any) => [user._id.toString(), user])).values()];
 }
 
-function escapeHtml(value: unknown): string {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-function resolveEmailLogoPath(): string | undefined {
-  const candidates = [
-    path.resolve(process.cwd(), 'apps/web/public/brand/mym-logo-dark-on-light.jpg'),
-    path.resolve(process.cwd(), '../web/public/brand/mym-logo-dark-on-light.jpg'),
-    path.resolve(__dirname, '../../../../web/public/brand/mym-logo-dark-on-light.jpg'),
-  ];
-  return candidates.find((candidate) => existsSync(candidate));
-}
-
 function emailTemplate(input: { request: any; salons: string; date: string; actionUrl: string }): string {
   const { request, salons, date, actionUrl } = input;
   const webUrl = env.CORS_ORIGIN.replace(/\/$/, '');
-  const logoCid = 'mym-logo-dark-on-light';
+  const logoCid = EMAIL_LOGO_CID;
   const detailUrl = `${webUrl}${actionUrl}`;
   const rows = [
     ['Cliente', request.contactName],
@@ -126,12 +107,7 @@ export async function createQuoteRequestNotifications(input: NotifyInput): Promi
   const message = `${request.contactName} (${request.phone || request.email || 'sin contacto'}) solicitó presupuesto para ${request.eventType || 'un evento'} el ${date}. Salón/es: ${salons}.`;
   const actionUrl = `/admin/quotes/requests/${request._id}`;
   const html = emailTemplate({ request, salons, date, actionUrl });
-  const logoPath = resolveEmailLogoPath();
-  const attachments = logoPath ? [{
-    filename: 'mym-logo-dark-on-light.jpg',
-    path: logoPath,
-    cid: 'mym-logo-dark-on-light'
-  }] : undefined;
+  const attachments = logoEmailAttachments();
 
   await Notification.insertMany(recipients.map((user: any) => ({
     userId: user._id,

@@ -36,6 +36,8 @@ import {
   ticketTokenHash,
   claimTicketCheckInById,
   regenerateTicketQr,
+  findTicketForValidation,
+  resolveCheckInResult,
 } from "./ticket.service";
 import { getTicketPaymentProvider } from "./ticket-payment.provider";
 import { env } from "../../config/env";
@@ -1312,7 +1314,7 @@ admin.post(
   requirePermission(Permission.TICKETS_VALIDATE),
   validateRequest(schema(checkInBody, { publicationId: id })),
   asyncHandler(async (req, res) => {
-    await publicationForUser(req.params.publicationId);
+    const publication = await publicationForUser(req.params.publicationId);
     const payload = req.body;
     if (payload.idempotencyKey) {
       const prior: any = await TicketAccessAttempt.findOne({
@@ -1323,22 +1325,12 @@ admin.post(
       if (prior)
         return sendSuccess(res, { result: prior.result, idempotent: true });
     }
-    const existing: any = await DigitalTicket.findOne({
-      publicationId: req.params.publicationId,
-      $or: [
-        { qrTokenHash: ticketTokenHash(payload.token) },
-        { publicToken: payload.token },
-        { ticketCode: payload.token },
-      ],
-      deletedAt: null,
-    }).lean();
-    const result = !existing
-      ? "invalid"
-      : existing.status === "issued"
-        ? "valid"
-        : existing.status === "checked_in"
-          ? "already_checked_in"
-          : existing.status;
+    const existing: any = await findTicketForValidation(payload.token);
+    const result = resolveCheckInResult(
+      existing,
+      req.params.publicationId,
+      publication,
+    );
     await TicketAccessAttempt.create({
       ticketId: existing?._id,
       publicationId: req.params.publicationId,
@@ -1377,20 +1369,48 @@ admin.post(
     ),
   ),
   asyncHandler(async (req, res) => {
-    await publicationForUser(req.params.publicationId);
+    const publication = await publicationForUser(req.params.publicationId);
+    const current: any = await DigitalTicket.findById(req.body.ticketId).lean();
+    // Re-runs the same full validation the scan step used (wrong event, expired
+    // qrConfig window, cancelled/refunded/transferred) so confirm can never fall
+    // through to an unrecognized status string for a ticket the scan step never saw.
+    const precheck = resolveCheckInResult(
+      current,
+      req.params.publicationId,
+      publication,
+    );
+    if (precheck !== "valid") {
+      await TicketAccessAttempt.create({
+        ticketId: current?._id,
+        publicationId: req.params.publicationId,
+        operatorUserId: req.user!.id,
+        action: "check_in",
+        result: precheck,
+        accessPoint: req.body.accessPoint,
+        idempotencyKey: req.body.idempotencyKey,
+      });
+      return sendSuccess(res, {
+        result: precheck,
+        ticket: current
+          ? {
+              _id: current._id,
+              ticketCode: current.ticketCode,
+              attendeeName: current.attendeeName,
+              status: current.status,
+              ticketTypeName: current.ticketTypeSnapshot?.name,
+              checkedInAt: current.checkedInAt,
+            }
+          : undefined,
+      });
+    }
     const ticket: any = await claimTicketCheckInById(
       req.params.publicationId,
       req.body.ticketId,
       req.user!.id,
       req.body.accessPoint,
     );
-    const existing: any =
-      ticket ?? (await DigitalTicket.findById(req.body.ticketId).lean());
-    const result = ticket
-      ? "accepted"
-      : existing?.status === "checked_in"
-        ? "already_checked_in"
-        : (existing?.status ?? "invalid");
+    const existing: any = ticket ?? current;
+    const result = ticket ? "accepted" : "already_checked_in";
     await TicketAccessAttempt.create({
       ticketId: existing?._id,
       publicationId: req.params.publicationId,

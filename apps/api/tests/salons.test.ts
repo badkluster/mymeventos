@@ -38,7 +38,6 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn() }
 }));
 vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: mocks.writeAuditLog }));
-vi.mock('../src/modules/notifications/notification.service', () => ({ createNotifications: vi.fn() }));
 
 import app from '../src/app';
 
