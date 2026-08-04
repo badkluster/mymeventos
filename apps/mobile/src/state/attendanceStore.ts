@@ -5,6 +5,7 @@ import { captureLocation, type LocationPermissionStatus } from '../lib/geo';
 import { getDeviceInfo } from '../lib/device';
 import { isOnline } from '../lib/network';
 import { getQueue, removeFromQueue, type QueuedPunch } from '../lib/offlineQueue';
+import { hideActiveSessionNotification, showActiveSessionNotification } from '../lib/activeSessionNotification';
 import type { AttendanceStatusResponse, WorkSession } from '../types/attendance';
 
 interface ClockResult { session: WorkSession; }
@@ -64,6 +65,7 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
       await get().syncPendingQueue();
       const response = await api.get<AttendanceStatusResponse>('/mobile/attendance/status');
       set({ activeSession: response.activeSession, todayAssignment: response.todayAssignment, elapsedMinutes: response.elapsedMinutes, loading: false });
+      void (response.activeSession ? showActiveSessionNotification(response.activeSession) : hideActiveSessionNotification());
     } catch (error) {
       const pendingQueue = await loadPendingQueue();
       set({ loading: false, pendingQueue, error: error instanceof ApiClientError ? error.message : 'No se pudo actualizar tu estado. Mostramos la última información disponible.' });
@@ -81,6 +83,7 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
       }
       const result = await api.post<ClockResult>('/mobile/attendance/check-in', payload);
       set({ activeSession: result.session, acting: false, elapsedMinutes: 0 });
+      void showActiveSessionNotification(result.session);
       return { requiresReview: result.session.requiresReview };
     } catch (error) {
       if (error instanceof ApiClientError && error.code === 'NETWORK_ERROR') {
@@ -106,6 +109,7 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
       // purposes. It is no longer an active shift, so keeping it in this field
       // would leave the home timer running after a successful check-out.
       set({ activeSession: null, acting: false, elapsedMinutes: 0 });
+      void hideActiveSessionNotification();
       return { requiresReview: result.session.requiresReview };
     } catch (error) {
       if (error instanceof ApiClientError && error.code === 'NETWORK_ERROR') {
@@ -132,6 +136,7 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
         set(item.kind === 'check-out'
           ? { activeSession: null, elapsedMinutes: 0 }
           : { activeSession: result.session, elapsedMinutes: 0 });
+        void (item.kind === 'check-out' ? hideActiveSessionNotification() : showActiveSessionNotification(result.session));
       } catch (error) {
         // A definitive rejection (not a network error) means retrying is pointless — drop it,
         // but a plain network error means we're still offline: stop draining and try again later.

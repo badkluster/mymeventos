@@ -8,6 +8,7 @@ import {
 } from '../lib/secureStorage';
 import { getDeviceInfo } from '../lib/device';
 import { authenticateWithBiometrics } from '../lib/biometrics';
+import { hideActiveSessionNotification } from '../lib/activeSessionNotification';
 import type { SessionUser } from '../types/user';
 
 export type AuthStatus = 'booting' | 'signedOut' | 'locked' | 'signedIn';
@@ -145,6 +146,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // best-effort: still clear the local session even if the request fails offline
     }
     await clearTokens();
+    void hideActiveSessionNotification();
     set({ status: 'signedOut', user: null });
   },
 
@@ -155,6 +157,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // best-effort
     }
     await clearTokens();
+    void hideActiveSessionNotification();
     // Treated as a panic action (lost/stolen device): also drop the local biometric shortcut
     // so this device requires a fresh manual login too, not just the others.
     try { await clearCachedCredentials(); } catch { /* best-effort */ }

@@ -33,6 +33,7 @@ apps/mobile/
       device.ts                — installationId + info de dispositivo (expo-application/device)
       network.ts                — detección de conectividad puntual (expo-network)
       attendanceLabels.ts       — labels es-AR de los enums de asistencia
+      activeSessionNotification.ts — notificación local persistente ("jornada en curso", expo-notifications)
     state/
       authStore.ts             — zustand: sesión, login, biometría, logout(-all)
       attendanceStore.ts       — zustand: estado de jornada, check-in/out, cola offline
@@ -74,15 +75,16 @@ Backend nuevo, sin tocar el auth/permite web existente (ver `docs/MOBILE_AUTHENT
 4. **Offline (o error de red):** la marcación se guarda en `offlineQueue` (AsyncStorage) con `networkStatus: 'offline_sync'` y se muestra un `OfflineBanner` — **nunca se pinta como confirmada** hasta que el servidor la acepta.
 5. Al recuperar conexión (siguiente `refresh()`, p. ej. al volver a la pantalla o hacer pull-to-refresh), `attendanceStore.syncPendingQueue()` drena la cola en orden FIFO contra los mismos endpoints, usando el mismo `requestId` (idempotencia real del backend — ver `docs/ATTENDANCE_ARCHITECTURE.md`).
 6. Un rechazo definitivo del servidor (por ejemplo `ATTENDANCE_ALREADY_ACTIVE`) elimina el ítem de la cola (reintentar no serviría); un error de red mantiene el ítem en cola para el próximo intento.
+7. **Desde 2026-08-04**: mientras `activeSession` no sea `null`, `activeSessionNotification.ts` mantiene una notificación local Android no descartable ("Jornada en curso", `sticky: true`) — se dispara al fichar entrada, se cancela al fichar salida, y `attendanceStore.refresh()` la reconcilia en cada `GET /mobile/attendance/status` (cubre reabrir la app tras cerrarla: el proceso puede morir, pero Android conserva la notificación ya publicada independientemente de él). No usa un foreground service ni background fetch — es una notificación local puntual (`expo-notifications`, `trigger: null`), no una tarea corriendo en segundo plano; no requiere módulos nativos propios ni salir del managed workflow.
 
 ## 5. Decisiones y simplificaciones explícitas de esta v1
 
 - **Sin listener de conectividad en segundo plano.** Se chequea conectividad en los puntos de interacción explícitos (fichar, refrescar pantallas) con `expo-network`, no con un listener persistente tipo NetInfo. Documentado, no oculto.
-- **Sin selector nativo de fecha/hora** en "Solicitar corrección": se usan campos de texto con formato guiado (`AAAA-MM-DD`, `HH:MM`) para no sumar una dependencia nativa adicional (`@react-native-community/datetimepicker`) en esta primera versión. Fácil de reemplazar después.
-- **Notificaciones push:** no implementadas. No se expone un endpoint ni se persisten tokens push hasta contar con el cliente y el servicio de envío reales. La bandeja in-app queda preservada, pero no está expuesta en la navegación actual.
+- **Selector de fecha/hora en "Solicitar corrección":** desde 2026-08-03 usa `DatePickerField`/`TimePickerField` (modal propio con calendario/listas de hora-minuto) en vez de los campos de texto libre (`AAAA-MM-DD`, `HH:MM`) de la v1 — sigue sin sumar `@react-native-community/datetimepicker` ni otra dependencia nativa.
+- **Notificaciones push (remotas):** no implementadas. No se expone un endpoint ni se persisten tokens push hasta contar con el cliente y el servicio de envío reales. La bandeja in-app queda preservada, pero no está expuesta en la navegación actual. **No confundir** con la notificación local de "jornada en curso" (§4, punto 7): esa es 100% local (`expo-notifications` sin token/servidor), no depende de esta infraestructura pendiente.
 - **Validación de entradas por QR:** explícitamente fuera de esta app (permiso y módulo aparte, ver `docs/MOBILE_AUTHENTICATION.md`), tal como pide la tarea.
 - **Turnos y Avisos:** sus pantallas y llamadas API quedan preservadas sin exponer hasta que se acuerde favorablemente el alcance con el cliente. Si se reactiva Turnos, su estado vacío usa `EventStaffAssignment` real, sin datos inventados.
-- **Íconos:** la UI usa emoji/Unicode en vez de una librería de iconos (`lucide-react-native` + `react-native-svg`) para no sumar dependencias nativas extra en esta primera versión.
+- **Íconos:** la UI dibuja formas propias con `View` (bordes/posicionamiento, igual que los íconos de la barra de tabs) en vez de sumar una librería de iconos (`lucide-react-native` + `react-native-svg`). Corregido 2026-08-04: `DatePickerField`/`TimePickerField` usaban caracteres Unicode (`□`/`○`) como ícono, que no se veían en algunos dispositivos/fuentes — se reemplazaron por el mismo patrón de `View` que ya usaba la barra de navegación inferior.
 
 ## 6. Cómo correrla en desarrollo
 

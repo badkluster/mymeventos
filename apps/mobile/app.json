@@ -30,7 +30,8 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
+        "USE_FINGERPRINT",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -57,6 +58,7 @@
         }
       ],
       "expo-secure-store",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {

@@ -5,7 +5,7 @@ import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { idOf, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
 
-const OPEN_SESSION_HOURS = 14;
+const OPEN_SESSION_HOURS = 8;
 
 async function fallbackRecipients(): Promise<string[]> {
   const users = await User.find({ active: true, deletedAt: null, roles: { $in: [Role.ADMIN, Role.MANAGER] } }).select('_id').lean();

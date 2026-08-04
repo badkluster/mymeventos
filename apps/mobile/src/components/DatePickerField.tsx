@@ -66,7 +66,13 @@ export function DatePickerField({ label, value, onChange, hint }: { label: strin
       <Text style={styles.label}>{label}</Text>
       <Pressable style={styles.field} onPress={open} accessibilityRole="button" accessibilityLabel={`${label}: ${formatDisplayDate(value)}`}>
         <Text style={[styles.value, !selectedDate && styles.placeholder]}>{formatDisplayDate(value)}</Text>
-        <View style={styles.calendarIcon}><Text style={styles.calendarIconText}>□</Text></View>
+        <View style={styles.calendarIcon}>
+          <View style={styles.calendarRingLeft} />
+          <View style={styles.calendarRingRight} />
+          <View style={styles.calendarGlyph}>
+            <View style={styles.calendarHeaderBand} />
+          </View>
+        </View>
       </Pressable>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
 
@@ -123,7 +129,10 @@ const styles = StyleSheet.create({
   value: { fontSize: 16, color: colors.text },
   placeholder: { color: colors.textSubtle },
   calendarIcon: { width: 29, height: 29, borderRadius: 9, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  calendarIconText: { color: colors.primarySoft, fontSize: 18, fontWeight: '800', marginTop: -2 },
+  calendarGlyph: { width: 15, height: 13, borderRadius: 3, borderWidth: 1.5, borderColor: colors.primarySoft, overflow: 'hidden' },
+  calendarHeaderBand: { height: 4, backgroundColor: colors.primarySoft },
+  calendarRingLeft: { position: 'absolute', top: 5, left: 10, width: 2, height: 5, borderRadius: 1, backgroundColor: colors.primarySoft },
+  calendarRingRight: { position: 'absolute', top: 5, left: 17, width: 2, height: 5, borderRadius: 1, backgroundColor: colors.primarySoft },
   hint: { ...typography.small, color: colors.textSubtle },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: spacing.xl, gap: spacing.md, ...shadow.card },

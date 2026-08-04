@@ -47,7 +47,12 @@ export function TimePickerField({ label, value, onChange, hint }: { label: strin
       <Text style={styles.label}>{label}</Text>
       <Pressable style={styles.field} onPress={open} accessibilityRole="button" accessibilityLabel={`${label}: ${parsed ? value : 'sin definir'}`}>
         <Text style={[styles.value, !parsed && styles.placeholder]}>{parsed ? value : 'Seleccionar hora'}</Text>
-        <View style={styles.clockIcon}><Text style={styles.clockIconText}>○</Text></View>
+        <View style={styles.clockIcon}>
+          <View style={styles.clockGlyph}>
+            <View style={styles.clockHandMinute} />
+            <View style={styles.clockHandHour} />
+          </View>
+        </View>
       </Pressable>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
 
@@ -102,7 +107,9 @@ const styles = StyleSheet.create({
   value: { fontSize: 16, color: colors.text },
   placeholder: { color: colors.textSubtle },
   clockIcon: { width: 29, height: 29, borderRadius: 9, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  clockIconText: { color: colors.primarySoft, fontSize: 16, fontWeight: '800' },
+  clockGlyph: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: colors.primarySoft },
+  clockHandMinute: { position: 'absolute', width: 1.5, height: 5, left: 7.25, top: 3, borderRadius: 1, backgroundColor: colors.primarySoft },
+  clockHandHour: { position: 'absolute', width: 4.5, height: 1.5, left: 7.6, top: 7.6, borderRadius: 1, backgroundColor: colors.primarySoft, transform: [{ rotate: '35deg' }] },
   hint: { ...typography.small, color: colors.textSubtle },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: spacing.xl, gap: spacing.md, ...shadow.card },
