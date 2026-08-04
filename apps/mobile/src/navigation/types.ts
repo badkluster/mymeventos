@@ -16,7 +16,7 @@ export type HistoryStackParamList = {
   Incidents: undefined;
   NewIncident: { workSessionId?: string } | undefined;
   Adjustments: undefined;
-  NewAdjustment: { workSessionId: string };
+  NewAdjustment: { workSessionId: string; currentStartedAt?: string; currentEndedAt?: string };
 };
 
 export type ScheduleStackParamList = {

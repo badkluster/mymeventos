@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppButton } from '../../components/AppButton';
@@ -63,30 +63,32 @@ export function EditProfileScreen({ navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled">
-      <ScreenHeader title="Editar perfil" description="Actualizá tus datos personales y de contacto." />
-      <AppCard style={styles.section}>
-        <Text style={styles.sectionTitle}>Datos personales</Text>
-        <AppTextInput label="Usuario" value={user?.username ?? ''} editable={false} hint="El usuario de acceso se administra desde Administración." />
-        <AppTextInput label="Nombre" value={firstName} onChangeText={setFirstName} />
-        <AppTextInput label="Apellido" value={lastName} onChangeText={setLastName} />
-        <AppTextInput label="Tipo de documento" value={documentType} onChangeText={setDocumentType} placeholder="DNI" autoCapitalize="characters" />
-        <AppTextInput label="DNI / número de documento" value={documentNumber} onChangeText={setDocumentNumber} keyboardType="number-pad" />
-        <DatePickerField label="Fecha de nacimiento" value={birthDate} onChange={setBirthDate} hint="Elegí la fecha desde el calendario." />
-      </AppCard>
-      <AppCard style={styles.section}>
-        <Text style={styles.sectionTitle}>Contacto</Text>
-        <AppTextInput label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <AppTextInput label="Teléfono" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-        <AppTextInput label="Dirección" value={address} onChangeText={setAddress} multiline style={styles.addressInput} textAlignVertical="top" />
-      </AppCard>
-      <AppCard style={styles.section}>
-        <Text style={styles.sectionTitle}>Contacto de emergencia</Text>
-        <AppTextInput label="Nombre y vínculo" value={emergencyContactName} onChangeText={setEmergencyContactName} placeholder="Por ejemplo: María Pérez · madre" />
-        <AppTextInput label="Teléfono de emergencia" value={emergencyContactPhone} onChangeText={setEmergencyContactPhone} keyboardType="phone-pad" />
-      </AppCard>
-      <AppButton title="Guardar cambios" onPress={() => void submit()} loading={loading} disabled={!firstName.trim() || !lastName.trim()} />
-    </ScrollView>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled">
+        <ScreenHeader title="Editar perfil" description="Actualizá tus datos personales y de contacto." />
+        <AppCard style={styles.section}>
+          <Text style={styles.sectionTitle}>Datos personales</Text>
+          <AppTextInput label="Usuario" value={user?.username ?? ''} editable={false} hint="El usuario de acceso se administra desde Administración." />
+          <AppTextInput label="Nombre" value={firstName} onChangeText={setFirstName} />
+          <AppTextInput label="Apellido" value={lastName} onChangeText={setLastName} />
+          <AppTextInput label="Tipo de documento" value={documentType} onChangeText={setDocumentType} placeholder="DNI" autoCapitalize="characters" />
+          <AppTextInput label="DNI / número de documento" value={documentNumber} onChangeText={setDocumentNumber} keyboardType="number-pad" />
+          <DatePickerField label="Fecha de nacimiento" value={birthDate} onChange={setBirthDate} hint="Elegí la fecha desde el calendario." />
+        </AppCard>
+        <AppCard style={styles.section}>
+          <Text style={styles.sectionTitle}>Contacto</Text>
+          <AppTextInput label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+          <AppTextInput label="Teléfono" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+          <AppTextInput label="Dirección" value={address} onChangeText={setAddress} multiline style={styles.addressInput} textAlignVertical="top" />
+        </AppCard>
+        <AppCard style={styles.section}>
+          <Text style={styles.sectionTitle}>Contacto de emergencia</Text>
+          <AppTextInput label="Nombre y vínculo" value={emergencyContactName} onChangeText={setEmergencyContactName} placeholder="Por ejemplo: María Pérez · madre" />
+          <AppTextInput label="Teléfono de emergencia" value={emergencyContactPhone} onChangeText={setEmergencyContactPhone} keyboardType="phone-pad" />
+        </AppCard>
+        <AppButton title="Guardar cambios" onPress={() => void submit()} loading={loading} disabled={!firstName.trim() || !lastName.trim()} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

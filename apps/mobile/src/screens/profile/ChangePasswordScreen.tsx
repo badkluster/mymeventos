@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppButton } from '../../components/AppButton';
@@ -41,14 +41,16 @@ export function ChangePasswordScreen({ navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled">
-      <ScreenHeader title="Cambiar contraseña" />
-      <PasswordInput label="Contraseña actual" value={currentPassword} onChangeText={setCurrentPassword} />
-      <PasswordInput label="Nueva contraseña" value={newPassword} onChangeText={setNewPassword} hint="Mínimo 8 caracteres." />
-      <PasswordInput label="Confirmar nueva contraseña" value={confirmPassword} onChangeText={setConfirmPassword} />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <AppButton title="Actualizar contraseña" onPress={() => void submit()} loading={loading} disabled={!currentPassword || !newPassword || !confirmPassword} />
-    </ScrollView>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled">
+        <ScreenHeader title="Cambiar contraseña" />
+        <PasswordInput label="Contraseña actual" value={currentPassword} onChangeText={setCurrentPassword} />
+        <PasswordInput label="Nueva contraseña" value={newPassword} onChangeText={setNewPassword} hint="Mínimo 8 caracteres." />
+        <PasswordInput label="Confirmar nueva contraseña" value={confirmPassword} onChangeText={setConfirmPassword} />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <AppButton title="Actualizar contraseña" onPress={() => void submit()} loading={loading} disabled={!currentPassword || !newPassword || !confirmPassword} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

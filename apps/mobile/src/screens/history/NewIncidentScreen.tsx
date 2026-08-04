@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppButton } from '../../components/AppButton';
@@ -37,19 +37,21 @@ export function NewIncidentScreen({ route, navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled">
-      <ScreenHeader title="Reportar incidencia" description="Contanos qué pasó para poder revisarlo." />
-      <Text style={styles.label}>Tipo</Text>
-      <View style={styles.chips}>
-        {types.map(([value, label]) => (
-          <Pressable key={value} onPress={() => setType(value)} style={[styles.chip, type === value && styles.chipActive]}>
-            <Text style={[styles.chipText, type === value && styles.chipTextActive]}>{label}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <AppTextInput label="Descripción" value={description} onChangeText={setDescription} multiline numberOfLines={4} style={styles.textarea} placeholder="Contá brevemente qué ocurrió" />
-      <AppButton title="Enviar incidencia" onPress={() => void submit()} loading={loading} disabled={description.trim().length < 3} />
-    </ScrollView>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled">
+        <ScreenHeader title="Reportar incidencia" description="Contanos qué pasó para poder revisarlo." />
+        <Text style={styles.label}>Tipo</Text>
+        <View style={styles.chips}>
+          {types.map(([value, label]) => (
+            <Pressable key={value} onPress={() => setType(value)} style={[styles.chip, type === value && styles.chipActive]}>
+              <Text style={[styles.chipText, type === value && styles.chipTextActive]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <AppTextInput label="Descripción" value={description} onChangeText={setDescription} multiline numberOfLines={4} style={styles.textarea} placeholder="Contá brevemente qué ocurrió" />
+        <AppButton title="Enviar incidencia" onPress={() => void submit()} loading={loading} disabled={description.trim().length < 3} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
