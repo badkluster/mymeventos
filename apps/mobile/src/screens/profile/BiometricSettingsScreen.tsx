@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppCard } from '../../components/AppCard';
+import { ConfirmationSheet } from '../../components/ConfirmationSheet';
+import { PasswordInput } from '../../components/PasswordInput';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useToast } from '../../components/Toast';
 import { authenticateWithBiometrics, isBiometricSupported } from '../../lib/biometrics';
@@ -12,21 +14,52 @@ export function BiometricSettingsScreen() {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const biometricEnabled = useAuthStore((state) => state.biometricEnabled);
-  const updateBiometricPreference = useAuthStore((state) => state.updateBiometricPreference);
+  const confirmPasswordForBiometrics = useAuthStore((state) => state.confirmPasswordForBiometrics);
+  const disableBiometric = useAuthStore((state) => state.disableBiometric);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => { void isBiometricSupported().then(setSupported); }, []);
 
   async function toggle(next: boolean) {
+    if (!next) {
+      setBusy(true);
+      try {
+        await disableBiometric();
+        showToast({ message: 'Desbloqueo rápido desactivado.', variant: 'success' });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     setBusy(true);
     try {
-      if (next) {
-        const confirmed = await authenticateWithBiometrics('Confirmá tu identidad para activar el desbloqueo rápido');
-        if (!confirmed) return showToast({ message: 'No pudimos verificar tu identidad.', variant: 'error' });
+      const confirmed = await authenticateWithBiometrics('Confirmá tu identidad para activar el desbloqueo rápido');
+      if (!confirmed) return showToast({ message: 'No pudimos verificar tu identidad.', variant: 'error' });
+      setPassword('');
+      setPasswordError('');
+      setShowPasswordPrompt(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmPassword() {
+    if (!password) return;
+    setBusy(true);
+    setPasswordError('');
+    try {
+      const ok = await confirmPasswordForBiometrics(password);
+      if (ok) {
+        setShowPasswordPrompt(false);
+        setPassword('');
+        showToast({ message: 'Desbloqueo rápido activado. Ya podés ingresar con huella incluso después de cerrar sesión.', variant: 'success' });
+      } else {
+        setPasswordError('Contraseña incorrecta.');
       }
-      await updateBiometricPreference(next);
-      showToast({ message: next ? 'Desbloqueo rápido activado.' : 'Desbloqueo rápido desactivado.', variant: 'success' });
     } finally {
       setBusy(false);
     }
@@ -41,11 +74,31 @@ export function BiometricSettingsScreen() {
         <AppCard style={styles.row}>
           <View style={styles.textBlock}>
             <Text style={styles.title}>Desbloqueo con huella/Face ID</Text>
-            <Text style={styles.body}>No reemplaza tu contraseña ni se envía al servidor. Solo protege el acceso local en este dispositivo.</Text>
+            <Text style={styles.body}>
+              Te permite abrir la app e ingresar con huella incluso después de cerrar sesión. Tu contraseña queda
+              cifrada solo en este dispositivo — nunca se envía ni se guarda en el servidor.
+            </Text>
           </View>
           <Switch value={biometricEnabled} onValueChange={(value) => void toggle(value)} disabled={busy} />
         </AppCard>
       )}
+
+      <ConfirmationSheet
+        visible={showPasswordPrompt}
+        title="Confirmá tu contraseña"
+        description="Para activar el ingreso con huella necesitamos validar tu contraseña una sola vez."
+        confirmLabel="Activar"
+        onConfirm={() => void confirmPassword()}
+        onCancel={() => { setShowPasswordPrompt(false); setPassword(''); setPasswordError(''); }}
+        loading={busy}
+      >
+        <PasswordInput
+          value={password}
+          onChangeText={(value) => { setPassword(value); if (passwordError) setPasswordError(''); }}
+          error={passwordError}
+          onSubmitEditing={() => void confirmPassword()}
+        />
+      </ConfirmationSheet>
     </View>
   );
 }

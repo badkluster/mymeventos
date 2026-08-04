@@ -60,10 +60,31 @@ Explícitamente **no se guarda ningún dato biométrico**, ni en `MobileDevice` 
 
 ## 5. Biometría (app móvil)
 
-`expo-local-authentication` protege únicamente el **acceso local** al refresh token ya guardado en `expo-secure-store`:
-- No reemplaza las credenciales del backend (el primer login siempre es usuario+contraseña).
-- No se envía nada biométrico a la red.
-- Se invalida automáticamente si se cierra sesión o se cambia la contraseña (el `reset-password` revoca todos los refresh tokens, así que un desbloqueo biométrico exitoso local igual fallaría al pedir `/mobile/auth/session` con un token ya revocado, forzando reingreso).
+**Actualizado 2026-08-03: dos mecanismos distintos, ambos gateados por `expo-local-authentication`, ninguno envía nada biométrico a la red.**
+
+### 5.1 Desbloqueo de sesión abierta (`unlockWithBiometrics`, sin cambios respecto al diseño original)
+
+Protege el **acceso local** a un refresh token que sigue vigente en `expo-secure-store` (la app sigue "adentro", solo se re-arrancó en frío con `RootNavigator` detectando `status: 'locked'`). No reemplaza las credenciales del backend — la sesión ya existía — y se invalida solo si esa sesión deja de ser válida (logout, reset de contraseña que revoca todos los refresh tokens, etc.).
+
+### 5.2 "Ingresar con huella" tras un logout explícito (`loginWithBiometrics`, nuevo)
+
+Antes de esta tarea, cerrar sesión ("Cerrar sesión") revocaba el refresh token y borraba todo localmente — sin nada que la huella pudiera desbloquear, el primer ingreso posterior era **siempre** usuario+contraseña, incluso si el usuario había activado la biometría. Esto generaba una confusión real: activar el toggle no ofrecía ninguna opción de huella en la pantalla de login tras un logout.
+
+Decisión tomada explícitamente por el usuario (evaluadas dos alternativas: cachear credenciales vs. redefinir "Cerrar sesión" como bloqueo local): **cachear la contraseña, cifrada, solo en este dispositivo**, gateada por una verificación biométrica fresca antes de cada uso. Cambia la garantía previa ("nada biométrico ni relacionado se guarda nunca") a una más matizada: **nunca se guarda ni envía nada biométrico; sí se cachea la contraseña en texto plano dentro de `expo-secure-store`, únicamente si el usuario activó el toggle de biometría.**
+
+- `apps/mobile/src/lib/secureStorage.ts`: `saveCachedCredentials`/`loadCachedCredentials`/`clearCachedCredentials`, misma clave de almacenamiento (`expo-secure-store`, Keychain/EncryptedSharedPreferences) que los tokens — no es un mecanismo nuevo de storage, solo un valor más.
+- Se cachea en dos momentos: (a) justo después de un login exitoso si la biometría ya estaba activada (`authStore.ts#login`, autorefresco silencioso — cubre el caso de contraseña cambiada por otro canal), y (b) al activar la biometría, con la contraseña disponible en memoria solo transitoriamente (`pendingCredentials`, nunca persistida sin cifrar fuera de ese flujo):
+  - Activación inmediatamente después de loguearse (`BiometricSetupScreen` → `enableBiometricFromPendingLogin`): usa la contraseña recién tipeada, ya en memoria por el login que se acaba de completar.
+  - Activación posterior desde `Perfil > Seguridad y biometría` (`BiometricSettingsScreen`): no hay contraseña en memoria, así que se pide re-tipearla una vez (`ConfirmationSheet` con `PasswordInput`) y se valida contra el backend (`confirmPasswordForBiometrics`, reutiliza `POST /mobile/auth/login`, no hay endpoint nuevo) antes de cachearla.
+- `LoginScreen` muestra un botón adicional "Ingresar con huella" (no reemplaza el formulario de usuario/contraseña, que sigue siendo siempre el flujo principal y el único disponible si no hay biometría activada o si el sensor falla) cuando hay biometría activada **y** una credencial cacheada disponible (`checkBiometricLoginAvailable`). Al tocarlo: pide huella/Face ID (`authenticateWithBiometrics`) y, si es exitosa, ejecuta un login real con la credencial cacheada (`loginWithBiometrics` → `authStore.login`).
+- Invalidación de la caché (además de al desactivar el toggle):
+  - `POST /mobile/auth/change-password` exitoso → se recachea con la contraseña nueva (`refreshCachedCredentialsAfterPasswordChange`), no se pierde el acceso rápido.
+  - `POST /mobile/auth/reset-password` exitoso → se borra (contraseña vieja inválida; se recachea sola en el próximo login manual exitoso si la biometría sigue activada).
+  - Intento de `loginWithBiometrics` que responde `INVALID_CREDENTIALS`/`MOBILE_ACCESS_DENIED` → se borra la caché (auto-sanación: la próxima vez no se ofrece el botón hasta el próximo login manual exitoso).
+  - `logoutAllDevices` (acción de pánico "perdí el dispositivo") → se borra la caché y se desactiva el toggle en este mismo dispositivo, no solo se revocan los tokens remotos.
+  - Un deep link de recuperación de contraseña abierto con la app corriendo (`beginPasswordReset`) → se borra preventivamente, antes incluso de que el usuario termine el flujo de reset.
+
+**Nunca se toca `unlockWithBiometrics`, `BiometricUnlockScreen` ni el mecanismo de la sección 5.1** — siguen protegiendo únicamente el acceso local a una sesión ya abierta, sin credenciales cacheadas de por medio. Esa pantalla ya tenía (y conserva) su propio fallback a contraseña ("Ingresar con contraseña" → vuelve a `LoginScreen`), que sigue siendo la salida si el sensor de huella falla.
 
 ## 6. Fuera de alcance de esta tarea (documentado, no fingido)
 

@@ -6,6 +6,7 @@ import { AppTextInput } from '../../components/AppTextInput';
 import { PasswordInput } from '../../components/PasswordInput';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { api, ApiClientError } from '../../lib/api';
+import { clearCachedCredentials } from '../../lib/secureStorage';
 import { colors, spacing, typography } from '../../theme/tokens';
 import type { AuthStackParamList } from '../../navigation/types';
 
@@ -29,6 +30,7 @@ export function ResetPasswordScreen({ route, navigation }: Props) {
     setError('');
     try {
       await api.post('/mobile/auth/reset-password', { username: username.trim(), token: token.trim(), newPassword });
+      try { await clearCachedCredentials(); } catch { /* best-effort: the old cached password is invalid regardless */ }
       setDone(true);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'No se pudo restablecer la contraseña.');

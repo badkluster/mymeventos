@@ -5,8 +5,10 @@ import * as SecureStore from 'expo-secure-store';
 const ACCESS_TOKEN_KEY = 'mym.accessToken';
 const REFRESH_TOKEN_KEY = 'mym.refreshToken';
 const BIOMETRIC_ENABLED_KEY = 'mym.biometricEnabled';
+const BIOMETRIC_CREDENTIALS_KEY = 'mym.biometricCredentials';
 
 export interface StoredTokens { accessToken: string; refreshToken: string; }
+export interface CachedCredentials { username: string; password: string; }
 
 export async function saveTokens(tokens: StoredTokens): Promise<void> {
   await Promise.all([
@@ -37,4 +39,27 @@ export async function setBiometricEnabled(enabled: boolean): Promise<void> {
 
 export async function isBiometricEnabled(): Promise<boolean> {
   return (await SecureStore.getItemAsync(BIOMETRIC_ENABLED_KEY)) === 'true';
+}
+
+// Opt-in only: while biometrics is enabled, the password is cached here (OS-backed secure
+// storage, same as the tokens) so "Ingresar con huella" can re-run a real login after an
+// explicit logout. Gated behind a fresh LocalAuthentication prompt before every read/write use.
+export async function saveCachedCredentials(credentials: CachedCredentials): Promise<void> {
+  await SecureStore.setItemAsync(BIOMETRIC_CREDENTIALS_KEY, JSON.stringify(credentials));
+}
+
+export async function loadCachedCredentials(): Promise<CachedCredentials | null> {
+  const raw = await SecureStore.getItemAsync(BIOMETRIC_CREDENTIALS_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.username === 'string' && typeof parsed?.password === 'string') return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearCachedCredentials(): Promise<void> {
+  await SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY);
 }

@@ -7,6 +7,7 @@ import { PasswordInput } from '../../components/PasswordInput';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useToast } from '../../components/Toast';
 import { api, ApiClientError } from '../../lib/api';
+import { useAuthStore } from '../../state/authStore';
 import { colors, spacing, typography } from '../../theme/tokens';
 import type { ProfileStackParamList } from '../../navigation/types';
 
@@ -15,6 +16,7 @@ type Props = NativeStackScreenProps<ProfileStackParamList, 'ChangePassword'>;
 export function ChangePasswordScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
+  const refreshCachedCredentialsAfterPasswordChange = useAuthStore((state) => state.refreshCachedCredentialsAfterPasswordChange);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,6 +30,7 @@ export function ChangePasswordScreen({ navigation }: Props) {
     setLoading(true);
     try {
       await api.post('/mobile/auth/change-password', { currentPassword, newPassword });
+      await refreshCachedCredentialsAfterPasswordChange(newPassword);
       showToast({ message: 'Contraseña actualizada correctamente.', variant: 'success' });
       navigation.goBack();
     } catch (err) {
