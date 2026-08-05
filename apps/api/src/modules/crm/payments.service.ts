@@ -15,6 +15,49 @@ export { computeFinancialSummary as paymentSummary, recalculateContractPayments 
 
 const refundableStatuses = new Set(['paid']);
 const terminalPaymentStatuses = new Set(['cancelled', 'refunded']);
+const closedInstallmentStatuses = new Set(['paid', 'cancelled']);
+
+export type PlanInstallment = {
+  id?: string;
+  amount?: number;
+  paidAmount?: number;
+  status?: string;
+  paymentId?: string;
+  [key: string]: unknown;
+};
+
+/**
+ * Applies a payment amount across a payment-plan schedule as a waterfall: starting at the
+ * selected installment (or the first still-open one when none was selected), it pays each open
+ * installment in full before moving to the next in schedule order, leaving the last one touched
+ * as 'partial' if the amount runs out mid-installment. Returns a new plan (the input is not
+ * mutated) plus any leftover amount that didn't fit any open installment — e.g. a payment larger
+ * than the whole remaining plan — so the caller can surface it instead of silently discarding it
+ * or shaving it off of an unrelated installment's programmed amount.
+ */
+export function applyPaymentToPlan(
+  plan: PlanInstallment[],
+  paymentAmount: number,
+  options: { planInstallmentId?: string; paymentId?: string } = {}
+): { plan: PlanInstallment[]; overpaymentAmount: number } {
+  const nextPlan = plan.map((item) => ({ ...item }));
+  const selectedIndex = options.planInstallmentId ? nextPlan.findIndex((item) => item.id === options.planInstallmentId) : -1;
+  const openIndexes = nextPlan.map((_, index) => index).filter((index) => !closedInstallmentStatuses.has(String(nextPlan[index].status)));
+  const startPosition = selectedIndex >= 0 ? Math.max(0, openIndexes.indexOf(selectedIndex)) : 0;
+
+  let remaining = amount(paymentAmount);
+  for (let position = startPosition; position < openIndexes.length && remaining > 0; position += 1) {
+    const target = nextPlan[openIndexes[position]];
+    const pending = Math.max(0, amount(target.amount) - amount(target.paidAmount));
+    if (pending <= 0) continue;
+    const applied = Math.min(remaining, pending);
+    target.paidAmount = amount(target.paidAmount) + applied;
+    target.status = target.paidAmount >= amount(target.amount) ? 'paid' : 'partial';
+    if (options.paymentId) target.paymentId = options.paymentId;
+    remaining -= applied;
+  }
+  return { plan: nextPlan, overpaymentAmount: remaining };
+}
 
 type PaymentPayload = {
   customerId?: string;

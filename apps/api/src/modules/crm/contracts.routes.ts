@@ -12,7 +12,7 @@ import { writeAuditLog } from '../audit/audit.service';
 import { getApiMessage } from '../../utils/messages';
 import { approveAddendum, approveContract, cancelContract, createAddendum, recalculateContractTotals, requestContractChanges, updateAddendum } from './event-to-contract.service';
 import { createPayment, paymentSummary } from './payments.service';
-import { generateAndUploadContractPdf } from './contract-pdf.service';
+import { buildContractPdfBuffer, generateAndUploadContractPdf } from './contract-pdf.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const statuses = ['draft', 'pending_approval', 'approved', 'requires_changes', 'cancelled', 'superseded'] as const;
@@ -166,6 +166,22 @@ router.post('/:id/approve', requirePermission(Permission.CONTRACTS_APPROVE), val
   await contract.save();
   await writeAuditLog(request, 'CONTRACT_APPROVE', 'Contract', contract._id.toString());
   return sendSuccess(response, { contract }, 200, getApiMessage('CONTRACT_UPDATED'));
+}));
+
+router.get('/:id/preview-pdf', requirePermission(Permission.CONTRACTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const contract = await Contract.findOne({ _id: request.params.id, deletedAt: null })
+    .populate('eventId', 'eventName eventType eventDate status')
+    .populate('customerId', 'fullName phone email')
+    .populate('salonId', 'name address locality city')
+    .lean();
+  await ensureContractAccess(request, contract);
+  // Vista previa dinámica: genera el mismo PDF a partir del estado actual del contrato, sin
+  // subirlo a Cloudinary ni guardar nada — permite revisarlo antes de aprobar. El PDF definitivo
+  // (el que sí se persiste) se sigue generando recién al aprobar, en /:id/approve.
+  const pdf = await buildContractPdfBuffer(contract);
+  response.setHeader('Content-Type', 'application/pdf');
+  response.setHeader('Content-Disposition', `inline; filename="contrato-preview-${(contract as any).contractNumber}.pdf"`);
+  return response.send(pdf);
 }));
 
 router.post('/:id/pdf', requirePermission(Permission.CONTRACTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {

@@ -14,12 +14,14 @@ import { generateAndUploadQuotePdf } from './quote-pdf.service';
 import { convertQuoteToEvent } from './quote-to-event.service';
 import { findOrCreateLead } from './lead-dedupe.service';
 import { calculateCommercialQuote } from './quote-pricing';
+import { civilDateInput } from '../../utils/argentina-date';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const quoteStatuses = ['draft', 'sent', 'follow_up', 'accepted', 'rejected', 'expired', 'converted'] as const;
 const pricingModes = ['per_person', 'fixed'] as const;
 const leadSources = ['web_form', 'quick_quote', 'whatsapp', 'phone', 'email', 'instagram', 'facebook', 'tiktok', 'google', 'referral', 'walk_in', 'manual', 'promotion', 'ticket', 'invitation', 'other'] as const;
 const menuSectionsSchema = z.array(z.object({ title: z.string().trim().min(1), items: z.array(z.string().trim().min(1)) }));
+const civilDateSchema = z.preprocess(civilDateInput, z.coerce.date());
 
 const packageFields = z.object({
   name: z.string().trim().min(2), active: z.boolean().optional(), isGlobal: z.boolean().optional(), salonIds: z.array(objectId).optional(),
@@ -34,7 +36,7 @@ const quoteFields = z.object({
   manualMode: z.boolean().optional(),
   applyCommercialOverrides: z.boolean().optional(),
   contactName: z.string().trim().min(2).optional(), firstName: z.string().trim().min(1).optional(), lastName: z.string().trim().min(1).optional(), phone: z.string().trim().min(6).optional(), email: z.string().trim().email().optional().or(z.literal('')),
-  eventType: z.string().trim().min(1).optional(), eventDate: z.coerce.date().optional(), guestCount: z.coerce.number().int().positive().optional(),
+  eventType: z.string().trim().min(1).optional(), eventDate: civilDateSchema.optional(), guestCount: z.coerce.number().int().positive().optional(),
   honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional(),
   packageName: z.string().trim().min(1).optional(), durationHours: z.coerce.number().positive().optional(), startTime: z.string().trim().optional(), endTime: z.string().trim().optional(),
   pricingMode: z.enum(pricingModes).optional(), pricePerPerson: z.coerce.number().min(0).optional(), fixedPrice: z.coerce.number().min(0).optional(), discountPercentage: z.coerce.number().min(0).max(100).optional(), finalPricePerPerson: z.coerce.number().min(0).optional(), finalFixedPrice: z.coerce.number().min(0).optional(), depositAmount: z.coerce.number().min(0).optional(),
@@ -117,6 +119,10 @@ const router = Router();
 
 function uniqueIds(ids: string[]): string[] { return [...new Set(ids)]; }
 function getQueryString(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
+function getQueryIds(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : [value];
+  return uniqueIds(values.flatMap((item) => typeof item === 'string' ? item.split(',') : []).map((item) => item.trim()).filter(Boolean));
+}
 function hasQuoteApproval(request: Request): boolean { return request.user!.roles.some((role) => hasPermission(role, Permission.QUOTES_APPROVE, request.user!.permissionOverrides)); }
 async function ensureAccessibleSalons(request: Request, salonIds: string[]): Promise<void> {
   if (!salonIds.length || salonIds.some((salonId) => !canAccessSalon(request.user!, salonId))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
@@ -195,7 +201,16 @@ function buildListQuery(request: Request): Record<string, unknown> {
 router.use(requireAuth);
 
 router.get('/packages', requirePermission(Permission.QUOTES_READ), asyncHandler(async (request, response) => {
-  const scope = request.user!.roles.includes(Role.ADMIN) ? {} : { $or: [{ isGlobal: true }, { salonIds: { $in: accessibleSalonIds(request.user!) } }] };
+  const requestedSalonIds = getQueryIds(request.query.salonId);
+  if (requestedSalonIds.some((salonId) => !objectId.safeParse(salonId).success)) throw new ApiError(400, 'VALIDATION_ERROR');
+  if (requestedSalonIds.some((salonId) => !canAccessSalon(request.user!, salonId))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+
+  const scopes: Record<string, any>[] = [];
+  if (!request.user!.roles.includes(Role.ADMIN)) scopes.push({ $or: [{ isGlobal: true }, { salonIds: { $in: accessibleSalonIds(request.user!) } }] });
+  // A single quote can be generated for each selected salon, so only offer packages
+  // that are applicable to every one of them.
+  if (requestedSalonIds.length) scopes.push({ $or: [{ isGlobal: true }, { salonIds: { $all: requestedSalonIds } }] });
+  const scope = scopes.length === 1 ? scopes[0] : scopes.length > 1 ? { $and: scopes } : {};
   const packages = await PackageTemplate.find({ deletedAt: null, active: true, ...scope }).sort({ name: 1 }).lean();
   return sendSuccess(response, { packages });
 }));

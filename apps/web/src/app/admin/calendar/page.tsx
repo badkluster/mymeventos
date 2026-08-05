@@ -205,7 +205,16 @@ function sameDay(a: Date, b: Date) {
 }
 
 function eventDate(event: Event) {
-  return event.eventDate ? new Date(event.eventDate) : undefined;
+  if (!event.eventDate) return undefined;
+  // `event.eventDate` llega normalizado a medianoche UTC (`civilDateInput`, ver
+  // apps/api/src/utils/argentina-date.ts) — parsearlo directo con `new Date(...)` y comparar con
+  // `sameDay`/getters locales (como hace el resto de esta página) corre el día para atrás en
+  // cualquier huso horario negativo (Argentina incluida): un evento el 16 aparecía en la celda
+  // del 15. Se reconstruye la fecha a partir de los componentes Y-M-D del string para que los
+  // getters locales devuelvan el día civil correcto sin importar el huso del navegador.
+  const match = String(event.eventDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return new Date(event.eventDate);
 }
 
 function toDateInputValue(date: Date) {

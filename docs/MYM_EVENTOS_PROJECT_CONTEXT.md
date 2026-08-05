@@ -257,18 +257,18 @@ Tabla de estado (Implementado / Parcial / Pendiente) contrastando backend, front
 | Presupuestos (Quote/PackageTemplate) | Implementado (PACKAGE/CUSTOM/HYBRID, revisiones, PDF) | Implementado | En menú | **Implementado** |
 | Clientes (Customer) | Implementado, conversión idempotente | Implementado | En menú | **Implementado** |
 | Contratos (Contract/ContractAddendum) | Implementado (versionado, PDF, aprobación) | Implementado (incl. vista de impresión) | En menú | **Implementado** (sin firma electrónica formal) |
-| Eventos (Event) | Implementado (snapshot operativo completo); genera automáticamente PDF/Word de timeline, logística, invitados por mesa y (desde 2026-07-29) reserva de vajilla (`event-operational-document.service.ts`) con un clic (endpoints `.../operational-documents/{timeline,logistics,guest_list,tableware}/export`); el documento de vajilla lista por separado lo asignado del stock propio del salón (`EventTablewareAllocation.source: 'salon_stock'`) y lo adicional/externo (`source: 'external'`), independiente de `resourcePlanSnapshot.inventoryItems`; el cliente puede cargar su propia lista de invitados vía link público (`POST /events/:id/guest-list-link`); **cierre en 3 niveles implementado** (operativo/financiero/administrativo, `event-closure` module, con checklist propio por nivel) | Implementado (incl. calendario 988 líneas, workspace de invitados por mesa con tablero visual) | En menú | **Implementado** (sin bloqueo duro de disponibilidad por fecha; el checklist de vajilla ya tiene documento exportable propio — ver recomendación 5 del gap analysis, cerrada) |
+| Eventos (Event) | Implementado (snapshot operativo completo); genera automáticamente PDF/Word de timeline, logística, invitados por mesa y (desde 2026-07-29) reserva de vajilla (`event-operational-document.service.ts`) con un clic (endpoints `.../operational-documents/{timeline,logistics,guest_list,tableware,full}/export`); el documento de vajilla lista por separado lo asignado del stock propio del salón (`EventTablewareAllocation.source: 'salon_stock'`) y lo adicional/externo (`source: 'external'`), independiente de `resourcePlanSnapshot.inventoryItems`; **agregado 2026-08-05: quinto tipo `full` ("Cronograma integral")** que agrega las 7 áreas del evento en un solo PDF/Word — momentos (+ notas de staff), invitados y mesas, logística, vajilla y stock (vajilla asignada + `resourcePlanSnapshot.inventoryItems`), productos (`resourcePlanSnapshot.productItems`, agrupados por rubro salado/dulce/bebidas/otros), proveedores (`resourcePlanSnapshot.supplierAssignments`) y staff asignado y roles (`EventStaffAssignment`, no incluido en los otros 4 tipos) — cada área en su propia página (salto de página forzado, tanto en PDF como en el HTML del Word vía `page-break-before`), omitiendo por completo cualquier área sin datos cargados; reutiliza los mismos renderers que los documentos individuales generalizados con un parámetro `type`, sin duplicar lógica. Nuevo endpoint de sólo lectura `GET .../operational-documents/:documentType/preview-pdf` (aplica a los 5 tipos) genera el PDF al vuelo para vista previa **sin subirlo a Cloudinary** — el botón "Generar" (`/export`, ya existía) sigue siendo el único que persiste, y sigue sobrescribiendo el mismo `public_id` por evento+tipo+formato (`overwrite:true`) en vez de acumular versiones; el cliente puede cargar su propia lista de invitados vía link público (`POST /events/:id/guest-list-link`); **cierre en 3 niveles implementado** (operativo/financiero/administrativo, `event-closure` module, con checklist propio por nivel) | Implementado (incl. calendario 988 líneas, workspace de invitados por mesa con tablero visual) | En menú | **Implementado** (sin bloqueo duro de disponibilidad por fecha; el checklist de vajilla ya tiene documento exportable propio — ver recomendación 5 del gap analysis, cerrada) |
 | Calendario general (CalendarItem) | Implementado (CRUD propio en `calendar-items.routes.ts`); tipos soportados: `event`, `alert`, `reminder`, `note`, `task`, `payment_window`, `meeting` (este último agregado el 2026-07-25 para agendar reuniones con leads/clientes, sin acoplarse a `Event`/`Lead`/`Customer` — la vinculación es opcional vía `leadId`/`customerId`, igual que en el resto de los tipos); las alertas/recordatorios cargados en la pestaña "Tareas" del detalle de un evento (`resourcePlanSnapshot.alerts`) se sincronizan automáticamente como `CalendarItem` (`type: 'reminder'`, `source: 'event'`, `eventId` seteado) vía `apps/api/src/modules/crm/event-alert-calendar-sync.service.ts` (invocado desde `POST /events` y `PATCH /events/:id`). Desde 2026-07-28, cuotas/pagos pendientes y saldo contractual generan `payment_window` de sistema con locks, reintentos e idempotencia. | Implementado (`/admin/calendar`, filtros por tipo/estado/prioridad/notificación) | En menú | **Implementado**, sincronización automática para alertas de evento y recordatorios financieros; notas, tareas sueltas y reuniones siguen siendo manuales |
 | Salones | Implementado; stock de salón (`SalonStockItem`) desde 2026-07-29 cubre 8 categorías: `PLATES`/`GLASSWARE`/`DRINKWARE`/`CUTLERY`/`MISCELLANEOUS` (con conteos reales sembrados, ver §10.12) más `LINENS`/`CLEANING`/`MINOR_EQUIPMENT` (categorías nuevas, sin sembrar — a cargar por el equipo) | Implementado (incluye gestión de paquetes embebida; pestaña "Stock" del salón, renombrada desde "Vajilla") | En menú | **Implementado** |
 | Paquetes (PackageTemplate/VenuePackageRule) | Implementado | Implementado, pero **embebido en Salón**, no es módulo propio | Sin entrada propia | **Implementado**, sin ruta dedicada |
 | Extras (ServiceExtra) | Implementado (modelo + rutas en `operations`) | No se identificó UI dedicada | No | **Parcial** |
-| Catálogo de operaciones (CatalogItem, Supplier) | Implementado, pero `catalog.routes.ts` **no está montado** en `routes/index.ts` | Carpeta `admin/catalog` vacía (sin `page.tsx`) | No | **Parcial / inconsistente** (ver §10) |
+| Catálogo de operaciones (CatalogItem, Supplier) | **Actualizado 2026-08-05**: `catalog.routes.ts` (rutas de `CatalogItem`, montadas en `/catalog`; también expone `ServiceExtra` en `/catalog/services`, sin frontend propio todavía) — ver `docs/PRODUCTION_MODULE.md` §7 | Pantalla propia en `/admin/production/catalog` (alta/edición/activar/eliminar producto — nombre, tipo, categoría, unidad); la carpeta histórica `admin/catalog` (pensada para un catálogo genérico con servicios/proveedores) sigue vacía, no se resucitó | En submenú "Producción" (pestaña "Catálogo") | **Implementado** para productos de Producción; el resto del módulo (servicios extra por catálogo, inventario, reglas de consumo) sigue igual que antes (ver §10) |
 | Inventario | Modelo + rutas implementadas, **no montadas** | Carpeta `admin/inventory` vacía | No | **Parcial / inconsistente** |
 | Reglas de consumo (ConsumptionRule) | Implementado, **no montado** | Carpeta `admin/consumption-rules` vacía | No | **Parcial / inconsistente** |
 | Proveedores (Supplier) | Implementado y **sí montado** (`suppliers.routes.ts`) | Implementado (lista + detalle) | En menú | **Implementado** |
 | Personal (Staff/Employee) | Implementado dentro de `User` (subrol, salones habilitados, asignación a eventos) | Implementado (CRUD) | **Actualizado 2026-07-25: ya tiene entrada en el submenú "Configuración"** (antes solo accesible por URL directa) | **Implementado** |
 | Fichaje/asistencia (Attendance) | **Implementado 2026-07-25**: `WorkSession`/`TimePunch`/`AttendanceIncident`/`AttendanceAdjustmentRequest` (`apps/api/src/modules/attendance/`), geocercas por salón, idempotencia real, offline handling — ver `docs/ATTENDANCE_ARCHITECTURE.md` | Implementado: `/admin/attendance` (activos/historial/incidencias/correcciones/configuración) + pestaña "Asistencia" en `/admin/salons/[id]` (geocerca) | En submenú "Configuración" | **Implementado** (la vista de liquidaciones agregada **ya existe**, ver fila "Liquidaciones (Payroll)" más abajo — corrige `docs/ATTENDANCE_BACKOFFICE.md` §5; no se confirmó en esta tarea si la exportación de registros de asistencia en sí está implementada) |
-| Producción (ProductionPlan) | **Implementado** (`apps/api/src/modules/production/`): un plan por evento, versionado, con secciones tipadas (salado/dulce/bebidas/torta/panadería/cocina/barra/varios) e ítems con cantidad planificada, listo/chequeado (con quién y cuándo) y observaciones — calca casi campo a campo la planilla mensual de Producción. Se genera automáticamente combinando `ProductionRule` (cantidad por invitado, configurable por salón/paquete) con los datos del evento; detecta cambios y permite regenerar. Existe además un endpoint de "consolidado" que suma cada producto de todos los planes vigentes del período y lo cruza contra stock, aunque sin desglose por evento ni por sección (esa parte de "Salado"/"Bebidas" del Excel mensual sigue sin un crosstab propio) | Implementado (`/admin/production`, `/admin/production/[id]`, `/admin/production/rules`, `/admin/production/consolidated`) | En menú | **Implementado**, con la brecha puntual de desglose en el consolidado |
+| Producción (ProductionPlan) | **Implementado** (`apps/api/src/modules/production/`): un plan por evento, versionado, con secciones tipadas (salado/dulce/bebidas/torta/panadería/cocina/barra/varios) e ítems con cantidad planificada, listo/chequeado (con quién y cuándo) y observaciones — calca casi campo a campo la planilla mensual de Producción. Se genera automáticamente combinando `ProductionRule` (cantidad por invitado, configurable por salón/paquete) con los datos del evento; detecta cambios y permite regenerar. El endpoint de "consolidado" **sí desglosa por evento y por sección** (corrige una afirmación de una versión previa de este documento y del gap analysis — el código ya lo tenía). **Agregado 2026-08-05** (ver `docs/PRODUCTION_MODULE.md`): (a) cancelar/perder un evento cancela automáticamente su plan de producción vigente (`cancelCurrentProductionPlan`) — antes `ProductionPlan.status: 'cancelled'` era un valor de enum muerto que ningún código asignaba, dejando planes de eventos cancelados vivos para siempre en los listados; un plan ya `closed` no se toca; (b) generar/regenerar producción para un evento `cancelled`/`lost` ahora se bloquea explícitamente (`PRODUCTION_EVENT_CANCELLED`); (c) nuevo recordatorio automático D+1/D+3 (`production-close-reminders.service.ts`, mismo `/api/internal/calendar-tick`) cuando el evento ya pasó y el plan sigue sin cerrarse (`closed`) — simétrico del aviso ya existente de "falta generar producción" | Implementado (`/admin/production`, `/admin/production/[id]`, `/admin/production/rules`, `/admin/production/consolidated`) | En menú | **Implementado** |
 | Gastos (Expense) / Rentabilidad | **Implementado** (`apps/api/src/modules/expenses/`, modelo en `operations/operations.models.ts`): gasto por evento con proveedor, categoría (sembrada con categorías reales: Panadería, Limpieza, Staff, DJ, Proyector, Ambientación, etc.), monto inicial estimado/final/adicional/impuestos. Reporte de **rentabilidad económica real por evento** (`GET /expenses/profitability/events`): ingreso contratado − gasto real = margen económico, con % de margen y resultado de caja, filtrable por período/salón. **Agregado 2026-07-29**: `GET /expenses/by-supplier` agrupa los gastos del período por proveedor con inicial/final/adicional/impuestos/total, desvío (final − inicial), pagado/pendiente y cantidad de gastos — reemplaza "Control de Gastos I/II/III" y "Relación de Gastos" de la planilla mensual (recomendación #3 de `docs/MYM_EVENTOS_ADMINISTRATIVE_GAP_ANALYSIS.html`). Sin vista agrupada por categoría equivalente (solo por proveedor) | Implementado (`/admin/expenses`, `/admin/expenses/by-supplier`, `/admin/expenses/profitability`) | En menú | **Implementado**, incluida la vista agrupada por proveedor; queda pendiente la agrupación por categoría si se pide |
 | Reportes (dashboard + reportes agregados) | **Implementado** (`apps/api/src/modules/reporting/`): dashboard con métricas por período/salón (leads, presupuestos, eventos, contratos, pagos, gastos, producción) y módulo de reportes exportables a CSV/Excel: `leads`, `quotes`, `events`, `contracts`, `payments`, `expenses`, cada uno con resumen y desgloses por estado/salón/categoría, filtrables por fecha y salón. **Agregado 2026-07-29**: reporte `payment-control` ("Control de pagos mensual") agrega por contrato/cliente los pagos pendientes cuyo vencimiento cae en el período — cruza `Payment` (cuotas pendientes, monto, notas) con `Contract` (total, cobrado, saldo, `paymentPlanSnapshot` para la ventana `paymentWindowStart`/`paymentWindowEnd`) en una sola pantalla con cliente, evento, salón, total del evento, cobrado, saldo, cuotas restantes, valor de la próxima cuota, ventana de fecha de pago y observaciones — cierra la recomendación #4 de `docs/MYM_EVENTOS_ADMINISTRATIVE_GAP_ANALYSIS.html`, que la describía como reconstruible combinando a mano los reportes de Pagos y Contratos | Implementado (`/admin/dashboard`, `/admin/reports`, `/admin/reports/[key]` — el frontend es genérico por columnas/filas declaradas en el backend, no requirió cambios propios para sumar `payment-control`) | En menú | **Implementado** — corrige la nota de la fila "Marketing y Campañas" más abajo, que describía `Reports/*` como scaffolding sin páginas; eso ya no es así |
 | Liquidaciones (Payroll) | **Implementado** (`apps/api/src/modules/payroll/`): calcula liquidaciones reales a partir de `WorkSession` (asistencia aprobada) — horas normales/extras, adicional nocturno/fin de semana/feriado, distintos tipos de compensación (por hora/día/mes/evento/mixto), adelantos y ajustes manuales. Al aprobar una liquidación se genera automáticamente un `Expense` de categoría personal vinculado al evento/salón, conectando con el reporte de rentabilidad | Implementado (`/admin/payroll`) | En submenú "Configuración" | **Implementado** — corrige la fila equivalente de una versión previa de este documento, que lo describía como "solo permisos, sin cálculo salarial" |
@@ -292,6 +292,187 @@ envía sólo al confirmar mediante el SMTP existente; WhatsApp abre un borrador
 `wa.me` para revisión y envío manual. La acción valida nuevamente estado,
 saldo y alcance de salón, requiere `PAYMENTS_CREATE` y deja auditoría sin
 guardar el contenido del mensaje. Ver `PAYMENT_COLLECTION_CONTACT.md`.
+
+Actualización 2026-08-05 — bug real encontrado y corregido: en la ficha de un
+evento, la fecha mostrada en "Resumen" (18 de septiembre) no coincidía con la
+del input de "Ficha" (19 de septiembre) para el mismo evento. Causa raíz: el
+backend normaliza `eventDate`/`estimatedEventDate` (fechas sin hora real, ver
+`civilDateInput` en `apps/api/src/utils/argentina-date.ts`) a medianoche UTC,
+pero varias pantallas de `apps/web` la formateaban con
+`Intl.DateTimeFormat(...).format(new Date(value))` sin fijar `timeZone`, lo
+que aplica el huso horario local del navegador y puede correr la fecha un día
+hacia atrás. El input de "Ficha" (`inputDate` en
+`apps/web/src/features/events/event-operations.tsx`) ya tenía el criterio
+correcto (si el valor es una fecha civil, usar el día UTC tal cual, sin
+convertir huso horario); ese mismo criterio no estaba aplicado en el resto de
+las pantallas. Se creó `apps/web/src/lib/dates.ts#formatCivilDate` (mismo
+criterio, reutilizable) y se reemplazaron los formateadores locales
+equivalentes en las páginas de detalle/listado de eventos, presupuestos,
+contratos (incl. impresión), leads, producción y en la página pública de
+armado de lista de invitados (`/invitados/[token]`) y su contraparte admin
+(`guest-list-workspace.tsx`). `apps/web/src/app/admin/leads/page.tsx` y
+`apps/web/src/components/admin/overdue-payment-contact.tsx` ya evitaban el bug
+con otro método (parsean `T12:00:00` hora local, con margen suficiente para
+Argentina) y no se tocaron. **Pendiente, no resuelto en esta tarea**:
+`apps/web/src/app/admin/calendar/page.tsx` construye `Date` a partir de
+`eventDate` de forma similar (`eventDate()`, línea ~207) y podría tener el
+mismo problema al ubicar la tarjeta del evento en la celda de día correcta —
+no se tocó porque ese archivo mezcla el formateo con cálculos de grilla/semana
+más complejos y amerita una revisión propia antes de tocarlo. Si se toca
+`eventDate`/cualquier otro campo de fecha-sin-hora nuevo en el frontend, usar
+`formatCivilDate` en vez de un formateador ad hoc.
+
+Actualización 2026-08-05 — cascada de cambio de fecha de un evento
+(`PATCH /events/:id`, `apps/api/src/modules/crm/events.routes.ts`). Reportado
+como un 422 con mensaje poco claro al mover la fecha de un evento. Las dos
+causas reales de ese 422 ya existían y son intencionales — bloquear el cambio,
+no un bug —, pero el mensaje no era suficientemente accionable: (1) el evento
+tiene vajilla del stock del salón asignada (`EventTablewareAllocation`,
+`source: 'salon_stock'`) y no hay disponibilidad de algún ítem para el nuevo
+día; (2) el evento está `reserved`/`confirmed` y hay otro evento
+`reserved`/`confirmed` en el mismo salón con un horario superpuesto ese día
+(`assertVenueAvailable`). Ambos mensajes ahora nombran cantidades/ítem y
+sugieren la acción a tomar (reducir la cantidad asignada, liberar el otro
+evento, elegir otro horario/fecha) en vez de solo describir el síntoma.
+
+Gap real encontrado (no un bug, una omisión): las alertas/recordatorios del
+evento (`resourcePlanSnapshot.alerts`, pestaña "Tareas", incluidas las 6 que
+`event-alert-defaults.ts` precarga como offsets fijos respecto de `eventDate`
+— D-15/D-10/D-7/D-3/D-1/D+2) se guardan como `remindAt` absoluto y **no se
+recalculaban** al cambiar sólo la fecha desde la pestaña "Ficha" (esa edición
+no toca `resourcePlanSnapshot`, así que `event-alert-calendar-sync.service.ts`
+nunca se volvía a ejecutar). Resultado: mover la fecha del evento dejaba las
+alertas ancladas a la fecha vieja. Corregido: `PATCH /events/:id` ahora
+detecta un cambio real de `eventDate` (día distinto al anterior, sólo si ya
+había una fecha previa) y desplaza por la misma cantidad de días todas las
+alertas que todavía no se enviaron (`status !== 'sent'`), preservando las ya
+entregadas tal cual están. El desplazamiento se aplica tanto si la fecha se
+cambia sola como si se cambia junto con el resto del plan operativo en la
+misma request. `syncEventAlertCalendarItems` se sigue invocando con el mismo
+criterio de antes (cuando el body termina teniendo `resourcePlanSnapshot`,
+que ahora incluye este caso), sin cambiar su propia lógica de idempotencia.
+
+Decisión explícita tomada y documentada acá para no repetir la pregunta: los
+vencimientos de pago (`Payment.dueDate`, cuotas de
+`Event.paymentPlanSnapshot`/`Contract.paymentPlanSnapshot`) **no se mueven
+automáticamente** al cambiar la fecha del evento — son un compromiso ya
+acordado con el cliente, correrlos solos sería alterar datos financieros sin
+que nadie lo decida. El control de saldo a D-15 (`financial-reminders.service.ts`)
+ya funcionaba bien porque lee `event.eventDate` en vivo en cada tick, no un
+valor congelado. Lo que sí se agregó: `PATCH /events/:id` devuelve ahora un
+array opcional `warnings` en la respuesta (`{ event, warnings? }`) cuando el
+cambio de fecha deja alguna cuota (`paymentPlanSnapshot`, vía
+`planFor`/`isOpenInstallment`/`installmentDueDateKey` de
+`financial-reminders.service.ts`, reutilizados sin duplicar lógica) o algún
+`Payment` pendiente con vencimiento posterior a la nueva fecha del evento —
+para que un operador lo note y decida a mano si renegocia el plan de pagos.
+`apps/web/src/app/admin/events/[id]/page.tsx#patchEvent` muestra cada string
+de `warnings` como un toast `info` adicional tras el de éxito.
+
+No incluido en esta tarea (fuera del alcance reportado): recalcular
+`ProductionPlan`/reglas de producción al cambiar la fecha (ya se recalculan
+por evento bajo demanda, no dependen de una fecha congelada); mover
+`EventTablewareAllocation.eventDay` ya se hacía antes de esta tarea (línea que
+actualiza `eventDay` tras un cambio de fecha exitoso, sin cambios). Si se pide
+más automatización sobre el cambio de fecha (ej. reprogramar automáticamente
+en vez de sólo avisar), tratarlo como una decisión de negocio nueva a
+confirmar, no como una extensión obvia de este cambio.
+
+Actualización 2026-08-05 (bis) — barrido sistémico del bug de huso horario en
+fechas civiles, más allá de lo corregido en la actualización anterior (que
+sólo tocó `apps/web`). Motivo: el usuario encontró un caso nuevo (el cumpleaños
+de un evento cargado como 16/08 en "Ficha" figuraba como 15/08 en el preview
+del cronograma) y pidió una revisión exhaustiva, no un parche puntual. Causa
+raíz común a todos los casos: `eventDate`/`estimatedEventDate`/`validUntil`/
+`dueDate`/`paymentWindowStart`/`paymentWindowEnd`/`Expense.date` son "fechas
+civiles" (sin hora real, normalizadas a medianoche UTC por `civilDateInput` —
+ver `apps/api/src/utils/argentina-date.ts`). Formatearlas con
+`Intl.DateTimeFormat` sin fijar `timeZone: 'UTC'` (ya sea con el huso local
+del proceso/navegador por defecto, o fijando explícitamente
+`America/Argentina/Buenos_Aires`) corre esa medianoche al día anterior en
+cualquier huso horario negativo — Argentina incluida. La actualización previa
+(más arriba en esta sección) sólo había cubierto un subconjunto de páginas de
+`apps/web`; este barrido encontró y corrigió instancias del mismo bug que
+habían quedado fuera, tanto en `apps/api` (nunca tocado) como en partes de
+`apps/web` no incluidas la vez anterior:
+
+- **Backend, generadores de PDF/email (nunca corregidos hasta ahora)**:
+  `event-operational-document.service.ts` (cronograma/logística/vajilla/"full",
+  el caso reportado), `quote-pdf.service.ts`, `contract-pdf.service.ts`,
+  `payment-receipt-pdf.service.ts` y `quote-request-notifications.service.ts`
+  tenían cada uno su propio helper `date()`/formateador local sin `timeZone`
+  (o mezclando fechas civiles con instantes reales — `paidAt`, `approvedAt`,
+  "ahora" — bajo el mismo helper). Se separaron en dos helpers por archivo
+  donde hacía falta: uno para fecha civil (`timeZone: 'UTC'`) y otro para
+  instante real (`timeZone: 'America/Argentina/Buenos_Aires'` explícito, nunca
+  el default del proceso). `ticket.service.ts` (email de entradas) y el
+  formateador compartido de `apps/web/src/features/digital/types.ts#formatDateTime`
+  (más `tickets-admin.tsx`, `scan-hub.tsx`) tenían el caso inverso: instantes
+  reales (`startsAt`/`endsAt` de `TicketPublication`, con hora propia) sin
+  `timeZone` fijado — dependían del huso del proceso/navegador; ahora fijan
+  `America/Argentina/Buenos_Aires` explícito.
+- **Backend, módulo de Reportes** (`apps/api/src/modules/reporting/reports.service.ts`
+  + `apps/web/src/features/reports/report-workspace.tsx`): el tipo de columna
+  `format: 'date'` mezclaba fechas civiles (`eventDate` en leads/quotes/events/
+  contracts/payment-control, `nextDueDate`/`dueDate`, `Expense.date`) con
+  instantes reales (`createdAt`, `sentAt`, `acceptedAt`, `approvedAt`) bajo un
+  único formateador fijado en huso Argentina — las columnas de fecha civil
+  salían un día corridas en cualquiera de los 6 reportes, tanto en pantalla
+  como en la exportación CSV/Excel (`exportValue`, misma función para ambos
+  formatos de descarga). Se agregó un segundo tipo de columna `'civilDate'`
+  (`timeZone: 'UTC'`) y se reclasificaron las columnas correspondientes;
+  `'date'` (Argentina) quedó sólo para instantes reales. La columna `date` del
+  reporte de Pagos es ambigua a propósito (según el filtro de atribución
+  puede ser `paidAt`/`createdAt` o `dueDate`) — se optó por `'civilDate'`
+  porque el caso "siempre mal" (cuotas pendientes) pesaba más que el caso
+  "ocasional" (un `paidAt` cerca de medianoche); documentado en el código, no
+  resuelto con una solución perfecta. También se corrigió `formatPaymentWindow`
+  (mismo archivo), que armaba el texto "Vence el DD/MM/AAAA" del control de
+  pagos mensual en huso Argentina sobre `paymentWindowStart`/`paymentWindowEnd`.
+- **Frontend, no cubierto por la corrección anterior**: `apps/web/src/app/admin/calendar/page.tsx#eventDate()`
+  — el más significativo de este grupo: construía `new Date(event.eventDate)`
+  a secas y lo comparaba con `sameDay()`/getters locales (`getFullYear/getMonth/getDate`)
+  para ubicar la tarjeta del evento en la celda del día correcto del calendario
+  — exactamente el riesgo que la actualización anterior había dejado marcado
+  como "pendiente, no resuelto" en ese mismo archivo. Un evento del día 16
+  podía aparecer visualmente en la celda del 15. Corregido reconstruyendo la
+  fecha a partir de los componentes Y-M-D del string (sin conversión de huso)
+  con el constructor local `new Date(y, m-1, d)`, coherente con el resto de
+  esta página (que ya opera en getters/constructores locales de forma
+  consistente). También: `production-list.tsx`, `production-consolidated.tsx`,
+  `expenses-workspace.tsx`, `profitability-workspace.tsx`, listado y detalle
+  de `admin/customers` (`eventDate` del próximo evento del cliente, mezclado
+  con `createdAt` — se resolvió reutilizando `formatCivilDate`, que detecta
+  fecha civil vs. instante real mirando la forma del valor en vez de exigir
+  que el llamador lo sepa de antemano) e `invitation-list-workspace.tsx`
+  (`DigitalInvitation.eventDate`, que a diferencia de `Event.eventDate` sí es
+  un instante real con hora propia de Argentina — `civilDateTimeInput`, no
+  `civilDateInput` —, así que el fix ahí fue fijar
+  `America/Argentina/Buenos_Aires` explícito, no `'UTC'`).
+- **Verificado sin cambios** (ya usaban el patrón seguro): `event-operations.tsx#inputDate`
+  (implementación de referencia), `production-detail.tsx`, páginas de detalle/
+  listado de eventos/contratos/presupuestos/leads (de la corrección anterior),
+  `dashboard-workspace.tsx`/`dashboard-charts.tsx` (usan el truco de mediodía
+  con offset explícito `-03:00`), `overdue-payment-contact.tsx` y
+  `leads/page.tsx` (truco de mediodía local), `financial-reminders.service.ts#humanDate`
+  y `payment-collection.service.ts` (reconstruyen la fecha a mediodía UTC antes
+  de formatear).
+
+**Regla general para evitar que este bug reaparezca**: cualquier campo que
+provenga de `civilDateInput`/`civilDateSchema` en el backend (fecha sin hora
+real: `eventDate`, `estimatedEventDate`, `validUntil`, `birthDate`,
+`dueDate`/`paymentWindowStart`/`paymentWindowEnd` de cuotas, `Expense.date`)
+debe formatearse **siempre** con `timeZone: 'UTC'` explícito (nunca el default
+del proceso/navegador, nunca `America/Argentina/Buenos_Aires`) — en el
+frontend, preferir `formatCivilDate` (`apps/web/src/lib/dates.ts`), que ya
+detecta el caso automáticamente por la forma del valor. Cualquier campo que
+sea un instante real con hora propia (`createdAt`, `paidAt`, `sentAt`,
+`approvedAt`, `startsAt`/`endsAt` de entradas, `DigitalInvitation.eventDate`)
+debe fijar `timeZone: 'America/Argentina/Buenos_Aires'` explícito — nunca
+depender del huso del proceso que lo generó (el servidor puede correr en
+cualquier huso) ni del navegador de quien lo mira (staff viajando, etc.).
+Typecheck y suite completa de `@mym/api` (298 tests / 54 archivos) y
+`@mym/web` verificados sin regresiones tras todos los cambios.
 
 ## 9. Integraciones — estado real
 
@@ -321,7 +502,7 @@ No se encontraron comentarios `TODO`/`FIXME`/`HACK` en `apps/api/src`, ni `conso
 | 3 | `DOMAIN_MODEL_OVERVIEW.md` describe `DigitalInvitation` como "asociada a un Event" | Línea explícita del doc, fechado el más antiguo (23 de junio) | Superado por §6/§10.2. Se marca como desactualizado en el índice de documentación (§11), sin editar el archivo original. |
 | 4 | ¿Contratos/eventos implementados o pendientes? | `QUOTES_MODULE.md`/`QUOTE_REQUESTS_MODULE.md` dicen "pendiente"; `EVENTS_MODULE.md`/`CUSTOM_QUOTING_MODULE.md` documentan endpoints reales; código confirma `Contract`, `ContractAddendum`, `POST /events/:id/create-contract` implementados | Se tratan como fases sucesivas del mismo proyecto, no como contradicción real: los docs "pendiente" son más antiguos. Estado real vigente = implementado (ver §8), con las brechas puntuales listadas ahí (sin firma formal, sin bloqueo duro de fecha). |
 | 5 | UI declarada como shadcn/ui en `ARCHITECTURE_DECISIONS.md`/`CODING_RULES.md` | Código usa Tailwind + Radix envuelto a mano, sin `components.json` ni CLI de shadcn | Se documenta como decisión no seguida en la práctica. No se reescribe el frontend para "cumplir" el doc; se dejan ambos hechos registrados aquí para que futuras tareas de UI no asuman una base shadcn que no existe. |
-| 6 | Rutas de operaciones (`catalog`, `inventory`, `consumption-rules`) existen en backend pero no están montadas, y el frontend tiene carpetas vacías para ellas | `apps/api/src/modules/operations/{catalog,inventory,consumption-rules}.routes.ts` no aparecen en `src/routes/index.ts`; `apps/web/src/app/admin/{catalog,inventory,consumption-rules}` están vacías | Se documenta como **riesgo/pendiente de integración**, no como código muerto a borrar sin confirmar: podría ser trabajo en curso interrumpido. No se monta ni se borra en esta tarea (instrucción explícita de no cambiar funcionalidad). Queda como prioridad técnica (§12). |
+| 6 | Rutas de operaciones (`catalog`, `inventory`, `consumption-rules`) existían en backend pero no estaban montadas, y el frontend tenía carpetas vacías para ellas | `apps/api/src/modules/operations/{catalog,inventory,consumption-rules}.routes.ts` no aparecían en `src/routes/index.ts`; `apps/web/src/app/admin/{catalog,inventory,consumption-rules}` seguían vacías | **Parcialmente resuelto 2026-08-05**: `catalog.routes.ts` se montó (`/catalog`), a pedido explícito del usuario, para destrabar el selector de "Producto" de las reglas de producción (antes no había ninguna forma de cargar un producto nuevo sin un script de desarrollo). Nueva pantalla en `/admin/production/catalog` (no en la carpeta histórica `admin/catalog`, que sigue vacía y sin uso). `inventory.routes.ts`/`consumption-rules.routes.ts` **siguen sin montar** — esa parte de la decisión original (riesgo/pendiente de integración, no código muerto a borrar sin confirmar) sigue vigente. Ver `docs/PRODUCTION_MODULE.md` §7. |
 | 7 | Doble adaptador serverless de Vercel | `api/` (raíz) + `vercel.json` (raíz) vs. `apps/api/api/[...path].ts` + `apps/api/vercel.json`, casi idénticos | El adaptador raíz es el que efectivamente usa Vercel (`outputDirectory: apps/web/.next`, `buildCommand` en `vercel.json` raíz coincide con `docs/VERCEL_DEPLOYMENT.md`). El de `apps/api` parece remanente de una configuración de despliegue standalone anterior. No se elimina en esta tarea; se deja anotado como limpieza pendiente a confirmar con el usuario antes de borrar. |
 | 8 | Inconsistencia de nombres de paquete en comandos (`--filter api` vs `--filter @mym/api`) | `docs/VERCEL_DEPLOYMENT.md` | Se documenta la forma correcta (con scope) en §3; no se edita el doc original en esta tarea. |
 | 9 | Rutas de pruebas manuales en `DIGITAL_INVITATIONS_AND_TICKETS_TESTING.md` referencian navegación "dentro de un evento" | El doc de testing es de la implementación pre-corrección | Se marca como parcialmente desactualizado (§6); la intención de las pruebas (concurrencia, unicidad de QR, idempotencia) sigue siendo válida y debería reescribirse contra las rutas independientes actuales cuando se retome testing de este módulo. |
@@ -359,6 +540,7 @@ Estos archivos existentes se conservan como documentación granular por módulo.
 | `MARKETING_EMAIL_PROVIDER.md` | Proveedor Resend: configuración, verificación de firma Svix, pasos manuales para producción | Vigente, creado 2026-07-25 |
 | `MARKETING_CAMPAIGNS_OPERATIONS.md` | Runbook operativo: ciclo de vida de campañas, motor de lotes, cron en Vercel, diagnóstico de errores | Vigente, creado 2026-07-25 |
 | `TICKET_AUTOMATION.md` | Runbook de expiración de reservas, reintentos y recordatorios de entradas; cron de GitHub Actions cada 5 minutos | Vigente |
+| `PRODUCTION_MODULE.md` | Proceso completo de Producción: generación desde reglas/snapshot, ciclo de vida de ítems, cierre/reapertura del plan, su dependencia con el cierre de evento y los recordatorios automáticos | Vigente, reescrito 2026-08-05 (versión previa era un resumen de una línea) |
 | `FINANCIAL_REMINDERS.md` | Política y operación de los avisos internos por cuotas/pagos pendientes, saldo D-15, cron y secretos | Vigente |
 | `PAYMENT_COLLECTION_CONTACT.md` | Contacto manual, editable y auditado con clientes por obligaciones vencidas; comportamiento de email y borrador de WhatsApp | Vigente |
 | `MOBILE_STAFF_APP.md` | App móvil de personal: arquitectura, pantallas, flujo de fichaje, decisiones/simplificaciones explícitas | Vigente, creado 2026-07-25 |
@@ -384,7 +566,7 @@ Existe una auditoría mucho más profunda, entidad por entidad, del ciclo Lead �
 En orden de relevancia:
 
 1. **Rate limiting en memoria** (`publicRateLimit.ts`) no es apto para múltiples instancias — auto-documentado en el código. Si el despliegue en Vercel escala a más de una instancia concurrente para rutas públicas, el rate limit deja de ser confiable. Requiere Redis o gateway antes de tráfico público serio.
-2. **Módulos de operaciones inconexos**: catálogo, inventario y reglas de consumo tienen backend completo pero desconectado (rutas no montadas) y frontend con carpetas vacías. Antes de continuar cualquier trabajo en inventario, confirmar con el usuario si se retoma esa integración o si el código debe eliminarse por estar abandonado.
+2. **Módulos de operaciones inconexos**: ~~catálogo, inventario y reglas de consumo tienen backend completo pero desconectado~~ **catálogo se montó 2026-08-05** (`/catalog`, con pantalla en `/admin/production/catalog` — ver §10.6). Inventario y reglas de consumo siguen con backend completo pero desconectado (rutas no montadas) y frontend con carpetas vacías. Antes de continuar cualquier trabajo en inventario, confirmar con el usuario si se retoma esa integración o si el código debe eliminarse por estar abandonado.
 3. ~~App móvil inexistente~~ **Actualizado 2026-07-25: implementada** (ver §2.3, §8). **Migrada a Expo SDK 57 el 2026-07-26** (desde ~50.0.8) para arreglar el crash de Expo Go en emuladores/dispositivos Android 15+ (`DETECT_SCREEN_CAPTURE`, ver `docs/MOBILE_BUILDS.md`). ~~Riesgo puntual: sin rate limiting en `/api/mobile/auth/login`~~ **Corregido 2026-08-03**: esa premisa era parcialmente incorrecta — `/api/mobile/auth/login` ya tenía `publicRateLimit` (10 intentos/15min por IP) igual que la recuperación de contraseña; lo que realmente faltaba era el bloqueo de cuenta tras fallos repetidos (`User.lockedUntil` se leía pero nunca se seteaba) — corregido en ambos logins (mobile y web), ver §14.3. Riesgos remanentes: sin build EAS ni credenciales de firma; sin push notifications reales (no se registran tokens mientras no exista envío); sin tests de render de pantallas (solo lib/ tiene cobertura automatizada) — ver `docs/MOBILE_QA.md` §5 para el detalle priorizado. Fast-follows abiertos por la migración de SDK: (a) React Navigation quedó deliberadamente en v6 (no forzado por SDK 57, pero v6 ya no recibe soporte activo — evaluar el salto a v7 como tarea separada); (b) el proyecto ahora usa el preset `jest-expo/node` para tests (antes se evitaba por un bug de pnpm+Flow-stripping que resultó estar resuelto en `jest-expo@57` — ver comentario en `apps/mobile/jest.config.js`), lo que reabre la posibilidad de sumar tests de render con `@testing-library/react-native` (dependencia ya presente pero sin uso real todavía).
 4. **Doble configuración de Vercel** (`apps/api/vercel.json` + `apps/api/api/[...path].ts` vs. la raíz) — riesgo de confusión en despliegues futuros; confirmar con el usuario antes de eliminar los archivos duplicados.
 5. **Auditoría sin UI de consulta**: se registra `AuditLog` pero no hay pantalla para revisarlo — limita la trazabilidad operativa real pese a que el dato existe.
@@ -448,6 +630,7 @@ Ampliación grande sobre el único motor de recordatorios que existía hasta est
 | P16 | Saludo de cumpleaños de clientes | `birthday-campaigns.service.ts` | Cliente (motor de Marketing) | Nuevo campo `Customer.birthDate` (opcional, editable desde `/admin/customers/[id]`) + `birthdayGreetingSentYear` para no repetir en el mismo año. Arma una `MarketingAudience` `manual`/`isDynamic:false` del día y una `MarketingCampaign` puntual, reusando `freezeCampaignSnapshots`→`prepareCampaignRecipients`→`processMarketingTick` (mismo camino que el wizard). No requirió sembrar ninguna `MarketingTemplate` — el contenido va directo en la campaña. |
 | P20 | Alerta de jornada abierta sin fichaje de salida (+8h, antes +14h — ajustado 2026-08-04) | `open-session-alerts.service.ts` | Gerente del salón o ADMIN/MANAGER | — |
 | P21 | Aviso de liquidación pendiente de generar | `payroll-pending-alerts.service.ts` | ADMIN/MANAGER | Detecta `WorkSession` aprobadas (`payrollApprovalStatus:'approved'`) sin `payrollSettlementId` y con más de 35 días — no reconstruye el período exacto por perfil, usa el mismo filtro que ya existía en `payroll.service.ts#settlementSessions` sin el `employeeId`. |
+| P22 | Aviso de producción sin cerrar (D+1/D+3) | `production-close-reminders.service.ts` | Gerente del salón o ADMIN/MANAGER | Agregada 2026-08-05. Simétrica de P13 (que avisa *antes* del evento si falta generar el plan): esta avisa *después* si el plan sigue en cualquier estado abierto (`pending`/`in_progress`/`ready`/`blocked`/`checked`) sin llegar a `closed` — ver `docs/PRODUCTION_MODULE.md` §3. |
 
 **No implementado, por decisión explícita:**
 

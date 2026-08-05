@@ -24,11 +24,13 @@ const statusStyle = (status?: string) =>
     : status === "paused"
       ? "bg-amber-100 text-amber-900"
       : "bg-sky-100 text-sky-800";
+// Instantes reales (inicio/fin de publicación) — hora de Argentina siempre.
 const date = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("es-AR", {
         dateStyle: "medium",
         timeStyle: "short",
+        timeZone: "America/Argentina/Buenos_Aires",
       }).format(new Date(value))
     : "Sin fecha";
 

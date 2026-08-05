@@ -103,7 +103,9 @@ export async function createQuoteRequestNotifications(input: NotifyInput): Promi
   if (!recipients.length) return;
 
   const salons = input.salonNames?.length ? input.salonNames.join(', ') : 'Sin salón definido';
-  const date = request.estimatedEventDate ? new Intl.DateTimeFormat('es-AR').format(new Date(request.estimatedEventDate)) : 'Sin fecha tentativa';
+  // `estimatedEventDate` es una fecha civil normalizada a medianoche UTC (`civilDateInput`) —
+  // sin `timeZone: 'UTC'` explícito, el huso local del proceso corre esa medianoche al día anterior.
+  const date = request.estimatedEventDate ? new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC' }).format(new Date(request.estimatedEventDate)) : 'Sin fecha tentativa';
   const message = `${request.contactName} (${request.phone || request.email || 'sin contacto'}) solicitó presupuesto para ${request.eventType || 'un evento'} el ${date}. Salón/es: ${salons}.`;
   const actionUrl = `/admin/quotes/requests/${request._id}`;
   const html = emailTemplate({ request, salons, date, actionUrl });

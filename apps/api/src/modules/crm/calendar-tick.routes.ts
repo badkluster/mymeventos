@@ -12,6 +12,7 @@ import { processCollectionFollowUpTick } from './collection-followup-reminders.s
 import { processLeadFollowUpTick } from './lead-followup-reminders.service';
 import { processQuoteLifecycleTick } from './quote-lifecycle-reminders.service';
 import { processProductionMissingTick } from './production-reminders.service';
+import { processProductionPendingCloseTick } from './production-close-reminders.service';
 import { processTablewareOverbookingTick } from './tableware-overbooking.service';
 import { processClosurePendingTick } from './closure-reminders.service';
 import { processOpenSessionAlertTick } from './open-session-alerts.service';
@@ -34,6 +35,7 @@ const domainTicks: Array<{ key: string; run: (now?: Date) => Promise<{ hasMore: 
   { key: 'leadFollowUp', run: processLeadFollowUpTick },
   { key: 'quoteLifecycle', run: processQuoteLifecycleTick },
   { key: 'productionMissing', run: processProductionMissingTick },
+  { key: 'productionPendingClose', run: processProductionPendingCloseTick },
   { key: 'tablewareOverbooking', run: processTablewareOverbookingTick },
   { key: 'closurePending', run: processClosurePendingTick },
   { key: 'openWorkSession', run: processOpenSessionAlertTick },

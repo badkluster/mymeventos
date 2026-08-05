@@ -7,7 +7,13 @@ const page = { width: 595.28, height: 841.89, left: 46, right: 549, bottom: 782 
 const color = { ink: '#101827', gold: '#b8965a', goldSoft: '#f5eedf', ivory: '#fcfbf8', card: '#f4f6f8', line: '#dfe3e8', muted: '#667085', white: '#ffffff' };
 
 const money = (value?: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value ?? 0);
-function date(value?: Date | string): string { if (!value) return 'A confirmar'; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? 'A confirmar' : new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(parsed); }
+// `quote.eventDate`/`quote.validUntil` son fechas civiles normalizadas a medianoche UTC
+// (`civilDateInput`) — sin `timeZone: 'UTC'` explícito, el huso local del proceso (Argentina,
+// UTC-3) corre esa medianoche al día anterior.
+function date(value?: Date | string): string { if (!value) return 'A confirmar'; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? 'A confirmar' : new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'UTC' }).format(parsed); }
+// A diferencia de `date()`, acá sí hay un instante real (momento de emisión) — se muestra en
+// hora de Argentina (la del lector), no en el huso del proceso que generó el PDF.
+function issuedDate(value: Date): string { return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'America/Argentina/Buenos_Aires' }).format(value); }
 function value(input?: unknown, fallback = 'A definir'): string { return typeof input === 'string' && input.trim() ? input.trim() : fallback; }
 function pdfBuffer(document: PDFKit.PDFDocument): Promise<Buffer> { return new Promise((resolve, reject) => { const chunks: Buffer[] = []; document.on('data', (chunk) => chunks.push(Buffer.from(chunk))); document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject); document.end(); }); }
 
@@ -56,7 +62,7 @@ export async function generateAndUploadQuotePdf(quote: any): Promise<{ pdfSecure
   document.rect(0, 0, page.width, 128).fill(color.ink); logo(document, page.left, 30, 88);
   document.font('Helvetica').fontSize(8.5).fillColor('#dbc9a9').text('PROPUESTA COMERCIAL', 313, 39, { width: 236, align: 'right', characterSpacing: 1.2 });
   document.font('Helvetica-Bold').fontSize(17).fillColor(color.white).text(`Presupuesto ${quote.quoteNumber}`, 220, 57, { width: 329, align: 'right' });
-  document.font('Helvetica').fontSize(8.5).fillColor('#d8dde6').text(`Emitido el ${date(new Date())}`, 220, 82, { width: 329, align: 'right' });
+  document.font('Helvetica').fontSize(8.5).fillColor('#d8dde6').text(`Emitido el ${issuedDate(new Date())}`, 220, 82, { width: 329, align: 'right' });
   const introductionY = 153;
   const investmentY = 211;
   document.font('Helvetica-Bold').fontSize(18).fillColor(color.ink).text(titleFor(quote), page.left, introductionY, { width: 450 });

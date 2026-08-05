@@ -3,16 +3,17 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { CalendarCheck, Check, ChevronLeft, Clock3, Copy, Download, Eye, FileText, Mail, MessageCircle, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { CalendarCheck, Check, ChevronLeft, Clock3, Copy, Download, Eye, FileText, Mail, MessageCircle, Pencil, RefreshCw, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { displayLabel, quoteStatusLabels } from '@/lib/display-labels';
 import { Button, Modal, Select } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { QuoteFormModal } from '@/features/quotes/quote-form-modal';
 import { getEntityId, getSalonName, type Event, type LeadOption, type PackageTemplate, type Quote, type Salon } from '@/features/quotes/types';
+import { formatCivilDate } from '@/lib/dates';
 
 const money = (value?: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value ?? 0);
-const date = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(value)) : 'Sin fecha definida';
+const date = (value?: string) => formatCivilDate(value, 'Sin fecha definida');
 
 export default function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -68,6 +69,26 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       setNotice('Estado actualizado correctamente.');
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'No se pudo actualizar el estado.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const acceptAndCreateEvent = async () => {
+    if (!quote) return;
+    let accepted = quote.status === 'accepted';
+    setSaving(true);
+    try {
+      if (!accepted) {
+        await api.patch(`/quotes/${quote._id}/status`, { status: 'accepted' });
+        accepted = true;
+      }
+      const response = await api.post<{ event: Event; createdEvent: boolean }>(`/quotes/${quote._id}/convert-to-event`, {});
+      setNotice(response.createdEvent ? 'Presupuesto aceptado y evento creado correctamente.' : 'El presupuesto ya tenía un evento asociado.');
+      router.push(`/admin/events/${response.event._id}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo crear el evento.';
+      setNotice(accepted ? `El presupuesto fue aceptado, pero no se pudo crear el evento: ${message}` : message);
     } finally {
       setSaving(false);
     }
@@ -180,8 +201,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     <Link href="/admin/quotes" className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 transition hover:text-zinc-950"><ChevronLeft className="h-4 w-4" />Volver a Presupuestos</Link>
     <header className="rounded-3xl border border-zinc-200 bg-white px-6 py-6 shadow-sm md:px-8">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-        <div><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold tracking-tight text-zinc-950">{quote.quoteNumber}</h1><span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">{displayLabel(quoteStatusLabels, quote.status)}</span></div><p className="mt-2 text-sm text-zinc-500">{quote.contactName} · {quote.eventType}</p><label className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-700">Estado<Select value={quote.status} disabled={saving} onChange={(event) => void updateStatus(event.target.value)} className="w-48 py-2">{Object.entries(quoteStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label></div>
-        <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={!pdfUrl} onClick={() => setPreviewOpen(true)}><Eye className="mr-2 h-4 w-4" />Ver PDF</Button><Button variant="secondary" disabled={!pdfUrl} onClick={downloadPdf}><Download className="mr-2 h-4 w-4" />Descargar</Button><Button variant="secondary" disabled={saving} onClick={() => void regeneratePdf()}><RefreshCw className="mr-2 h-4 w-4" />{saving ? 'Generando...' : 'Regenerar PDF'}</Button><Button variant="secondary" onClick={whatsapp}><MessageCircle className="mr-2 h-4 w-4" />WhatsApp</Button>{quote.email && <Button variant="secondary" onClick={email}><Mail className="mr-2 h-4 w-4" />Email</Button>}<Button variant="secondary" onClick={() => void duplicate()}><Copy className="mr-2 h-4 w-4" />Duplicar</Button><Button onClick={() => setEditOpen(true)}><Pencil className="mr-2 h-4 w-4" />Editar</Button><Button variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button></div>
+        <div><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold tracking-tight text-zinc-950">{quote.quoteNumber}</h1><span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">{displayLabel(quoteStatusLabels, quote.status)}</span></div><p className="mt-2 text-sm text-zinc-500">{quote.contactName} · {quote.eventType}</p><label className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-700">Estado<Select value={quote.status} disabled={saving} onChange={(event) => void (event.target.value === 'accepted' ? acceptAndCreateEvent() : updateStatus(event.target.value))} className="w-48 py-2">{Object.entries(quoteStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label></div>
+        <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={!pdfUrl} onClick={() => setPreviewOpen(true)}><Eye className="mr-2 h-4 w-4" />Ver PDF</Button><Button variant="secondary" disabled={!pdfUrl} onClick={downloadPdf}><Download className="mr-2 h-4 w-4" />Descargar</Button><Button variant="secondary" disabled={saving} onClick={() => void regeneratePdf()}><RefreshCw className="mr-2 h-4 w-4" />{saving ? 'Generando...' : 'Regenerar PDF'}</Button><Button variant="secondary" onClick={whatsapp}><MessageCircle className="mr-2 h-4 w-4" />WhatsApp</Button>{quote.email && <Button variant="secondary" onClick={email}><Mail className="mr-2 h-4 w-4" />Email</Button>}<Button variant="secondary" onClick={() => void duplicate()}><Copy className="mr-2 h-4 w-4" />Duplicar</Button><Button disabled={saving || Boolean(relatedEventId)} onClick={() => void acceptAndCreateEvent()}><Check className="mr-2 h-4 w-4" />{quote.status === 'accepted' ? 'Crear evento' : 'Aceptar y crear evento'}</Button><Button variant="danger" disabled={saving || quote.status === 'rejected'} onClick={() => void updateStatus('rejected')}><X className="mr-2 h-4 w-4" />Marcar rechazado</Button><Button onClick={() => setEditOpen(true)}><Pencil className="mr-2 h-4 w-4" />Editar</Button><Button variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 className="mr-2 h-4 w-4" />Eliminar</Button></div>
       </div>
     </header>
 

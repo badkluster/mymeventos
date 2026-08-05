@@ -17,7 +17,8 @@
     "migrate:ticket-type-sale-index": "ts-node src/scripts/removeLegacyTicketTypeSaleIndex.ts",
     "migrate:unique-user-email-index": "ts-node src/scripts/restoreUniqueUserEmailIndex.ts",
     "migrate:remove-ticket-payment-credentials": "ts-node src/scripts/removeTicketPaymentCredentials.ts",
-    "migrate:unique-user-email-index": "ts-node src/scripts/restoreUniqueUserEmailIndex.ts"
+    "migrate:unique-user-email-index": "ts-node src/scripts/restoreUniqueUserEmailIndex.ts",
+    "migrate:digital-ticket-public-token-index": "ts-node src/scripts/removeLegacyDigitalTicketPublicTokenIndex.ts"
   },
   "dependencies": {
     "@mym/shared": "workspace:*",

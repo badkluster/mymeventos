@@ -286,8 +286,10 @@ function lifecycleEmailContent(
 ) {
   const buyer = escapeHtml(order.buyer?.name || "hola");
   const event = escapeHtml(publication?.title || "M&M Eventos");
+  // `startsAt` es un instante real (fecha y hora de inicio) — se muestra en hora de Argentina
+  // (la del comprador), no en el huso del proceso que arma el email.
   const eventDate = publication?.startsAt
-    ? new Intl.DateTimeFormat("es-AR", { dateStyle: "full", timeStyle: "short" }).format(new Date(publication.startsAt))
+    ? new Intl.DateTimeFormat("es-AR", { dateStyle: "full", timeStyle: "short", timeZone: "America/Argentina/Buenos_Aires" }).format(new Date(publication.startsAt))
     : "fecha a confirmar";
   const location = escapeHtml(publication?.venueName || publication?.address || "ubicación a confirmar");
   const amount = formatTicketAmount(Number(order.totalAmount ?? 0), order.currency ?? "ARS");

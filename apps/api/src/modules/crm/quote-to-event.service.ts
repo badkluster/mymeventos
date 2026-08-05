@@ -1,6 +1,8 @@
 import { Event, Lead, LeadActivity, Quote, QuoteRevision } from './crm.models';
 import { findOrCreateCustomer } from './contact-dedupe.service';
 import { buildInitialResourcePlan } from './event-resource-plan';
+import { buildDefaultEventAlerts } from './event-alert-defaults';
+import { syncEventAlertCalendarItems } from './event-alert-calendar-sync.service';
 import { ApiError } from '../../middlewares/errorHandler';
 
 type ConvertQuoteInput = {
@@ -98,6 +100,16 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     giftText: quote.giftText
   };
 
+  const eventName = input.eventName || `${quote.eventType || 'Evento'} - ${quote.contactName || customer.fullName}`;
+  const resourcePlanSnapshot = buildInitialResourcePlan({ source: 'quote_conversion', sourceQuoteId: quote._id });
+  const alerts = quote.eventDate
+    ? buildDefaultEventAlerts({
+      eventDate: quote.eventDate,
+      customerName: customer.fullName,
+      eventName
+    })
+    : [];
+  resourcePlanSnapshot.alerts = alerts;
   const event = await Event.create({
     customerId: customer._id,
     leadId: lead?._id,
@@ -107,7 +119,7 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     createdFromQuoteId: quote._id,
     salonId: quote.salonId,
     eventType: quote.eventType,
-    eventName: input.eventName || `${quote.eventType || 'Evento'} - ${quote.contactName || customer.fullName}`,
+    eventName,
     eventDate: quote.eventDate,
     startTime: quote.startTime,
     endTime: quote.endTime,
@@ -137,12 +149,13 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     commercialSnapshot,
     menuSnapshot: quote.menuSections ?? [],
     servicesSnapshot: quote.includedServices ?? [],
-    resourcePlanSnapshot: buildInitialResourcePlan({ source: 'quote_conversion', sourceQuoteId: quote._id }),
+    resourcePlanSnapshot,
     paymentSnapshot: { depositAmount: quote.depositAmount, balanceAmount: quote.balanceAmount, paymentTerms: quote.paymentTerms, realPaymentsImplemented: false },
     contractReadyChecklist: checklist(quote, customer),
     createdBy: input.userId,
     updatedBy: input.userId
   });
+  await syncEventAlertCalendarItems(event, alerts, input.userId);
 
   quote.customerId = customer._id;
   quote.convertedCustomerId = customer._id;

@@ -21,7 +21,9 @@ type Expense = {
 type ListResponse = { items: Expense[]; summary: { total: number; initial: number; final: number; additional: number; tax: number; paid: number; pending: number }; meta: { page: number; totalItems: number; totalPages: number; hasNextPage: boolean; hasPreviousPage: boolean } };
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
-const date = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short' });
+// `Expense.date` es una fecha civil normalizada a medianoche UTC — se formatea en UTC para no
+// correrla un día para atrás.
+const date = new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', dateStyle: 'short' });
 const paymentLabels: Record<string, string> = { cash: 'Efectivo', bank_transfer: 'Transferencia', mercado_pago: 'Mercado Pago', card: 'Tarjeta', other: 'Otro' };
 const statusLabels: Record<string, string> = { pending: 'Pendiente', paid: 'Pagado', cancelled: 'Cancelado' };
 const entity = (value?: Named) => value?.name || value?.businessName || value?.eventName || value?.eventType || '—';

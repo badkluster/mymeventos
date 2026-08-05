@@ -283,6 +283,8 @@ export type QuoteRequest = {
 export type PackageTemplate = {
   _id: string;
   name: string;
+  isGlobal?: boolean;
+  salonIds?: string[];
   durationHours?: number;
   startTime?: string;
   endTime?: string;

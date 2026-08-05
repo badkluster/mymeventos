@@ -66,11 +66,13 @@ const money = (value = 0) =>
     currency: "ARS",
     maximumFractionDigits: 0,
   }).format(value);
+// Instantes reales (inicio/fin de publicación, ventana de venta) — hora de Argentina siempre.
 const date = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("es-AR", {
         dateStyle: "medium",
         timeStyle: "short",
+        timeZone: "America/Argentina/Buenos_Aires",
       }).format(new Date(value))
     : "—";
 const toDateTimeLocal = (value?: string | Date) => {

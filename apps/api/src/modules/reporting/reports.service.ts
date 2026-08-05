@@ -7,7 +7,11 @@ import { Contract, Event, EventStaffAssignment, Lead, Payment, Quote } from '../
 import { parseReportPeriod, periodMatch, resolveReportScope } from './report-filter';
 import { ProductionPlan } from '../production/production.models';
 
-type Column = { key: string; label: string; format?: 'date' | 'currency' | 'number' | 'status'; linkKey?: string };
+// 'date' = instante real con hora propia (createdAt, sentAt, approvedAt, paidAt) — se muestra en
+// hora de Argentina. 'civilDate' = fecha civil sin hora (eventDate, dueDate/paymentWindow*,
+// Expense.date), normalizada a medianoche UTC por `civilDateInput` — se muestra en UTC, nunca en
+// un huso horario real, o la medianoche corre al día anterior en husos negativos como Argentina.
+type Column = { key: string; label: string; format?: 'date' | 'civilDate' | 'currency' | 'number' | 'status'; linkKey?: string };
 type ReportDefinition = {
   key: string;
   group: string;
@@ -23,14 +27,14 @@ export const reportDefinitions: ReportDefinition[] = [
     columns: [
       { key: 'createdAt', label: 'Alta', format: 'date' }, { key: 'name', label: 'Lead', linkKey: 'href' }, { key: 'salon', label: 'Salón' },
       { key: 'source', label: 'Origen', format: 'status' }, { key: 'status', label: 'Estado', format: 'status' }, { key: 'responsible', label: 'Responsable' },
-      { key: 'eventType', label: 'Tipo de evento' }, { key: 'eventDate', label: 'Fecha estimada', format: 'date' }, { key: 'guestCount', label: 'Invitados', format: 'number' },
+      { key: 'eventType', label: 'Tipo de evento' }, { key: 'eventDate', label: 'Fecha estimada', format: 'civilDate' }, { key: 'guestCount', label: 'Invitados', format: 'number' },
     ],
   },
   {
     key: 'quotes', group: 'Comercial', title: 'Presupuestos', description: 'Propuestas emitidas, importes y aceptación.', permission: Permission.REPORTS_COMMERCIAL_READ,
     columns: [
       { key: 'createdAt', label: 'Alta', format: 'date' }, { key: 'number', label: 'Número', linkKey: 'href' }, { key: 'customer', label: 'Cliente' },
-      { key: 'salon', label: 'Salón' }, { key: 'eventType', label: 'Tipo de evento' }, { key: 'eventDate', label: 'Fecha del evento', format: 'date' },
+      { key: 'salon', label: 'Salón' }, { key: 'eventType', label: 'Tipo de evento' }, { key: 'eventDate', label: 'Fecha del evento', format: 'civilDate' },
       { key: 'status', label: 'Estado', format: 'status' }, { key: 'package', label: 'Paquete' }, { key: 'amount', label: 'Importe', format: 'currency' },
       { key: 'sentAt', label: 'Enviado', format: 'date' }, { key: 'acceptedAt', label: 'Aceptado', format: 'date' },
     ],
@@ -38,7 +42,7 @@ export const reportDefinitions: ReportDefinition[] = [
   {
     key: 'events', group: 'Operación', title: 'Eventos', description: 'Estado integral, invitados y pendientes operativos.', permission: Permission.REPORTS_EVENTS_READ,
     columns: [
-      { key: 'eventDate', label: 'Fecha', format: 'date' }, { key: 'name', label: 'Evento', linkKey: 'href' }, { key: 'customer', label: 'Cliente' },
+      { key: 'eventDate', label: 'Fecha', format: 'civilDate' }, { key: 'name', label: 'Evento', linkKey: 'href' }, { key: 'customer', label: 'Cliente' },
       { key: 'salon', label: 'Salón' }, { key: 'eventType', label: 'Tipo' }, { key: 'status', label: 'Estado', format: 'status' },
       { key: 'guestCount', label: 'Invitados', format: 'number' }, { key: 'contractStatus', label: 'Contrato', format: 'status' },
       { key: 'paidAmount', label: 'Cobrado', format: 'currency' }, { key: 'overdueAmount', label: 'Vencido', format: 'currency' },
@@ -49,20 +53,24 @@ export const reportDefinitions: ReportDefinition[] = [
     key: 'contracts', group: 'Finanzas', title: 'Contratos', description: 'Valor contratado, cobranzas, saldos y vencimientos.', permission: Permission.REPORTS_CONTRACTS_READ,
     columns: [
       { key: 'createdAt', label: 'Alta', format: 'date' }, { key: 'number', label: 'Contrato', linkKey: 'href' }, { key: 'customer', label: 'Cliente' },
-      { key: 'event', label: 'Evento' }, { key: 'eventDate', label: 'Fecha del evento', format: 'date' }, { key: 'salon', label: 'Salón' },
+      { key: 'event', label: 'Evento' }, { key: 'eventDate', label: 'Fecha del evento', format: 'civilDate' }, { key: 'salon', label: 'Salón' },
       { key: 'status', label: 'Estado', format: 'status' }, { key: 'approvedAt', label: 'Aprobación', format: 'date' },
       { key: 'totalAmount', label: 'Contratado', format: 'currency' }, { key: 'depositAmount', label: 'Seña', format: 'currency' },
       { key: 'paidAmount', label: 'Cobrado', format: 'currency' }, { key: 'balanceAmount', label: 'Saldo', format: 'currency' },
       { key: 'overdueAmount', label: 'Vencido', format: 'currency' }, { key: 'installments', label: 'Cuotas', format: 'number' },
-      { key: 'nextDueDate', label: 'Próximo vencimiento', format: 'date' },
+      { key: 'nextDueDate', label: 'Próximo vencimiento', format: 'civilDate' },
     ],
   },
   {
     key: 'payments', group: 'Finanzas', title: 'Pagos y cobranzas', description: 'Movimientos, cuotas, medios y vencimientos.', permission: Permission.REPORTS_PAYMENTS_READ,
     columns: [
-      { key: 'date', label: 'Fecha', format: 'date' }, { key: 'number', label: 'Movimiento', linkKey: 'href' }, { key: 'customer', label: 'Cliente' },
+      // 'date' es ambiguo a propósito: según `attribution` puede ser `paidAt`/`createdAt` (instante
+      // real) o `dueDate` (fecha civil) — ver `paymentsReport`. Se marca `civilDate` porque el caso
+      // guaranteed-siempre-mal (cuotas pendientes mostrando `dueDate` en huso Argentina) es peor que
+      // el caso ocasional (un `paidAt` mostrado en UTC corriéndose de día sólo cerca de medianoche).
+      { key: 'date', label: 'Fecha', format: 'civilDate' }, { key: 'number', label: 'Movimiento', linkKey: 'href' }, { key: 'customer', label: 'Cliente' },
       { key: 'event', label: 'Evento' }, { key: 'salon', label: 'Salón' }, { key: 'type', label: 'Tipo', format: 'status' },
-      { key: 'method', label: 'Medio', format: 'status' }, { key: 'status', label: 'Estado', format: 'status' }, { key: 'dueDate', label: 'Vencimiento', format: 'date' },
+      { key: 'method', label: 'Medio', format: 'status' }, { key: 'status', label: 'Estado', format: 'status' }, { key: 'dueDate', label: 'Vencimiento', format: 'civilDate' },
       { key: 'amount', label: 'Importe', format: 'currency' }, { key: 'receipt', label: 'Comprobante' },
     ],
   },
@@ -70,7 +78,7 @@ export const reportDefinitions: ReportDefinition[] = [
     key: 'payment-control', group: 'Finanzas', title: 'Control de pagos mensual', description: 'Vista por cliente: contrato, saldo, cuotas restantes y ventana de vencimiento del período.', permission: Permission.REPORTS_PAYMENTS_READ,
     columns: [
       { key: 'number', label: 'Contrato', linkKey: 'href' }, { key: 'customer', label: 'Cliente' }, { key: 'event', label: 'Evento' },
-      { key: 'eventDate', label: 'Fecha del evento', format: 'date' }, { key: 'salon', label: 'Salón' },
+      { key: 'eventDate', label: 'Fecha del evento', format: 'civilDate' }, { key: 'salon', label: 'Salón' },
       { key: 'totalAmount', label: 'Total del evento', format: 'currency' }, { key: 'paidAmount', label: 'Cobrado', format: 'currency' },
       { key: 'balanceAmount', label: 'Saldo', format: 'currency' }, { key: 'installmentsRemaining', label: 'Cuotas restantes', format: 'number' },
       { key: 'installmentAmount', label: 'Valor de cuota', format: 'currency' }, { key: 'paymentWindow', label: 'Ventana de pago' },
@@ -80,7 +88,7 @@ export const reportDefinitions: ReportDefinition[] = [
   {
     key: 'expenses', group: 'Finanzas', title: 'Gastos', description: 'Costos por fecha efectiva, categoría, salón y evento.', permission: Permission.REPORTS_EXPENSES_READ,
     columns: [
-      { key: 'date', label: 'Fecha', format: 'date' }, { key: 'description', label: 'Concepto' }, { key: 'category', label: 'Categoría', format: 'status' },
+      { key: 'date', label: 'Fecha', format: 'civilDate' }, { key: 'description', label: 'Concepto' }, { key: 'category', label: 'Categoría', format: 'status' },
       { key: 'salon', label: 'Salón' }, { key: 'event', label: 'Evento' }, { key: 'supplier', label: 'Proveedor' },
       { key: 'status', label: 'Estado', format: 'status' }, { key: 'amount', label: 'Importe', format: 'currency' },
     ],
@@ -135,7 +143,9 @@ function range(period: ReturnType<typeof parseReportPeriod>) {
   return { $gte: period.from, $lt: period.toExclusive };
 }
 
-const paymentWindowFormatter = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric' });
+// `paymentWindowStart`/`paymentWindowEnd` son fechas civiles normalizadas a medianoche UTC — se
+// formatean en UTC, no en huso de Argentina, para no correrlas un día para atrás.
+const paymentWindowFormatter = new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 function formatPaymentWindow(start: unknown, end: unknown): string {
   const endDate = end ? new Date(String(end)) : undefined;
@@ -351,54 +361,50 @@ async function paymentControlReport(request: Request, definition: ReportDefiniti
     { id: 'balance', label: 'Saldo pendiente total', value: 0, format: 'currency' },
   ], breakdowns: {}, meta: commonMeta(definition, request, 0, page, limit, 'dueDate') };
 
-  let searchedContractIds: any[] | undefined;
+  // Las cuotas reales viven embebidas en Contract/Event.paymentPlanSnapshot (ver
+  // EventCommercialEditor) — nunca se materializan como Payment con status:'pending' (el único
+  // flujo real de cobro, POST /events/:id/payments, crea el Payment ya con status:'paid'). Este
+  // reporte reutiliza la misma noción de "cuota abierta" que financial-reminders.service.ts, en
+  // vez de agregar sobre Payment como antes (eso dejaba el reporte casi siempre vacío).
+  const contractMatch: any = { deletedAt: null, status: 'approved', ...scope.match() };
   if (search) {
     const regex = new RegExp(escapeRegex(search), 'i');
-    const matches = await Contract.find({ deletedAt: null, ...scope.match(), $or: [{ contractNumber: regex }, { 'customerSnapshot.fullName': regex }] }).select('_id').lean();
-    searchedContractIds = matches.map((item: any) => item._id);
-    if (!searchedContractIds.length) return emptyResult;
+    contractMatch.$or = [{ contractNumber: regex }, { 'customerSnapshot.fullName': regex }];
   }
 
-  const paymentMatch: any = { deletedAt: null, status: 'pending', affectsContractBalance: true, contractId: searchedContractIds ? { $in: searchedContractIds } : { $ne: null }, dueDate: range(period), ...scope.match() };
-  const grouped = await Payment.aggregate([
-    { $match: paymentMatch },
-    { $sort: { dueDate: 1 } },
-    { $group: { _id: '$contractId', dueCount: { $sum: 1 }, nextDueDate: { $first: '$dueDate' }, nextAmount: { $first: '$amount' }, nextNotes: { $first: '$notes' }, nextPlanInstallmentId: { $first: '$planInstallmentId' } } },
-  ]);
-  if (!grouped.length) return emptyResult;
-
-  const contractIds = grouped.map((item: any) => item._id).filter(Boolean);
-  const [contracts, remainingAgg] = await Promise.all([
-    Contract.find({ _id: { $in: contractIds }, deletedAt: null })
-      .populate('customerId', 'fullName').populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name')
-      .select('contractNumber customerId eventId salonId totalAmount paidAmount balanceAmount paymentPlanSnapshot observations').lean(),
-    Payment.aggregate([
-      { $match: { deletedAt: null, status: 'pending', affectsContractBalance: true, contractId: { $in: contractIds } } },
-      { $group: { _id: '$contractId', remaining: { $sum: 1 } } },
-    ]),
-  ]);
-  const contractMap = new Map(contracts.map((item: any) => [item._id.toString(), item]));
-  const remainingMap = new Map(remainingAgg.map((item: any) => [item._id.toString(), item.remaining]));
+  const contracts = await Contract.find(contractMatch)
+    .populate('customerId', 'fullName').populate('eventId', 'eventName eventType eventDate paymentPlanSnapshot').populate('salonId', 'name')
+    .select('contractNumber customerId eventId salonId totalAmount paidAmount balanceAmount paymentPlanSnapshot observations').lean();
+  if (!contracts.length) return emptyResult;
 
   const sortField = ['totalAmount', 'balanceAmount', 'installmentAmount'].includes(String(request.query.sortBy)) ? String(request.query.sortBy) : 'dueDate';
   const sortOrder = request.query.sortOrder === 'desc' ? -1 : 1;
 
-  const rows = grouped.map((item: any) => {
-    const contract: any = contractMap.get(item._id?.toString());
-    if (!contract) return undefined;
-    const installment = Array.isArray(contract.paymentPlanSnapshot) ? contract.paymentPlanSnapshot.find((plan: any) => plan?.id && String(plan.id) === String(item.nextPlanInstallmentId)) : undefined;
+  const rows = contracts.map((contract: any) => {
+    const openInstallments = planFor(contract.eventId, contract).filter(isOpenInstallment);
+    if (!openInstallments.length) return undefined;
+    const dueInPeriod = openInstallments
+      .filter((installment: any) => {
+        const dueValue = installment?.paymentWindowEnd ?? installment?.dueDate;
+        const dueDate = dueValue ? new Date(dueValue) : undefined;
+        return Boolean(dueDate) && !Number.isNaN(dueDate!.getTime()) && dueDate! >= period.from && dueDate! < period.toExclusive;
+      })
+      .sort((a: any, b: any) => new Date(a.paymentWindowEnd ?? a.dueDate).getTime() - new Date(b.paymentWindowEnd ?? b.dueDate).getTime());
+    if (!dueInPeriod.length) return undefined;
+    const next = dueInPeriod[0];
     return {
       id: contract._id.toString(), href: `/admin/contracts/${contract._id}`,
       number: contract.contractNumber, customer: entityName(contract.customerId), event: entityName(contract.eventId, 'Sin evento'),
       eventDate: contract.eventId?.eventDate, salon: entityName(contract.salonId, 'Sin salón'),
       totalAmount: contract.totalAmount ?? 0, paidAmount: contract.paidAmount ?? 0, balanceAmount: contract.balanceAmount ?? 0,
-      installmentsRemaining: remainingMap.get(item._id?.toString()) ?? item.dueCount,
-      installmentAmount: item.nextAmount ?? 0,
-      paymentWindow: formatPaymentWindow(installment?.paymentWindowStart, installment?.paymentWindowEnd ?? item.nextDueDate),
-      notes: installment?.notes || item.nextNotes || contract.observations || 'Sin observaciones',
-      dueDate: item.nextDueDate,
+      installmentsRemaining: openInstallments.length,
+      installmentAmount: remainingInstallmentAmount(next),
+      paymentWindow: formatPaymentWindow(next.paymentWindowStart, next.paymentWindowEnd ?? next.dueDate),
+      notes: next.notes || contract.observations || 'Sin observaciones',
+      dueDate: next.paymentWindowEnd ?? next.dueDate,
     };
   }).filter(Boolean) as any[];
+  if (!rows.length) return emptyResult;
   rows.sort((a: any, b: any) => {
     const left = sortField === 'dueDate' ? new Date(a.dueDate ?? 0).getTime() : Number(a[sortField] ?? 0);
     const right = sortField === 'dueDate' ? new Date(b.dueDate ?? 0).getTime() : Number(b[sortField] ?? 0);
@@ -478,6 +484,10 @@ function exportValue(value: unknown, format?: Column['format']) {
   if (format === 'date') {
     const parsed = new Date(String(value));
     return Number.isNaN(parsed.getTime()) ? '' : new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' }).format(parsed);
+  }
+  if (format === 'civilDate') {
+    const parsed = new Date(String(value));
+    return Number.isNaN(parsed.getTime()) ? '' : new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', dateStyle: 'short' }).format(parsed);
   }
   if (typeof value === 'number') return String(value);
   return String(value);

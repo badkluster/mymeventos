@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button, Input, NumberField } from "@/components/ui/primitives";
+import { brandAssets } from "@/lib/brand-assets";
 import type { DigitalTicket, TicketPublication, TicketType } from "./types";
 import { formatDateTime, money } from "./types";
 import { ticketLabel } from "./ticket-labels";
@@ -24,9 +26,8 @@ function Frame({ children }: { children: React.ReactNode }) {
     <main className="min-h-dvh bg-[#f7f7f5] px-4 py-6 text-zinc-900 sm:py-10">
       <div className="@container mx-auto max-w-6xl">
         <nav className="mb-5 flex items-center justify-between gap-4 text-sm">
-          <Link href="/" className="flex items-center gap-2 font-bold tracking-[.12em] text-zinc-950">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-950 text-xs text-amber-300">M&M</span>
-            <span>M&M EVENTOS</span>
+          <Link href="/" className="flex items-center">
+            <Image src={brandAssets.logoDarkOnLight} alt="M&M Eventos" width={150} height={150} className="h-14 w-auto object-contain" priority />
           </Link>
           <Link href="/" className="rounded-full border border-zinc-200 bg-white px-4 py-2 font-medium text-zinc-700 shadow-sm transition hover:border-zinc-300 hover:text-zinc-950">← Volver al inicio</Link>
         </nav>

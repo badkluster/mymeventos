@@ -193,6 +193,9 @@ async function previousManualItems(existing: any): Promise<SuggestedItem[]> {
 export async function generateProductionPlan(request: Request, eventId: string, options: { regenerate?: boolean; reason?: string } = {}) {
   const source = await productionSource(eventId);
   assertSalon(request, source.event.salonId);
+  if (['cancelled', 'lost'].includes(source.event.status)) {
+    throw new ApiError(409, 'PRODUCTION_EVENT_CANCELLED', 'El evento está cancelado o perdido; no se puede generar ni regenerar su producción.');
+  }
   const existing: any = await ProductionPlan.findOne({ eventId, isCurrent: true, deletedAt: null }).lean();
   const sourceChanged = Boolean(existing && existing.sourceFingerprint !== source.sourceFingerprint);
   if (existing && !sourceChanged) return { plan: await productionPlanDetail(request, existing._id.toString()), created: false, requiresRegeneration: false, sourceChanged: false };
@@ -268,6 +271,20 @@ export async function productionPlanFreshness(request: Request, planId: string) 
   assertSalon(request, plan.salonId);
   const source = await productionSource(plan.eventId.toString());
   return { current: plan.sourceFingerprint === source.sourceFingerprint, currentFingerprint: plan.sourceFingerprint, nextFingerprint: source.sourceFingerprint };
+}
+
+// Called when an Event moves to 'cancelled'/'lost' (events.routes.ts). A plan already 'closed' is
+// left untouched — that status means the event actually happened and production was checked off,
+// so a later cancellation (e.g. a bookkeeping correction) shouldn't retroactively alter an audited
+// record. Only plans still open (pending/in_progress/ready/checked/blocked) get cancelled, so they
+// stop cluttering `/admin/production` and the monthly consolidated view for an event that won't happen.
+export async function cancelCurrentProductionPlan(eventId: string, userId: string) {
+  const plan = await ProductionPlan.findOne({ eventId, isCurrent: true, deletedAt: null, status: { $nin: ['closed', 'cancelled'] } });
+  if (!plan) return null;
+  plan.status = 'cancelled';
+  plan.updatedBy = userId as any;
+  await plan.save();
+  return plan;
 }
 
 export async function refreshPlanStatus(planId: string) {

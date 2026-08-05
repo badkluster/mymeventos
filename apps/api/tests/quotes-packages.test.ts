@@ -37,6 +37,17 @@ describe('quote package templates', () => {
     expect(mocks.packageFind).toHaveBeenCalledWith(expect.objectContaining({ active: true, deletedAt: null }));
   });
 
+  it('filters templates to packages applicable to the selected salon', async () => {
+    mocks.packageFind.mockReturnValue({ sort: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue([]) }) });
+
+    const response = await request(app).get(`/api/quotes/packages?salonId=${salonId}`).set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(mocks.packageFind).toHaveBeenCalledWith(expect.objectContaining({
+      $or: [{ isGlobal: true }, { salonIds: { $all: [salonId] } }]
+    }));
+  });
+
   it('reports when a selected salon has no commercial rule for a template', async () => {
     mocks.salonCount.mockResolvedValue(1);
     mocks.packageFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: packageId, name: 'Magic Night', active: true, isGlobal: true }) });
