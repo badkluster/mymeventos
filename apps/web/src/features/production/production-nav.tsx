@@ -13,6 +13,7 @@ export function ProductionNav() {
     { href: '/admin/production', label: 'Por evento', exact: true, permission: Permission.PRODUCTION_VIEW },
     { href: '/admin/production/consolidated', label: 'Consolidado', permission: Permission.PRODUCTION_VIEW },
     { href: '/admin/production/rules', label: 'Reglas', permission: Permission.PRODUCTION_RULES_MANAGE },
+    { href: '/admin/production/catalog', label: 'Catálogo', permission: Permission.CATALOG_READ },
   ].filter((item) => userCanAccess(user, [item.permission]));
   return <nav className="print:hidden flex flex-wrap gap-1 rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-sm">
     {items.map((item) => {

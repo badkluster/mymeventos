@@ -130,4 +130,41 @@ describe('contracts routes', () => {
     expect(response.body.error.code).toBe('CONTRACT_STATUS_CANCEL_NOT_ALLOWED');
     expect(contract.save).not.toHaveBeenCalled();
   });
+
+  it('generates a dynamic PDF preview before approval, without persisting or uploading anything', async () => {
+    const draftContract = {
+      _id: contractId,
+      salonId,
+      contractNumber: 'C-2026-00001',
+      status: 'draft',
+      versionNumber: 1,
+      totalAmount: 1750000,
+      balanceAmount: 1750000,
+      customerSnapshot: { fullName: 'Manuela Albarracín', documentNumber: '30111222', phone: '+5491111111', email: 'manuela@example.com' },
+      eventSnapshot: { eventName: 'Cumple de 40 años', eventType: 'Cumpleaños', eventDate: new Date('2026-09-10T00:00:00.000Z'), guestCount: 80, startTime: '21:00', endTime: '05:00', salonName: 'San Carlos', salonAddress: 'Calle Falsa 123' },
+      commercialSnapshot: { depositAmount: 400000, paymentTerms: 'Seña + 12 cuotas' },
+      paymentPlanSnapshot: [{ label: 'Cuota 1 de 12', amount: 112500, paymentWindowStart: '2026-09-01', paymentWindowEnd: '2026-09-10' }],
+      servicesSnapshot: ['Servicio de salón: DJ y sonido'],
+      menuSnapshot: [{ title: 'Entrada', items: ['Bruschettas'] }],
+      legalTermsSnapshot: { clauses: [{ title: 'Reserva', text: 'La reserva se confirma con el pago de la seña.' }] }
+    };
+    mocks.contractFindOne.mockReturnValue(detailChain(draftContract));
+
+    const response = await request(app)
+      .get(`/api/contracts/${contractId}/preview-pdf`)
+      .set('Cookie', adminCookie)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => callback(null, Buffer.concat(chunks)));
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toContain('application/pdf');
+    expect(response.headers['content-disposition']).toContain('inline');
+    expect(response.headers['content-disposition']).toContain('C-2026-00001');
+    expect(Buffer.isBuffer(response.body)).toBe(true);
+    expect((response.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+  });
 });

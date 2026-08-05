@@ -29,16 +29,17 @@ pnpm dev            # todas las apps en paralelo
 pnpm dev:web / dev:api / dev:mobile
 pnpm build / pnpm lint / pnpm typecheck / pnpm test   # -r sobre los workspaces (apps/web no tiene script test)
 
-pnpm --filter @mym/api test        # vitest run (requiere Mongo local)
-pnpm --filter @mym/api seed        # seed de base de datos
-pnpm --filter @mym/api seed:mobile-attendance   # usuarios + jornadas demo para probar la app de personal
-pnpm --filter @mym/api reset:admin-password   # solo local, bloqueado en producción
+pnpm --filter @mym/api test        # vitest run (sin usar una base persistente/remota)
 pnpm --filter @mym/web typecheck
 pnpm --filter @mym/mobile start / typecheck / test   # Expo dev server / tsc / jest (ver docs/MOBILE_STAFF_APP.md)
 pnpm --filter @mym/shared build    # reconstruir antes de que api/web/mobile recojan cambios de tipos/enums
 ```
 
 Usar siempre el nombre de paquete con scope (`@mym/api`, `@mym/web`, `@mym/mobile`, `@mym/shared`), no `api`/`web` a secas.
+
+## Protección de datos (obligatoria)
+
+Antes de cualquier intervención que pudiera modificar datos, leer y cumplir [`AGENTS.md`](AGENTS.md). Ningún agente puede sembrar, resetear, importar, restaurar, borrar ni actualizar datos directamente en bases locales, de testing, staging o producción sin autorización explícita del usuario para ese entorno y alcance en la conversación actual.
 
 ## Reglas críticas de dominio
 
@@ -60,7 +61,7 @@ Usar siempre el nombre de paquete con scope (`@mym/api`, `@mym/web`, `@mym/mobil
 
 ## Módulos independientes (no acoplar)
 
-CRM (leads/presupuestos/clientes/contratos/eventos), Salones (con paquetes embebidos), Operaciones (catálogo/inventario/reglas de consumo — backend existe pero **no está montado en rutas** ni tiene frontend, ver riesgos en el doc detallado; proveedores y `Expense`/`ExpenseCategory` sí están montados, ver módulo Gastos abajo), Producción (`production`: plan de producción por evento con secciones/ítems tipados, generado a partir de reglas configurables por salón/paquete, más un consolidado mensual por ítem — ver `docs/MYM_EVENTOS_PROJECT_CONTEXT.md` §8), Gastos y Rentabilidad (`expenses`: gasto por evento/proveedor/categoría + reporte de rentabilidad económica real ingreso−gasto), Liquidaciones/Payroll (`payroll`: liquidación real a partir de `WorkSession`, genera un `Expense` automático al aprobarse), Reportes (`reporting`: dashboard + reportes agregados exportables — leads/quotes/events/contracts/payments/expenses), Cierre de evento (`event-closure`: cierre en 3 niveles — operativo/financiero/administrativo, cada uno con su checklist), Personal/Staff (implementado, ahora **con entrada en el menú** — ver `docs/ATTENDANCE_BACKOFFICE.md`), App móvil de personal / Asistencia (fichaje con geolocalización y geocercas por salón, incidencias y correcciones; Turnos vía `EventStaffAssignment` y Avisos se preservan pero no se exponen — independiente del resto, ver `docs/MOBILE_STAFF_APP.md` y `docs/ATTENDANCE_ARCHITECTURE.md`), Pagos, Landing pública, Invitaciones digitales, Entradas digitales, Marketing y Campañas (promociones, plantillas de email con editor visual de bloques, audiencias segmentadas de leads/clientes, campañas con envío por lotes vía Resend — independiente de `Event`/`Salon`/`Customer`, opcionalmente vinculable a un salón o promoción; ver `docs/MARKETING_MODULE.md`), Notificaciones, Auditoría (se registra, sin UI de consulta), Usuarios/Roles/Permisos, Configuración.
+CRM (leads/presupuestos/clientes/contratos/eventos), Salones (con paquetes embebidos), Operaciones (catálogo: **montado desde 2026-08-05** en `/catalog` con pantalla propia en `/admin/production/catalog` — ver `docs/PRODUCTION_MODULE.md`; inventario/reglas de consumo siguen sin montar en rutas ni tener frontend, ver riesgos en el doc detallado; proveedores y `Expense`/`ExpenseCategory` sí están montados, ver módulo Gastos abajo), Producción (`production`: plan de producción por evento con secciones/ítems tipados, generado a partir de reglas configurables por salón/paquete, más un consolidado mensual por ítem — ver `docs/MYM_EVENTOS_PROJECT_CONTEXT.md` §8), Gastos y Rentabilidad (`expenses`: gasto por evento/proveedor/categoría + reporte de rentabilidad económica real ingreso−gasto), Liquidaciones/Payroll (`payroll`: liquidación real a partir de `WorkSession`, genera un `Expense` automático al aprobarse), Reportes (`reporting`: dashboard + reportes agregados exportables — leads/quotes/events/contracts/payments/expenses), Cierre de evento (`event-closure`: cierre en 3 niveles — operativo/financiero/administrativo, cada uno con su checklist), Personal/Staff (implementado, ahora **con entrada en el menú** — ver `docs/ATTENDANCE_BACKOFFICE.md`), App móvil de personal / Asistencia (fichaje con geolocalización y geocercas por salón, incidencias y correcciones; Turnos vía `EventStaffAssignment` y Avisos se preservan pero no se exponen — independiente del resto, ver `docs/MOBILE_STAFF_APP.md` y `docs/ATTENDANCE_ARCHITECTURE.md`), Pagos, Landing pública, Invitaciones digitales, Entradas digitales, Marketing y Campañas (promociones, plantillas de email con editor visual de bloques, audiencias segmentadas de leads/clientes, campañas con envío por lotes vía Resend — independiente de `Event`/`Salon`/`Customer`, opcionalmente vinculable a un salón o promoción; ver `docs/MARKETING_MODULE.md`), Notificaciones, Auditoría (se registra, sin UI de consulta), Usuarios/Roles/Permisos, Configuración.
 
 ## Convenciones técnicas
 

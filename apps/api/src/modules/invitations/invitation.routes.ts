@@ -18,8 +18,10 @@ import { ensureSystemInvitationTemplates } from './system-templates.service';
 import { basicFeatures, featuresForTier, type InvitationTemplateFeatures, validateInvitationContent, validateInvitationCustomization } from './invitation-features.service';
 import { defaultInvitationContent } from './invitation-content.service';
 import { deleteAsset } from '../uploads/cloudinary.service';
+import { civilDateTimeInput } from '../../utils/argentina-date';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
+const civilDateTimeSchema = z.preprocess(civilDateTimeInput, z.coerce.date());
 const token = z.string().min(32).max(128);
 const optionalText = z.string().trim().max(4000).optional();
 const wrap = (body: z.ZodTypeAny, params: z.ZodTypeAny = z.object({}), query: z.ZodTypeAny = z.object({}).passthrough()) => z.object({ body, params, query });
@@ -52,9 +54,9 @@ const invitationSectionSchema = z.union([
 ]);
 const contentSchema = z.object({ sections: z.array(invitationSectionSchema).max(18) });
 const invitationFields = z.object({
-  title: z.string().trim().min(1).max(180), honoreeName: optionalText, eventDate: z.coerce.date().optional(), address: optionalText,
+  title: z.string().trim().min(1).max(180), honoreeName: optionalText, eventDate: civilDateTimeSchema.optional(), address: optionalText,
   mapsUrl: z.string().url().optional().or(z.literal('')), coverImageUrl: z.string().url().optional().or(z.literal('')), gallery: z.array(z.string().url()).max(30).optional(),
-  introduction: optionalText, dressCode: optionalText, additionalInfo: optionalText, rsvpDeadline: z.coerce.date().optional(), expiresAt: z.coerce.date().optional(),
+  introduction: optionalText, dressCode: optionalText, additionalInfo: optionalText, rsvpDeadline: civilDateTimeSchema.optional(), expiresAt: civilDateTimeSchema.optional(),
   templateId: objectId.optional(), template: z.string().trim().max(80).optional(), celebrationType: z.enum(['wedding', 'fifteen', 'birthday', 'kids', 'baby_shower', 'baptism', 'communion', 'anniversary', 'corporate', 'general', 'other']).optional(), theme: themeSchema.optional(), generalBackground: backgroundSchema.optional(), content: contentSchema.optional(), media: z.array(mediaSchema).max(25).optional(),
   allowCompanions: z.boolean().optional(), maxCompanions: z.coerce.number().int().min(0).max(100).optional(), allowMinors: z.boolean().optional(), allowResponseChanges: z.boolean().optional(), confirmationMessage: optionalText
 });

@@ -27,7 +27,7 @@ const activitySchema = new Schema({
   leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
   eventId: { type: Schema.Types.ObjectId, ref: 'Event', index: true },
-  type: { type: String, enum: ['note', 'call', 'whatsapp', 'email', 'status_change', 'assignment', 'quote_created', 'quote_sent', 'lost', 'converted', 'event_created', 'customer_created', 'system'] },
+  type: { type: String, enum: ['note', 'call', 'whatsapp', 'email', 'status_change', 'assignment', 'quote_created', 'quote_sent', 'lost', 'converted', 'event_created', 'customer_created', 'payment_registered', 'system'] },
   title: String, description: String, metadata: Schema.Types.Mixed, createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: { createdAt: true, updatedAt: false } });
 

@@ -23,7 +23,9 @@ type ListResponse = { items: Plan[]; summary: Array<{ _id: string; value: number
 
 const statusLabels: Record<string, string> = { pending: 'Pendiente', in_progress: 'En proceso', ready: 'Lista', checked: 'Chequeada', blocked: 'Bloqueada', cancelled: 'Cancelada', closed: 'Cerrada' };
 const statusTone: Record<string, string> = { pending: 'bg-amber-50 text-amber-800', in_progress: 'bg-sky-50 text-sky-700', ready: 'bg-violet-50 text-violet-700', checked: 'bg-emerald-50 text-emerald-700', blocked: 'bg-red-50 text-red-700', closed: 'bg-zinc-900 text-white' };
-const date = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'medium' });
+// `eventDate` es una fecha civil normalizada a medianoche UTC — se formatea en UTC, no en huso
+// de Argentina, para no correrla un día para atrás (única fecha que usa este formatter acá).
+const date = new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', dateStyle: 'medium' });
 
 function period() {
   const values = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).map((part) => [part.type, part.value]));

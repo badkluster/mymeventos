@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CalendarClock, ClipboardCheck, Download, FileText, Mail, MessageCircle, PackageCheck, Plus, Save, Trash2, Truck } from 'lucide-react';
+import { CalendarClock, ClipboardCheck, Download, Eye, FileText, Mail, MessageCircle, PackageCheck, Plus, Save, Trash2, Truck } from 'lucide-react';
 import { Button, Input, Modal, NumberField, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
@@ -25,7 +25,7 @@ const logisticsTemplates: Record<keyof typeof emptyLogistics, string> = {
   eventSetupNotes: `Hora de llegada y responsable de apertura: [completar]
 
 Montaje del salón
-• Confirmar el layout, cantidad y ubicación de mesas según el plano.
+• Confirmar el diseño, cantidad y ubicación de mesas según el plano.
 • Preparar mesa principal, sectores de fotos, pista y mesa dulce si aplica.
 • Verificar sillas, cartelería, iluminación, sonido y circulación de invitados.
 • Hacer una recorrida final con coordinación antes de habilitar el ingreso.`,
@@ -118,9 +118,18 @@ function numeric(value: string): number | undefined {
 
 function inputDate(value?: string) {
   if (!value) return '';
+  const dateKey = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  // Plain "YYYY-MM-DD" values (fresh from a date input, not yet round-tripped through the
+  // backend) and UTC-midnight-normalized records both already carry the intended civil day.
+  // Only real timestamps with a meaningful time-of-day need the Argentina-timezone recovery
+  // below — otherwise a value like "2026-08-04" gets parsed as UTC midnight and converting
+  // that to Argentina time (UTC-3) rolls it back to the previous day.
+  if (dateKey && (value.length === 10 || /T00:00:00(?:\.000)?Z$/.test(value))) return dateKey;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function inputDateTime(value?: string) {
@@ -152,6 +161,11 @@ function dateOnly(date: Date) {
 function monthDay(date: Date, day: number) {
   const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   return new Date(date.getFullYear(), date.getMonth(), Math.min(Math.max(1, day), lastDay), 12);
+}
+
+function firstDayOfNextMonthKey() {
+  const now = new Date();
+  return dateOnly(new Date(now.getFullYear(), now.getMonth() + 1, 1, 12));
 }
 
 export function normalizeResourcePlan(plan?: EventResourcePlan): EventResourcePlan {
@@ -236,20 +250,34 @@ function SaveBar({ saving, onSave, text = 'Guardar plan operativo' }: { saving: 
   </div>;
 }
 
-type OperationalDocumentType = 'timeline' | 'logistics' | 'guest_list' | 'tableware';
+type OperationalDocumentType = 'timeline' | 'logistics' | 'guest_list' | 'tableware' | 'full';
 type OperationalDocument = { fileName: string; format: 'pdf' | 'word'; url: string; secureUrl: string };
 
+const operationalDocumentTitles: Record<OperationalDocumentType, string> = { timeline: 'cronograma', guest_list: 'control de invitados por mesa', tableware: 'reserva de vajilla', logistics: 'logística y coordinación interna', full: 'cronograma integral' };
+
 function EventOperationalDocumentActions({ event, type, disabled, onNotice }: { event: Event; type: OperationalDocumentType; disabled?: boolean; onNotice?: (message: string, variant?: 'success' | 'error') => void }) {
-  const [working, setWorking] = useState<'pdf' | 'word' | 'email' | 'whatsapp' | null>(null);
-  const title = type === 'timeline' ? 'cronograma' : type === 'guest_list' ? 'control de invitados por mesa' : type === 'tableware' ? 'reserva de vajilla' : 'logística y coordinación interna';
+  const [working, setWorking] = useState<'preview' | 'pdf' | 'word' | 'email' | 'whatsapp' | null>(null);
+  const title = operationalDocumentTitles[type];
   const customer = typeof event.customerId === 'string' ? undefined : event.customerId;
   const customerName = customer?.fullName || [customer?.firstName, customer?.lastName].filter(Boolean).join(' ');
   const [emailOpen, setEmailOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [emailRecipient, setEmailRecipient] = useState(customer?.email ?? '');
   const [phoneRecipient, setPhoneRecipient] = useState(customer?.phone ?? '');
   const [emailFormat, setEmailFormat] = useState<'pdf' | 'word'>('pdf');
   const requestDocument = async (format: 'pdf' | 'word') => api.post<{ document: OperationalDocument }>(`/events/${event._id}/operational-documents/${type}/export`, { format });
+  const closePreview = () => setPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
+  const preview = async () => {
+    setWorking('preview');
+    try {
+      const { blob } = await api.download(`/events/${event._id}/operational-documents/${type}/preview-pdf`);
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return url; });
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : `No se pudo generar la vista previa del ${title}.`, 'error');
+    } finally { setWorking(null); }
+  };
   const openDocument = (asset: OperationalDocument) => {
     const link = globalThis.document.createElement('a');
     link.href = asset.secureUrl || asset.url;
@@ -296,11 +324,15 @@ function EventOperationalDocumentActions({ event, type, disabled, onNotice }: { 
   };
   const busy = Boolean(working) || disabled;
   return <><div className="flex flex-wrap gap-2">
+    <Button type="button" variant="secondary" disabled={busy} onClick={() => void preview()}><Eye className="mr-2 h-4 w-4" />{working === 'preview' ? 'Generando vista previa...' : 'Vista previa'}</Button>
     <Button type="button" variant="secondary" disabled={busy} onClick={() => void exportDocument('pdf')}><Download className="mr-2 h-4 w-4" />{working === 'pdf' ? 'Generando...' : 'PDF'}</Button>
     <Button type="button" variant="secondary" disabled={busy} onClick={() => void exportDocument('word')}><FileText className="mr-2 h-4 w-4" />{working === 'word' ? 'Generando...' : 'Word'}</Button>
     <Button type="button" variant="secondary" disabled={busy} onClick={() => setEmailOpen(true)}><Mail className="mr-2 h-4 w-4" />Email</Button>
     <Button type="button" variant="secondary" disabled={busy} onClick={() => setWhatsappOpen(true)}><MessageCircle className="mr-2 h-4 w-4" />WhatsApp</Button>
   </div>
+  <Modal wide open={Boolean(previewUrl)} title={`Vista previa: ${title}`} description="Se genera al instante a partir de los datos cargados y no se guarda en la nube. Usá “PDF” o “Word” para generar la versión que se comparte por email o WhatsApp." onClose={closePreview}>
+    <div className="p-4">{previewUrl ? <iframe title={`Vista previa ${title}`} src={previewUrl} className="h-[75vh] w-full rounded-xl border border-zinc-200" /> : null}</div>
+  </Modal>
   <Modal open={emailOpen} title={`Enviar ${title} por email`} description="Elegí el formato e indicá el destinatario antes de enviar." onClose={() => !working && setEmailOpen(false)}><form className="space-y-4 p-6" onSubmit={(event) => { event.preventDefault(); void email(); }}><Field label="Email destinatario"><Input required type="email" value={emailRecipient} onChange={(event) => setEmailRecipient(event.target.value)} placeholder="equipo@ejemplo.com" /></Field><Field label="Formato adjunto"><Select value={emailFormat} onChange={(event) => setEmailFormat(event.target.value as 'pdf' | 'word')}><option value="pdf">PDF</option><option value="word">Word</option></Select></Field><div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button type="button" variant="secondary" disabled={Boolean(working)} onClick={() => setEmailOpen(false)}>Cancelar</Button><Button disabled={Boolean(working)}>{working === 'email' ? 'Enviando...' : 'Enviar documento'}</Button></div></form></Modal>
   <Modal open={whatsappOpen} title={`Compartir ${title} por WhatsApp`} description="Indicá el número al que querés preparar el mensaje con el enlace al PDF." onClose={() => !working && setWhatsappOpen(false)}><form className="space-y-4 p-6" onSubmit={(event) => { event.preventDefault(); void whatsapp(); }}><Field label="Número de WhatsApp"><Input required inputMode="tel" value={phoneRecipient} onChange={(event) => setPhoneRecipient(event.target.value)} placeholder="54911..." /></Field><p className="rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">Se abrirá WhatsApp con el mensaje y el enlace seguro al PDF, listo para revisar y enviar.</p><div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button type="button" variant="secondary" disabled={Boolean(working)} onClick={() => setWhatsappOpen(false)}>Cancelar</Button><Button disabled={Boolean(working)}>{working === 'whatsapp' ? 'Preparando...' : 'Abrir WhatsApp'}</Button></div></form></Modal>
   </>;
@@ -359,13 +391,19 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
 }
 
 export function EventCommercialEditor({ event, saving, onSave }: { event: Event; saving: boolean; onSave: SaveEvent }) {
+  const { showToast } = useToast();
   const initial = event.commercialSnapshot ?? {};
   const [form, setForm] = useState({ total: String(event.finalAmount ?? event.estimatedAmount ?? initial.totalAmount ?? ''), deposit: String(initial.depositAmount ?? ''), paymentTerms: String(initial.paymentTerms ?? ''), installments: event.paymentPlanSnapshot ?? [] as Installment[] });
-  const [generator, setGenerator] = useState({ count: '1', firstDueDate: '', frequency: 'monthly', windowStartDay: '1', windowEndDay: '10' });
+  const [generator, setGenerator] = useState({ count: '1', firstDueDate: firstDayOfNextMonthKey(), frequency: 'monthly', windowStartDay: '1', windowEndDay: '10' });
+  const today = dateOnly(new Date());
   const updateInstallment = (index: number, changes: Record<string, unknown>) => setForm((current) => ({ ...current, installments: current.installments.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item) }));
   const total = numeric(form.total) ?? 0;
   const deposit = numeric(form.deposit) ?? 0;
   const generateInstallments = () => {
+    if (generator.firstDueDate && generator.firstDueDate < today) {
+      showToast({ message: 'El primer período no puede ser anterior a la fecha actual.', variant: 'error' });
+      return;
+    }
     const count = Math.max(1, Math.floor(Number(generator.count) || 1));
     const balance = Math.max(0, total - deposit);
     const base = Math.floor(balance / count);
@@ -394,7 +432,7 @@ export function EventCommercialEditor({ event, saving, onSave }: { event: Event;
   };
   return <SectionCard title="Valores y plan de pagos" icon={<ClipboardCheck className="h-4 w-4" />}>
     <div className="grid gap-4 md:grid-cols-3"><Field label="Total acordado"><Input type="number" min={0} value={form.total} onChange={(event) => setForm((current) => ({ ...current, total: event.target.value }))} /></Field><Field label="Seña"><Input type="number" min={0} value={form.deposit} onChange={(event) => setForm((current) => ({ ...current, deposit: event.target.value }))} /></Field><Field label="Saldo estimado"><div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-semibold">{Math.max(0, total - deposit).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div></Field><Field label="Condiciones de pago" className="md:col-span-3"><Textarea value={form.paymentTerms} onChange={(event) => setForm((current) => ({ ...current, paymentTerms: event.target.value }))} placeholder="Ej.: seña al reservar y saldo en cuotas mensuales." /></Field></div>
-    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4"><p className="font-medium text-amber-950">Generar cuotas automáticamente</p><p className="mt-1 text-sm text-amber-800">Cada cuota queda programada con su período de pago para usar en alertas y recordatorios.</p><div className="mt-3 grid gap-3 md:grid-cols-6"><Field label="Cantidad de cuotas"><Input type="number" min={1} max={60} value={generator.count} onChange={(event) => setGenerator((current) => ({ ...current, count: event.target.value }))} /></Field><Field label="Primer período"><Input type="date" value={generator.firstDueDate} onChange={(event) => setGenerator((current) => ({ ...current, firstDueDate: event.target.value }))} /></Field><Field label="Frecuencia"><Select value={generator.frequency} onChange={(event) => setGenerator((current) => ({ ...current, frequency: event.target.value }))}><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option><option value="bimonthly">Bimestral</option><option value="quarterly">Trimestral</option></Select></Field>{generator.frequency !== 'biweekly' && <><Field label="Paga desde el día"><Input type="number" min={1} max={31} value={generator.windowStartDay} onChange={(event) => setGenerator((current) => ({ ...current, windowStartDay: event.target.value }))} /></Field><Field label="Hasta el día"><Input type="number" min={1} max={31} value={generator.windowEndDay} onChange={(event) => setGenerator((current) => ({ ...current, windowEndDay: event.target.value }))} /></Field></>}<div className="flex items-end"><Button type="button" variant="secondary" onClick={generateInstallments}>Generar plan</Button></div></div><p className="mt-3 text-xs text-amber-800">{generator.frequency === 'biweekly' ? 'Las cuotas quincenales se generan cada 15 días y cada ventana abarca los 15 días del período.' : 'Ejemplo: del día 1 al 10 de cada período. El vencimiento será el último día de esa ventana.'}</p></div>
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4"><p className="font-medium text-amber-950">Generar cuotas automáticamente</p><p className="mt-1 text-sm text-amber-800">Cada cuota queda programada con su período de pago para usar en alertas y recordatorios.</p><div className="mt-3 grid gap-3 md:grid-cols-6"><Field label="Cantidad de cuotas"><Input type="number" min={1} max={60} value={generator.count} onChange={(event) => setGenerator((current) => ({ ...current, count: event.target.value }))} /></Field><Field label="Primer período"><Input type="date" min={today} value={generator.firstDueDate} onChange={(event) => setGenerator((current) => ({ ...current, firstDueDate: event.target.value }))} /></Field><Field label="Frecuencia"><Select value={generator.frequency} onChange={(event) => setGenerator((current) => ({ ...current, frequency: event.target.value }))}><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option><option value="bimonthly">Bimestral</option><option value="quarterly">Trimestral</option></Select></Field>{generator.frequency !== 'biweekly' && <><Field label="Paga desde el día"><Input type="number" min={1} max={31} value={generator.windowStartDay} onChange={(event) => setGenerator((current) => ({ ...current, windowStartDay: event.target.value }))} /></Field><Field label="Hasta el día"><Input type="number" min={1} max={31} value={generator.windowEndDay} onChange={(event) => setGenerator((current) => ({ ...current, windowEndDay: event.target.value }))} /></Field></>}<div className="flex items-end"><Button type="button" variant="secondary" onClick={generateInstallments}>Generar plan</Button></div></div><p className="mt-3 text-xs text-amber-800">{generator.frequency === 'biweekly' ? 'Las cuotas quincenales se generan cada 15 días y cada ventana abarca los 15 días del período.' : 'Ejemplo: del día 1 al 10 de cada período. El vencimiento será el último día de esa ventana.'}</p></div>
     <div className="space-y-3">{form.installments.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 md:grid-cols-[minmax(150px,1fr)_140px_155px_155px_130px_44px]"><Input value={item.label ?? ''} onChange={(event) => updateInstallment(index, { label: event.target.value })} placeholder="Seña / Cuota" /><NumberField label="Importe de la cuota" min={0} value={item.amount ?? 0} onChange={(event) => updateInstallment(index, { amount: Number(event.target.value) })} /><Field label="Paga desde"><Input type="date" value={item.paymentWindowStart?.slice(0, 10) ?? ''} onChange={(event) => updateInstallment(index, { paymentWindowStart: event.target.value || undefined })} /></Field><Field label="Hasta"><Input type="date" value={item.paymentWindowEnd?.slice(0, 10) ?? item.dueDate?.slice(0, 10) ?? ''} onChange={(event) => updateInstallment(index, { paymentWindowEnd: event.target.value || undefined, dueDate: event.target.value || undefined })} /></Field><Select value={item.status ?? 'pending'} onChange={(event) => updateInstallment(index, { status: event.target.value })}><option value="pending">Pendiente</option><option value="scheduled">Programada</option><option value="paid">Cobrada</option></Select><IconButton label="Quitar cuota" disabled={saving} onClick={() => setForm((current) => ({ ...current, installments: current.installments.filter((_, itemIndex) => itemIndex !== index) }))} /></div>)}</div>
     <SaveBar saving={saving} text="Guardar valores y plan de pagos" onSave={() => onSave({ finalAmount: total, estimatedAmount: total, commercialSnapshot: { ...initial, totalAmount: total, depositAmount: deposit, balanceAmount: Math.max(0, total - deposit), paymentTerms: form.paymentTerms }, paymentPlanSnapshot: form.installments })} />
   </SectionCard>;
@@ -441,7 +479,7 @@ const operationalViews = [
 export function EventOperationsWorkspace({ event, plan, saving, onSave, onSyncSummary, onNotice }: { event: Event; plan?: EventResourcePlan; saving: boolean; onSave: SavePlan; onSyncSummary: (payload: Record<string, unknown>) => void; onNotice?: (message: string, variant?: 'success' | 'error') => void }) {
   const [view, setView] = useState<(typeof operationalViews)[number][0]>('moments');
   return <div className="space-y-5"><div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm"><div className="flex gap-2 overflow-x-auto"><div className="flex min-w-max gap-2">{operationalViews.map(([value, label]) => <button key={value} type="button" onClick={() => setView(value)} className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${view === value ? 'bg-zinc-950 text-white shadow-sm' : 'bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'}`}>{label}</button>)}</div></div></div>
-    <SectionCard title="Documentos operativos" icon={<FileText className="h-4 w-4" />}><p className="text-sm text-zinc-500">El cronograma reúne todas las vistas del evento. Desde aquí podés generar cada planilla por separado, sin depender de la pestaña que estés consultando.</p><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Cronograma integral</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Momentos, responsables, notas de staff y resumen de invitados.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="timeline" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Control de ingreso por mesa</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Lista para recepción con casillas de ingreso, menú y observaciones.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="guest_list" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Logística y coordinación</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Armado, cocina, barra, ambientación, accesos y riesgos.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="logistics" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Reserva de vajilla</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Vajilla propia del salón y adicional/externa asignada al evento.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="tableware" disabled={saving} onNotice={onNotice} /></div></div></div></SectionCard>
+    <SectionCard title="Documentos operativos" icon={<FileText className="h-4 w-4" />}><p className="text-sm text-zinc-500">El cronograma reúne todas las vistas del evento. Desde aquí podés generar cada planilla por separado, sin depender de la pestaña que estés consultando.</p><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Cronograma integral</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Momentos, invitados, logística, vajilla y stock, productos, proveedores y staff asignado: una página por área, solo las que tengan contenido cargado.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="full" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Control de ingreso por mesa</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Lista para recepción con casillas de ingreso, menú y observaciones.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="guest_list" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Logística y coordinación</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Armado, cocina, barra, ambientación, accesos y riesgos.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="logistics" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Reserva de vajilla</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Vajilla propia del salón y adicional/externa asignada al evento.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="tableware" disabled={saving} onNotice={onNotice} /></div></div></div></SectionCard>
     {view === 'moments' && <EventTimelineEditor plan={plan} saving={saving} onSave={onSave} />}
     {view === 'guests' && <EventGuestListEditor event={event} plan={plan} saving={saving} onSave={onSave} onSyncSummary={onSyncSummary} onNotice={onNotice} />}
     {view === 'logistics' && <EventLogisticsEditor plan={plan} saving={saving} onSave={onSave} />}
@@ -662,7 +700,7 @@ export function EventSuppliersEditor({ plan, saving, onSave }: { plan?: EventRes
 
   useEffect(() => {
     let active = true;
-    api.get<{ items: SupplierOption[] }>('/suppliers?active=true')
+    api.get<{ items: SupplierOption[] }>('/suppliers/options?active=true')
       .then((response) => { if (active) setSuppliers(response.items ?? []); })
       .catch((error) => { if (active) showToast({ message: error instanceof Error ? error.message : 'No se pudo cargar el catálogo de proveedores.', variant: 'error' }); })
       .finally(() => { if (active) setLoadingSuppliers(false); });
@@ -778,6 +816,7 @@ export function EventTasksEditor({ plan, saving, onSave }: { plan?: EventResourc
         <IconButton label="Quitar tarea" disabled={saving} onClick={() => setTasks((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
         <Textarea aria-label="Notas" className="lg:col-span-6" placeholder="Detalle, acuerdos, seguimiento..." value={item.notes ?? ''} onChange={(event) => updateTask(index, { notes: event.target.value })} />
       </div>)}</div> : <EmptyRows text="No hay tareas operativas cargadas." />}
+      <SaveBar saving={saving} onSave={() => onSave({ ...basePlan, tasks: cleanTasks, alerts: cleanAlerts })} />
     </SectionCard>
     <SectionCard title="Alertas y recordatorios" icon={<CalendarClock className="h-4 w-4" />} action={<Button variant="secondary" onClick={() => setAlerts((current) => [...current, { id: makeId(), title: '', remindAt: '', channel: 'system', status: 'pending', notes: '' }])}><Plus className="mr-2 h-4 w-4" />Agregar alerta</Button>}>
       {alerts.length ? <div className="space-y-3">{alerts.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 lg:grid-cols-[minmax(180px,1fr)_170px_130px_130px_44px]">
@@ -802,7 +841,7 @@ export function EventLogisticsEditor({ plan, saving, onSave }: { plan?: EventRes
   return <SectionCard title="Logística y coordinación interna" icon={<ClipboardCheck className="h-4 w-4" />} action={<Button type="button" variant="secondary" onClick={fillEmptyGuides}>Completar guías vacías</Button>}>
     <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">Usá estas instrucciones base como en el cronograma de ejemplo: completá cantidades, responsables y condiciones propias del evento. Podés editar cualquier texto.</p>
     <div className="grid gap-4 md:grid-cols-2">
-      <Field label="Armado del salón" action={guideButton('eventSetupNotes')}><Textarea value={logistics.eventSetupNotes ?? ''} onChange={(event) => set('eventSetupNotes', event.target.value)} placeholder="Layout, mesas, pista, ceremonia, sectores..." /></Field>
+      <Field label="Armado del salón" action={guideButton('eventSetupNotes')}><Textarea value={logistics.eventSetupNotes ?? ''} onChange={(event) => set('eventSetupNotes', event.target.value)} placeholder="Diseño, mesas, pista, ceremonia, sectores..." /></Field>
       <Field label="Cocina" action={guideButton('kitchenNotes')}><Textarea value={logistics.kitchenNotes ?? ''} onChange={(event) => set('kitchenNotes', event.target.value)} placeholder="Producción, tiempos, restricciones, emplatado..." /></Field>
       <Field label="Barra y bebidas" action={guideButton('barNotes')}><Textarea value={logistics.barNotes ?? ''} onChange={(event) => set('barNotes', event.target.value)} placeholder="Bebidas, hielo, barra, alcohol, horarios..." /></Field>
       <Field label="Ambientación, mantelería y vajilla" action={guideButton('decorationNotes')}><Textarea value={logistics.decorationNotes ?? ''} onChange={(event) => set('decorationNotes', event.target.value)} placeholder="Decoración, mantelería, centros, colores..." /></Field>

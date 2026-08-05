@@ -6,9 +6,10 @@ import { ChevronLeft, Printer } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/primitives';
 import type { Contract, ContractAddendum } from '@/features/quotes/types';
+import { formatCivilDate } from '@/lib/dates';
 
 const money = (value?: unknown) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(value ?? 0));
-const formatDate = (value?: unknown) => typeof value === 'string' ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(value)) : 'Sin fecha';
+const formatDate = (value?: unknown) => formatCivilDate(value, 'Sin fecha');
 const text = (value: unknown, fallback = 'No informado') => typeof value === 'string' && value.trim() ? value : fallback;
 
 export default function ContractPrintPage({ params }: { params: Promise<{ id: string }> }) {

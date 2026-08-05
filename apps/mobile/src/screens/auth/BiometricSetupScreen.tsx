@@ -6,11 +6,11 @@ import { colors, spacing, typography } from '../../theme/tokens';
 
 export function BiometricSetupScreen() {
   const insets = useSafeAreaInsets();
-  const updateBiometricPreference = useAuthStore((state) => state.updateBiometricPreference);
+  const enableBiometricFromPendingLogin = useAuthStore((state) => state.enableBiometricFromPendingLogin);
   const dismissBiometricPrompt = useAuthStore((state) => state.dismissBiometricPrompt);
 
   async function enable() {
-    await updateBiometricPreference(true);
+    await enableBiometricFromPendingLogin();
     dismissBiometricPrompt();
   }
 
@@ -20,8 +20,9 @@ export function BiometricSetupScreen() {
         <Text style={styles.icon}>🔐</Text>
         <Text style={styles.title}>Desbloqueo rápido</Text>
         <Text style={styles.description}>
-          Activá la huella o Face ID de tu dispositivo para abrir la app sin escribir tu contraseña cada vez.
-          Esto protege únicamente el acceso local — nunca se envía ni se guarda información biométrica en el servidor.
+          Activá la huella o Face ID de tu dispositivo para abrir la app sin escribir tu contraseña cada vez, incluso
+          después de cerrar sesión. Nunca se envía ni se guarda información biométrica en el servidor: tu contraseña
+          queda cifrada solo en este dispositivo, protegida por tu huella o Face ID.
         </Text>
       </View>
       <View style={styles.actions}>

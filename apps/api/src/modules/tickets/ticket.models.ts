@@ -674,3 +674,25 @@ export async function dropLegacyTicketTypeSaleIndex() {
     if (error?.codeName !== "NamespaceNotFound") throw error;
   }
 }
+
+// The deployed `publicToken_1` unique index predates `sparse: true` on this
+// field. Since no current flow ever populates `publicToken`, a non-sparse
+// unique index only allows a single DigitalTicket in the entire collection
+// to have it missing — every ticket issued after the first one collides on
+// E11000 and silently fails to persist (see issueTicketsForPaidOrder).
+// Dropping it lets Mongoose recreate it correctly (sparse) from the schema.
+export async function dropLegacyDigitalTicketPublicTokenIndex() {
+  try {
+    const indexes = await DigitalTicket.collection.indexes();
+    const legacy = indexes.find(
+      (index) => index.name === "publicToken_1" && !index.sparse,
+    );
+    if (legacy?.name) await DigitalTicket.collection.dropIndex(legacy.name);
+    await DigitalTicket.collection.createIndex(
+      { publicToken: 1 },
+      { unique: true, sparse: true, name: "publicToken_1" },
+    );
+  } catch (error: any) {
+    if (error?.codeName !== "NamespaceNotFound") throw error;
+  }
+}

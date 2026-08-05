@@ -1,4 +1,5 @@
 import { CalendarItem } from './crm.models';
+import { argentinaDateTime } from '../../utils/argentina-date';
 
 type EventAlertItem = {
   id?: string;
@@ -31,13 +32,13 @@ export async function syncEventAlertCalendarItems(
 ): Promise<void> {
   const validAlerts = (alerts ?? []).filter((alert): alert is EventAlertItem & { id: string; title: string; remindAt: string } => {
     if (!alert?.id || !alert.title?.trim() || !alert.remindAt) return false;
-    return !Number.isNaN(new Date(alert.remindAt).getTime());
+    return !Number.isNaN(argentinaDateTime(alert.remindAt).getTime());
   });
   const seenIds = validAlerts.map((alert) => alert.id);
 
   for (const alert of validAlerts) {
     const channel = notificationChannels.includes(alert.channel ?? '') ? alert.channel : 'system';
-    const startAt = new Date(alert.remindAt);
+    const startAt = argentinaDateTime(alert.remindAt);
     const filter = { eventId: event._id, source: 'event', type: 'reminder', 'metadata.eventAlertId': alert.id, deletedAt: null };
     // Every save of the event's task plan re-syncs every alert, even ones already delivered by
     // event-alert-reminders.service.ts. Only reset the delivery state when remindAt actually

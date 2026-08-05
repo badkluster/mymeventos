@@ -11,7 +11,7 @@
 | `scheme` (deep links) | `mymeventos` |
 | iOS `bundleIdentifier` | `com.mymeventos.staff` |
 | Android `package` | `com.mymeventos.staff` |
-| Ícono / splash / adaptive icon | `apps/mobile/assets/*.png` (reutilizan el logo ya existente en `apps/web/public/brand/mym-icon-512.png`, copiado — no se generó arte nuevo) |
+| Ícono / splash / adaptive icon | `apps/mobile/assets/*.png` (reutilizan el logo ya existente en `apps/web/public/brand/mym-icon-512.png`, copiado — no se generó arte nuevo). **Corregido 2026-08-04**: `adaptive-icon.png` ocupaba casi el 100% del lienzo de 512×512 (el wordmark llegaba a ~8px de cada borde); Android aplica una máscara de "zona segura" de 66% de diámetro sobre el foreground de un ícono adaptativo, así que el launcher recortaba las puntas de las letras al instalar. Se regeneró como un recorte con transparencia real (alpha = luminancia del arte original, sin fondo negro sólido embebido) escalado al ~68% y centrado, quedando dentro de la zona segura sin costura visible contra el `backgroundColor` configurado (`#0B0B0F`). `icon.png` (iOS/store, con esquinas redondeadas mucho menos agresivas) no se tocó. |
 
 Estos identificadores (`com.mymeventos.staff`) son **provisorios** — hay que confirmarlos con quien gestione las cuentas de Apple/Google antes de un build real, ya que no se puede cambiar el bundle id/package después de publicar.
 
@@ -20,6 +20,7 @@ Estos identificadores (`com.mymeventos.staff`) son **provisorios** — hay que c
 - **Ubicación** (`expo-location`, foreground únicamente — no se pidió ni declaró permiso de ubicación en segundo plano): textos de justificación en español ya cargados en `app.json` (`NSLocationWhenInUseUsageDescription`, `locationWhenInUsePermission`).
 - **Biometría** (`expo-local-authentication`): `NSFaceIDUsageDescription` (iOS) + `USE_BIOMETRIC`/`USE_FINGERPRINT` (Android).
 - **Fotos/cámara** (`expo-image-picker`, para el avatar): permisos declarados con texto en español.
+- **Notificaciones locales** (`expo-notifications`, agregada 2026-08-04): `POST_NOTIFICATIONS` (Android 13+, requerida para publicar cualquier notificación, incluida la local de "jornada en curso" — ver `docs/MOBILE_STAFF_APP.md` §4 punto 7 y §5). No usa push remoto: sin token, sin proyecto de Expo Push/FCM/APNs, sin cambios en el backend.
 
 ## 3. Variables de entorno
 
@@ -60,7 +61,7 @@ El comando inicia el AVD `Medium_Phone_2`, espera a que Android termine de arran
 
 Además configura automáticamente `adb reverse tcp:3001 tcp:3001`, por lo que el valor local de `EXPO_PUBLIC_API_URL` funciona desde el emulador. El backend debe estar iniciado en el puerto 3001 (por ejemplo, con `pnpm dev:api`). Para un dispositivo Android físico no existe esa redirección: usar la IP de LAN de la máquina en `apps/mobile/.env`.
 
-Requiere Expo Go (SDK 57) o un development build propio para los módulos nativos usados (`expo-secure-store`, `expo-location`, `expo-local-authentication`, `expo-image-picker`, `expo-application`, `expo-device`, `expo-network`, `expo-crypto`, `expo-splash-screen`) — todos son plugins de Expo estándar, compatibles con Expo Go sin config plugin adicional salvo los ya declarados en `app.json`.
+Requiere Expo Go (SDK 57) o un development build propio para los módulos nativos usados (`expo-secure-store`, `expo-location`, `expo-local-authentication`, `expo-image-picker`, `expo-application`, `expo-device`, `expo-network`, `expo-crypto`, `expo-splash-screen`, `expo-notifications`) — todos son plugins de Expo estándar, compatibles con Expo Go sin config plugin adicional salvo los ya declarados en `app.json`. Nota: Expo Go dejó de soportar **push remoto** desde SDK 53 (Android e iOS) — no afecta a `expo-notifications` acá, porque se usa únicamente para la notificación local de "jornada en curso" (`scheduleNotificationAsync` con `trigger: null`, sin token ni servidor de push).
 
 ### 4.1 Migración de Expo SDK ~50.0.8 → 57 (2026-07-26)
 

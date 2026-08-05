@@ -8,13 +8,16 @@ import { activityTypeLabels, displayLabel, eventStatusLabels, paymentMethodLabel
 import { Button, Input, Modal, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { contractStatusLabels } from '@/lib/display-labels';
+import { formatCivilDate } from '@/lib/dates';
 import type { Contract, Customer, Event, Payment, PaymentSummary, Quote, QuoteRequest } from '@/features/quotes/types';
 
 type Activity = { _id: string; type: string; title: string; description?: string; createdAt: string };
 type DetailResponse = { customer: Customer; quotes: Quote[]; events: Event[]; quoteRequests: QuoteRequest[]; contracts?: Contract[]; payments?: Payment[]; paymentSummary?: PaymentSummary; activities: Activity[] };
 
 const money = (value?: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value ?? 0);
-const formatDate = (value?: unknown) => typeof value === 'string' ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value)) : 'Sin fecha';
+// `formatCivilDate` distingue por sí sola fecha civil (eventDate, dueDate) de instante real
+// (createdAt, paidAt) mirando la forma del valor — ver apps/web/src/lib/dates.ts.
+const formatDate = (value?: unknown) => typeof value === 'string' ? formatCivilDate(value, 'Sin fecha', 'medium') : 'Sin fecha';
 const customerName = (customer?: Customer) => customer?.fullName || [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') || 'Cliente sin nombre';
 const salonName = (value: unknown) => !value || typeof value === 'string' ? 'Sin salón' : (value as { name?: string }).name ?? 'Sin salón';
 

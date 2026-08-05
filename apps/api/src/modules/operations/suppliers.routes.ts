@@ -46,6 +46,17 @@ router.get('/', requirePermission(Permission.SUPPLIERS_READ), asyncHandler(async
   const items = await Supplier.find(buildQuery(request)).sort({ name: 1 }).lean();
   return sendSuccess(response, { items, suppliers: items, categories: Object.values(SupplierCategory) });
 }));
+// Lightweight picker (contact fields only, no notes/tax id/audit data) for linking a
+// supplier from Calendar or an event's supplier assignment — gated by EVENTS_READ (same
+// as those features) instead of SUPPLIERS_READ, which also unlocks the full Proveedores menu.
+router.get('/options', requirePermission(Permission.EVENTS_READ), asyncHandler(async (request, response) => {
+  const items = await Supplier.find(buildQuery(request))
+    .select('name businessName category contactPerson phone whatsapp email active')
+    .sort({ name: 1 })
+    .lean();
+  return sendSuccess(response, { items, suppliers: items });
+}));
+
 router.post('/', requirePermission(Permission.SUPPLIERS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
   const supplier = await Supplier.create({ ...request.body, createdBy: request.user!.id, updatedBy: request.user!.id });
   await writeAuditLog(request, 'SUPPLIER_CREATE', 'Supplier', supplier._id.toString());

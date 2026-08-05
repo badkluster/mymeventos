@@ -1,3 +1,4 @@
+import { argentinaDateKey } from '../../utils/argentina-date';
 import type { InvitationTemplateCategory } from './system-templates.service';
 
 export type EventInvitationSource = {
@@ -24,7 +25,13 @@ function localDateTime(eventDate?: Date | string, startTime?: string): string {
   if (!eventDate) return '';
   const date = new Date(eventDate);
   if (Number.isNaN(date.getTime())) return '';
-  const day = date.toISOString().slice(0, 10);
+  // eventDate is a civil day with no time of its own (the actual time comes from the
+  // separate startTime field), normalized as UTC midnight going forward — for those the
+  // UTC calendar day is exactly right. Records saved before that normalization can carry
+  // a real time-of-day baked in instead, which shifts the UTC day away from the intended
+  // Argentina day; for those, the civil day is recovered in that time zone instead.
+  const iso = date.toISOString();
+  const day = iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : argentinaDateKey(date);
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime ?? '') ? startTime : '18:00';
   return `${day}T${time}`;
 }

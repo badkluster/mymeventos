@@ -7,11 +7,14 @@ import { api } from '@/lib/api';
 import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
+import { formatCivilDate } from '@/lib/dates';
 import type { Customer, PaginationMeta } from '@/features/quotes/types';
 
 type ListResponse = { items?: Customer[]; meta?: Partial<PaginationMeta> };
 
-const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value)) : 'Sin fecha';
+// `formatCivilDate` distingue fecha civil (eventDate) de instante real (createdAt) mirando la
+// forma del valor — esta columna mezcla ambas según si el cliente tiene un próximo evento.
+const formatDate = (value?: string) => value ? formatCivilDate(value, 'Sin fecha', 'medium') : 'Sin fecha';
 const customerName = (customer: Customer) => customer.fullName || [customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Cliente sin nombre';
 
 function normalize(response: ListResponse): { items: Customer[]; meta: PaginationMeta } {

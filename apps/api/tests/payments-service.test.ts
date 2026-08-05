@@ -16,7 +16,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
 }));
 
 import { ApiError } from '../src/middlewares/errorHandler';
-import { cancelPayment, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from '../src/modules/crm/payments.service';
+import { applyPaymentToPlan, cancelPayment, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from '../src/modules/crm/payments.service';
 
 describe('payments service', () => {
   beforeEach(() => {
@@ -221,6 +221,80 @@ describe('payments service', () => {
     expect(summary.paidAmount).toBe(5000);
     expect(summary.refundedAmount).toBe(5000);
     expect(summary.securityDepositAmount).toBe(3000);
+  });
+});
+
+describe('applyPaymentToPlan', () => {
+  function installmentPlan(count: number, amountPerInstallment: number) {
+    return Array.from({ length: count }, (_, index) => ({ id: `installment-${index + 1}`, label: `Cuota ${index + 1} de ${count}`, amount: amountPerInstallment, paidAmount: 0, status: 'pending' }));
+  }
+
+  it('cascades a payment larger than one installment across the next open installments in order', () => {
+    const plan = installmentPlan(12, 112500);
+
+    const { plan: result, overpaymentAmount } = applyPaymentToPlan(plan, 400000, { paymentId: 'payment-1' });
+
+    expect(result[0]).toMatchObject({ paidAmount: 112500, status: 'paid', paymentId: 'payment-1' });
+    expect(result[1]).toMatchObject({ paidAmount: 112500, status: 'paid', paymentId: 'payment-1' });
+    expect(result[2]).toMatchObject({ paidAmount: 112500, status: 'paid', paymentId: 'payment-1' });
+    expect(result[3]).toMatchObject({ paidAmount: 62500, status: 'partial', paymentId: 'payment-1' });
+    expect(result[4]).toMatchObject({ paidAmount: 0, status: 'pending' });
+    expect(result[4].paymentId).toBeUndefined();
+    // The programmed amount of untouched installments must never be altered by someone else's overpayment.
+    expect(result[11].amount).toBe(112500);
+    expect(overpaymentAmount).toBe(0);
+  });
+
+  it('does not mutate the plan passed in', () => {
+    const plan = installmentPlan(2, 50000);
+
+    applyPaymentToPlan(plan, 50000);
+
+    expect(plan[0].paidAmount).toBe(0);
+    expect(plan[0].status).toBe('pending');
+  });
+
+  it('starts the waterfall at the selected installment and still cascades forward from there', () => {
+    const plan = installmentPlan(6, 100000);
+
+    const { plan: result } = applyPaymentToPlan(plan, 250000, { planInstallmentId: 'installment-3' });
+
+    expect(result[0]).toMatchObject({ paidAmount: 0, status: 'pending' });
+    expect(result[1]).toMatchObject({ paidAmount: 0, status: 'pending' });
+    expect(result[2]).toMatchObject({ paidAmount: 100000, status: 'paid' });
+    expect(result[3]).toMatchObject({ paidAmount: 100000, status: 'paid' });
+    expect(result[4]).toMatchObject({ paidAmount: 50000, status: 'partial' });
+    expect(result[5]).toMatchObject({ paidAmount: 0, status: 'pending' });
+  });
+
+  it('skips already paid or cancelled installments when applying the waterfall', () => {
+    const plan = installmentPlan(3, 100000);
+    plan[0].status = 'paid';
+    plan[0].paidAmount = 100000;
+    plan[1].status = 'cancelled';
+
+    const { plan: result } = applyPaymentToPlan(plan, 40000);
+
+    expect(result[0]).toMatchObject({ status: 'paid', paidAmount: 100000 });
+    expect(result[1]).toMatchObject({ status: 'cancelled', paidAmount: 0 });
+    expect(result[2]).toMatchObject({ status: 'partial', paidAmount: 40000 });
+  });
+
+  it('reports the leftover as overpaymentAmount instead of discarding it or shrinking another installment', () => {
+    const plan = installmentPlan(2, 50000);
+
+    const { plan: result, overpaymentAmount } = applyPaymentToPlan(plan, 130000);
+
+    expect(result[0]).toMatchObject({ status: 'paid', paidAmount: 50000 });
+    expect(result[1]).toMatchObject({ status: 'paid', paidAmount: 50000, amount: 50000 });
+    expect(overpaymentAmount).toBe(30000);
+  });
+
+  it('returns the full amount as overpayment when there is no plan left to apply it to', () => {
+    const { plan: result, overpaymentAmount } = applyPaymentToPlan([], 40000);
+
+    expect(result).toEqual([]);
+    expect(overpaymentAmount).toBe(40000);
   });
 });
 

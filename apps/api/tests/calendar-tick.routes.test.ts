@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   processLeadFollowUpTick: vi.fn(),
   processQuoteLifecycleTick: vi.fn(),
   processProductionMissingTick: vi.fn(),
+  processProductionPendingCloseTick: vi.fn(),
   processTablewareOverbookingTick: vi.fn(),
   processClosurePendingTick: vi.fn(),
   processOpenSessionAlertTick: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock('../src/modules/crm/collection-followup-reminders.service', () => ({ pro
 vi.mock('../src/modules/crm/lead-followup-reminders.service', () => ({ processLeadFollowUpTick: mocks.processLeadFollowUpTick }));
 vi.mock('../src/modules/crm/quote-lifecycle-reminders.service', () => ({ processQuoteLifecycleTick: mocks.processQuoteLifecycleTick }));
 vi.mock('../src/modules/crm/production-reminders.service', () => ({ processProductionMissingTick: mocks.processProductionMissingTick }));
+vi.mock('../src/modules/crm/production-close-reminders.service', () => ({ processProductionPendingCloseTick: mocks.processProductionPendingCloseTick }));
 vi.mock('../src/modules/crm/tableware-overbooking.service', () => ({ processTablewareOverbookingTick: mocks.processTablewareOverbookingTick }));
 vi.mock('../src/modules/crm/closure-reminders.service', () => ({ processClosurePendingTick: mocks.processClosurePendingTick }));
 vi.mock('../src/modules/crm/open-session-alerts.service', () => ({ processOpenSessionAlertTick: mocks.processOpenSessionAlertTick }));
@@ -53,6 +55,7 @@ describe('financial calendar tick route', () => {
     mocks.processLeadFollowUpTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
     mocks.processQuoteLifecycleTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
     mocks.processProductionMissingTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
+    mocks.processProductionPendingCloseTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
     mocks.processTablewareOverbookingTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
     mocks.processClosurePendingTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
     mocks.processOpenSessionAlertTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });

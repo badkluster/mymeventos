@@ -60,7 +60,7 @@ export default function SalonsPage() {
       const response = await api.get<{ salons: Salon[] }>(`/salons?${params.toString()}`);
       setSalons(response.salons ?? []);
       try {
-        const usersResponse = await api.get<{ users: UserOption[] }>('/users');
+        const usersResponse = await api.get<{ users: UserOption[] }>('/users/options');
         setUsers((usersResponse.users ?? []).filter((user) => user.active !== false));
       } catch (usersError) {
         setUsers([]);

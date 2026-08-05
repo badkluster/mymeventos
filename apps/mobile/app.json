@@ -13,6 +13,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mymeventos.staff",
+      "buildNumber": "1",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Usamos tu ubicación únicamente al registrar tu entrada o salida, para guardar el punto del fichaje.",
         "NSFaceIDUsageDescription": "Usá Face ID para desbloquear tu sesión de forma rápida y segura en este dispositivo."
@@ -20,6 +21,7 @@
     },
     "android": {
       "package": "com.mymeventos.staff",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0B0F"
@@ -28,7 +30,8 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
+        "USE_FINGERPRINT",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -55,6 +58,7 @@
         }
       ],
       "expo-secure-store",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
@@ -63,11 +67,6 @@
           "backgroundColor": "#0B0B0F"
         }
       ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": ""
-      }
-    }
+    ]
   }
 }

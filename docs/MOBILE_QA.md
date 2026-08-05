@@ -41,13 +41,9 @@ Se levantó la API contra una base MongoDB local descartable (nunca contra la ba
 
 El primer intento de login con un `STAFF` cuyo `attendanceConfig.canUseMobileApp` era `false` **se aceptó** (debía rechazarse). Causa: el gate de login solo chequeaba el permiso `mobile.access` (que `STAFF` trae por defecto vía rol), sin chequear el toggle per-usuario. Corregido en `isMobileEligible()` (`apps/api/src/modules/mobile/mobile-auth.routes.ts`) para exigir **ambas** condiciones — ver `docs/MOBILE_AUTHENTICATION.md` §2. Se agregó un test de regresión (`mobile-auth-routes.test.ts`) para que no vuelva a pasar desapercibido.
 
-### Seeds usados para este QA
-
-`pnpm --filter @mym/api seed:mobile-attendance` (`apps/api/src/scripts/seedMobileAttendance.ts`, idempotente — verificado corriéndolo dos veces seguidas sin duplicar nada): crea/actualiza un salón con geocerca, tres usuarios `STAFF` (uno con acceso móvil habilitado y jornadas de ejemplo, uno sin acceso móvil, uno inactivo) y, para el habilitado: una jornada completada con una incidencia y una solicitud de corrección pendientes, más una jornada activa.
-
 ### Nota de seguridad sobre el entorno de este QA
 
-El `.env`/`apps/api/.env` del repositorio apunta a un clúster de MongoDB Atlas compartido (no `localhost`). Para todo este QA manual se usó explícitamente una base **local descartable** (`MONGODB_URI=mongodb://127.0.0.1:27017/...` pasado por variable de entorno, sin tocar los archivos `.env`), nunca la base compartida — para no escribir datos de prueba (usuarios demo, jornadas, contraseñas) en el entorno real del equipo.
+No usar seeds, fixtures ni una base persistente/remota para QA. Las pruebas deben usar mocks o recursos aislados sin datos de usuarios, conforme a [`AGENTS.md`](../AGENTS.md).
 
 ## 4. No verificado en esta tarea (limitaciones reales)
 

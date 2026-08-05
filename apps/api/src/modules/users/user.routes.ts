@@ -167,6 +167,23 @@ async function getUserOrFail(id: string): Promise<any> {
 
 router.use(requireAuth);
 
+// Lightweight directory (name/role only, no permissions/attendance/audit data) for
+// pickers that need to link to a user — e.g. "Encargado del salón" and calendar
+// linking — without requiring USERS_READ, which also unlocks the full Usuarios menu.
+router.get('/options', asyncHandler(async (request, response) => {
+  const limit = Math.min(200, Math.max(1, Number(queryValue(request.query.limit)) || 100));
+  const search = queryValue(request.query.search);
+  const terms: Record<string, unknown>[] = [{ deletedAt: null }];
+  if (search) terms.push({ $or: ['fullName', 'firstName', 'lastName', 'username', 'email'].map((field) => ({ [field]: { $regex: search, $options: 'i' } })) });
+  const query = terms.length === 1 ? terms[0] : { $and: terms };
+  const items = await User.find(query)
+    .select('firstName lastName fullName email username phone roles active')
+    .sort({ fullName: 1 })
+    .limit(limit)
+    .lean();
+  return sendSuccess(response, { items, users: items });
+}));
+
 router.get('/', requirePermission(Permission.USERS_READ), asyncHandler(async (request, response) => {
   const page = Math.max(1, Number(queryValue(request.query.page)) || 1);
   const limit = Math.min(100, Math.max(1, Number(queryValue(request.query.limit)) || 20));

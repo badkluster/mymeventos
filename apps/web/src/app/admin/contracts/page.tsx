@@ -9,11 +9,12 @@ import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
 import type { Contract, Event, PaginationMeta } from '@/features/quotes/types';
+import { formatCivilDate } from '@/lib/dates';
 
 type ListResponse = { items?: Contract[]; meta?: Partial<PaginationMeta> };
 
 const money = (value?: unknown) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(value ?? 0));
-const formatDate = (value?: unknown) => typeof value === 'string' ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value)) : 'Sin fecha';
+const formatDate = (value?: unknown) => formatCivilDate(value, 'Sin fecha', 'medium');
 const statusTone: Record<string, string> = { draft: 'bg-zinc-100 text-zinc-700', pending_approval: 'bg-amber-50 text-amber-800', approved: 'bg-emerald-50 text-emerald-700', requires_changes: 'bg-sky-50 text-sky-700', cancelled: 'bg-rose-50 text-rose-700', superseded: 'bg-zinc-100 text-zinc-500' };
 
 function entityName(value: unknown) {

@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
   revisionFindOne: vi.fn(),
   revisionCreate: vi.fn(),
   eventFindOne: vi.fn(),
-  eventCreate: vi.fn()
+  eventCreate: vi.fn(),
+  syncEventAlerts: vi.fn()
 }));
 
 vi.mock('../src/modules/crm/crm.models', () => ({
@@ -25,6 +26,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   QuoteRevision: { findOne: mocks.revisionFindOne, create: mocks.revisionCreate },
   Event: { findOne: mocks.eventFindOne, create: mocks.eventCreate }
 }));
+vi.mock('../src/modules/crm/event-alert-calendar-sync.service', () => ({ syncEventAlertCalendarItems: mocks.syncEventAlerts }));
 
 import { findOrCreateLead, normalizeEmail, normalizePhone } from '../src/modules/crm/contact-dedupe.service';
 import { convertQuoteToEvent } from '../src/modules/crm/quote-to-event.service';
@@ -84,5 +86,23 @@ describe('commercial flow services', () => {
     expect(result.event).toBe(event);
     expect(mocks.eventCreate).not.toHaveBeenCalled();
     expect(quote.convertedEventId).toBe('event-1');
+  });
+
+  it('creates and syncs the default alerts when converting a quote to an event', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const quote = { _id: 'quote-1', quoteNumber: 'P-1', customerId: 'customer-1', salonId: 'salon-1', contactName: 'Ana Perez', eventType: 'Cumpleaños', eventDate: new Date('2026-04-09T00:00:00.000Z'), totalAmount: 1000, menuSections: [], includedServices: [], save };
+    const customer = { _id: 'customer-1', fullName: 'Ana Perez' };
+    const event = { _id: 'event-1', salonId: 'salon-1' };
+    mocks.quoteFindOne.mockResolvedValue(quote);
+    mocks.leadFindOne.mockResolvedValue(null);
+    mocks.customerFindOne.mockResolvedValue(customer);
+    mocks.eventFindOne.mockResolvedValue(null);
+    mocks.eventCreate.mockResolvedValue(event);
+
+    await convertQuoteToEvent({ quoteId: 'quote-1', userId: 'user-1' });
+
+    const createdEvent = mocks.eventCreate.mock.calls[0][0];
+    expect(createdEvent.resourcePlanSnapshot.alerts).toHaveLength(6);
+    expect(mocks.syncEventAlerts).toHaveBeenCalledWith(event, createdEvent.resourcePlanSnapshot.alerts, 'user-1');
   });
 });

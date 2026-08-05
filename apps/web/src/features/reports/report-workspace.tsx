@@ -11,7 +11,10 @@ import {
 } from '@/lib/display-labels';
 import { useToast } from '@/components/ui/toast-provider';
 
-type Column = { key: string; label: string; format?: 'date' | 'currency' | 'number' | 'status'; linkKey?: string };
+// 'date' = instante real (createdAt, sentAt, approvedAt, paidAt) en hora de Argentina.
+// 'civilDate' = fecha civil sin hora (eventDate, dueDate/paymentWindow*, gasto), en UTC — el
+// backend ya la normalizó a medianoche UTC, y formatearla en un huso real la corre un día.
+type Column = { key: string; label: string; format?: 'date' | 'civilDate' | 'currency' | 'number' | 'status'; linkKey?: string };
 type SummaryItem = { id: string; label: string; value: number; format: 'number' | 'currency' | 'percentage'; partial?: boolean };
 type ReportResponse = {
   columns: Column[];
@@ -32,6 +35,7 @@ type Filters = { from: string; to: string; salonId: string; status: string; sear
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
 const date = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short' });
+const civilDate = new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', dateStyle: 'short' });
 
 function todayPeriod() {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
@@ -59,6 +63,10 @@ function valueLabel(value: unknown, column: Column) {
   if (column.format === 'date') {
     const parsed = new Date(String(value));
     return Number.isNaN(parsed.getTime()) ? '—' : date.format(parsed);
+  }
+  if (column.format === 'civilDate') {
+    const parsed = new Date(String(value));
+    return Number.isNaN(parsed.getTime()) ? '—' : civilDate.format(parsed);
   }
   if (column.format === 'currency') return money.format(Number(value));
   if (column.format === 'number') return number.format(Number(value));

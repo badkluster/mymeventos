@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppButton } from '../../components/AppButton';
 import { AppTextInput } from '../../components/AppTextInput';
@@ -31,22 +31,24 @@ export function ForgotPasswordScreen({ navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <ScreenHeader title="Recuperar contraseña" description="Te enviamos un código para restablecerla si tu usuario tiene acceso a la app." />
-      {sent ? (
-        <View style={styles.sent}>
-          <Text style={styles.sentTitle}>Revisá tu email</Text>
-          <Text style={styles.sentBody}>Si el usuario existe y tiene email configurado, vas a recibir un código de seis dígitos. Abrí el enlace o ingresalo en la siguiente pantalla.</Text>
-          <AppButton title="Ya tengo el código" variant="secondary" onPress={() => navigation.navigate('ResetPassword', { username: username.trim() })} />
-        </View>
-      ) : (
-        <View style={styles.form}>
-          <AppTextInput label="Usuario o email" autoCapitalize="none" autoCorrect={false} value={username} onChangeText={setUsername} />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <AppButton title="Enviar instrucciones" onPress={() => void submit()} loading={loading} disabled={!username.trim()} />
-        </View>
-      )}
-    </ScrollView>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <ScreenHeader title="Recuperar contraseña" description="Te enviamos un código para restablecerla si tu usuario tiene acceso a la app." />
+        {sent ? (
+          <View style={styles.sent}>
+            <Text style={styles.sentTitle}>Revisá tu email</Text>
+            <Text style={styles.sentBody}>Si el usuario existe y tiene email configurado, vas a recibir un código de seis dígitos. Abrí el enlace o ingresalo en la siguiente pantalla.</Text>
+            <AppButton title="Ya tengo el código" variant="secondary" onPress={() => navigation.navigate('ResetPassword', { username: username.trim() })} />
+          </View>
+        ) : (
+          <View style={styles.form}>
+            <AppTextInput label="Usuario o email" autoCapitalize="none" autoCorrect={false} value={username} onChangeText={setUsername} />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <AppButton title="Enviar instrucciones" onPress={() => void submit()} loading={loading} disabled={!username.trim()} />
+          </View>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

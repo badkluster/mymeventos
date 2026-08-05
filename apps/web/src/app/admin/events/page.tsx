@@ -11,11 +11,12 @@ import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
 import { EventCreateModal } from '@/features/events/event-create-modal';
+import { formatCivilDate } from '@/lib/dates';
 import type { Event, PaginationMeta, Salon } from '@/features/quotes/types';
 
 type ListResponse = { items?: Event[]; meta?: Partial<PaginationMeta> };
 
-const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value)) : 'Sin fecha';
+const formatDate = (value?: string) => formatCivilDate(value, 'Sin fecha', 'medium');
 const statusTone: Record<string, string> = { draft: 'bg-zinc-100 text-zinc-700', quoted: 'bg-amber-50 text-amber-800', reserved: 'bg-sky-50 text-sky-700', confirmed: 'bg-emerald-50 text-emerald-700', cancelled: 'bg-rose-50 text-rose-700', lost: 'bg-orange-50 text-orange-700' };
 
 function entityName(value: unknown) {

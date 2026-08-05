@@ -325,11 +325,15 @@ export const fullName = (person: Partial<InvitationGuest>) =>
   person.fullName ||
   [person.firstName, person.lastName].filter(Boolean).join(" ") ||
   "Invitado sin nombre";
+// `startsAt`/`endsAt` son instantes reales (fecha y hora de la entrada/publicación) — se
+// muestran en hora de Argentina siempre, sin depender del huso horario del navegador de quien
+// mira la pantalla (staff viajando, etc.).
 export const formatDateTime = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("es-AR", {
         dateStyle: "full",
         timeStyle: "short",
+        timeZone: "America/Argentina/Buenos_Aires",
       }).format(new Date(value))
     : "Fecha a confirmar";
 export const money = (value?: number) =>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,6 +8,7 @@ import { AppButton } from '../../components/AppButton';
 import { AppTextInput } from '../../components/AppTextInput';
 import { PasswordInput } from '../../components/PasswordInput';
 import { useAuthStore } from '../../state/authStore';
+import { isBiometricSupported } from '../../lib/biometrics';
 import { colors, radii, shadow, spacing, typography } from '../../theme/tokens';
 import type { AuthStackParamList } from '../../navigation/types';
 
@@ -16,11 +17,24 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 export function LoginScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const login = useAuthStore((state) => state.login);
+  const loginWithBiometrics = useAuthStore((state) => state.loginWithBiometrics);
+  const checkBiometricLoginAvailable = useAuthStore((state) => state.checkBiometricLoginAvailable);
   const loading = useAuthStore((state) => state.loading);
   const error = useAuthStore((state) => state.error);
   const clearError = useAuthStore((state) => state.clearError);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [canUseBiometrics, setCanUseBiometrics] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const [supported, available] = await Promise.all([isBiometricSupported(), checkBiometricLoginAvailable()]);
+      if (active) setCanUseBiometrics(supported && available);
+    })();
+    return () => { active = false; };
+  }, [checkBiometricLoginAvailable]);
 
   async function handleSubmit() {
     if (!username.trim() || !password) return;
@@ -31,8 +45,19 @@ export function LoginScreen({ navigation }: Props) {
     }
   }
 
+  async function handleBiometricLogin() {
+    if (error) clearError();
+    setBiometricBusy(true);
+    try {
+      const success = await loginWithBiometrics();
+      if (!success) setCanUseBiometrics(await checkBiometricLoginAvailable());
+    } finally {
+      setBiometricBusy(false);
+    }
+  }
+
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <AmbientBackdrop dark />
       <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.xxl, paddingBottom: insets.bottom + spacing.xl }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <AnimatedEntrance distance={22}>
@@ -70,6 +95,16 @@ export function LoginScreen({ navigation }: Props) {
               />
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <AppButton title="Ingresar" onPress={() => void handleSubmit()} loading={loading} disabled={!username.trim() || !password} />
+              {canUseBiometrics ? (
+                <>
+                  <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerLabel}>o</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+                  <AppButton title="Ingresar con huella" variant="secondary" onPress={() => void handleBiometricLogin()} loading={biometricBusy} />
+                </>
+              ) : null}
               <Text style={styles.forgot} onPress={() => navigation.navigate('ForgotPassword')}>¿Olvidaste tu contraseña?</Text>
             </View>
           </View>
@@ -98,6 +133,9 @@ const styles = StyleSheet.create({
   formTitle: { ...typography.bodyStrong, color: colors.text },
   form: { gap: spacing.lg },
   error: { ...typography.small, color: colors.danger, textAlign: 'center' },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerLabel: { ...typography.small, color: colors.textSubtle },
   forgot: { ...typography.small, color: colors.primarySoft, fontWeight: '700', textAlign: 'center' },
   footer: { ...typography.caption, color: '#A9BAD0', textAlign: 'center', paddingHorizontal: spacing.lg }
 });

@@ -1,14 +1,6 @@
-const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 
-const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, '../..');
-const config = getDefaultConfig(projectRoot);
-
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(workspaceRoot, 'node_modules')
-];
-
-module.exports = config;
+// Expo SDK 52+ detects PNPM workspaces automatically. Keeping manual
+// watchFolders/nodeModulesPaths here can make release bundling resolve a
+// different dependency graph than native autolinking.
+module.exports = getDefaultConfig(__dirname);

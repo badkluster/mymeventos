@@ -15,6 +15,19 @@ const categoryLabels: Record<InvitationTemplateCategory | 'other', string> = { w
 const categories = Object.entries(categoryLabels) as Array<[InvitationTemplateCategory | 'other', string]>;
 const emptyForm = { title: '', honoreeName: '', eventDate: '', address: '', mapsUrl: '', introduction: '', rsvpDeadline: '', templateId: '', celebrationType: 'general' as InvitationTemplateCategory | 'other' };
 
+// Stored instants are UTC; slicing the raw ISO string assumes its date/time components are
+// already Argentina wall-clock time, which only holds if whoever saved it ran in that time
+// zone. Reading it back through the zone explicitly keeps the datetime-local input correct
+// regardless of where the value was written from.
+function inputDateTimeArgentina(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+}
+
 function InvitationVisualWorkspace({ invitation, onUpdated }: { invitation: DigitalInvitation; onUpdated: (invitation: DigitalInvitation) => void }) {
   const templateId = typeof invitation.templateId === 'string' ? invitation.templateId : invitation.templateId?._id ?? invitation.template ?? 'basic';
   return <><InvitationTemplateSwitcher invitation={invitation} onUpdated={onUpdated} /><InvitationDeliveryActions invitation={invitation} /><InvitationVisualWorkspaceBase key={`${invitation._id}-${templateId}`} invitation={invitation} onUpdated={onUpdated} /></>;
@@ -53,7 +66,7 @@ export function InvitationsList() {
 
 export function InvitationEditor({ invitationId, initialTemplateId }: { invitationId?: string; initialTemplateId?: string }) {
   const { showToast } = useToast(); const [form, setForm] = useState(emptyForm); const [templates, setTemplates] = useState<InvitationTemplate[]>([]); const [saving, setSaving] = useState(false);
-  useEffect(() => { void api.get<{ templates: InvitationTemplate[] }>('/invitations/templates').then((data) => setTemplates(data.templates ?? [])); if (invitationId) void api.get<{ invitation: DigitalInvitation }>(`/invitations/${invitationId}`).then(({ invitation }) => setForm({ title: invitation.title ?? '', honoreeName: invitation.honoreeName ?? '', eventDate: invitation.eventDate?.slice(0, 16) ?? '', address: invitation.address ?? '', mapsUrl: invitation.mapsUrl ?? '', introduction: invitation.introduction ?? '', rsvpDeadline: invitation.rsvpDeadline?.slice(0, 16) ?? '', templateId: typeof invitation.templateId === 'string' ? invitation.templateId : invitation.templateId?._id ?? '', celebrationType: invitation.celebrationType ?? 'general' })).catch((error) => showToast({ message: error.message, variant: 'error' })); else if (initialTemplateId) { const timer = window.setTimeout(() => setForm((current) => ({ ...current, templateId: initialTemplateId }))); return () => window.clearTimeout(timer); } }, [initialTemplateId, invitationId, showToast]);
+  useEffect(() => { void api.get<{ templates: InvitationTemplate[] }>('/invitations/templates').then((data) => setTemplates(data.templates ?? [])); if (invitationId) void api.get<{ invitation: DigitalInvitation }>(`/invitations/${invitationId}`).then(({ invitation }) => setForm({ title: invitation.title ?? '', honoreeName: invitation.honoreeName ?? '', eventDate: inputDateTimeArgentina(invitation.eventDate), address: invitation.address ?? '', mapsUrl: invitation.mapsUrl ?? '', introduction: invitation.introduction ?? '', rsvpDeadline: inputDateTimeArgentina(invitation.rsvpDeadline), templateId: typeof invitation.templateId === 'string' ? invitation.templateId : invitation.templateId?._id ?? '', celebrationType: invitation.celebrationType ?? 'general' })).catch((error) => showToast({ message: error.message, variant: 'error' })); else if (initialTemplateId) { const timer = window.setTimeout(() => setForm((current) => ({ ...current, templateId: initialTemplateId }))); return () => window.clearTimeout(timer); } }, [initialTemplateId, invitationId, showToast]);
   const suggestions = useMemo(() => [...templates].sort((a, b) => Number(b.category === form.celebrationType) - Number(a.category === form.celebrationType)), [form.celebrationType, templates]);
   const selectedTemplate = templates.find((template) => template._id === form.templateId);
   const set = <K extends keyof typeof form>(key: K, value: typeof form[K]) => setForm((current) => ({ ...current, [key]: value }));

@@ -10,10 +10,11 @@ import { Button } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { QuoteFormModal } from '@/features/quotes/quote-form-modal';
 import type { LeadOption, PackageTemplate, Quote, QuoteRequest, Salon } from '@/features/quotes/types';
+import { formatCivilDate } from '@/lib/dates';
 
 type Activity = { _id: string; type: string; title: string; description?: string; createdAt: string };
 
-const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(value)) : 'Sin fecha';
+const formatDate = (value?: string) => formatCivilDate(value, 'Sin fecha');
 const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin fecha';
 
 export default function QuoteRequestDetailPage({ params }: { params: Promise<{ id: string }> }) {

@@ -19,13 +19,16 @@ import { buildInitialResourcePlan } from './event-resource-plan';
 import { buildDefaultEventAlerts } from './event-alert-defaults';
 import { createContractFromEvent } from './event-to-contract.service';
 import { convertQuoteToEvent } from './quote-to-event.service';
-import { createPayment, paymentSummary } from './payments.service';
+import { applyPaymentToPlan, createPayment, paymentSummary } from './payments.service';
 import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
 import { sendEmail } from '../email/email.service';
 import { uploadBuffer } from '../uploads/cloudinary.service';
 import { generateOperationalPdf, generateOperationalWord, type OperationalDocumentType } from './event-operational-document.service';
 import { eventExpenses, syncEventSupplierExpenses } from './event-supplier-expenses.service';
 import { syncEventAlertCalendarItems } from './event-alert-calendar-sync.service';
+import { cancelCurrentProductionPlan } from '../production/production.service';
+import { argentinaDateKey, civilDateInput, daysBetweenDateKeys, dueDateKey } from '../../utils/argentina-date';
+import { installmentDueDateKey, isOpenInstallment, planFor } from './financial-reminders.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const optionalObjectId = objectId.optional().or(z.literal(''));
@@ -33,7 +36,9 @@ const eventStatuses = ['draft', 'quoted', 'contract_draft', 'deposit_pending', '
 const pricingModes = ['per_person', 'fixed'] as const;
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const assignmentIdSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
+const activityNoteSchema = z.object({ body: z.object({ description: z.string().trim().min(1) }), params: z.object({ id: objectId }), query: z.object({}) });
 const menuSectionsSchema = z.array(z.object({ title: z.string().trim().min(1), items: z.array(z.string().trim().min(1)) }));
+const civilDateSchema = z.preprocess(civilDateInput, z.coerce.date());
 const newCustomerSchema = z.object({
   fullName: z.string().trim().optional(),
   firstName: z.string().trim().optional(),
@@ -54,7 +59,7 @@ const createEventSchema = z.object({
     salonId: optionalObjectId,
     eventType: z.string().trim().optional(),
     eventName: z.string().trim().optional(),
-    eventDate: z.coerce.date().optional(),
+    eventDate: civilDateSchema.optional(),
     startTime: z.string().trim().optional(),
     endTime: z.string().trim().optional(),
     guestCount: z.coerce.number().int().positive().optional(),
@@ -106,7 +111,7 @@ const updateSchema = z.object({
   body: z.object({
     eventType: z.string().trim().optional(),
     eventName: z.string().trim().optional(),
-    eventDate: z.coerce.date().optional(),
+    eventDate: civilDateSchema.optional(),
     startTime: z.string().trim().optional(),
     endTime: z.string().trim().optional(),
     guestCount: z.coerce.number().int().positive().optional(),
@@ -163,9 +168,10 @@ const eventSuppliersSchema = z.object({
   query: z.object({}),
 });
 const paymentReceiptSchema = z.object({ body: z.object({ email: z.string().trim().email().optional() }).optional(), params: z.object({ id: objectId, paymentId: objectId }), query: z.object({}) });
-const operationalDocumentType = z.enum(['timeline', 'logistics', 'guest_list', 'tableware']);
+const operationalDocumentType = z.enum(['timeline', 'logistics', 'guest_list', 'tableware', 'full']);
 const operationalDocumentSchema = z.object({ body: z.object({ format: z.enum(['pdf', 'word']) }), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
 const operationalDocumentEmailSchema = z.object({ body: z.object({ format: z.enum(['pdf', 'word']).default('pdf'), email: z.string().trim().email().optional() }), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
+const operationalDocumentPreviewSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, documentType: operationalDocumentType }), query: z.object({}) });
 const guestListLinkSchema = z.object({ body: z.object({}).optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const tablewareItemSchema = z.object({ stockItemId: objectId, quantity: z.coerce.number().int().positive(), notes: z.string().trim().optional() });
 const externalTablewareItemSchema = z.object({ id: z.string().trim().optional(), name: z.string().trim().min(1), category: z.string().trim().optional(), quantity: z.coerce.number().int().positive(), unit: z.string().trim().min(1).optional(), notes: z.string().trim().optional() });
@@ -193,7 +199,11 @@ function eventDay(value: Date | string | undefined): string | undefined {
   if (!value) return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
-  return date.toISOString().slice(0, 10);
+  // Records normalized through civilDateInput are exact UTC midnight, so the UTC calendar
+  // day matches; older records may still carry a real time-of-day that shifts the UTC day
+  // away from the intended Argentina day, so those recover the civil day in that time zone.
+  const iso = date.toISOString();
+  return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : argentinaDateKey(date);
 }
 
 const lockedEventStatuses = new Set(['reserved', 'confirmed']);
@@ -244,7 +254,7 @@ async function assertVenueAvailable(input: { salonId: string; day: string; start
   if (!candidates.length) return;
   const requested = timeSlot(startTime, endTime);
   const conflict = candidates.find((candidate) => slotsOverlap(requested, timeSlot(candidate.startTime, candidate.endTime)));
-  if (conflict) throw new ApiError(422, 'EVENT_VENUE_SLOT_CONFLICT', `El salón ya tiene "${conflict.eventName || conflict.eventType || 'otro evento'}" reservado en un horario superpuesto ese día.`);
+  if (conflict) throw new ApiError(422, 'EVENT_VENUE_SLOT_CONFLICT', `El salón ya tiene "${conflict.eventName || conflict.eventType || 'otro evento'}" reservado en un horario superpuesto ese día. Elegí otro horario o coordiná con ese evento antes de confirmar el cambio.`);
 }
 
 function resourcePlanWithTableware(plan: any, allocations: any[]): Record<string, unknown> {
@@ -292,8 +302,11 @@ async function ensureEventAccess(request: Request, event: any): Promise<void> {
 async function getEventForOperationalDocument(request: Request, eventId: string, type?: OperationalDocumentType): Promise<any> {
   const event: any = await Event.findOne({ _id: eventId, deletedAt: null }).populate('customerId', 'fullName phone email').populate('salonId', 'name address locality city');
   await ensureEventAccess(request, event);
-  if (type === 'tableware') {
+  if (type === 'tableware' || type === 'full') {
     event.tablewareAllocations = await EventTablewareAllocation.find({ eventId: event._id }).sort({ source: 1, itemName: 1 }).lean();
+  }
+  if (type === 'full') {
+    event.staffAssignments = await EventStaffAssignment.find({ eventId: event._id, deletedAt: null }).populate('staffUserId', 'firstName lastName fullName').sort({ shiftStart: 1, createdAt: 1 }).lean();
   }
   return event;
 }
@@ -609,9 +622,10 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
   if (request.body.allowOverpayment && !canOverride) throw new ApiError(403, 'PAYMENT_OVERRIDE_NOT_AUTHORIZED');
   const previousBalance = contract.balanceAmount;
 
+  const type = request.body.type ?? 'installment';
   const payment = await createPayment({
     ...request.body,
-    type: request.body.type ?? 'installment',
+    type,
     status: 'paid',
     eventId: event._id.toString(),
     contractId: contract._id.toString(),
@@ -622,27 +636,18 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
   }, request.user!.id);
   contract = await Contract.findOne({ _id: contract._id, deletedAt: null });
 
-  const plan = Array.isArray(event.paymentPlanSnapshot) ? event.paymentPlanSnapshot.map((item: any) => ({ ...item })) : [];
-  if (plan.length) {
-    const selectedIndex = request.body.planInstallmentId ? plan.findIndex((item: any) => item.id === request.body.planInstallmentId) : -1;
-    const pendingIndexes = plan.map((item: any, index: number) => ({ item, index })).filter(({ item }: any) => !['paid', 'cancelled'].includes(item.status));
-    const targetIndex = selectedIndex >= 0 ? selectedIndex : pendingIndexes[0]?.index;
-    if (targetIndex !== undefined) {
-      const target = plan[targetIndex];
-      const remaining = Math.max(0, Number(target.amount || 0) - Number(target.paidAmount || 0));
-      const applied = Math.min(Number(request.body.amount), remaining);
-      target.paidAmount = Number(target.paidAmount || 0) + applied;
-      target.status = target.paidAmount >= Number(target.amount || 0) ? 'paid' : 'partial';
-      target.paymentId = payment._id.toString();
-      const excess = Math.max(0, Number(request.body.amount) - applied);
-      if (excess) {
-        const lastOpen = [...plan].reverse().find((item: any, reverseIndex: number) => !['paid', 'cancelled'].includes(item.status) && plan.length - 1 - reverseIndex !== targetIndex);
-        if (lastOpen) lastOpen.amount = Math.max(0, Number(lastOpen.amount || 0) - excess);
-      }
-    }
-    event.paymentPlanSnapshot = plan;
+  // El plan de cuotas modela únicamente el saldo posterior a la seña (ver EventCommercialEditor:
+  // "Total acordado" - "Seña" = "Saldo estimado", y ese saldo es lo que se reparte en cuotas). Un
+  // pago de tipo distinto a 'installment' (seña, saldo global, extra, ajuste, etc.) impacta el
+  // saldo del contrato igual, pero nunca debe descontarse de esas cuotas: antes cualquier cobro
+  // registrado desde "Importe libre" — incluida la seña — se tomaba como si fuera una cuota.
+  let planOverpaymentAmount = 0;
+  if (type === 'installment' && Array.isArray(event.paymentPlanSnapshot) && event.paymentPlanSnapshot.length) {
+    const result = applyPaymentToPlan(event.paymentPlanSnapshot, request.body.amount, { planInstallmentId: request.body.planInstallmentId, paymentId: payment._id.toString() });
+    planOverpaymentAmount = result.overpaymentAmount;
+    event.paymentPlanSnapshot = result.plan;
     await event.save();
-    contract.paymentPlanSnapshot = plan;
+    contract.paymentPlanSnapshot = result.plan;
     await contract.save();
   }
   let receiptEmailSent = false;
@@ -662,7 +667,8 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
     const contractAfter: any = await Contract.findOne({ _id: contract._id, deletedAt: null }).select('balanceAmount').lean();
     await writeAuditLog(request, 'PAYMENT_OVERPAYMENT_OVERRIDE', 'Payment', payment._id.toString(), { contractId: contract._id, eventId: request.params.id, requestedAmount: payment.amount, previousBalance, resultingBalance: contractAfter?.balanceAmount, reason: request.body.overrideReason });
   }
-  return sendSuccess(response, { payment, paymentPlanSnapshot: event.paymentPlanSnapshot, receiptEmailSent }, 201, getApiMessage('PAYMENT_CREATED'));
+  await LeadActivity.create({ eventId: event._id, customerId: event.customerId, type: 'payment_registered', title: 'Pago registrado', description: `Se registró el pago ${payment.paymentNumber} por $ ${Number(payment.amount || 0).toLocaleString('es-AR')}.`, metadata: { paymentId: payment._id, amount: payment.amount, type: payment.type }, createdBy: request.user!.id });
+  return sendSuccess(response, { payment, paymentPlanSnapshot: event.paymentPlanSnapshot, planOverpaymentAmount, receiptEmailSent }, 201, getApiMessage('PAYMENT_CREATED'));
 }));
 
 router.post('/:id/payments/:paymentId/receipt-email', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(paymentReceiptSchema), asyncHandler(async (request, response) => {
@@ -734,6 +740,32 @@ router.get('/:id/payment-summary', requirePermission(Permission.PAYMENTS_READ), 
   return sendSuccess(response, { summary: await paymentSummary({ eventId: request.params.id }) });
 }));
 
+router.get('/:id/activity', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  const activities = await LeadActivity.find({ eventId: request.params.id }).sort({ createdAt: -1 }).lean();
+  return sendSuccess(response, { activities });
+}));
+
+router.post('/:id/activities', requirePermission(Permission.EVENTS_UPDATE), validateRequest(activityNoteSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  const activity = await LeadActivity.create({ eventId: event._id, customerId: event.customerId, type: 'note', title: 'Nota', description: request.body.description, createdBy: request.user!.id });
+  return sendSuccess(response, { activity }, 201, getApiMessage('ACTIVITY_CREATED'));
+}));
+
+router.get('/:id/operational-documents/:documentType/preview-pdf', requirePermission(Permission.EVENTS_READ), validateRequest(operationalDocumentPreviewSchema), asyncHandler(async (request, response) => {
+  const type = request.params.documentType as OperationalDocumentType;
+  const event = await getEventForOperationalDocument(request, request.params.id, type);
+  // Vista previa dinámica: genera el PDF a partir del estado actual del evento sin subirlo a
+  // Cloudinary — permite revisarlo antes de "generar". El PDF/Word definitivo (el que sí se
+  // persiste, para compartir por email/WhatsApp) se sigue generando en /export y /email.
+  const { buffer, fileName } = await generateOperationalPdf(event, type);
+  response.setHeader('Content-Type', 'application/pdf');
+  response.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+  return response.send(buffer);
+}));
+
 router.post('/:id/operational-documents/:documentType/export', requirePermission(Permission.EVENTS_READ), validateRequest(operationalDocumentSchema), asyncHandler(async (request, response) => {
   const type = request.params.documentType as OperationalDocumentType;
   const event = await getEventForOperationalDocument(request, request.params.id, type);
@@ -748,7 +780,7 @@ router.post('/:id/operational-documents/:documentType/email', requirePermission(
   const email = request.body.email ?? event.customerId?.email;
   if (!email) throw new ApiError(422, 'El cliente no tiene un email registrado.');
   const document = await createOperationalDocument(event, type, request.body.format);
-  const title = type === 'timeline' ? 'Cronograma operativo' : type === 'guest_list' ? 'Control de invitados por mesa' : type === 'tableware' ? 'Reserva de vajilla' : 'Logística y coordinación interna';
+  const title = type === 'timeline' ? 'Cronograma operativo' : type === 'guest_list' ? 'Control de invitados por mesa' : type === 'tableware' ? 'Reserva de vajilla' : type === 'full' ? 'Cronograma integral' : 'Logística y coordinación interna';
   const eventName = event.eventName || event.eventType || 'evento';
   const emailSent = await sendEmail({
     to: email,
@@ -862,13 +894,36 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   }
   const currentReservationDay = eventDay(event.eventDate);
   const nextReservationDay = updateBody.eventDate ? eventDay(updateBody.eventDate) : undefined;
-  if (nextReservationDay && nextReservationDay !== currentReservationDay && event.salonId) {
+  const eventDateChanged = Boolean(currentReservationDay && nextReservationDay && nextReservationDay !== currentReservationDay);
+  if (eventDateChanged && event.salonId) {
     const allocations = await EventTablewareAllocation.find({ eventId: event._id, source: 'salon_stock' }).lean();
-    const availableItems = await tablewareAvailability(event.salonId.toString(), nextReservationDay, event._id.toString());
+    const availableItems = await tablewareAvailability(event.salonId.toString(), nextReservationDay!, event._id.toString());
     const availabilityById = new Map(availableItems.map((item: any) => [item._id.toString(), item]));
     for (const allocation of allocations) {
       const item: any = allocation.salonStockItemId ? availabilityById.get(allocation.salonStockItemId.toString()) : undefined;
-      if (!item || allocation.quantity > item.maxAssignableQuantity) throw new ApiError(422, `No se puede cambiar la fecha: no hay disponibilidad de ${allocation.itemName} para el ${nextReservationDay}.`);
+      const maxAssignable = item?.maxAssignableQuantity ?? 0;
+      if (!item || allocation.quantity > maxAssignable) throw new ApiError(422, 'EVENT_TABLEWARE_UNAVAILABLE_FOR_DATE', `No se puede cambiar la fecha al ${nextReservationDay}: "${allocation.itemName}" no tiene stock suficiente ese día (asignado ${allocation.quantity}, disponible ${maxAssignable}). Reducí la cantidad asignada en la pestaña Cronograma, liberala del otro evento que la reserva ese día, o elegí otra fecha.`);
+    }
+  }
+  // El evento tiene sus propias alertas/recordatorios (resourcePlanSnapshot.alerts, pestaña
+  // "Tareas") calculadas como offsets fijos respecto de la fecha original (ver
+  // event-alert-defaults.ts). Si la fecha cambia acá y no se las desplaza, quedan ancladas a un
+  // día que ya no tiene sentido (ej. "revisar cronograma" programada para lo que era D-7 de una
+  // fecha que ya no es la del evento). Las que ya se enviaron (status 'sent') no se tocan.
+  if (eventDateChanged) {
+    const baseAlerts: any[] = Array.isArray(updateBody.resourcePlanSnapshot?.alerts)
+      ? updateBody.resourcePlanSnapshot.alerts
+      : Array.isArray(event.resourcePlanSnapshot?.alerts) ? event.resourcePlanSnapshot.alerts : [];
+    if (baseAlerts.length) {
+      const deltaDays = daysBetweenDateKeys(currentReservationDay!, nextReservationDay!);
+      const shiftedAlerts = baseAlerts.map((alert: any) => {
+        if (!alert?.remindAt || alert.status === 'sent') return alert;
+        const shifted = new Date(alert.remindAt);
+        if (Number.isNaN(shifted.getTime())) return alert;
+        shifted.setUTCDate(shifted.getUTCDate() + deltaDays);
+        return { ...alert, remindAt: shifted.toISOString() };
+      });
+      updateBody.resourcePlanSnapshot = { ...(event.resourcePlanSnapshot ?? {}), ...(updateBody.resourcePlanSnapshot ?? {}), alerts: shiftedAlerts };
     }
   }
   const resultingStatus = updateBody.status ?? event.status;
@@ -899,6 +954,22 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   }
   const contracts: any[] = await Contract.find({ eventId: event._id, deletedAt: null }).sort({ versionNumber: -1, createdAt: -1 });
   const draft = contracts.find((item) => ['draft', 'pending_approval', 'requires_changes'].includes(item.status));
+  const approved = contracts.find((item) => item.status === 'approved');
+  // No movemos vencimientos de pago automáticamente: son un compromiso ya acordado con el
+  // cliente y correrlos sin que nadie lo decida sería alterar datos financieros en silencio. Sólo
+  // avisamos si, tras el cambio de fecha, algún vencimiento pendiente quedó posterior al evento
+  // (típicamente porque el evento se adelantó), para que un operador lo revise a mano.
+  const warnings: string[] = [];
+  if (eventDateChanged) {
+    const staleInstallments = planFor(event, draft ?? approved ?? contracts[0]).filter(isOpenInstallment).filter((installment) => {
+      const dueKey = installmentDueDateKey(installment);
+      return dueKey && dueKey > nextReservationDay!;
+    });
+    if (staleInstallments.length) warnings.push(`Hay ${staleInstallments.length} cuota(s) del plan de pagos con vencimiento posterior a la nueva fecha del evento (${nextReservationDay}). Revisá el plan de pagos.`);
+    const pendingPayments: any[] = await Payment.find({ eventId: event._id, status: 'pending', dueDate: { $ne: null }, deletedAt: null }).select('dueDate').lean();
+    const stalePayments = pendingPayments.filter((payment) => { const key = dueDateKey(payment.dueDate); return key && key > nextReservationDay!; });
+    if (stalePayments.length) warnings.push(`Hay ${stalePayments.length} pago(s) pendiente(s) cargado(s) con vencimiento posterior a la nueva fecha del evento. Revisá la pestaña Pagos.`);
+  }
   const sync = (contract: any) => {
     contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
     contract.commercialSnapshot = { ...(contract.commercialSnapshot ?? {}), ...(event.commercialSnapshot ?? {}), totalAmount: event.finalAmount ?? event.estimatedAmount ?? contract.commercialSnapshot?.totalAmount };
@@ -910,7 +981,6 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   };
   if (draft) { sync(draft); await draft.save(); }
   else {
-    const approved = contracts.find((item) => item.status === 'approved');
     if (approved) {
       const nextVersion = Math.max(...contracts.map((item) => Number(item.versionNumber ?? 1))) + 1;
       const revision = new Contract({ ...approved.toObject(), _id: undefined, contractNumber: `${approved.contractNumber}-V${nextVersion}`, contractFamilyId: approved.contractFamilyId ?? approved._id, versionNumber: nextVersion, supersedesContractId: approved._id, supersededByContractId: undefined, status: 'draft', approvedAt: undefined, approvedByUserId: undefined, pdfUrl: undefined, pdfSecureUrl: undefined, pdfPublicId: undefined, pdfGeneratedAt: undefined, createdAt: undefined, updatedAt: undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
@@ -918,7 +988,7 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
     }
   }
   await writeAuditLog(request, 'EVENT_UPDATE', 'Event', event._id.toString(), { contractAffected: true });
-  return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
+  return sendSuccess(response, { event, warnings: warnings.length ? warnings : undefined }, 200, getApiMessage('EVENT_UPDATED'));
 }));
 
 router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validateRequest(statusSchema), asyncHandler(async (request, response) => {
@@ -941,7 +1011,10 @@ router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validat
   }
   event.updatedBy = request.user!.id;
   await event.save();
-  if (['cancelled', 'lost'].includes(event.status)) await EventTablewareAllocation.deleteMany({ eventId: event._id });
+  if (['cancelled', 'lost'].includes(event.status)) {
+    await EventTablewareAllocation.deleteMany({ eventId: event._id });
+    await cancelCurrentProductionPlan(event._id.toString(), request.user!.id);
+  }
   await writeAuditLog(request, 'EVENT_STATUS_UPDATE', 'Event', event._id.toString(), { status: event.status, reason: request.body.reason });
   return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
 }));

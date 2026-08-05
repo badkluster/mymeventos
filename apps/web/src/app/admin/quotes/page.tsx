@@ -10,11 +10,12 @@ import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
 import { QuoteFormModal } from '@/features/quotes/quote-form-modal';
 import { getLeadName, getSalonName, type Customer, type LeadOption, type PackageTemplate, type PaginationMeta, type Quote, type QuoteRequest, type Salon } from '@/features/quotes/types';
+import { formatCivilDate } from '@/lib/dates';
 
 type ListResponse<T> = { items?: T[]; meta?: Partial<PaginationMeta> };
 
 const currency = (value?: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value ?? 0);
-const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(value)) : 'Sin fecha';
+const formatDate = (value?: string) => formatCivilDate(value, 'Sin fecha', 'medium');
 const statusTone: Record<string, string> = { draft: 'bg-zinc-100 text-zinc-700', sent: 'bg-blue-50 text-blue-700', follow_up: 'bg-amber-50 text-amber-800', accepted: 'bg-emerald-50 text-emerald-700', rejected: 'bg-rose-50 text-rose-700', expired: 'bg-orange-50 text-orange-700', converted: 'bg-violet-50 text-violet-700', new: 'bg-sky-50 text-sky-700', in_review: 'bg-amber-50 text-amber-800', discarded: 'bg-rose-50 text-rose-700', duplicated: 'bg-zinc-100 text-zinc-700' };
 
 function normalizeList<T>(response: ListResponse<T>): { items: T[]; meta: PaginationMeta } {

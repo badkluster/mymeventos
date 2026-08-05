@@ -87,7 +87,7 @@ export function WorkSessionDetailScreen({ route, navigation }: Props) {
 
       <View style={styles.actions}>
         <AppButton title="Reportar un problema" variant="secondary" onPress={() => navigation.navigate('NewIncident', { workSessionId: session._id })} />
-        {canRequestAdjustment ? <AppButton title="Solicitar corrección" variant="secondary" onPress={() => navigation.navigate('NewAdjustment', { workSessionId: session._id })} /> : null}
+        {canRequestAdjustment ? <AppButton title="Solicitar corrección" variant="secondary" onPress={() => navigation.navigate('NewAdjustment', { workSessionId: session._id, currentStartedAt: session.startedAt, currentEndedAt: session.endedAt })} /> : null}
       </View>
     </ScrollView>
   );

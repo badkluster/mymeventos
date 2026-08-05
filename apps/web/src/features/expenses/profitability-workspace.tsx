@@ -15,7 +15,9 @@ type Summary = { contractedRevenue: number; collectedRevenue: number; estimatedC
 type Response = { items: Row[]; summary: Summary };
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
-const date = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short' });
+// `eventDate` es una fecha civil normalizada a medianoche UTC — se formatea en UTC para no
+// correrla un día para atrás.
+const date = new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', dateStyle: 'short' });
 const costStatusLabel: Record<CostStatus, string> = { no_expenses: 'Sin gastos', pending: 'Con gastos pendientes', preliminary: 'Preliminar', complete: 'Completa' };
 function initialPeriod() { const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).map((part) => [part.type, part.value])); const last = new Date(Date.UTC(Number(p.year), Number(p.month), 0)).getUTCDate(); return { from: `${p.year}-${p.month}-01`, to: `${p.year}-${p.month}-${last}` }; }
 

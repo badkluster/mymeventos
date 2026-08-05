@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { activityTypeLabels, displayLabel, leadSourceLabels, leadStatusLabels, quoteRequestSourceLabels, quoteRequestStatusLabels, quoteStatusLabels } from '@/lib/display-labels';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
+import { formatCivilDate } from '@/lib/dates';
 
 type Lead = {
   _id: string;
@@ -36,9 +37,7 @@ type Quote = { _id: string; quoteNumber: string; status: string; packageName?: s
 type EventItem = { _id: string; eventName?: string; eventType?: string; status: string; eventDate?: string; salonId?: string | { name?: string } };
 type CustomerItem = { _id: string; fullName?: string; phone?: string; email?: string };
 
-const formatDate = (value?: string) => value
-  ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(value))
-  : 'Sin fecha estimativa';
+const formatDate = (value?: string) => formatCivilDate(value, 'Sin fecha estimativa');
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {

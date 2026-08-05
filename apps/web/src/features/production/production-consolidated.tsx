@@ -17,7 +17,9 @@ type Row = {
 type Section = { type: string; name: string; events: EventQty[]; items: Row[] };
 type Response = { sections: Section[]; totals: { products: number; plannedQuantity: number; missingQuantity: number } };
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
-const shortDate = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit' });
+// `eventDate` es una fecha civil normalizada a medianoche UTC — se formatea en UTC para no
+// correrla un día para atrás.
+const shortDate = new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', day: '2-digit', month: '2-digit' });
 function eventLabel(event: EventQty) {
   const name = event.customerName || event.eventName || event.eventType || 'Evento';
   return `${name} ${shortDate.format(new Date(event.eventDate))}`;

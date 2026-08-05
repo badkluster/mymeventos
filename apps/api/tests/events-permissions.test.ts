@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   tablewareDeleteMany: vi.fn(),
   writeAuditLog: vi.fn(),
   syncEventSupplierExpenses: vi.fn(),
-  eventExpenses: vi.fn()
+  eventExpenses: vi.fn(),
+  productionPlanFindOne: vi.fn()
 }));
 
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne, find: vi.fn() } }));
@@ -28,6 +29,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
   Contract: { findOne: vi.fn() }, ContractAddendum: {}, Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn() }
 }));
+vi.mock('../src/modules/production/production.models', () => ({ ProductionPlan: { findOne: mocks.productionPlanFindOne } }));
 vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: mocks.writeAuditLog }));
 vi.mock('../src/modules/crm/quote-pdf.service', () => ({ generateAndUploadQuotePdf: vi.fn() }));
 vi.mock('../src/modules/crm/event-supplier-expenses.service', () => ({ syncEventSupplierExpenses: mocks.syncEventSupplierExpenses, eventExpenses: mocks.eventExpenses }));
@@ -53,6 +55,7 @@ describe('event cancellation permissions and reason', () => {
     vi.resetAllMocks();
     mocks.tablewareDeleteMany.mockResolvedValue({});
     mocks.eventFind.mockReturnValue(queryChain([]));
+    mocks.productionPlanFindOne.mockResolvedValue(null);
   });
 
   it('rejects cancellation without a reason', async () => {
@@ -76,6 +79,34 @@ describe('event cancellation permissions and reason', () => {
     expect(event.cancellationReason).toBe('El cliente canceló el evento.');
     expect(event.cancelledBy).toBe(adminId);
     expect(mocks.tablewareDeleteMany).toHaveBeenCalledWith({ eventId: event._id });
+  });
+
+  it('cancels the current production plan when the event is cancelled', async () => {
+    const event: any = { _id: eventId, salonId, status: 'confirmed', save: vi.fn().mockResolvedValue(undefined) };
+    const plan: any = { status: 'checked', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.productionPlanFindOne.mockResolvedValue(plan);
+
+    const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'cancelled', reason: 'El cliente canceló el evento.' });
+
+    expect(response.status).toBe(200);
+    expect(plan.status).toBe('cancelled');
+    expect(plan.save).toHaveBeenCalled();
+  });
+
+  it('leaves an already closed production plan untouched when the event is cancelled', async () => {
+    const event: any = { _id: eventId, salonId, status: 'confirmed', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+    mocks.eventFindOne.mockResolvedValue(event);
+    // production.service.ts#cancelCurrentProductionPlan filters status $nin ['closed','cancelled'] in
+    // the query itself, so a closed plan simply never matches — asserting the mock received that filter.
+    mocks.productionPlanFindOne.mockResolvedValue(null);
+
+    const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'cancelled', reason: 'El cliente canceló el evento.' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.productionPlanFindOne).toHaveBeenCalledWith(expect.objectContaining({ eventId: event._id, status: { $nin: ['closed', 'cancelled'] } }));
   });
 
   it('rejects cancellation for a user whose EVENTS_CANCEL permission was explicitly revoked', async () => {
