@@ -173,7 +173,7 @@ export default function SalonDetailPage() {
       setStockItems(stockResult.status === 'fulfilled' ? stockResult.value.items ?? [] : []);
       if (stockResult.status === 'rejected') setNotice('El salón cargó, pero el inventario de stock todavía no está disponible en el backend activo.');
       try {
-        const usersResponse = await api.get<{ users: UserOption[] }>('/users');
+        const usersResponse = await api.get<{ users: UserOption[] }>('/users/options');
         setUsers((usersResponse.users ?? []).filter((user) => user.active !== false));
       } catch (usersError) {
         setUsers([]);

@@ -700,7 +700,7 @@ export function EventSuppliersEditor({ plan, saving, onSave }: { plan?: EventRes
 
   useEffect(() => {
     let active = true;
-    api.get<{ items: SupplierOption[] }>('/suppliers?active=true')
+    api.get<{ items: SupplierOption[] }>('/suppliers/options?active=true')
       .then((response) => { if (active) setSuppliers(response.items ?? []); })
       .catch((error) => { if (active) showToast({ message: error instanceof Error ? error.message : 'No se pudo cargar el catálogo de proveedores.', variant: 'error' }); })
       .finally(() => { if (active) setLoadingSuppliers(false); });

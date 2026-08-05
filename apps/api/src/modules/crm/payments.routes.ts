@@ -107,6 +107,23 @@ router.get('/', requirePermission(Permission.PAYMENTS_READ), validateRequest(lis
   return sendSuccess(response, { items, meta: { page, limit, totalItems, totalPages: Math.max(1, Math.ceil(totalItems / limit)), hasNextPage: page * limit < totalItems, hasPreviousPage: page > 1 } });
 }));
 
+// Lightweight picker (number/amount/status only, no customer/contract/receipt data) for
+// linking a calendar item to a payment — gated by EVENTS_READ (same as Calendar itself)
+// instead of PAYMENTS_READ, which also unlocks the full Ingresos menu.
+router.get('/options', requirePermission(Permission.EVENTS_READ), asyncHandler(async (request, response) => {
+  const limit = Math.min(100, Math.max(1, Number(queryValue(request.query.limit)) || 50));
+  const search = queryValue(request.query.search);
+  const terms: Record<string, unknown>[] = [{ deletedAt: null }, ...scopedQuery(request)];
+  if (search) terms.push({ $or: ['paymentNumber', 'receiptNumber', 'reference'].map((field) => ({ [field]: { $regex: search, $options: 'i' } })) });
+  const query = terms.length === 1 ? terms[0] : { $and: terms };
+  const items = await Payment.find(query)
+    .select('paymentNumber amount status dueDate')
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+  return sendSuccess(response, { items });
+}));
+
 router.post('/', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(createSchema), asyncHandler(async (request, response) => {
   await ensureContractAccess(request, request.body.contractId);
   const canOverride = userHasPermission(request.user!, Permission.PAYMENTS_APPROVE);

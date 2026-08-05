@@ -509,6 +509,55 @@ dashboard o el reporte de Contratos, aplicar el mismo criterio (leer
 `paymentPlanSnapshot` vía los helpers de `financial-reminders.service.ts`) en
 vez de agregar sobre `Payment`.
 
+Actualización 2026-08-05 (cuater) — patrón nuevo: endpoints `/options` livianos
+para pickers, separados del permiso fuerte del módulo. Encontrado a partir de
+un caso real: Patricia Luna (`SALON_MANAGER` de San Carlos) tiene
+`payments.read`/`suppliers.read`/`users.read` bloqueados a mano
+(`permissionDeniedOverrides`) para que no vea los menús completos de Ingresos/
+Proveedores/Usuarios — pero esos mismos tres permisos eran los únicos que
+protegían tres selectores que no tienen nada que ver con administrar esos
+módulos: "Encargado del salón" (`/admin/salons`, `/admin/salons/[id]`,
+necesita listar usuarios), y "vincular Pago"/"vincular Proveedor" en el
+formulario de un ítem de Calendario (`/admin/calendar`), más el selector de
+proveedor al asignar uno a un evento (`EventSuppliersEditor`,
+`event-operations.tsx`). Al no existir separación entre "ver una lista liviana
+para elegir" y "administrar el módulo completo", bloquear el menú también
+rompía esos tres selectores (403), incluso para su propio salón/eventos.
+
+Corregido agregando tres endpoints nuevos, todos registrados **antes** de su
+ruta `/:id` correspondiente (si no, Express matchea `options` como un id):
+
+- `GET /users/options` (`user.routes.ts`) — sin `requirePermission` propio
+  (alcanza con `requireAuth`, ya aplicado a nivel de router): es un directorio
+  mínimo (`firstName/lastName/fullName/email/username/phone/roles/active`, sin
+  permisos/asistencia/auditoría) que cualquier cuenta con acceso al backoffice
+  puede necesitar para elegir una persona.
+- `GET /payments/options` (`payments.routes.ts`) — gateado por
+  `Permission.EVENTS_READ` (el mismo permiso que ya exige Calendario), reusa
+  `scopedQuery` para el alcance por salón. Devuelve solo
+  `paymentNumber/amount/status/dueDate`, sin cliente/contrato/recibo/notas.
+- `GET /suppliers/options` (`suppliers.routes.ts`) — también gateado por
+  `Permission.EVENTS_READ` (cubre tanto Calendario como la asignación de
+  proveedores de un evento), reusa el `buildQuery` existente. Devuelve
+  `name/businessName/category/contactPerson/phone/whatsapp/email/active`, sin
+  notas/CUIT/dirección/auditoría.
+
+Frontend actualizado para apuntar a estos tres endpoints en vez de los
+completos, en los cinco puntos que los usaban solo para poblar un selector:
+`calendar/page.tsx` (carga inicial y `searchEndpoint` de los tres
+`SearchableRelationSelect` de Usuario/Pago/Proveedor), `salons/page.tsx` y
+`salons/[id]/page.tsx` (desplegable de encargado), y
+`event-operations.tsx#EventSuppliersEditor`. El menú/página completa de
+Usuarios/Ingresos/Proveedores (`admin-permissions.ts`, `permission-areas.ts`)
+sigue exigiendo el permiso fuerte sin cambios — solo se desacopló el selector.
+
+**Regla a futuro**: si un formulario necesita poblar un selector con datos de
+otro módulo (para vincular/asignar, no para administrar), no reusar el
+endpoint de listado completo de ese módulo — crear (o reusar) un `/options`
+liviano gateado por un permiso que el caso de uso realmente necesite, para no
+forzar a exponer el menú/CRUD completo de un módulo no relacionado solo para
+habilitar un picker.
+
 ## 9. Integraciones — estado real
 
 | Integración | Librería/mecanismo | Estado |

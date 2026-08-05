@@ -472,14 +472,14 @@ export default function CalendarPage() {
 
   const loadOptions = useCallback(async () => {
     const [usersResponse, leadsResponse, customersResponse, eventsResponse, quotesResponse, contractsResponse, paymentsResponse, suppliersResponse] = await Promise.all([
-      safeGet<OptionResponse<LinkedEntity>>('/users?limit=100', {}),
+      safeGet<OptionResponse<LinkedEntity>>('/users/options?limit=100', {}),
       safeGet<OptionResponse<LinkedEntity>>('/leads?limit=100', {}),
       safeGet<OptionResponse<LinkedEntity>>('/customers?limit=100', {}),
       safeGet<OptionResponse<LinkedEntity>>('/events?limit=100&sortBy=eventDate&sortOrder=desc', {}),
       safeGet<OptionResponse<LinkedEntity>>('/quotes?limit=100', {}),
       safeGet<OptionResponse<LinkedEntity>>('/contracts?limit=100', {}),
-      safeGet<OptionResponse<LinkedEntity>>('/payments?limit=100', {}),
-      safeGet<OptionResponse<LinkedEntity>>('/suppliers?active=true', {})
+      safeGet<OptionResponse<LinkedEntity>>('/payments/options?limit=100', {}),
+      safeGet<OptionResponse<LinkedEntity>>('/suppliers/options?active=true', {})
     ]);
     setUsers(usersResponse.items ?? usersResponse.users ?? []);
     setLeads(leadsResponse.items ?? leadsResponse.leads ?? []);
@@ -924,14 +924,14 @@ function CalendarItemFormModal({ open, mode, form, salons, users, leads, custome
         <p className="text-sm font-semibold text-zinc-950">Vínculos rápidos</p>
         <p className="mt-1 text-xs text-zinc-500">Relacioná este item con personas o registros para abrirlos directo desde el detalle.</p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <SearchableRelationSelect label="Usuario" value={form.assignedToUserId} options={users} placeholder="Sin usuario vinculado" searchPlaceholder="Buscar usuario..." searchEndpoint="/users?limit=50" onChange={(value) => onChange((current) => ({ ...current, assignedToUserId: value }))} />
+          <SearchableRelationSelect label="Usuario" value={form.assignedToUserId} options={users} placeholder="Sin usuario vinculado" searchPlaceholder="Buscar usuario..." searchEndpoint="/users/options?limit=50" onChange={(value) => onChange((current) => ({ ...current, assignedToUserId: value }))} />
           <SearchableRelationSelect label="Lead" value={form.leadId} options={leads} placeholder="Sin lead vinculado" searchPlaceholder="Buscar lead..." searchEndpoint="/leads?limit=50" onChange={(value) => onChange((current) => ({ ...current, leadId: value }))} />
           <SearchableRelationSelect label="Cliente" value={form.customerId} options={customers} placeholder="Sin cliente vinculado" searchPlaceholder="Buscar cliente..." searchEndpoint="/customers?limit=50" onChange={(value) => onChange((current) => ({ ...current, customerId: value }))} />
           <SearchableRelationSelect label="Evento" value={form.eventId} options={events} placeholder="Sin evento vinculado" searchPlaceholder="Buscar evento..." searchEndpoint="/events?limit=50&sortBy=eventDate&sortOrder=desc" onChange={(value) => onChange((current) => ({ ...current, eventId: value }))} />
           <SearchableRelationSelect label="Presupuesto" value={form.quoteId} options={quotes} placeholder="Sin presupuesto vinculado" searchPlaceholder="Buscar presupuesto..." searchEndpoint="/quotes?limit=50" onChange={(value) => onChange((current) => ({ ...current, quoteId: value }))} />
           <SearchableRelationSelect label="Contrato" value={form.contractId} options={contracts} placeholder="Sin contrato vinculado" searchPlaceholder="Buscar contrato..." searchEndpoint="/contracts?limit=50" onChange={(value) => onChange((current) => ({ ...current, contractId: value }))} />
-          <SearchableRelationSelect label="Pago" value={form.paymentId} options={payments} placeholder="Sin pago vinculado" searchPlaceholder="Buscar pago..." searchEndpoint="/payments?limit=50" onChange={(value) => onChange((current) => ({ ...current, paymentId: value }))} />
-          <SearchableRelationSelect label="Proveedor" value={form.supplierId} options={suppliers} placeholder="Sin proveedor vinculado" searchPlaceholder="Buscar proveedor..." searchEndpoint="/suppliers?active=true&limit=50" onChange={(value) => onChange((current) => ({ ...current, supplierId: value }))} />
+          <SearchableRelationSelect label="Pago" value={form.paymentId} options={payments} placeholder="Sin pago vinculado" searchPlaceholder="Buscar pago..." searchEndpoint="/payments/options?limit=50" onChange={(value) => onChange((current) => ({ ...current, paymentId: value }))} />
+          <SearchableRelationSelect label="Proveedor" value={form.supplierId} options={suppliers} placeholder="Sin proveedor vinculado" searchPlaceholder="Buscar proveedor..." searchEndpoint="/suppliers/options?active=true&limit=50" onChange={(value) => onChange((current) => ({ ...current, supplierId: value }))} />
         </div>
       </div>
       {form.notify ? <><label className="text-sm font-medium text-zinc-700">Avisar antes<Input type="number" min={1} className="mt-1.5" value={form.offsetValue} onChange={(event) => onChange((current) => ({ ...current, offsetValue: Number(event.target.value) }))} /></label><label className="text-sm font-medium text-zinc-700">Unidad<Select className="mt-1.5" value={form.offsetUnit} onChange={(event) => onChange((current) => ({ ...current, offsetUnit: event.target.value as CalendarForm['offsetUnit'] }))}><option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Días</option><option value="weeks">Semanas</option></Select></label></> : null}
