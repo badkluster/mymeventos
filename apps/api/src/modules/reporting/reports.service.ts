@@ -4,6 +4,7 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { userHasPermission } from '../../middlewares/auth';
 import { Expense, ExpenseCategory } from '../operations/operations.models';
 import { Contract, Event, EventStaffAssignment, Lead, Payment, Quote } from '../crm/crm.models';
+import { isOpenInstallment, planFor, remainingInstallmentAmount } from '../crm/financial-reminders.service';
 import { parseReportPeriod, periodMatch, resolveReportScope } from './report-filter';
 import { ProductionPlan } from '../production/production.models';
 
