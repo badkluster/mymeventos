@@ -98,7 +98,8 @@ async function deliverDigestToUser(user: any, summary: DigestSummary, scopeLabel
   if (!isFirstSendToday) return false;
   const preferences = user.notificationPreferences ?? {};
   if (user.email && preferences.email !== false && preferences.emailNotificationsEnabled !== false) {
-    await sendEmail({ to: user.email, subject: content.subject, text: content.text, html: content.html }).catch(() => undefined);
+    await sendEmail({ to: user.email, subject: content.subject, text: content.text, html: content.html })
+      .catch((error) => console.error(`Daily digest email failed for user ${user._id}:`, error));
   }
   return true;
 }
