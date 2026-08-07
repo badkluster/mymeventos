@@ -1,4 +1,5 @@
 import { Role } from '@mym/shared';
+import { env } from '../../config/env';
 import { CalendarItem, Event } from './crm.models';
 import { User } from '../users/user.model';
 import { Notification } from '../notifications/notification.model';
@@ -8,6 +9,7 @@ import { findEventsWithPendingClosure } from '../event-closure/pending-closures'
 import { argentinaDateKey, argentinaMidnight, addDaysToDateKey } from '../../utils/argentina-date';
 
 const EVENT_TERMINAL_STATUSES = ['cancelled', 'lost'];
+const DIGEST_DETAIL_LIMIT = 5;
 // The digest is an aggregate report, not a per-obligation reminder, so it doesn't fit
 // reminder-engine.ts's claim-next-item model — it's its own small tick, run once the local
 // morning window starts. Idempotency comes from the Notification automationKey below, not from
@@ -26,6 +28,190 @@ type DigestSummary = {
   pendingClosures: any[];
 };
 
+function relatedName(value: any): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'string') return undefined;
+  const fullName = String(value.fullName ?? '').trim();
+  if (fullName) return fullName;
+  const composedName = [value.firstName, value.lastName].filter(Boolean).join(' ').trim();
+  if (composedName) return composedName;
+  const name = String(value.name ?? '').trim();
+  return name || undefined;
+}
+
+function truncate(value: unknown, maxLength = 180): string | undefined {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return undefined;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
+}
+
+function humanDateKey(dateKey: string): string {
+  const formatted = new Intl.DateTimeFormat('es-AR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(new Date(`${dateKey}T12:00:00.000Z`));
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+function humanDate(value: unknown): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value as any);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'America/Argentina/Buenos_Aires'
+  }).format(date);
+}
+
+function humanTime(value: unknown): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value as any);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return new Intl.DateTimeFormat('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'America/Argentina/Buenos_Aires'
+  }).format(date);
+}
+
+function money(value: unknown): string | undefined {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return undefined;
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
+function statusLabel(status: unknown): string | undefined {
+  const labels: Record<string, string> = {
+    draft: 'Borrador',
+    quoted: 'Presupuestado',
+    contract_draft: 'Contrato en borrador',
+    deposit_pending: 'Seña pendiente',
+    reserved: 'Reservado',
+    confirmed: 'Confirmado'
+  };
+  return labels[String(status ?? '')] ?? truncate(status, 40);
+}
+
+function priorityLabel(priority: unknown): string | undefined {
+  const labels: Record<string, string> = {
+    low: 'baja',
+    normal: 'normal',
+    high: 'alta',
+    critical: 'crítica'
+  };
+  return labels[String(priority ?? '')];
+}
+
+function typeLabel(type: unknown): string | undefined {
+  const labels: Record<string, string> = {
+    alert: 'Alerta',
+    reminder: 'Recordatorio',
+    task: 'Tarea',
+    meeting: 'Reunión'
+  };
+  return labels[String(type ?? '')];
+}
+
+function eventTitle(event: any): string {
+  return String(event?.eventName || event?.eventType || 'Evento sin nombre');
+}
+
+function eventLine(event: any): string {
+  const timeRange = event?.startTime
+    ? `${event.startTime}${event.endTime ? `–${event.endTime}` : ''}`
+    : undefined;
+  const salon = relatedName(event?.salonId);
+  const customer = relatedName(event?.customerId);
+  const guests = Number(event?.guestCount) > 0 ? `${Number(event.guestCount)} invitados` : undefined;
+  const status = statusLabel(event?.status);
+  const details = [timeRange, salon ? `Salón: ${salon}` : undefined, customer ? `Cliente: ${customer}` : undefined, guests, status]
+    .filter(Boolean);
+  return `${eventTitle(event)}${details.length ? ` — ${details.join(' · ')}` : ''}`;
+}
+
+function reminderLine(item: any): string {
+  const event = item?.eventId;
+  const salon = relatedName(item?.salonId);
+  const details = [
+    humanTime(item?.startAt),
+    typeLabel(item?.type),
+    priorityLabel(item?.priority) ? `Prioridad ${priorityLabel(item.priority)}` : undefined,
+    event ? `Evento: ${eventTitle(event)}` : undefined,
+    salon ? `Salón: ${salon}` : undefined,
+    truncate(item?.description)
+  ].filter(Boolean);
+  return `${item?.title || 'Pendiente sin título'}${details.length ? ` — ${details.join(' · ')}` : ''}`;
+}
+
+function paymentLine(item: any): string {
+  const event = item?.eventId;
+  const salon = relatedName(item?.salonId);
+  const pendingAmount = money(item?.metadata?.remainingAmount);
+  const details = [
+    pendingAmount ? `Pendiente: ${pendingAmount}` : undefined,
+    event ? `Evento: ${eventTitle(event)}` : undefined,
+    salon ? `Salón: ${salon}` : undefined,
+    truncate(item?.description)
+  ].filter(Boolean);
+  return `${item?.title || 'Pago pendiente'}${details.length ? ` — ${details.join(' · ')}` : ''}`;
+}
+
+function closureLine(event: any): string {
+  const salon = relatedName(event?.salonId);
+  const customer = relatedName(event?.customerId);
+  const eventDate = humanDate(event?.eventDate);
+  const details = [
+    eventDate ? `Evento del ${eventDate}` : undefined,
+    salon ? `Salón: ${salon}` : undefined,
+    customer ? `Cliente: ${customer}` : undefined
+  ].filter(Boolean);
+  return `${eventTitle(event)}${details.length ? ` — ${details.join(' · ')}` : ''}`;
+}
+
+function detailValue(
+  items: any[],
+  singular: string,
+  plural: string,
+  emptyText: string,
+  toLine: (item: any) => string
+): string {
+  if (!items.length) return emptyText;
+  const countLabel = `${items.length} ${items.length === 1 ? singular : plural}`;
+  const lines = items.slice(0, DIGEST_DETAIL_LIMIT).map((item) => `• ${toLine(item)}`);
+  if (items.length > DIGEST_DETAIL_LIMIT) {
+    lines.push(`+${items.length - DIGEST_DETAIL_LIMIT} más en el backoffice.`);
+  }
+  return [countLabel, ...lines].join('\n');
+}
+
+function narrative(summary: DigestSummary, scopeLabel: string): string {
+  const parts = [
+    summary.events.length
+      ? `${summary.events.length === 1 ? 'Hay 1 evento programado' : `Hay ${summary.events.length} eventos programados`} para hoy`
+      : 'No hay eventos programados para hoy',
+    summary.reminders.length
+      ? `${summary.reminders.length === 1 ? 'tenés 1 alerta o tarea' : `tenés ${summary.reminders.length} alertas o tareas`} para revisar`
+      : 'no hay alertas ni tareas pendientes para hoy',
+    summary.paymentsDueToday.length
+      ? `${summary.paymentsDueToday.length === 1 ? '1 pago requiere' : `${summary.paymentsDueToday.length} pagos requieren`} atención por vencimiento hoy`
+      : 'no hay pagos con vencimiento hoy',
+    summary.pendingClosures.length
+      ? `${summary.pendingClosures.length === 1 ? 'queda 1 cierre administrativo' : `quedan ${summary.pendingClosures.length} cierres administrativos`} pendiente${summary.pendingClosures.length === 1 ? '' : 's'}`
+      : 'no quedan cierres administrativos pendientes'
+  ];
+  return `Panorama para ${scopeLabel}: ${parts.join('; ')}.`;
+}
+
 async function buildDailyDigest(now: Date, salonIds?: string[]): Promise<DigestSummary> {
   const todayKey = argentinaDateKey(now);
   const start = argentinaMidnight(todayKey);
@@ -34,43 +220,78 @@ async function buildDailyDigest(now: Date, salonIds?: string[]): Promise<DigestS
 
   const [events, reminders, paymentsDueToday, allPendingClosures] = await Promise.all([
     Event.find({ deletedAt: null, status: { $nin: EVENT_TERMINAL_STATUSES }, eventDate: { $gte: start, $lt: end }, ...salonFilter })
-      .select('_id eventName eventDate salonId').sort({ eventDate: 1 }).lean(),
+      .select('_id eventName eventType eventDate startTime endTime guestCount status salonId customerId')
+      .populate({ path: 'salonId', select: 'name' })
+      .populate({ path: 'customerId', select: 'fullName firstName lastName' })
+      .sort({ eventDate: 1, startTime: 1 })
+      .lean(),
     CalendarItem.find({ deletedAt: null, status: { $nin: ['done', 'cancelled'] }, type: { $in: ['reminder', 'alert', 'task', 'meeting'] }, startAt: { $gte: start, $lt: end }, ...salonFilter })
-      .select('_id title startAt eventId').sort({ startAt: 1 }).lean(),
+      .select('_id type title description startAt priority eventId salonId')
+      .populate({ path: 'eventId', select: 'eventName eventType' })
+      .populate({ path: 'salonId', select: 'name' })
+      .sort({ startAt: 1 })
+      .lean(),
     CalendarItem.find({ deletedAt: null, 'metadata.financialReminder': true, 'metadata.dueDateKey': todayKey, 'notification.status': { $ne: 'cancelled' }, ...salonFilter })
-      .select('_id title eventId').lean(),
+      .select('_id title description startAt priority eventId salonId metadata')
+      .populate({ path: 'eventId', select: 'eventName eventType' })
+      .populate({ path: 'salonId', select: 'name' })
+      .sort({ startAt: 1 })
+      .lean(),
     findEventsWithPendingClosure(now, 0)
   ]);
-  const pendingClosures = salonIds?.length
+
+  const scopedPendingClosures = salonIds?.length
     ? allPendingClosures.filter((event: any) => salonIds.includes(String(event.salonId)))
     : allPendingClosures;
+  const pendingClosures = await Event.populate(scopedPendingClosures, [
+    { path: 'salonId', select: 'name' },
+    { path: 'customerId', select: 'fullName firstName lastName' }
+  ]);
 
   return { dateKey: todayKey, events, reminders, paymentsDueToday, pendingClosures };
 }
 
 function digestContent(summary: DigestSummary, scopeLabel: string): { subject: string; text: string; html: string } {
   const subject = `Resumen del día — ${scopeLabel} (${summary.dateKey})`;
+  const intro = narrative(summary, scopeLabel);
   const bulletLines = (label: string, items: any[], toLine: (item: any) => string) => [
     `${label}: ${items.length}`,
-    ...items.slice(0, 15).map((item) => `  · ${toLine(item)}`)
+    ...items.slice(0, 15).map((item) => `  · ${toLine(item)}`),
+    ...(items.length > 15 ? [`  · +${items.length - 15} más en el backoffice.`] : [])
   ];
   const text = [
-    ...bulletLines('Eventos de hoy', summary.events, (event) => event.eventName || 'Evento sin nombre'),
-    ...bulletLines('Alertas y recordatorios de hoy', summary.reminders, (item) => item.title),
-    ...bulletLines('Pagos vencidos hoy', summary.paymentsDueToday, (item) => item.title),
-    ...bulletLines('Cierres de evento pendientes', summary.pendingClosures, (event) => event.eventName || 'Evento sin nombre')
+    intro,
+    '',
+    ...bulletLines('Eventos de hoy', summary.events, eventLine),
+    ...bulletLines('Alertas y tareas de hoy', summary.reminders, reminderLine),
+    ...bulletLines('Pagos con vencimiento hoy', summary.paymentsDueToday, paymentLine),
+    ...bulletLines('Cierres de evento pendientes', summary.pendingClosures, closureLine)
   ].join('\n');
   const html = renderBrandedEmail({
     eyebrow: 'Resumen ejecutivo diario',
-    heading: `Hoy, ${summary.dateKey}`,
-    intro: `Esto es lo que tiene ${scopeLabel} para hoy en M&M Eventos.`,
+    heading: `Hoy · ${humanDateKey(summary.dateKey)}`,
+    intro,
     rows: [
-      ['Eventos de hoy', String(summary.events.length)],
-      ['Alertas y recordatorios de hoy', String(summary.reminders.length)],
-      ['Pagos vencidos hoy', String(summary.paymentsDueToday.length)],
-      ['Cierres de evento pendientes', String(summary.pendingClosures.length)]
+      [
+        'Eventos de hoy',
+        detailValue(summary.events, 'evento', 'eventos', 'Sin eventos programados.', eventLine)
+      ],
+      [
+        'Alertas y tareas',
+        detailValue(summary.reminders, 'pendiente', 'pendientes', 'Sin alertas ni tareas para hoy.', reminderLine)
+      ],
+      [
+        'Pagos de hoy',
+        detailValue(summary.paymentsDueToday, 'pago', 'pagos', 'Sin pagos con vencimiento hoy.', paymentLine)
+      ],
+      [
+        'Cierres pendientes',
+        detailValue(summary.pendingClosures, 'cierre', 'cierres', 'Sin cierres administrativos pendientes.', closureLine)
+      ]
     ],
-    footerNote: 'Abrí el backoffice para ver el detalle completo de cada punto.'
+    ctaLabel: 'Abrir panel de administración',
+    ctaUrl: `${env.CORS_ORIGIN.replace(/\/+$/, '')}/admin/dashboard`,
+    footerNote: 'El resumen muestra hasta 5 detalles por categoría. El backoffice conserva el listado completo y actualizado.'
   });
   return { subject, text, html };
 }
@@ -124,8 +345,9 @@ export async function processDailyDigestTick(now = new Date()): Promise<{ delive
       const summary = await buildDailyDigest(now, salonIds);
       if (await deliverDigestToUser(manager, summary, 'tu salón')) delivered += 1; else skipped += 1;
     }
-  } catch {
+  } catch (error) {
     failed += 1;
+    console.error('Daily digest tick failed:', error);
   }
   return { delivered, skipped, failed, hasMore: false };
 }
