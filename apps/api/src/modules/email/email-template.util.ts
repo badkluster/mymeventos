@@ -1,5 +1,6 @@
 import { existsSync } from 'fs';
 import path from 'path';
+import { env } from '../../config/env';
 
 // Extracted from quote-request-notifications.service.ts (the only prior HTML email in the
 // codebase) so every new automation email shares the same logo resolution and escaping instead
@@ -30,6 +31,16 @@ export function logoEmailAttachments(): Array<{ filename: string; path: string; 
   return logoPath ? [{ filename: 'mym-logo-dark-on-light.jpg', path: logoPath, cid: EMAIL_LOGO_CID }] : undefined;
 }
 
+/**
+ * Branded email images must be reachable by the email client itself. Using a public HTTPS URL
+ * avoids broken `cid:` images when a serverless caller forgets to attach the local file or when
+ * Vercel does not bundle a sibling app's public asset into the API function.
+ */
+export function resolveEmailLogoUrl(): string {
+  const publicOrigin = env.CORS_ORIGIN.replace(/\/+$/, '');
+  return `${publicOrigin}/brand/mym-logo-dark-on-light.jpg`;
+}
+
 export type BrandedEmailInput = {
   eyebrow: string;
   heading: string;
@@ -47,6 +58,7 @@ export type BrandedEmailInput = {
 // email, generalized so callers don't hand-roll HTML tables.
 export function renderBrandedEmail(input: BrandedEmailInput): string {
   const { eyebrow, heading, intro, rows = [], ctaLabel, ctaUrl, footerNote, headerLabel = 'M&M Eventos' } = input;
+  const logoUrl = resolveEmailLogoUrl();
   return `<!doctype html>
 <html lang="es">
   <head>
@@ -64,7 +76,7 @@ export function renderBrandedEmail(input: BrandedEmailInput): string {
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
                     <td>
-                      <img src="cid:${EMAIL_LOGO_CID}" alt="M&M Eventos" width="132" height="56" style="display:block;width:132px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;background:#ffffff;">
+                      <img src="${escapeHtml(logoUrl)}" alt="M&M Eventos" width="132" style="display:block;width:132px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;background:#ffffff;">
                     </td>
                     <td align="right" style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#d4d4d8;">${escapeHtml(headerLabel)}</td>
                   </tr>
@@ -82,15 +94,15 @@ export function renderBrandedEmail(input: BrandedEmailInput): string {
               <td style="padding:18px 28px 8px;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 10px;">
                   ${rows.map(([label, value]) => `<tr>
-                    <td style="width:190px;padding:13px 16px;background:#f4f4f5;border-top-left-radius:12px;border-bottom-left-radius:12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#71717a;">${escapeHtml(label)}</td>
-                    <td style="padding:13px 16px;background:#fafafa;border-top-right-radius:12px;border-bottom-right-radius:12px;font-size:15px;line-height:1.45;color:#18181b;">${escapeHtml(value)}</td>
+                    <td style="width:190px;padding:13px 16px;background:#f4f4f5;border-top-left-radius:12px;border-bottom-left-radius:12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#71717a;vertical-align:top;">${escapeHtml(label)}</td>
+                    <td style="padding:13px 16px;background:#fafafa;border-top-right-radius:12px;border-bottom-right-radius:12px;font-size:14px;line-height:1.6;color:#18181b;white-space:pre-line;vertical-align:top;">${escapeHtml(value)}</td>
                   </tr>`).join('')}
                 </table>
               </td>
             </tr>` : ''}
             ${ctaUrl && ctaLabel ? `<tr>
               <td style="padding:18px 28px 30px;">
-                <a href="${ctaUrl}" style="display:inline-block;border-radius:12px;background:#18181b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 18px;">${escapeHtml(ctaLabel)}</a>
+                <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;border-radius:12px;background:#18181b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 18px;">${escapeHtml(ctaLabel)}</a>
                 ${footerNote ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#71717a;">${escapeHtml(footerNote)}</p>` : ''}
               </td>
             </tr>` : footerNote ? `<tr><td style="padding:0 28px 30px;"><p style="margin:0;font-size:12px;line-height:1.5;color:#71717a;">${escapeHtml(footerNote)}</p></td></tr>` : ''}
