@@ -1,6 +1,12 @@
 import mongoose from 'mongoose';
 import { env } from '../config/env';
 
+// Models are imported long before the first request in a warm serverless instance. Never
+// let them silently buffer operations while Atlas is unavailable: fail and let the API
+// return a controlled 503 instead of waiting for Vercel's 30-second function timeout.
+mongoose.set('bufferCommands', false);
+mongoose.set('bufferTimeoutMS', 5_000);
+
 let connectionPromise: Promise<typeof mongoose> | null = null;
 let listenersAttached = false;
 
@@ -26,8 +32,7 @@ const databaseOptions = {
   waitQueueTimeoutMS: 5_000,
   socketTimeoutMS: 15_000,
 
-  // Never queue Mongoose operations while there is no usable connection. Buffering can
-  // otherwise hide a broken connection until the platform function timeout is reached.
+  // Keep this connection-scoped option too, in addition to the global Mongoose setting.
   bufferCommands: false,
 } as const;
 
