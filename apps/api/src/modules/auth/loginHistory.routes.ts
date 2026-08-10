@@ -5,6 +5,7 @@ import { requireAuth } from '../../middlewares/auth';
 import { ApiError } from '../../middlewares/errorHandler';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
+import { addDaysToDateKey, argentinaDateKey, argentinaMidnight } from '../../utils/argentina-date';
 import { LoginHistory } from './loginHistory.model';
 
 const router = Router();
@@ -29,19 +30,13 @@ function escapeRegex(value: string): string {
 
 router.get('/', asyncHandler(async (request, response) => {
   const query = querySchema.parse(request.query);
-  const filter: Record<string, unknown> = {};
+  const commonFilter: Record<string, unknown> = {};
 
-  if (query.channel) filter.channel = query.channel;
-  if (query.platform) filter.platform = query.platform;
-  if (query.from || query.to) {
-    filter.createdAt = {
-      ...(query.from ? { $gte: query.from } : {}),
-      ...(query.to ? { $lte: query.to } : {}),
-    };
-  }
+  if (query.channel) commonFilter.channel = query.channel;
+  if (query.platform) commonFilter.platform = query.platform;
   if (query.q) {
     const regex = new RegExp(escapeRegex(query.q), 'i');
-    filter.$or = [
+    commonFilter.$or = [
       { username: regex },
       { fullName: regex },
       { email: regex },
@@ -51,14 +46,27 @@ router.get('/', asyncHandler(async (request, response) => {
     ];
   }
 
+  const dateFilter = query.from || query.to
+    ? { createdAt: { ...(query.from ? { $gte: query.from } : {}), ...(query.to ? { $lte: query.to } : {}) } }
+    : {};
+  const filter = { ...commonFilter, ...dateFilter };
   const skip = (query.page - 1) * query.limit;
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+
+  const todayKey = argentinaDateKey(new Date());
+  const todayStart = argentinaMidnight(todayKey);
+  const tomorrowStart = argentinaMidnight(addDaysToDateKey(todayKey, 1));
+  const todayFilter = {
+    $and: [
+      commonFilter,
+      { createdAt: { $gte: todayStart, $lt: tomorrowStart } },
+      ...(query.from || query.to ? [dateFilter] : []),
+    ],
+  };
 
   const [items, totalItems, todayCount, uniqueUsers] = await Promise.all([
     LoginHistory.find(filter).sort({ createdAt: -1 }).skip(skip).limit(query.limit).lean(),
     LoginHistory.countDocuments(filter),
-    LoginHistory.countDocuments({ createdAt: { $gte: startOfToday } }),
+    LoginHistory.countDocuments(todayFilter),
     LoginHistory.distinct('userId', filter),
   ]);
 
