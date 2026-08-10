@@ -1,4 +1,4 @@
-import { Schema, model, models } from 'mongoose';
+import { Schema, model, models, type Model } from 'mongoose';
 
 export type LoginChannel = 'web' | 'mobile';
 export type LoginPlatform = 'web' | 'ios' | 'android';
@@ -30,4 +30,4 @@ loginHistorySchema.index({ userId: 1, createdAt: -1 });
 loginHistorySchema.index({ channel: 1, createdAt: -1 });
 loginHistorySchema.index({ platform: 1, createdAt: -1 });
 
-export const LoginHistory = models.LoginHistory || model('LoginHistory', loginHistorySchema);
+export const LoginHistory: Model<any> = (models.LoginHistory as Model<any> | undefined) ?? model<any>('LoginHistory', loginHistorySchema);
