@@ -1,9 +1,9 @@
-import { hasAnyPermission, Permission, type Role } from '@mym/shared';
+import { hasAnyPermission, Permission, Role } from '@mym/shared';
 import type { ComponentType } from 'react';
-import { Activity, BadgeDollarSign, Bell, Building2, CalendarClock, CalendarDays, ChartNoAxesCombined, ChefHat, ClipboardList, Clock3, CreditCard, FileText, Globe2, LayoutDashboard, Mail, Megaphone, ReceiptText, ScanLine, Settings, Ticket, Truck, UserRound, Users, WalletCards } from 'lucide-react';
+import { Activity, BadgeDollarSign, Bell, Building2, CalendarClock, CalendarDays, ChartNoAxesCombined, ChefHat, ClipboardList, Clock3, CreditCard, FileText, Globe2, History, LayoutDashboard, Mail, Megaphone, ReceiptText, ScanLine, Settings, Ticket, Truck, UserRound, Users, WalletCards } from 'lucide-react';
 import type { SessionUser } from './auth';
 
-export type AdminModule = { href: string; label: string; title: string; description: string; icon: ComponentType<{ className?: string }>; permissions: Permission[] };
+export type AdminModule = { href: string; label: string; title: string; description: string; icon: ComponentType<{ className?: string }>; permissions: Permission[]; adminOnly?: boolean };
 
 export const adminModules: AdminModule[] = [
   { href: '/admin/dashboard', label: 'Dashboard', title: 'Dashboard gerencial', description: 'Indicadores, agenda y alertas operativas con información real.', icon: LayoutDashboard, permissions: [Permission.DASHBOARD_VIEW] },
@@ -28,6 +28,7 @@ export const adminModules: AdminModule[] = [
   { href: '/admin/notifications', label: 'Notificaciones', title: 'Notificaciones', description: 'Avisos operativos, pendientes y accesos rápidos del backoffice.', icon: Bell, permissions: [] },
   { href: '/admin/salons', label: 'Salones', title: 'Salones', description: 'Salones, paquetes y reglas comerciales.', icon: Building2, permissions: [Permission.SALONS_READ] },
   { href: '/admin/users', label: 'Usuarios', title: 'Usuarios y equipo', description: 'Personas, roles, operación, horarios y capacidades de asistencia.', icon: Users, permissions: [Permission.USERS_READ] },
+  { href: '/admin/login-history', label: 'Historial de accesos', title: 'Historial de accesos', description: 'Inicios de sesión registrados en el backoffice y la app móvil.', icon: History, permissions: [], adminOnly: true },
   { href: '/admin/attendance', label: 'Asistencia', title: 'Asistencia y app móvil', description: 'Jornadas activas, historial, incidencias, correcciones y configuración de fichaje móvil.', icon: Clock3, permissions: [Permission.ATTENDANCE_READ] },
   { href: '/admin/settings', label: 'Configuración', title: 'Configuración', description: 'Parámetros operativos del sistema.', icon: Settings, permissions: [Permission.SETTINGS_READ] }
 ];
@@ -38,8 +39,14 @@ export function userCanAccess(user: SessionUser | null | undefined, permissions:
   return (user.roles ?? []).some((role) => hasAnyPermission(role as Role, permissions, user.permissionOverrides as Permission[] ?? [], user.permissionDeniedOverrides as Permission[] ?? []));
 }
 
+export function userCanAccessModule(user: SessionUser | null | undefined, module: AdminModule): boolean {
+  if (!user) return false;
+  if (module.adminOnly && !(user.roles ?? []).includes(Role.ADMIN)) return false;
+  return userCanAccess(user, module.permissions);
+}
+
 export function visibleAdminModules(user: SessionUser | null | undefined): AdminModule[] {
-  return adminModules.filter((module) => userCanAccess(user, module.permissions));
+  return adminModules.filter((module) => userCanAccessModule(user, module));
 }
 
 export function moduleForPath(pathname: string): AdminModule | undefined {
