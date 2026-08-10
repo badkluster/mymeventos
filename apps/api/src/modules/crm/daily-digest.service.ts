@@ -2,7 +2,6 @@ import { Role } from '@mym/shared';
 import { env } from '../../config/env';
 import { CalendarItem, Event } from './crm.models';
 import { User } from '../users/user.model';
-import { Notification } from '../notifications/notification.model';
 import { sendEmail } from '../email/email.service';
 import { renderBrandedEmail } from '../email/email-template.util';
 import { findEventsWithPendingClosure } from '../event-closure/pending-closures';
@@ -12,8 +11,8 @@ const EVENT_TERMINAL_STATUSES = ['cancelled', 'lost'];
 const DIGEST_DETAIL_LIMIT = 5;
 // The digest is an aggregate report, not a per-obligation reminder, so it doesn't fit
 // reminder-engine.ts's claim-next-item model — it's its own small tick, run once the local
-// morning window starts. Idempotency comes from the Notification automationKey below, not from
-// a tight minute-level window, so a delayed or repeated tick within the same day never re-sends.
+// morning window starts. Idempotency is stored on the user, not as an in-app notification, so a
+// delayed or repeated tick within the same day never re-sends the email.
 const DIGEST_START_HOUR = 8;
 
 function argentinaHour(date: Date): number {
@@ -297,31 +296,21 @@ function digestContent(summary: DigestSummary, scopeLabel: string): { subject: s
 }
 
 async function deliverDigestToUser(user: any, summary: DigestSummary, scopeLabel: string): Promise<boolean> {
-  const automationKey = `daily_digest:${user._id}:${summary.dateKey}`;
-  const content = digestContent(summary, scopeLabel);
-  const result = await Notification.bulkWrite([{
-    updateOne: {
-      filter: { userId: user._id, automationKey },
-      update: {
-        $setOnInsert: {
-          userId: user._id,
-          automationKey,
-          type: 'daily_digest',
-          title: content.subject,
-          message: content.text,
-          actionUrl: '/admin/dashboard'
-        }
-      },
-      upsert: true
-    }
-  }]);
-  const isFirstSendToday = (result.upsertedCount ?? 0) > 0;
-  if (!isFirstSendToday) return false;
   const preferences = user.notificationPreferences ?? {};
-  if (user.email && preferences.email !== false && preferences.emailNotificationsEnabled !== false) {
-    await sendEmail({ to: user.email, subject: content.subject, text: content.text, html: content.html })
-      .catch((error) => console.error(`Daily digest email failed for user ${user._id}:`, error));
-  }
+  const canReceiveEmail = Boolean(user.email) && preferences.email !== false && preferences.emailNotificationsEnabled !== false;
+  if (!canReceiveEmail) return false;
+
+  // Atomically claim this user's digest for the day. This is deliberately not a Notification:
+  // the daily summary is an email-only delivery and must not appear in the notification center.
+  const claim = await User.updateOne(
+    { _id: user._id, dailyDigestLastSentDateKey: { $ne: summary.dateKey } },
+    { $set: { dailyDigestLastSentDateKey: summary.dateKey } }
+  );
+  if ((claim.modifiedCount ?? 0) === 0) return false;
+
+  const content = digestContent(summary, scopeLabel);
+  await sendEmail({ to: user.email, subject: content.subject, text: content.text, html: content.html })
+    .catch((error) => console.error(`Daily digest email failed for user ${user._id}:`, error));
   return true;
 }
 

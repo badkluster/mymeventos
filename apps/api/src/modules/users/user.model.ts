@@ -142,6 +142,9 @@ const userSchema = new Schema({
   active: { type: Boolean, default: true, index: true },
   mustChangePassword: { type: Boolean, default: false },
   lastLoginAt: Date,
+  // Internal delivery marker for the email-only daily digest. Keeping this outside
+  // Notification prevents the digest from being surfaced in the in-app inbox.
+  dailyDigestLastSentDateKey: { type: String, select: false },
   lastPasswordChangeAt: Date,
   passwordResetTokenHash: String,
   passwordResetExpiresAt: Date,

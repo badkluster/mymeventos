@@ -13,8 +13,9 @@ const notificationIdSchema = z.object({ body: z.unknown().optional(), params: id
 router.use(requireAuth);
 
 router.get('/', asyncHandler(async (request, response) => {
-  const notifications = await Notification.find({ userId: request.user!.id, deletedAt: null }).sort({ createdAt: -1 }).lean();
-  const unreadCount = await Notification.countDocuments({ userId: request.user!.id, readAt: null, deletedAt: null });
+  const visibleNotifications = { userId: request.user!.id, deletedAt: null, type: { $ne: 'daily_digest' } };
+  const notifications = await Notification.find(visibleNotifications).sort({ createdAt: -1 }).lean();
+  const unreadCount = await Notification.countDocuments({ ...visibleNotifications, readAt: null });
   return sendSuccess(response, { notifications, unreadCount });
 }));
 
