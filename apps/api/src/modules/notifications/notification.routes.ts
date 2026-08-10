@@ -14,8 +14,10 @@ router.use(requireAuth);
 
 router.get('/', asyncHandler(async (request, response) => {
   const visibleNotifications = { userId: request.user!.id, deletedAt: null, type: { $ne: 'daily_digest' } };
-  const notifications = await Notification.find(visibleNotifications).sort({ createdAt: -1 }).lean();
-  const unreadCount = await Notification.countDocuments({ ...visibleNotifications, readAt: null });
+  const [notifications, unreadCount] = await Promise.all([
+    Notification.find(visibleNotifications).sort({ createdAt: -1 }).lean(),
+    Notification.countDocuments({ ...visibleNotifications, readAt: null }),
+  ]);
   return sendSuccess(response, { notifications, unreadCount });
 }));
 

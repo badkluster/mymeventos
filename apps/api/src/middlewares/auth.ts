@@ -19,11 +19,26 @@ function extractAccessToken(request: Parameters<RequestHandler>[0]): { token?: s
   return { viaCookie: false };
 }
 
-export const requireAuth: RequestHandler = async (request, _response, next) => {
+export const requireAuth: RequestHandler = async (request, response, next) => {
+  const startedAt = Date.now();
+  const finishTiming = () => { response.locals.authMs = Date.now() - startedAt; };
+
+  let token: string | undefined;
+  let viaCookie = false;
+  let payload: ReturnType<typeof verifyAccessToken>;
+
+  // Token/cookie failures are authentication failures. Database failures are not: keep
+  // them separate so a transient Atlas problem returns 503 instead of a misleading 401.
   try {
-    const { token, viaCookie } = extractAccessToken(request);
+    ({ token, viaCookie } = extractAccessToken(request));
     if (!token) throw new ApiError(401, 'UNAUTHENTICATED');
-    const payload = verifyAccessToken(token);
+    payload = verifyAccessToken(token);
+  } catch {
+    finishTiming();
+    return next(new ApiError(401, 'UNAUTHENTICATED'));
+  }
+
+  try {
     const filter: Record<string, unknown> = { _id: payload.sub, active: true, deletedAt: null };
     if (viaCookie) filter.canAccessBackoffice = { $ne: false };
     const userQuery = User.findOne(filter);
@@ -31,11 +46,15 @@ export const requireAuth: RequestHandler = async (request, _response, next) => {
       ? userQuery.select('_id username email phone documentType documentNumber avatarUrl firstName lastName fullName roles permissionOverrides permissionDeniedOverrides salonIds managedSalonIds active canAccessBackoffice')
       : userQuery;
     const user: any = await projectedUserQuery.lean();
-    if (!user) throw new ApiError(401, 'UNAUTHENTICATED');
+    finishTiming();
+    if (!user) return next(new ApiError(401, 'UNAUTHENTICATED'));
     request.authUser = user;
     request.user = { id: user._id.toString(), roles: user.roles, permissionOverrides: user.permissionOverrides ?? [], permissionDeniedOverrides: user.permissionDeniedOverrides ?? [], salonIds: (user.salonIds ?? []).map(String), managedSalonIds: (user.managedSalonIds ?? []).map(String), active: user.active };
-    next();
-  } catch { next(new ApiError(401, 'UNAUTHENTICATED')); }
+    return next();
+  } catch (error) {
+    finishTiming();
+    return next(error);
+  }
 };
 export const requirePermission = (permission: Permission): RequestHandler => (request, _response, next) => { const allowed = request.user?.roles.some((role) => hasPermission(role, permission, request.user?.permissionOverrides, request.user?.permissionDeniedOverrides)); if (!allowed) return next(new ApiError(403, 'FORBIDDEN')); next(); };
 export const requireAnyPermission = (permissions: Permission[]): RequestHandler => (request, _response, next) => { const allowed = request.user?.roles.some((role) => hasAnyPermission(role, permissions, request.user?.permissionOverrides, request.user?.permissionDeniedOverrides)); if (!allowed) return next(new ApiError(403, 'FORBIDDEN')); next(); };
