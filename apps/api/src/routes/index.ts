@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from '../modules/auth/auth.routes';
+import loginHistoryRoutes from '../modules/auth/loginHistory.routes';
 import userRoutes from '../modules/users/user.routes';
 import staffRoutes from '../modules/users/staff.routes';
 import salonRoutes from '../modules/salons/salon.routes';
@@ -42,6 +43,7 @@ import mobilePayrollRoutes from '../modules/payroll/mobile-payroll.routes';
 const router = Router();
 
 router.use('/auth', authRoutes);
+router.use('/login-history', loginHistoryRoutes);
 router.use('/users', userRoutes);
 router.use('/staff', staffRoutes);
 router.use('/salons', salonRoutes);
