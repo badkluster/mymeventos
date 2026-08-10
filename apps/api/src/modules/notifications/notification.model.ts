@@ -3,4 +3,8 @@ const notificationSchema = new Schema({ userId: { type: Schema.Types.ObjectId, r
 // A compound sparse index would still index every notification because userId
 // is required. Restrict uniqueness to generated deliveries only.
 notificationSchema.index({ userId: 1, automationKey: 1 }, { unique: true, partialFilterExpression: { automationKey: { $type: 'string' } } });
+// The backoffice polls this collection frequently. These indexes cover both the newest
+// notifications list and the unread counter without scanning unrelated users.
+notificationSchema.index({ userId: 1, deletedAt: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, readAt: 1, deletedAt: 1 });
 export const Notification = models.Notification || model('Notification', notificationSchema);
