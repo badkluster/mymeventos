@@ -1,3 +1,5 @@
+import { eventStaffStatusLabels as sharedEventStaffStatusLabels } from '@mym/shared';
+
 export const leadStatusLabels: Record<string,string>={new:'Nuevo',contacted:'Contactado',follow_up:'Seguimiento',quote_sent:'Presupuesto enviado',negotiation:'Negociación',won:'Ganado',lost:'Perdido',converted:'Convertido'};
 export const leadSourceLabels: Record<string,string>={web_form:'Formulario web',quick_quote:'Cotización rápida',whatsapp:'WhatsApp',manual:'Manual',promotion:'Promoción',ticket:'Entrada',invitation:'Invitación',other:'Otro'};
 export const activityTypeLabels: Record<string,string>={note:'Nota',call:'Llamada',whatsapp:'WhatsApp',email:'Email',status_change:'Cambio de estado',assignment:'Asignación',quote_created:'Presupuesto creado',quote_sent:'Presupuesto enviado',lost:'Perdido',converted:'Convertido',event_created:'Evento creado',customer_created:'Cliente creado',payment_registered:'Pago registrado',system:'Sistema'};
@@ -5,6 +7,7 @@ export const quoteStatusLabels: Record<string,string>={draft:'Borrador',sent:'En
 export const quoteRequestStatusLabels: Record<string,string>={new:'Nueva',in_review:'En revisión',converted:'Presupuestada',discarded:'Descartada',duplicated:'Duplicada'};
 export const quoteRequestSourceLabels: Record<string,string>={website:'Web',admin:'Carga manual',whatsapp:'WhatsApp',office:'Oficina',phone:'Teléfono',quick_quote:'Cotización rápida',other:'Otro'};
 export const eventStatusLabels: Record<string,string>={draft:'Borrador',quoted:'Pendiente de contrato',contract_draft:'Contrato borrador',deposit_pending:'Seña pendiente',reserved:'Reservado',confirmed:'Confirmado',cancelled:'Cancelado',lost:'Perdido'};
+export const eventTypeLabels: Record<string,string>={birthday:'Cumpleaños',wedding:'Casamiento',fifteen:'15 años',graduates:'Egresados',corporate:'Evento empresarial',baptism_communion:'Bautismo / Comunión',other:'Otro'};
 export const contractStatusLabels: Record<string,string>={draft:'Borrador',pending_approval:'Pendiente de aprobación',approved:'Aprobado',requires_changes:'Requiere cambios',cancelled:'Cancelado',superseded:'Reemplazado'};
 export const contractAddendumStatusLabels: Record<string,string>={draft:'Borrador',pending_approval:'Pendiente de aprobación',approved:'Aprobada',rejected:'Rechazada',cancelled:'Cancelada'};
 export const contractAddendumTypeLabels: Record<string,string>={extra_service:'Servicio extra',beverage:'Bebidas',decoration:'Ambientación',menu_upgrade:'Menú adicional',staff:'Staff',hour_extension:'Hora extra',other:'Otro'};
@@ -12,16 +15,17 @@ export const paymentStatusLabels: Record<string,string>={pending:'Pendiente',pai
 export const paymentTypeLabels: Record<string,string>={deposit:'Seña',installment:'Cuota',balance:'Saldo',addendum:'Adenda',extra:'Extra',security_deposit:'Depósito garantía',adjustment:'Ajuste',refund:'Reembolso',other:'Otro'};
 export const paymentMethodLabels: Record<string,string>={cash:'Efectivo',bank_transfer:'Transferencia',mercado_pago:'Mercado Pago',card:'Tarjeta',other:'Otro'};
 export const roleLabels: Record<string,string>={ADMIN:'Administrador',MANAGER:'Manager',SALON_MANAGER:'Encargado salón',STAFF:'Staff'};
-export const staffSubroleLabels: Record<string,string>={WAITER:'Mozo',MAITRE:'Metre',COOK:'Cocinero',KITCHEN_ASSISTANT:'Ayudante de cocina',BARTENDER:'Barman',DJ:'DJ',DECORATION:'Decoración',CLEANING:'Limpieza',SECURITY:'Seguridad',COORDINATOR:'Coordinador',RECEPTION:'Recepción',OTHER:'Otro'};
+export const staffSubroleLabels: Record<string,string>={WAITER:'Mozo/a',MAITRE:'Maître',COOK:'Cocinero/a',KITCHEN_ASSISTANT:'Ayudante de cocina',BARTENDER:'Barman',DJ:'DJ',DECORATION:'Decoración',CLEANING:'Limpieza',SECURITY:'Seguridad',COORDINATOR:'Coordinador/a',RECEPTION:'Recepción',OTHER:'Otro'};
 export const documentTypeLabels: Record<string,string>={DNI:'DNI',CUIL:'CUIL',CUIT:'CUIT',PASAPORTE:'Pasaporte',OTRO:'Otro'};
 export const staffEmploymentStatusLabels: Record<string,string>={ACTIVE:'Activo',INACTIVE:'Inactivo',SUSPENDED:'Suspendido',TERMINATED:'Finalizado'};
 export const payrollPaymentTypeLabels: Record<string,string>={PER_EVENT:'Por evento',PER_HOUR:'Por hora',MONTHLY:'Mensual',OTHER:'Otro'};
-export const eventStaffStatusLabels: Record<string,string>={proposed:'Propuesto',assigned:'Asignado',confirmed:'Confirmado',checked_in:'Fichado',completed:'Completado',cancelled:'Cancelado',no_show:'Ausente'};
+export const eventStaffStatusLabels: Record<string,string>=sharedEventStaffStatusLabels;
 export const catalogItemTypeLabels: Record<string,string>={FOOD:'Comida',BEVERAGE:'Bebida',DISPOSABLE:'Descartable',CLEANING:'Limpieza',DECORATION:'Decoración',OTHER:'Otro'};
 export const inventoryCategoryLabels: Record<string,string>={FOOD:'Comida',BEVERAGE:'Bebida',TABLEWARE:'Vajilla',LINEN:'Mantelería',FURNITURE:'Mobiliario',DECORATION:'Decoración',EQUIPMENT:'Equipos',CLEANING:'Limpieza',DISPOSABLE:'Descartable',OTHER:'Otro'};
 export const beverageTypeLabels: Record<string,string>={NON_ALCOHOLIC:'Sin alcohol',ALCOHOLIC:'Con alcohol'};
 export const serviceExtraTypeLabels: Record<string,string>={FIXED_PRICE:'Precio fijo',PER_PERSON:'Por persona',PER_HOUR:'Por hora',PER_UNIT:'Por unidad',CUSTOM:'Personalizado'};
 export const supplierCategoryLabels: Record<string,string>={BEVERAGES:'Bebidas',FOOD:'Comida',BAKERY:'Panadería',PASTRY:'Pastelería',MEAT:'Carnes',DECORATION:'Decoración',SOUND_DJ:'Sonido/DJ',PHOTOGRAPHY:'Fotografía',CLEANING:'Limpieza',DISPOSABLES:'Descartables',TABLEWARE:'Vajilla',LINEN:'Mantelería',STAFFING:'Personal',OTHER:'Otro'};
+export const settingKeyLabels: Record<string,string>={application:'Aplicación'};
 export const inventoryItemTypeLabels: Record<string,string>={CONSUMABLE:'Consumible',NON_CONSUMABLE:'No consumible'};
 export const inventoryAdjustmentTypeLabels: Record<string,string>={IN:'Entrada',OUT:'Salida',ADJUSTMENT:'Ajuste',DAMAGE:'Rotura',LOSS:'Pérdida',RETURN:'Devolución'};
 export const consumptionRuleTargetLabels: Record<string,string>={TOTAL_GUESTS:'Total invitados',ADULTS:'Adultos',MINORS:'Menores',CHILDREN:'Niños',TEENAGERS:'Adolescentes',ADULTS_WITH_ALCOHOL:'Adultos con alcohol',TABLES:'Mesas',EVENT_DURATION_HOURS:'Horas de evento'};
@@ -52,4 +56,8 @@ export {
   MarketingTemplateCategoryLabels as marketingTemplateCategoryLabels,
   MarketingUnsubscribeReasonLabels as marketingUnsubscribeReasonLabels
 } from '@mym/shared';
-export const displayLabel=(labels:Record<string,string>,value:string)=>labels[value]??'Sin especificar';
+export function humanizeLabel(value: string): string {
+  const normalized = value.trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  return normalized ? `${normalized.charAt(0).toLocaleUpperCase('es-AR')}${normalized.slice(1)}` : 'Sin especificar';
+}
+export const displayLabel=(labels:Record<string,string>,value:string)=>labels[value]??humanizeLabel(value);

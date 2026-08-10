@@ -11,6 +11,7 @@ import { CatalogItem } from '../operations/operations.models';
 import { Event } from '../crm/crm.models';
 import { parseReportPeriod, resolveReportScope } from '../reporting/report-filter';
 import { consolidatedProduction, generateProductionPlan, normalizeProductName, productionPlanDetail, productionPlanFreshness, refreshPlanStatus } from './production.service';
+import { consolidatedProductionExcel, consolidatedProductionPdf } from './production-consolidated-export.service';
 import { ProductionItem, ProductionPlan, ProductionRule, ProductionSection } from './production.models';
 
 const router = Router();
@@ -189,6 +190,29 @@ router.get('/consolidated', requirePermission(Permission.PRODUCTION_VIEW), async
     sections, period: { from: period.fromDate, to: period.toDate },
     totals: { products: flat.length, plannedQuantity: flat.reduce((sum, item) => sum + item.plannedQuantity, 0), missingQuantity: flat.reduce((sum, item) => sum + item.missingQuantity, 0) },
   });
+}));
+
+router.get('/consolidated/export', requirePermission(Permission.PRODUCTION_VIEW), asyncHandler(async (request, response) => {
+  const format = z.enum(['excel', 'pdf']).parse(request.query.format ?? 'excel');
+  const type = request.query.type ? sectionType.parse(request.query.type) : undefined;
+  const period = parseReportPeriod(request.query);
+  const scope = resolveReportScope(request);
+  const { sections } = await consolidatedProduction(request, period.from, period.toExclusive, scope.match());
+  const selected = type ? sections.filter((section) => section.type === type) : sections;
+  if (type && !selected.length) throw new ApiError(404, 'PRODUCTION_SECTION_NOT_FOUND', 'No hay producción para ese tipo dentro del período seleccionado.');
+
+  await writeAuditLog(request, 'PRODUCTION_CONSOLIDATED_EXPORT', 'ProductionConsolidated', type ?? 'all', { format, type: type ?? 'all', from: period.fromDate, to: period.toDate, sectionCount: selected.length });
+  const suffix = type ?? 'total';
+  const date = new Date().toISOString().slice(0, 10);
+  if (format === 'excel') {
+    response.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
+    response.setHeader('Content-Disposition', `attachment; filename="produccion-consolidada-${suffix}-${date}.xls"`);
+    return response.send(consolidatedProductionExcel(selected, 'Producción consolidada'));
+  }
+  const pdf = await consolidatedProductionPdf(selected, 'Producción consolidada', `${period.fromDate} al ${period.toDate}`);
+  response.setHeader('Content-Type', 'application/pdf');
+  response.setHeader('Content-Disposition', `attachment; filename="produccion-consolidada-${suffix}-${date}.pdf"`);
+  return response.send(pdf);
 }));
 
 router.get('/rules', requirePermission(Permission.PRODUCTION_RULES_MANAGE), asyncHandler(async (request, response) => {

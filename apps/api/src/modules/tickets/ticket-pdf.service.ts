@@ -7,13 +7,48 @@ import { env } from '../../config/env';
 
 const collect = (document: PDFKit.PDFDocument) => new Promise<Buffer>((resolve, reject) => { const chunks: Buffer[] = []; document.on('data', (chunk) => chunks.push(Buffer.from(chunk))); document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject); document.end(); });
 const safe = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const TICKET_PDF_VERSION = 2;
 
-async function render(tickets: any[], publication: any, order: any): Promise<Buffer> {
+export function ticketPdfCoverUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (!url.includes('res.cloudinary.com/') || !url.includes('/upload/')) return url;
+  const normalized = url.replace(/f_auto(?=,|\/|\?|$)/g, 'f_jpg');
+  return normalized.includes('/upload/f_jpg') ? normalized : normalized.replace('/upload/', '/upload/f_jpg,q_auto/');
+}
+
+async function coverBuffer(url?: string): Promise<Buffer | undefined> {
+  const pdfUrl = ticketPdfCoverUrl(url);
+  if (!pdfUrl) return undefined;
+  try {
+    const response = await fetch(pdfUrl, { signal: AbortSignal.timeout(8_000) });
+    const contentType = response.headers.get('content-type') ?? '';
+    // PDFKit accepts JPEG and PNG only. Cloudinary may otherwise negotiate WebP or AVIF.
+    if (!response.ok || !['image/jpeg', 'image/png'].includes(contentType.split(';')[0].toLowerCase())) return undefined;
+    const image = Buffer.from(await response.arrayBuffer());
+    return image.length && image.length <= 8 * 1024 * 1024 ? image : undefined;
+  } catch {
+    // A ticket must remain printable even if its optional cover cannot be loaded.
+    return undefined;
+  }
+}
+
+async function render(tickets: any[], publication: any, order: any, cover?: Buffer): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: 32, autoFirstPage: false });
   for (const ticket of tickets) {
     doc.addPage();
     const dark = publication.appearance?.backgroundColor ?? '#18181b'; const accent = publication.appearance?.secondaryColor ?? '#d4a373';
-    doc.rect(32, 32, 531, 310).fill(dark); doc.fillColor(accent).rect(32, 32, 531, 8).fill();
+    let coverApplied = false;
+    if (cover) {
+      try {
+        doc.image(cover, 32, 32, { cover: [531, 310], align: 'center', valign: 'center' });
+        doc.save().fillColor('#09090b').fillOpacity(0.62).rect(32, 32, 531, 310).fill().restore();
+        coverApplied = true;
+      } catch {
+        // Invalid image bytes must not prevent a paid ticket from being generated.
+      }
+    }
+    if (!coverApplied) doc.rect(32, 32, 531, 310).fill(dark);
+    doc.fillColor(accent).rect(32, 32, 531, 8).fill();
     doc.fillColor('#fff').fontSize(25).text(publication.title ?? 'M&M Eventos', 56, 65, { width: 330 });
     doc.fontSize(11).fillColor('#e4e4e7').text(`${new Date(publication.startsAt).toLocaleString('es-AR')}\n${publication.venueName ?? ''}\n${publication.address ?? ''}`, 56, 130, { width: 300 });
     doc.fillColor('#fff').fontSize(16).text(ticket.ticketTypeSnapshot?.name ?? 'Entrada', 56, 235);
@@ -31,7 +66,8 @@ export async function generateOrderTicketPdfs(orderId: string) {
   const order: any = await TicketOrder.findById(orderId); if (!order || order.status !== 'paid') throw new Error('La orden no está pagada.');
   const [publicationResult, tickets] = await Promise.all([TicketPublication.findById(order.publicationId).lean(), DigitalTicket.find({ orderId, status: { $in: ['issued', 'checked_in'] }, deletedAt: null }).sort({ orderLineId: 1, unitIndex: 1 }).lean()]); const publication: any = publicationResult;
   if (!publication || !tickets.length) throw new Error('No hay entradas emitidas para documentar.');
+  const cover = await coverBuffer(publication.coverImage);
   await TicketOrder.updateOne({ _id: orderId }, { $set: { documentStatus: 'generating' } });
-  for (const ticket of tickets) { if (ticket.pdf?.storageKey) continue; const buffer = await render([ticket], publication, order); const filename = `${safe(publication.title)}-${ticket.ticketCode}.pdf`; const uploaded = await uploadBuffer(buffer, { folder: `digital-tickets/${publication._id}/orders/${order.publicId}/tickets/${ticket.ticketCode}`, public_id: `ticket-v1`, resource_type: 'raw', format: 'pdf', overwrite: true }); await DigitalTicket.updateOne({ _id: ticket._id }, { $set: { pdf: { storageKey: uploaded.publicId, url: uploaded.secureUrl, filename, mimeType: 'application/pdf', sizeBytes: uploaded.bytes, layout: 'ticket', version: 1, generatedAt: new Date(), checksum: createHash('sha256').update(buffer).digest('hex') } } }); }
-  const combined = await render(tickets, publication, order); const filename = `Entradas-${order.publicId}.pdf`; const uploaded = await uploadBuffer(combined, { folder: `digital-tickets/${publication._id}/orders/${order.publicId}/combined`, public_id: 'order-tickets-v1', resource_type: 'raw', format: 'pdf', overwrite: true }); await TicketOrder.updateOne({ _id: orderId }, { $set: { documentStatus: 'generated', documentsGeneratedAt: new Date(), ticketsPdf: { storageKey: uploaded.publicId, url: uploaded.secureUrl, filename, mimeType: 'application/pdf', sizeBytes: uploaded.bytes, layout: 'a4_printable', ticketCount: tickets.length, version: 1, generatedAt: new Date(), checksum: createHash('sha256').update(combined).digest('hex') } } }); return { filename, tickets: tickets.length };
+  for (const ticket of tickets) { if (ticket.pdf?.storageKey && ticket.pdf.version >= TICKET_PDF_VERSION) continue; const buffer = await render([ticket], publication, order, cover); const filename = `${safe(publication.title)}-${ticket.ticketCode}.pdf`; const uploaded = await uploadBuffer(buffer, { folder: `digital-tickets/${publication._id}/orders/${order.publicId}/tickets/${ticket.ticketCode}`, public_id: `ticket-v1`, resource_type: 'raw', format: 'pdf', overwrite: true }); await DigitalTicket.updateOne({ _id: ticket._id }, { $set: { pdf: { storageKey: uploaded.publicId, url: uploaded.secureUrl, filename, mimeType: 'application/pdf', sizeBytes: uploaded.bytes, layout: 'ticket', version: TICKET_PDF_VERSION, generatedAt: new Date(), checksum: createHash('sha256').update(buffer).digest('hex') } } }); }
+  const combined = await render(tickets, publication, order, cover); const filename = `Entradas-${order.publicId}.pdf`; const uploaded = await uploadBuffer(combined, { folder: `digital-tickets/${publication._id}/orders/${order.publicId}/combined`, public_id: 'order-tickets-v1', resource_type: 'raw', format: 'pdf', overwrite: true }); await TicketOrder.updateOne({ _id: orderId }, { $set: { documentStatus: 'generated', documentsGeneratedAt: new Date(), ticketsPdf: { storageKey: uploaded.publicId, url: uploaded.secureUrl, filename, mimeType: 'application/pdf', sizeBytes: uploaded.bytes, layout: 'a4_printable', ticketCount: tickets.length, version: TICKET_PDF_VERSION, generatedAt: new Date(), checksum: createHash('sha256').update(combined).digest('hex') } } }); return { filename, tickets: tickets.length };
 }

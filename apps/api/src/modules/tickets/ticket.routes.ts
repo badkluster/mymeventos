@@ -602,6 +602,51 @@ admin.get(
   }),
 );
 admin.get(
+  "/buyers/orders",
+  requirePermission(Permission.TICKETS_READ),
+  validateRequest(
+    schema(
+      z.object({ email: z.string().trim().email() }),
+      {},
+    ),
+  ),
+  asyncHandler(async (req, res) => {
+    const email = String(req.query.email).trim();
+    const exactEmail = new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+    const orders: any[] = await TicketOrder.find({
+      deletedAt: null,
+      "buyer.email": exactEmail,
+    })
+      .populate("publicationId", "title startsAt venueName")
+      .sort({ createdAt: -1 })
+      .lean();
+    const orderIds = orders.map((order) => order._id);
+    const tickets = await DigitalTicket.find({
+      orderId: { $in: orderIds },
+      deletedAt: null,
+    })
+      .select("orderId ticketCode attendeeName status checkedInAt ticketTypeSnapshot pdf")
+      .sort({ createdAt: -1 })
+      .lean();
+    return sendSuccess(res, {
+      buyer: orders[0]?.buyer
+        ? {
+            name: orders[0].buyer.name,
+            email: orders[0].buyer.email,
+            documentNumber: orders[0].buyer.documentNumber,
+          }
+        : { email },
+      orders,
+      tickets: tickets.map((ticket: any) => ({
+        ...ticket,
+        pdfUrl: ticket.pdf?.storageKey
+          ? getSignedDownloadUrl(ticket.pdf.storageKey)
+          : undefined,
+      })),
+    });
+  }),
+);
+admin.get(
   "/buyers",
   requirePermission(Permission.TICKETS_READ),
   asyncHandler(async (req, res) => {
@@ -759,7 +804,93 @@ admin.get(
       TicketDelivery.find({ orderId: req.params.orderId }).sort({ createdAt: -1 }).lean(),
     ]);
     if (!order) throw new ApiError(404, "TICKET_ORDER_NOT_FOUND");
-    return sendSuccess(res, { documentStatus: (order as any).documentStatus, combined: (order as any).ticketsPdf, tickets, deliveries });
+    return sendSuccess(res, {
+      documentStatus: (order as any).documentStatus,
+      combined: (order as any).ticketsPdf
+        ? {
+            ...(order as any).ticketsPdf,
+            url: getSignedDownloadUrl((order as any).ticketsPdf.storageKey),
+          }
+        : undefined,
+      tickets: tickets.map((ticket: any) => ({
+        ...ticket,
+        pdfUrl: ticket.pdf?.storageKey
+          ? getSignedDownloadUrl(ticket.pdf.storageKey)
+          : undefined,
+      })),
+      deliveries,
+    });
+  }),
+);
+admin.get(
+  "/publications/:publicationId/operations-summary",
+  requirePermission(Permission.TICKETS_READ),
+  validateRequest(schema(z.unknown().optional(), { publicationId: id })),
+  asyncHandler(async (req, res) => {
+    const publication: any = await publicationForUser(req.params.publicationId);
+    await expirePendingOrders(String(publication._id));
+    const [orders, ticketStatuses] = await Promise.all([
+      TicketOrder.aggregate([
+        { $match: { publicationId: publication._id, deletedAt: null } },
+        {
+          $project: {
+            status: 1,
+            totalAmount: 1,
+            quantity: { $sum: "$lines.quantity" },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            orderCount: { $sum: 1 },
+            paidOrders: {
+              $sum: { $cond: [{ $in: ["$status", ["paid", "partially_refunded"]] }, 1, 0] },
+            },
+            pendingOrders: {
+              $sum: { $cond: [{ $in: ["$status", ["pending", "payment_pending"]] }, 1, 0] },
+            },
+            refundedOrders: {
+              $sum: { $cond: [{ $in: ["$status", ["refunded", "partially_refunded"]] }, 1, 0] },
+            },
+            grossRevenue: {
+              $sum: {
+                $cond: [{ $in: ["$status", ["paid", "partially_refunded", "refunded"]] }, "$totalAmount", 0],
+              },
+            },
+          },
+        },
+      ]),
+      DigitalTicket.aggregate([
+        { $match: { publicationId: publication._id, deletedAt: null } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
+    const statusCounts = ticketStatuses.reduce<Record<string, number>>(
+      (counts: Record<string, number>, row: any) => ({ ...counts, [row._id]: row.count }),
+      {},
+    );
+    const sold = Number(publication.soldCount ?? 0);
+    const checkedIn = Number(statusCounts.checked_in ?? 0);
+    return sendSuccess(res, {
+      publication: {
+        _id: publication._id,
+        title: publication.title,
+        status: publication.status,
+        startsAt: publication.startsAt,
+        endsAt: publication.endsAt,
+        venueName: publication.venueName,
+        capacity: publication.capacity,
+        soldCount: sold,
+        reservedCount: Number(publication.reservedCount ?? 0),
+        availableCount: Math.max(0, Number(publication.capacity ?? 0) - sold - Number(publication.reservedCount ?? 0)),
+      },
+      summary: {
+        ...(orders[0] ?? { orderCount: 0, paidOrders: 0, pendingOrders: 0, refundedOrders: 0, grossRevenue: 0 }),
+        ticketStatuses: statusCounts,
+        checkedIn,
+        attendanceRate: sold ? checkedIn / sold : 0,
+      },
+    });
   }),
 );
 admin.get(

@@ -19,8 +19,8 @@ const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ eve
 const closeSchema = z.object({ body: z.object({ notes: z.string().trim().max(3000).optional().or(z.literal('')) }), params: z.object({ eventId: objectId, stage }), query: z.object({}) });
 const reopenSchema = z.object({ body: z.object({ reason: z.string().trim().min(3).max(1000) }), params: z.object({ eventId: objectId, stage }), query: z.object({}) });
 
-type ClosureStage = 'operational' | 'financial' | 'administrative';
-type Check = { id: string; label: string; ok: boolean; severity: 'blocker' | 'warning'; detail?: string; href?: string };
+export type ClosureStage = 'operational' | 'financial' | 'administrative';
+export type ClosureCheck = { id: string; label: string; ok: boolean; severity: 'blocker' | 'warning'; detail?: string; href?: string };
 
 async function eventForRequest(request: Request, eventId: string) {
   const event: any = await Event.findOne({ _id: eventId, deletedAt: null }).populate('salonId', 'name').populate('customerId', 'fullName').lean();
@@ -38,7 +38,7 @@ async function closureForEvent(eventId: string, salonId: string, userId: string)
   );
 }
 
-async function closureChecks(event: any, closure: any) {
+export async function closureChecks(event: any, closure: any) {
   const eventId = event._id;
   const now = new Date();
   const currentPlanIds = await ProductionPlan.find({ eventId, isCurrent: true, deletedAt: null }).distinct('_id');
@@ -59,7 +59,7 @@ async function closureChecks(event: any, closure: any) {
   const pendingExpenses = Number(results[5]);
   const expenseCount = Number(results[6]);
   const eventOccurred = Boolean(event.eventDate && new Date(event.eventDate).getTime() <= now.getTime());
-  const operational: Check[] = [
+  const operational: ClosureCheck[] = [
     { id: 'event-date', label: 'El evento ya ocurrió', ok: eventOccurred, severity: 'blocker', detail: event.eventDate ? undefined : 'El evento no tiene fecha definida.', href: `/admin/events/${eventId}` },
     { id: 'production-plan', label: 'Producción generada', ok: Boolean(plan), severity: 'blocker', detail: plan ? undefined : 'Generá la producción antes de cerrar.', href: '/admin/production?generate=1' },
     { id: 'production-closed', label: 'Producción chequeada y cerrada', ok: plan?.status === 'closed', severity: 'blocker', detail: plan ? `Estado actual: ${plan.status}.` : undefined, href: plan?._id ? `/admin/production/${plan._id}` : '/admin/production' },
@@ -67,7 +67,7 @@ async function closureChecks(event: any, closure: any) {
     { id: 'staff-complete', label: 'Asignaciones de personal finalizadas', ok: staffOpen === 0, severity: 'blocker', detail: staffOpen ? `${staffOpen} asignación(es) siguen abiertas.` : undefined, href: `/admin/events/${eventId}?tab=staff` },
   ];
   const balance = Number(contract?.balanceAmount ?? Math.max(0, Number(contract?.totalAmount ?? 0) - Number(contract?.paidAmount ?? 0)));
-  const financial: Check[] = [
+  const financial: ClosureCheck[] = [
     { id: 'operational-closed', label: 'Cierre operativo realizado', ok: closure.operational?.status === 'closed', severity: 'blocker' },
     { id: 'contract-active', label: 'Contrato activo disponible', ok: Boolean(contract), severity: 'blocker', detail: contract ? undefined : 'No hay contrato activo para conciliar.', href: `/admin/events/${eventId}?tab=contrato` },
     { id: 'contract-approved', label: 'Contrato aprobado', ok: contract?.status === 'approved', severity: 'blocker', detail: contract ? `Estado actual: ${contract.status}.` : undefined, href: contract?._id ? `/admin/contracts/${contract._id}` : `/admin/events/${eventId}?tab=contrato` },
@@ -76,7 +76,7 @@ async function closureChecks(event: any, closure: any) {
     { id: 'expenses-resolved', label: 'Sin gastos pendientes', ok: pendingExpenses === 0, severity: 'blocker', detail: pendingExpenses ? `${pendingExpenses} gasto(s) pendiente(s).` : undefined, href: `/admin/expenses?eventId=${eventId}` },
     { id: 'expenses-loaded', label: 'Costos del evento cargados', ok: expenseCount > 0, severity: 'warning', detail: expenseCount ? undefined : 'No hay gastos asociados; la rentabilidad quedará incompleta.', href: `/admin/expenses?eventId=${eventId}` },
   ];
-  const administrative: Check[] = [
+  const administrative: ClosureCheck[] = [
     { id: 'operational-closed', label: 'Cierre operativo realizado', ok: closure.operational?.status === 'closed', severity: 'blocker' },
     { id: 'financial-closed', label: 'Cierre financiero realizado', ok: closure.financial?.status === 'closed', severity: 'blocker' },
     { id: 'customer-associated', label: 'Cliente asociado', ok: Boolean(event.customerId), severity: 'blocker', href: `/admin/events/${eventId}?tab=cliente` },
@@ -85,7 +85,7 @@ async function closureChecks(event: any, closure: any) {
   return { operational, financial, administrative, context: { plan, contract, balance, pendingPayments, pendingExpenses, expenseCount } };
 }
 
-function blockers(checks: Check[]) {
+export function blockers(checks: ClosureCheck[]) {
   return checks.filter((item) => item.severity === 'blocker' && !item.ok);
 }
 

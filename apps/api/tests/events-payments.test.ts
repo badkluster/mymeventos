@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   eventFindOne: vi.fn(),
   contractFindOne: vi.fn(),
   customerFindOne: vi.fn(),
+  paymentFind: vi.fn(),
   createPayment: vi.fn(),
   generateAndUploadPaymentReceiptPdf: vi.fn(),
   sendEmail: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   EventStaffAssignment: { find: vi.fn() },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn() },
   Contract: { findOne: mocks.contractFindOne }, ContractAddendum: {},
-  Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn() }
+  Payment: { countDocuments: vi.fn(), find: mocks.paymentFind, findOne: vi.fn() }
 }));
 vi.mock('../src/modules/crm/payments.service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/modules/crm/payments.service')>();
@@ -49,6 +50,9 @@ function chainLean(value: unknown) {
 function installmentPlan(count: number, amountPerInstallment: number) {
   return Array.from({ length: count }, (_, index) => ({ id: `installment-${index + 1}`, label: `Cuota ${index + 1} de ${count}`, amount: amountPerInstallment, status: 'scheduled' }));
 }
+function paymentListQuery(value: unknown) {
+  return { populate: vi.fn().mockReturnThis(), sort: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
+}
 
 describe('event payment registration and the installment plan', () => {
   beforeEach(() => {
@@ -59,6 +63,9 @@ describe('event payment registration and the installment plan', () => {
     mocks.contractFindOne
       .mockReturnValueOnce({ sort: vi.fn().mockResolvedValue({ _id: contractId, balanceAmount: 1750000, status: 'approved', save: vi.fn().mockResolvedValue(undefined) }) })
       .mockResolvedValueOnce({ _id: contractId, balanceAmount: 1350000, status: 'approved', save: vi.fn().mockResolvedValue(undefined) });
+    mocks.paymentFind
+      .mockReturnValueOnce(paymentListQuery([{ _id: 'payment-1', paymentNumber: 'PAY-2026-00001', amount: 400000, status: 'paid', type: 'deposit' }]))
+      .mockResolvedValueOnce([{ amount: 400000, status: 'paid', type: 'deposit', affectsContractBalance: true }]);
   });
 
   it('does not touch the installment plan when the payment is a deposit ("seña")', async () => {
@@ -75,6 +82,8 @@ describe('event payment registration and the installment plan', () => {
     expect(event.save).not.toHaveBeenCalled();
     expect(response.body.data.paymentPlanSnapshot).toEqual(plan);
     expect(response.body.data.planOverpaymentAmount).toBe(0);
+    expect(response.body.data.items).toHaveLength(1);
+    expect(response.body.data.summary).toMatchObject({ paidAmount: 400000 });
   });
 
   it('still cascades an installment payment across the plan (default type)', async () => {

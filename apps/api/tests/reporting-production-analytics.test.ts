@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { Role } from '@mym/shared';
 import { parseReportPeriod, REPORT_TIME_ZONE, resolveReportScope } from '../src/modules/reporting/report-filter';
 import { normalizeProductName } from '../src/modules/production/production.service';
+import { consolidatedProductionExcel, consolidatedProductionPdf } from '../src/modules/production/production-consolidated-export.service';
 import { AnalyticsEvent, AnalyticsSession, analyticsEventNames } from '../src/modules/analytics/analytics.models';
 import { dashboardMetricDefinitions } from '../src/modules/reporting/metric-catalog';
 
@@ -62,6 +63,31 @@ describe('production normalization', () => {
   it('merges accents, casing and repeated whitespace into the same comparison key', () => {
     expect(normalizeProductName('  Café   MOLIDO ')).toBe('cafe molido');
     expect(normalizeProductName('CuchÁra')).toBe(normalizeProductName('cuchara'));
+  });
+});
+
+describe('production consolidated exports', () => {
+  const sections = [{
+    type: 'savory', name: 'Producción salada', items: [{ productName: 'Empanadas', unit: 'unidad', eventCount: 2, plannedQuantity: 120, completedQuantity: 90, availableQuantity: 80, missingQuantity: 40, toBuyQuantity: 40, toProduceQuantity: 30, pendingItems: 1 }],
+  }, {
+    type: 'beverages', name: 'Bebidas', items: [{ productName: 'Agua', unit: 'litro', eventCount: 1, plannedQuantity: 30, completedQuantity: 30, availableQuantity: 50, missingQuantity: 0, toBuyQuantity: 0, toProduceQuantity: 0, pendingItems: 0 }],
+  }];
+
+  it('builds a total worksheet plus one worksheet per production type', () => {
+    const excel = consolidatedProductionExcel(sections, 'Producción consolidada');
+
+    expect(excel).toContain('ss:Name="Total consolidado"');
+    expect(excel).toContain('ss:Name="Producción salada"');
+    expect(excel).toContain('ss:Name="Bebidas"');
+    expect(excel).toContain('Empanadas');
+    expect(excel).toContain('Agua');
+  });
+
+  it('builds a PDF containing every requested production type', async () => {
+    const pdf = await consolidatedProductionPdf(sections, 'Producción consolidada', '2026-07-01 al 2026-07-31');
+
+    expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+    expect(pdf.length).toBeGreaterThan(500);
   });
 });
 

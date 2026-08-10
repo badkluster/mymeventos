@@ -85,6 +85,16 @@ export enum AttendanceStatus {
   EXCUSED = 'EXCUSED'
 }
 
+export const eventStaffStatusLabels: Record<string, string> = {
+  proposed: 'Propuesto',
+  assigned: 'Asignado',
+  confirmed: 'Confirmado',
+  checked_in: 'Ingresó',
+  completed: 'Completado',
+  cancelled: 'Cancelado',
+  no_show: 'Ausente'
+};
+
 // Promotion Types
 export enum PromotionType {
   PERCENTAGE_DISCOUNT = 'PERCENTAGE_DISCOUNT',

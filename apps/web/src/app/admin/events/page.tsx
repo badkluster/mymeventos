@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Eye, LockKeyhole, Plus, Search } from 'lucide-react';
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Eye, LockKeyhole, Plus, Search, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { eventStatusLabels } from '@/lib/display-labels';
 import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
@@ -39,6 +39,15 @@ function normalize(response: ListResponse): { items: Event[]; meta: PaginationMe
   return { items, meta: { page, limit, totalItems, totalPages, hasNextPage: source.hasNextPage ?? page < totalPages, hasPreviousPage: source.hasPreviousPage ?? page > 1 } };
 }
 
+function rangeForMonth(month: string) {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) return { dateFrom: '', dateTo: '' };
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]);
+  const lastDay = new Date(year, monthIndex, 0).getDate();
+  return { dateFrom: `${month}-01`, dateTo: `${month}-${String(lastDay).padStart(2, '0')}` };
+}
+
 export default function EventsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,7 +56,7 @@ export default function EventsPage() {
   const [salons, setSalons] = useState<Salon[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [filters, setFilters] = useState({ page: 1, limit: 20, query: '', status: '', salonId: '' });
+  const [filters, setFilters] = useState({ page: 1, limit: 20, query: '', status: '', salonId: '', month: '', dateFrom: '', dateTo: '' });
   const [searchInput, setSearchInput] = useState('');
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, totalItems: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false });
   const [savingId, setSavingId] = useState('');
@@ -59,6 +68,8 @@ export default function EventsPage() {
       const query = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit), search: filters.query });
       if (filters.status) query.set('status', filters.status);
       if (filters.salonId) query.set('salonId', filters.salonId);
+      if (filters.dateFrom) query.set('dateFrom', filters.dateFrom);
+      if (filters.dateTo) query.set('dateTo', filters.dateTo);
       const [eventsResponse, salonsResponse] = await Promise.all([
         api.get<ListResponse>(`/events?${query.toString()}`),
         api.get<{ salons?: Salon[] } | Salon[]>('/salons')
@@ -84,6 +95,9 @@ export default function EventsPage() {
   }, [searchParams]);
 
   const updateFilters = (changes: Partial<typeof filters>) => setFilters((current) => ({ ...current, ...changes }));
+  const selectMonth = (month: string) => updateFilters({ page: 1, month, ...rangeForMonth(month) });
+  const clearDateFilters = () => updateFilters({ page: 1, month: '', dateFrom: '', dateTo: '' });
+  const hasDateFilters = Boolean(filters.month || filters.dateFrom || filters.dateTo);
   const updateStatus = async (event: Event, status: string) => {
     setSavingId(event._id);
     try {
@@ -112,6 +126,14 @@ export default function EventsPage() {
         <Select aria-label="Filtrar por estado" value={filters.status} onChange={(event) => updateFilters({ page: 1, status: event.target.value })} className="h-11 min-w-44"><option value="">Todos los estados</option>{Object.entries(eventStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
         <Select aria-label="Filtrar por salón" value={filters.salonId} onChange={(event) => updateFilters({ page: 1, salonId: event.target.value })} className="h-11 min-w-40"><option value="">Todos los salones</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select>
         <Select aria-label="Cantidad de filas por página" value={filters.limit} onChange={(event) => updateFilters({ page: 1, limit: Number(event.target.value) })} className="h-11 min-w-32">{[10, 20, 50].map((item) => <option key={item} value={item}>{item} por página</option>)}</Select>
+      </div>
+      <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-zinc-100 pt-4">
+        <div className="flex items-center gap-2 pb-2 text-sm font-medium text-zinc-700"><CalendarRange className="h-4 w-4 text-zinc-500" /><span>Fecha del evento</span></div>
+        <label className="grid gap-1.5 text-xs font-medium text-zinc-600"><span>Mes</span><Input aria-label="Filtrar por mes" type="month" value={filters.month} onChange={(event) => selectMonth(event.target.value)} className="h-10 min-w-40" /></label>
+        <span className="pb-2 text-xs text-zinc-400">o</span>
+        <label className="grid gap-1.5 text-xs font-medium text-zinc-600"><span>Desde</span><Input type="date" value={filters.dateFrom} max={filters.dateTo || undefined} onChange={(event) => updateFilters({ page: 1, month: '', dateFrom: event.target.value })} className="h-10 min-w-40" /></label>
+        <label className="grid gap-1.5 text-xs font-medium text-zinc-600"><span>Hasta</span><Input type="date" value={filters.dateTo} min={filters.dateFrom || undefined} onChange={(event) => updateFilters({ page: 1, month: '', dateTo: event.target.value })} className="h-10 min-w-40" /></label>
+        {hasDateFilters ? <Button type="button" variant="secondary" onClick={clearDateFilters} className="h-10 px-3"><X className="mr-1.5 h-4 w-4" />Limpiar fechas</Button> : null}
       </div>
     </div>
     <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm">

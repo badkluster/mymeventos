@@ -1,0 +1,1510 @@
+[
+  {
+    "slug": "produccion-plan",
+    "title": "Producción — plan del evento",
+    "route": "/admin/production/6a732306e5799c0f0f219303",
+    "screenshot": "74-produccion-plan.png",
+    "headings": [
+      "Comunión - Comunión de Mía Domínguez"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Cerrar producción",
+      "Agregar ítem",
+      "Regenerar versión"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver a producción Comunión - Comunión de Mía Domínguez 29 de agosto de 2026 · 13:00 · Villa Elisa · Versión 1 Cerrar producción Agregar ítem La producción quedó desactualizada. Cambió el evento, contrato, paquete, servicios o alguna regla desde que se generó esta versión. Regenerar versión Cliente Fiorella Campos Invitados 55 Contrato C-2026-00010 Avance 0 de 0 chequeados La producción se generó sin ítems porque el evento no tenía productos explícitos y todavía no hay reglas aplicables. Agregá ítems manuales o configurá reglas."
+  },
+  {
+    "slug": "produccion-consolidada",
+    "title": "Producción consolidada",
+    "route": "/admin/production/consolidated",
+    "screenshot": "75-produccion-consolidada.png",
+    "headings": [
+      "Producción consolidada"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Imprimir",
+      "Actualizar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Producción consolidada Cantidades normalizadas de todos los eventos del período, comparadas con stock y avance real. Imprimir Actualizar Por evento Consolidado Reglas Catálogo Desde Hasta Productos distintos 0 Cantidad planificada 0 Faltante contra stock 0 No hay ítems de producción en el período."
+  },
+  {
+    "slug": "produccion-reglas",
+    "title": "Producción — reglas",
+    "route": "/admin/production/rules",
+    "screenshot": "76-produccion-reglas.png",
+    "headings": [
+      "Reglas de producción"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Nueva regla"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Reglas de producción Transforman invitados y condiciones del evento en cantidades reproducibles. Cada generación conserva su snapshot. Nueva regla Por evento Consolidado Reglas Catálogo REGLA PRODUCTO SECCIÓN TIPO DE EVENTO RANGO INVITADOS CÁLCULO MERMA ESTADO Agua mineral por invitado (borrador) Agua mineral Bebidas Todos 0 — sin máximo 0 + 0.2 por invitado · Hacia arriba 0% Activa Cerveza por invitado (borrador) Cerveza Bebidas Todos 0 — sin máximo 0 + 0.5 por invitado · Hacia arriba 0% Inactiva Empanadas por invitado (borrador) Empanadas Salado Todos 0 — sin máximo 0 + 4 por invitado · Hacia arriba 5% Inactiva Gaseosa por invitado (borrador) Gaseosa Bebidas Todos 0 — sin máximo 0 + 0.3 por invitado · Hacia arriba 0% Inactiva Hielo por invitado (borrador) Hielo Otros Todos 0 — sin máximo 0 + 0.15 por invitado · Hacia arriba 0% Inactiva Pan por invitado (borrador) Pan / panificados Panadería Todos 0 — sin máximo 0 + 2 por invitado · Hacia arriba 5% Inactiva Torta por invitado (borrador) Torta Tortas Todos 0 — sin máximo 0 + 1 por invitado · Hacia arriba 0% Inactiva Vino por invitado (borrador) Vino Bebidas Todos 0 — sin máximo 0 + 0.25 por invitado · Hacia arriba 0% Inactiva"
+  },
+  {
+    "slug": "produccion-catalogo",
+    "title": "Producción — catálogo",
+    "route": "/admin/production/catalog",
+    "screenshot": "77-produccion-catalogo.png",
+    "headings": [
+      "Catálogo de productos"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Nuevo producto"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Catálogo de productos Los productos de acá son los que después podés elegir al crear una regla de producción. Nuevo producto Por evento Consolidado Reglas Catálogo PRODUCTO TIPO CATEGORÍA UNIDAD ESTADO Agua mineral(No alcohólica) Bebida Bebidas litro Activo Cerveza(Alcohólica) Bebida Bebidas botella Activo Empanadas Alimento Comida unidad Activo Gaseosa(No alcohólica) Bebida Bebidas litro Activo Hielo Otro Otro kg Activo Pan / panificados Alimento Comida unidad Activo Torta Alimento Comida porción Activo Vino(Alcohólica) Bebida Bebidas botella Activo"
+  },
+  {
+    "slug": "gastos-proveedor",
+    "title": "Gastos por proveedor",
+    "route": "/admin/expenses/by-supplier",
+    "screenshot": "78-gastos-proveedor.png",
+    "headings": [
+      "Gastos por proveedor"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Actualizar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Gastos por proveedor Reemplaza el 'Control de Gastos I/II/III' y la 'Relación de Gastos' del Excel: inicial, final y adicional agrupados por proveedor, con el desvío final vs. inicial. Actualizar Gastos Por proveedor Rentabilidad Desde Hasta Estimado inicial $ 0 Monto final $ 0 Adicional $ 0 Total gastado $ 0 Desvío final vs. inicial $ 0 PROVEEDOR INICIAL FINAL ADICIONAL IMPUESTOS TOTAL DESVÍO PAGADO PENDIENTE GASTOS No hay gastos en el período."
+  },
+  {
+    "slug": "rentabilidad",
+    "title": "Rentabilidad",
+    "route": "/admin/expenses/profitability",
+    "screenshot": "79-rentabilidad.png",
+    "headings": [
+      "Rentabilidad por evento"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Actualizar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Rentabilidad por evento Margen económico y movimiento de caja se muestran por separado para no confundir cobros pendientes con pérdidas. Actualizar Gastos Por proveedor Rentabilidad Desde Hasta Ingreso contratado $ 55.085.000 Ingreso cobrado $ 36.937.500 Costo real registrado $ 3.462.000 Margen económico $ 51.623.000 Resultado de caja $ 33.475.500 Hay 6 evento(s) con costos preliminares, pendientes o sin gastos cargados. EVENTO FECHA / SALÓN INVITADOS CONTRATADO COBRADO COSTO ESTIMADO COSTO REAL COSTO PAGADO MARGEN ESTIMADO MARGEN ECONÓMICO RESULTADO CAJA MARGEN % COSTO/INVITADO INGRESO/INVITADO DESVÍO COSTO CALIDAD Fiesta de Egresados - Promoción 2026 - Colegio San Martín Valentina Ortiz 8/8/26 San Carlos 60 $ 3.900.000 $ 3.900.000 $ 0 $ 434.000 $ 434.000 $ 3.900.000 $ 3.466.000 $ 3.466.000 88,9% $ 7.233 $ 65.000 $ 434.000 Completa Casamiento - Ana Bravo & Martín Coronel Melina Ortiz 8/8/26 Villa Elisa 90 $ 7.650.000 $ 4.075.000 $ 0 $ 651.000 $ 651.000 $ 7.650.000 $ 6.999.000 $ 3.424.000 91,5% $ 7.233 $ 85.000 $ 651.000 Completa Evento corporativo - Cena anual Constructora del Plata SA Oscar García 8/8/26 La Plata 55 $ 7.700.000 $ 7.700.000 $ 0 $ 193.000 $ 193.000 $ 7.700.000 $ 7.507.000 $ 7.507.000 97,5% $ 3.509 $ 140.000 $ 193.000 Completa Cumpleaños infantil - Benjamín Torres (5 años) Victoria Ortiz 15/8/26 San Carlos 35 $ 650.000 $ 650.000 $ 0 $ 123.000 $ 123.000 $ 650.000 $ 527.000 $ 527.000 81,1% $ 3.514 $ 18.571 $ 123.000 Preliminar Casamiento - Florencia Ojeda & Nicolás Herrera Karen Herrera 15/8/26 San Carlos 95 $ 7.600.000 $ 4.100.000 $ 0 $ 514.000 $ 514.000 $ 7.600.000 $ 7.086.000 $ 3.586.000 93,2% $ 5.411 $ 80.000 $ 514.000 Preliminar Evento corporativo - Aniversario 20 años Laboratorio Vega Gastón Ramírez 15/8/26 Villa Elisa 65 $ 6.175.000 $ 0 $ 0 $ 413.000 $ 413.000 $ 6.175.000 $ 5.762.000 -$ 413.000 93,3% $ 6.354 $ 95.000 $ 413.000 Preliminar Cumple de 40 años - Manuela Manuela Albarracin 16/8/26 San Carlos 50 $ 3.500.000 $ 512.500 $ 0 $ 16.000 $ 16.000 $ 3.500.000 $ 3.484.000 $ 496.500 99,5% $ 320 $ 70.000 $ 16.000 Preliminar Casamiento - Carla Maldonado & Diego Ferreyra Emma Vargas 22/8/26 La Plata 120 $ 15.600.000 $ 15.600.000 $ 0 $ 758.000 $ 758.000 $ 15.600.000 $ 14.842.000 $ 14.842.000 95,1% $ 6.317 $ 130.000 $ 758.000 Preliminar Comunión - Comunión de Mía Domínguez Fiorella Campos 29/8/26 Villa Elisa 55 $ 2.310.000 $ 400.000 $ 0 $ 360.000 $ 360.000 $ 2.310.000 $ 1.950.000 $ 40.000 84,4% $ 6.545 $ 42.000 $ 360.000 Preliminar"
+  },
+  {
+    "slug": "invitaciones-plantillas",
+    "title": "Plantillas de invitaciones",
+    "route": "/admin/digital-invitations/templates",
+    "screenshot": "80-invitaciones-plantillas.png",
+    "headings": [
+      "Plantillas de invitación"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Todas las invitaciones",
+      "Todas",
+      "BASIC",
+      "PREMIUM",
+      "Casamiento",
+      "Quince años",
+      "Cumpleaños",
+      "Cumple infantil",
+      "Baby shower",
+      "Bautismo",
+      "Comunión",
+      "Aniversario",
+      "Corporativo",
+      "General",
+      "Aniversario BASIC Aniversario Minimal Tipografía protagonista y elegancia minimalista. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 aniversario pareja minimalista Usar esta plantilla →",
+      "Baby shower BASIC Baby Shower Suave Tonos pastel y un estilo delicado para celebrar una llegada especial. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 baby shower bebé pastel Usar esta plantilla →",
+      "General BASIC Basic Elegant Diseño claro, elegante y versátil para cumpleaños, bautismos y aniversarios. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 basic elegante versátil Usar esta plantilla →",
+      "Cumpleaños BASIC Basic Modern Bloques de color, hero visual y una configuración simple pero impactante. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 basic moderno cumpleaños Usar esta plantilla →",
+      "Casamiento ✦ PREMIUM Boda Botánica Verdes profundos y detalles orgánicos para una celebración al aire libre. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 casamiento boda verde Usar esta plantilla →",
+      "Casamiento ✦ PREMIUM Boda Clásica Marfil, champagne y una estética atemporal. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 casamiento boda clásico Usar esta plantilla →",
+      "General BASIC Celebración Esencial Un diseño neutro, cálido y adaptable a cualquier ocasión. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 general neutro otro Usar esta plantilla →",
+      "Corporativo BASIC Corporativo Executive Sobrio, claro y profesional para lanzamientos y encuentros de empresa. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 corporativo empresa profesional Usar esta plantilla →",
+      "Cumpleaños BASIC Cumple Bloom Una paleta coral y lavanda, fresca y con energía femenina. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños femenino coral Usar esta plantilla →",
+      "Cumpleaños BASIC Cumple Moderno Diseño oscuro, vibrante y versátil para festejos adultos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños adultos moderno Usar esta plantilla →",
+      "Cumpleaños BASIC Cumple Urban Azul eléctrico y grafito para un festejo masculino o urbano. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños masculino azul Usar esta plantilla →",
+      "Cumple infantil BASIC Infantil Arcoíris Color, formas suaves y alegría para los más chicos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 infantil niños nenas Usar esta plantilla →",
+      "Cumple infantil BASIC Infantil Aventura Una propuesta en azul, verde y naranja para pequeños exploradores. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 infantil niños aventura Usar esta plantilla →",
+      "Cumple infantil ✦ PREMIUM Premium Infantil Colores configurables, agenda, galería y animaciones suaves para festejos infantiles. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium infantil colorido Usar esta plantilla →",
+      "Casamiento ✦ PREMIUM Premium Wedding Portada personalizada, fotos, agenda, regalos, música y RSVP para bodas. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium casamiento música Usar esta plantilla →",
+      "Quince años ✦ PREMIUM Premium XV Una experiencia inmersiva con portada, música, galería editorial, agenda y regalos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium xv música Usar esta plantilla →",
+      "Quince años ✦ PREMIUM Quince Dorado Noche elegante con negro, dorado y destellos sutiles. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 xv quince elegante Usar esta plantilla →",
+      "Quince años ✦ PREMIUM Quince Rosa Una propuesta romántica, luminosa y contemporánea para tus XV. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 xv quince rosa Usar esta plantilla →"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Plantillas de invitación Catálogo profesional de estilos reutilizables para cada celebración. Todas las invitaciones Todas BASIC PREMIUM Todas Casamiento Quince años Cumpleaños Cumple infantil Baby shower Bautismo Comunión Aniversario Corporativo General Aniversario BASIC Aniversario Minimal Tipografía protagonista y elegancia minimalista. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 aniversario pareja minimalista Usar esta plantilla → Baby shower BASIC Baby Shower Suave Tonos pastel y un estilo delicado para celebrar una llegada especial. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 baby shower bebé pastel Usar esta plantilla → General BASIC Basic Elegant Diseño claro, elegante y versátil para cumpleaños, bautismos y aniversarios. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 basic elegante versátil Usar esta plantilla → Cumpleaños BASIC Basic Modern Bloques de color, hero visual y una configuración simple pero impactante. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 basic moderno cumpleaños Usar esta plantilla → Casamiento ✦ PREMIUM Boda Botánica Verdes profundos y detalles orgánicos para una celebración al aire libre. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 casamiento boda verde Usar esta plantilla → Casamiento ✦ PREMIUM Boda Clásica Marfil, champagne y una estética atemporal. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 casamiento boda clásico Usar esta plantilla → General BASIC Celebración Esencial Un diseño neutro, cálido y adaptable a cualquier ocasión. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 general neutro otro Usar esta plantilla → Corporativo BASIC Corporativo Executive Sobrio, claro y profesional para lanzamientos y encuentros de empresa. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 corporativo empresa profesional Usar esta plantilla → Cumpleaños BASIC Cumple Bloom Una paleta coral y lavanda, fresca y con energía femenina. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños femenino coral Usar esta plantilla → Cumpleaños BASIC Cumple Moderno Diseño oscuro, vibrante y versátil para festejos adultos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños adultos moderno Usar esta plantilla → Cumpleaños BASIC Cumple Urban Azul eléctrico y grafito para un festejo masculino o urbano. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños masculino azul Usar esta plantilla → Cumple infantil BASIC Infantil Arcoíris Color, formas suaves y alegría para los más chicos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 infantil niños nenas Usar esta plantilla → Cumple infantil BASIC Infantil Aventura Una propuesta en azul, verde y naranja para pequeños exploradores. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 infantil niños aventura Usar esta plantilla → Cumple infantil ✦ PREMIUM Premium Infantil Colores configurables, agenda, galería y animaciones suaves para festejos infantiles. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium infantil colorido Usar esta plantilla → Casamiento ✦ PREMIUM Premium Wedding Portada personalizada, fotos, agenda, regalos, música y RSVP para bodas. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium casamiento música Usar esta plantilla → Quince años ✦ PREMIUM Premium XV Una experiencia inmersiva con portada, música, galería editorial, agenda y regalos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium xv música Usar esta plantilla → Quince años ✦ PREMIUM Quince Dorado Noche elegante con negro, dorado y destellos sutiles. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 xv quince elegante Usar esta plantilla → Quince años ✦ PREMIUM Quince Rosa Una propuesta romántica, luminosa y contemporánea para tus XV. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 xv quince rosa Usar esta plantilla →"
+  },
+  {
+    "slug": "invitaciones-ejemplos",
+    "title": "Ejemplos de invitaciones",
+    "route": "/admin/digital-invitations/examples",
+    "screenshot": "81-invitaciones-ejemplos.png",
+    "headings": [
+      "Ejemplos de invitaciones",
+      "Todo lo esencial, con estilo.",
+      "Una experiencia que sorprende.",
+      "25 años juntos",
+      "Una celebración especial",
+      "Falta muy poco",
+      "Dónde nos encontramos",
+      "Momentos para recordar",
+      "Dress code",
+      "Confirmá tu asistencia",
+      "¿Tenés alguna consulta?"
+    ],
+    "fields": [
+      "Apellido y nombre",
+      "¿Vas a asistir? Sí, voy a asistir No voy a poder asistir",
+      "Restricción alimentaria",
+      "Música que no puede faltar",
+      "Mensaje"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Todas las invitaciones",
+      "Aniversario Minimal Aniversario · Basic · RSVP",
+      "Baby Shower Suave Baby shower · Basic · RSVP",
+      "Basic Elegant General · Basic · RSVP",
+      "Basic Modern Cumpleaños · Basic · RSVP",
+      "Boda Botánica Boda · ✦ Premium · RSVP",
+      "Boda Clásica Boda · ✦ Premium · RSVP",
+      "Celebración Esencial General · Basic · RSVP",
+      "Corporativo Executive Corporativo · Basic · RSVP",
+      "Cumple Bloom Cumpleaños · Basic · RSVP",
+      "Cumple Moderno Cumpleaños · Basic · RSVP",
+      "Cumple Urban Cumpleaños · Basic · RSVP",
+      "Infantil Arcoíris Infantil · Basic · RSVP",
+      "Infantil Aventura Infantil · Basic · RSVP",
+      "Premium Infantil Infantil · ✦ Premium · RSVP",
+      "Premium Wedding Boda · ✦ Premium · RSVP",
+      "Premium XV XV · ✦ Premium · RSVP",
+      "Quince Dorado XV · ✦ Premium · RSVP",
+      "Quince Rosa XV · ✦ Premium · RSVP",
+      "Web",
+      "Móvil",
+      "DÓNDE Bodega La Emilia · La Plata Ver mapa →",
+      "Confirmar asistencia"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Ejemplos de invitaciones Muestras ficticias listas para presentar a clientes y comparar cada opción. Todas las invitaciones INVITACIÓN BASIC Todo lo esencial, con estilo. Una propuesta elegante y completa para comunicar tu evento: bienvenida personalizada, fecha, mapa, cuenta regresiva, galería de hasta 4 fotos y formulario de confirmación RSVP. Ideal para compartir una invitación clara, linda y fácil de usar. No incluye música de fondo, agenda, mesa de regalos ni fondos personalizados por sección. ✦ INVITACIÓN PREMIUM Una experiencia que sorprende. Incluye todo lo de Basic y suma música de fondo en MP3 o URL, hasta 20 fotos, agenda del evento, mesa de regalos, fondos personalizados por sección, animaciones avanzadas y más libertad para crear contenidos a medida. Ideal para quince años, casamientos y celebraciones donde cada detalle cuenta una historia. Elegí una plantilla Cada ejemplo respeta las capacidades y límites reales de la plantilla. Aniversario Minimal Aniversario · Basic · RSVP Baby Shower Suave Baby shower · Basic · RSVP Basic Elegant General · Basic · RSVP Basic Modern Cumpleaños · Basic · RSVP Boda Botánica Boda · ✦ Premium · RSVP Boda Clásica Boda · ✦ Premium · RSVP Celebración Esencial General · Basic · RSVP Corporativo Executive Corporativo · Basic · RSVP Cumple Bloom Cumpleaños · Basic · RSVP Cumple Moderno Cumpleaños · Basic · RSVP Cumple Urban Cumpleaños · Basic · RSVP Infantil Arcoíris Infantil · Basic · RSVP Infantil Aventura Infantil · Basic · RSVP Premium Infantil Infantil · ✦ Premium · RSVP Premium Wedding Boda · ✦ Premium · RSVP Premium XV XV · ✦ Premium · RSVP Quince Dorado XV · ✦ Premium · RSVP Quince Rosa XV · ✦ Premium · RSVP Aniversario Minimal Formato esencial, directo y fácil de recorrer · 10 de 10 secciones RSVP Mapa Web Móvil M&M EVENTOS 25 años juntos Mariana & Diego sábado, 7 de noviembre de 2026, 5:00 p. m. Una celebración especial Volvemos a elegirnos y queremos brindar por este camino compartido. Te esperamos AGENDÁ LA FECHA sábado, 7 de noviembre de 2026, 5:00 p. m. Agendar en Google Calendar → DÓNDE Bodega La Emilia · La Plata Ver mapa → Falta muy poco 89 DÍAS 14 HORAS 49 MIN 46 SEG Dónde nos encontramos Bodega La Emilia · La Plata Un espacio pensado para vivir una celebración inolvidable. Cómo llegar Momentos para recordar Dress code Elegante Confirmá tu asistencia Completá el formulario para ayudarnos a preparar cada detalle. Apellido y nombre ¿Vas a asistir? Sí, voy a asistir No voy a poder asistir Restricción alimentaria Música que no puede faltar Mensaje Confirmar asistencia ¿Tenés alguna consulta? Mariana · +54 9 (221) 000-0000 · usuario@ejemplo.com Ejemplo de invitación digital M&M Eventos"
+  },
+  {
+    "slug": "entradas-ventas",
+    "title": "Entradas — ventas",
+    "route": "/admin/digital-tickets/orders",
+    "screenshot": "82-entradas-ventas.png",
+    "headings": [
+      "Ventas"
+    ],
+    "fields": [
+      "Buscar por código, comprador, DNI o email",
+      "Estado Todos Pendiente de pago Pagada Cancelada Reembolsada"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Ventas Órdenes, pagos, compradores y entradas emitidas. Buscar por código, comprador, DNI o email Estado Todos Pendiente de pago Pagada Cancelada Reembolsada CÓDIGO PUBLICACIÓN COMPRADOR ENTRADAS TOTAL PAGO ESTADO DETALLE TKT-E35BB685633C9B Stand Up: Noche de Comedia Debug Tester usuario@ejemplo.com 1 $ 12.000 Pagada Pagada TKT-0A8B7A56372EF5 Stand Up: Noche de Comedia Debug Tester usuario@ejemplo.com 1 $ 12.000 Pagada Pagada TKT-F11D5F51216444 Stand Up: Noche de Comedia Debug Tester usuario@ejemplo.com 1 $ 12.000 Pagada Pagada TKT-F4F8A1018083B2 Fiesta de Halloween M&M Paula Castro usuario@ejemplo.com 1 $ 30.000 Pendiente Cancelada TKT-0CEB8F6DFB2A50 Fiesta de Halloween M&M Zoe González usuario@ejemplo.com 1 $ 18.000 Pendiente Vencida TKT-35F53A81D49311 Fiesta de Halloween M&M Agustina Ojeda usuario@ejemplo.com 3 $ 54.000 Pendiente Vencida TKT-C9EA08AE71E7B3 Fiesta de Halloween M&M Ignacio Díaz usuario@ejemplo.com 2 $ 60.000 Pagada Pagada TKT-21347DE11AF6F2 Fiesta de Halloween M&M Leandro Giménez usuario@ejemplo.com 2 $ 36.000 Pagada Pagada TKT-50743DDC45E241 Expo Gastronómica & Feria de Cerveza Artesanal Micaela Sánchez usuario@ejemplo.com 1 $ 15.000 Pendiente Cancelada TKT-1BFC8B3BE57DB8 Expo Gastronómica & Feria de Cerveza Artesanal Renata Bustos usuario@ejemplo.com 1 $ 8.000 Pendiente Vencida TKT-86EB748A568162 Expo Gastronómica & Feria de Cerveza Artesanal Ricardo García usuario@ejemplo.com 2 $ 30.000 Pagada Pagada TKT-D109DA0BF59075 Expo Gastronómica & Feria de Cerveza Artesanal Micaela Romero usuario@ejemplo.com 5 $ 40.000 Pagada Pagada TKT-6567F43C057BC3 Recital Tributo Queen Agustín Acosta usuario@ejemplo.com 3 $ 60.000 Reembolsada Reembolso parcial TKT-7BF058A1816C70 Recital Tributo Queen Emiliano Gómez usuario@ejemplo.com 1 $ 35.000 Pendiente Cancelada TKT-370311A0B3006F Recital Tributo Queen Hernán Rodríguez usuario@ejemplo.com 2 $ 40.000 Pendiente Vencida TKT-D106FF9D773A82 Recital Tributo Queen Julián Núñez usuario@ejemplo.com 1 $ 50.000 Pagada Pagada TKT-F7FF42DCD2B809 Recital Tributo Queen Sofía Sosa usuario@ejemplo.com 2 $ 70.000 Pagada Pagada TKT-B721774AD9EA2E Recital Tributo Queen Benjamín Maldonado usuario@ejemplo.com 4 $ 80.000 Pagada Pagada TKT-48D1E6972CDE58 Stand Up: Noche de Comedia Renata Martínez usuario@ejemplo.com 2 $ 24.000 Pendiente Cancelada TKT-4BDE7AF41BE5FB Stand Up: Noche de Comedia Fiorella Ibáñez usuario@ejemplo.com 1 $ 12.000 Pendiente Vencida"
+  },
+  {
+    "slug": "analitica-mapa-calor",
+    "title": "Analítica — mapa de calor",
+    "route": "/admin/analytics/heatmap",
+    "screenshot": "83-analitica-mapa-calor.png",
+    "headings": [
+      "Interacciones",
+      "Interés por sección",
+      "Botones y enlaces más elegidos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Dispositivo Computadora Tablet Celular",
+      "Versión de la página Todas las versiones landing-2026-07"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Aplicar filtros"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Interacciones Conocé qué secciones y botones despiertan más interés. Los datos son agregados: no hay capturas de pantalla ni grabaciones. Resumen Interacciones Privacidad Desde Hasta Dispositivo Computadora Tablet Celular Versión de la página Todas las versiones landing-2026-07 Aplicar filtros Clics registrados 16 Secciones con clics 3 Botones o enlaces elegidos 11 Interés por sección Sirve para detectar qué partes de la página invitan a seguir explorando. Sin sección 14 Contacto 1 Salones 1 Botones y enlaces más elegidos Usalo para evaluar llamados a la acción, contacto y navegación. Ingresar Al Backoffice 4 Entradas 3 Solicitar Presupuesto 1 Ver Salon 1 Cerrar Detalle Del Paquete 1 Solicita Presupuesto 1 M M Villa Elisacalle 419 E 23 Y Belgrano N 2253 Villa Elisa 1 Ver Detalle Completo 1 Cerrar Selector 1 Botón flotante «Solicitá tu presupuesto» 1 Botón flotante de WhatsApp 1"
+  },
+  {
+    "slug": "analitica-configuracion",
+    "title": "Analítica — configuración",
+    "route": "/admin/analytics/settings",
+    "screenshot": "84-analitica-configuracion.png",
+    "headings": [
+      "Privacidad y conservación",
+      "Qué se registra"
+    ],
+    "fields": [
+      "Activar analítica Al desactivarla, el sitio deja de registrar nueva actividad.",
+      "Pedir autorización antes de medir La persona debe aceptar la analítica opcional antes de que se registre su actividad.",
+      "Registrar clics en botones y enlaces Permite ver qué acciones generan interés. No captura la pantalla ni el movimiento del mouse.",
+      "Medir interés por sección Registra de forma agregada qué partes de la página se ven y cuánto tiempo.",
+      "Conservar datos individuales durante Entre 7 y 730 días."
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Guardar cambios"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Privacidad y conservación Definí qué se mide y durante cuánto tiempo se conservan los datos anónimos. Resumen Interacciones Privacidad Qué se registra La analítica no guarda el contenido de formularios, e-mail, teléfono ni DNI. Solo registra actividad anónima de navegación. Activar analítica Al desactivarla, el sitio deja de registrar nueva actividad. Pedir autorización antes de medir La persona debe aceptar la analítica opcional antes de que se registre su actividad. Registrar clics en botones y enlaces Permite ver qué acciones generan interés. No captura la pantalla ni el movimiento del mouse. Medir interés por sección Registra de forma agregada qué partes de la página se ven y cuánto tiempo. Conservar datos individuales durante Entre 7 y 730 días. Al cumplirse este plazo se eliminan automáticamente las sesiones y eventos individuales asociados a un navegador anónimo. Los totales por día y sección se mantienen para los informes históricos, pero no permiten identificar a una persona. El cambio se aplica a los datos que se registren desde ahora; no acorta ni extiende el vencimiento ya asignado a registros existentes. Guardar cambios Eliminación manual de datos de analítica"
+  },
+  {
+    "slug": "reporte-leads",
+    "title": "Reporte de leads",
+    "route": "/admin/reports/leads?from=2026-08-01&to=2026-08-10&sortOrder=desc&page=1&limit=25",
+    "screenshot": "85-reporte-leads.png",
+    "headings": [
+      "Leads"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Salón Todo mi alcance San Carlos Villa Elisa La Plata",
+      "Estado Todos Nuevo Contactado Seguimiento Presupuesto enviado Negociación Ganado Perdido Convertido",
+      "Buscar"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Aplicar",
+      "Limpiar",
+      "Guardar vista",
+      "Restaurar vista",
+      "Compartir URL",
+      "Imprimir",
+      "CSV",
+      "Excel",
+      "Alta",
+      "Lead",
+      "Salón",
+      "Origen",
+      "Estado",
+      "Responsable",
+      "Tipo de evento",
+      "Fecha estimada",
+      "Invitados"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver al centro de reportes Leads Consultas, origen, responsables y evolución comercial. Desde Hasta Salón Todo mi alcance San Carlos Villa Elisa La Plata Estado Todos Nuevo Contactado Seguimiento Presupuesto enviado Negociación Ganado Perdido Convertido Buscar Aplicar Limpiar Guardar vista Restaurar vista Compartir URL Imprimir CSV Excel LEADS 42 NUEVOS 2 CONVERTIDOS 40 CONVERSIÓN 95,2 % Alta Lead Salón Origen Estado Responsable Tipo de evento Fecha estimada Invitados 10/8/26 Valeria Díaz Villa Elisa Sin especificar Convertido Usuario administrador baptism_communion 31/7/26 70 10/8/26 Ignacio Pérez Villa Elisa Sin especificar Convertido Usuario administrador birthday 25/7/26 76 10/8/26 Julieta Gómez Villa Elisa Sin especificar Convertido Usuario administrador fifteen 24/7/26 76 10/8/26 Gonzalo Castro Villa Elisa Sin especificar Convertido Usuario administrador graduates 18/7/26 96 10/8/26 Paula Torres Villa Elisa Sin especificar Convertido Usuario administrador anniversary 17/7/26 69 10/8/26 Martín Romero Villa Elisa Sin especificar Convertido Usuario administrador wedding 11/7/26 96 10/8/26 Florencia Rodríguez Villa Elisa Sin especificar Convertido Usuario administrador corporate 10/7/26 71 10/8/26 Nicolás Martínez Villa Elisa Sin especificar Convertido Usuario administrador baptism_communion 4/7/26 82 10/8/26 Agustina Medina Villa Elisa Sin especificar Convertido Usuario administrador birthday 3/7/26 83 10/8/26 Federico Álvarez San Carlos Sin especificar Convertido Usuario administrador anniversary 31/7/26 84 10/8/26 Carolina Sánchez San Carlos Sin especificar Convertido Usuario administrador wedding 25/7/26 72 10/8/26 Lucas López San Carlos Sin especificar Convertido Usuario administrador corporate 24/7/26 88 10/8/26 Mariana Fernández San Carlos Sin especificar Convertido Usuario administrador baptism_communion 18/7/26 100 10/8/26 Sebastián Ruiz San Carlos Sin especificar Convertido Usuario administrador birthday 17/7/26 90 10/8/26 Valeria Díaz San Carlos Sin especificar Convertido Usuario administrador fifteen 11/7/26 86 10/8/26 Ignacio Pérez San Carlos Sin especificar Convertido Usuario administrador graduates 10/7/26 98 10/8/26 Julieta Gómez San Carlos Sin especificar Convertido Usuario administrador anniversary 4/7/26 68 10/8/26 Gonzalo Castro San Carlos Sin especificar Convertido Usuario administrador wedding 3/7/26 65 10/8/26 Paula Torres La Plata Sin especificar Convertido Usuario administrador birthday 31/7/26 101 10/8/26 Martín Romero La Plata Sin especificar Convertido Usuario administrador fifteen 25/7/26 155 10/8/26 Florencia Rodríguez La Plata Sin especificar Convertido Usuario administrador graduates 24/7/26 85 10/8/26 Nicolás Martínez La Plata Sin especificar Convertido Usuario administrador anniversary 18/7/26 127 10/8/26 Agustina Medina La Plata Sin especificar Convertido Usuario administrador wedding 17/7/26 74 10/8/26 Federico Álvarez La Plata Sin especificar Convertido Usuario administrador corporate 11/7/26 79 10/8/26 Carolina Sánchez La Plata Sin especificar Convertido Usuario administrador baptism_communion 10/7/26 154 Mostrando 25 de 42 · Generado 10/8/26 25 filas 50 filas 100 filas Página 1 de 2"
+  },
+  {
+    "slug": "reporte-presupuestos",
+    "title": "Reporte de presupuestos",
+    "route": "/admin/reports/quotes?from=2026-08-01&to=2026-08-10&sortOrder=desc&page=1&limit=25",
+    "screenshot": "86-reporte-presupuestos.png",
+    "headings": [
+      "Presupuestos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Salón Todo mi alcance San Carlos Villa Elisa La Plata",
+      "Estado Todos Borrador Enviado En seguimiento Aceptado Rechazado Vencido Convertido",
+      "Buscar"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Aplicar",
+      "Limpiar",
+      "Guardar vista",
+      "Restaurar vista",
+      "Compartir URL",
+      "Imprimir",
+      "CSV",
+      "Excel",
+      "Alta",
+      "Número",
+      "Cliente",
+      "Salón",
+      "Tipo de evento",
+      "Fecha del evento",
+      "Estado",
+      "Paquete",
+      "Importe",
+      "Enviado",
+      "Aceptado"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver al centro de reportes Presupuestos Propuestas emitidas, importes y aceptación. Desde Hasta Salón Todo mi alcance San Carlos Villa Elisa La Plata Estado Todos Borrador Enviado En seguimiento Aceptado Rechazado Vencido Convertido Buscar Aplicar Limpiar Guardar vista Restaurar vista Compartir URL Imprimir CSV Excel PRESUPUESTOS 42 MONTO PRESUPUESTADO $ 258.978.000 MONTO ACEPTADO $ 258.978.000 TASA DE ACEPTACIÓN 100 % Alta Número Cliente Salón Tipo de evento Fecha del evento Estado Paquete Importe Enviado Aceptado 10/8/26 QA-JUL26-027 Valeria Díaz Villa Elisa baptism_communion 31/7/26 Convertido Exclusive Night $ 5.320.000 9/7/26 13/7/26 10/8/26 QA-JUL26-026 Ignacio Pérez Villa Elisa birthday 25/7/26 Convertido Promo Infantil Sonrisitas $ 650.000 9/7/26 12/7/26 10/8/26 QA-JUL26-025 Julieta Gómez Villa Elisa fifteen 24/7/26 Convertido Promo Infantil Risitas $ 400.000 19/6/26 21/6/26 10/8/26 QA-JUL26-024 Gonzalo Castro Villa Elisa graduates 18/7/26 Convertido Platinum Night $ 6.912.000 22/6/26 27/6/26 10/8/26 QA-JUL26-023 Paula Torres Villa Elisa anniversary 17/7/26 Convertido Magic Night $ 4.692.000 27/6/26 1/7/26 10/8/26 QA-JUL26-022 Martín Romero Villa Elisa wedding 11/7/26 Convertido Fiesta Platinum $ 4.032.000 2/6/26 5/6/26 10/8/26 QA-JUL26-021 Florencia Rodríguez Villa Elisa corporate 10/7/26 Convertido Exclusive Night $ 5.396.000 10/6/26 12/6/26 10/8/26 QA-JUL26-020 Nicolás Martínez Villa Elisa baptism_communion 4/7/26 Convertido Promo Infantil Sonrisitas $ 650.000 10/6/26 15/6/26 10/8/26 QA-JUL26-019 Agustina Medina Villa Elisa birthday 3/7/26 Convertido Promo Infantil Risitas $ 400.000 15/6/26 19/6/26 10/8/26 QA-JUL26-018 Federico Álvarez San Carlos anniversary 31/7/26 Convertido Luxury Night $ 6.720.000 27/6/26 30/6/26 10/8/26 QA-JUL26-017 Carolina Sánchez San Carlos wedding 25/7/26 Convertido Fiesta de Egresados $ 4.680.000 27/6/26 29/6/26 10/8/26 QA-JUL26-016 Lucas López San Carlos corporate 24/7/26 Convertido Banquete Premium $ 6.600.000 2/7/26 7/7/26 10/8/26 QA-JUL26-015 Mariana Fernández San Carlos baptism_communion 18/7/26 Convertido Servicio por 5 horas $ 3.500.000 10/6/26 14/6/26 10/8/26 QA-JUL26-014 Sebastián Ruiz San Carlos birthday 17/7/26 Convertido Promo Salón Full $ 2.500.000 15/6/26 18/6/26 10/8/26 QA-JUL26-013 Valeria Díaz San Carlos fifteen 11/7/26 Convertido Promo Infantil Sonrisitas $ 650.000 15/6/26 17/6/26 10/8/26 QA-JUL26-012 Ignacio Pérez San Carlos graduates 10/7/26 Convertido Promo Infantil Risitas $ 400.000 23/6/26 28/6/26 10/8/26 QA-JUL26-011 Julieta Gómez San Carlos anniversary 4/7/26 Convertido Opción Bássic $ 1.500.000 29/5/26 2/6/26 10/8/26 QA-JUL26-010 Gonzalo Castro San Carlos wedding 3/7/26 Convertido Luxury Night $ 5.200.000 3/6/26 6/6/26 10/8/26 QA-JUL26-009 Paula Torres La Plata birthday 31/7/26 Convertido Gold Service $ 14.140.000 10/7/26 12/7/26 10/8/26 QA-JUL26-008 Martín Romero La Plata fifteen 25/7/26 Convertido Gala y Gourmet $ 20.150.000 15/6/26 20/6/26 10/8/26 QA-JUL26-007 Florencia Rodríguez La Plata graduates 24/7/26 Convertido Fiesta de egresados M&M La Plata $ 8.075.000 20/6/26 24/6/26 10/8/26 QA-JUL26-006 Nicolás Martínez La Plata anniversary 18/7/26 Convertido Black Service La Plata $ 15.240.000 23/6/26 26/6/26 10/8/26 QA-JUL26-005 Agustina Medina La Plata wedding 17/7/26 Convertido Salón completo M&M La Plata $ 5.000.000 28/6/26 30/6/26 10/8/26 QA-JUL26-004 Federico Álvarez La Plata corporate 11/7/26 Convertido Gold Service $ 11.060.000 3/6/26 8/6/26 10/8/26 QA-JUL26-003 Carolina Sánchez La Plata baptism_communion 10/7/26 Convertido Gala y Gourmet $ 20.020.000 11/6/26 15/6/26 Mostrando 25 de 42 · Generado 10/8/26 25 filas 50 filas 100 filas Página 1 de 2"
+  },
+  {
+    "slug": "reporte-eventos",
+    "title": "Reporte de eventos",
+    "route": "/admin/reports/events?from=2026-08-01&to=2026-08-10&sortOrder=desc&page=1&limit=25",
+    "screenshot": "87-reporte-eventos.png",
+    "headings": [
+      "Eventos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Salón Todo mi alcance San Carlos Villa Elisa La Plata",
+      "Estado Todos Borrador Pendiente de contrato Contrato borrador Seña pendiente Reservado Confirmado Cancelado Perdido",
+      "Buscar"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Aplicar",
+      "Limpiar",
+      "Guardar vista",
+      "Restaurar vista",
+      "Compartir URL",
+      "Imprimir",
+      "CSV",
+      "Excel",
+      "Fecha",
+      "Evento",
+      "Cliente",
+      "Salón",
+      "Tipo",
+      "Estado",
+      "Invitados",
+      "Contrato",
+      "Cobrado",
+      "Vencido",
+      "Staff",
+      "Producción"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver al centro de reportes Eventos Estado integral, invitados y pendientes operativos. Desde Hasta Salón Todo mi alcance San Carlos Villa Elisa La Plata Estado Todos Borrador Pendiente de contrato Contrato borrador Seña pendiente Reservado Confirmado Cancelado Perdido Buscar Aplicar Limpiar Guardar vista Restaurar vista Compartir URL Imprimir CSV Excel EVENTOS 3 CONFIRMADOS 2 CANCELADOS 0 INVITADOS EN PÁGINA 205 Fecha Evento Cliente Salón Tipo Estado Invitados Contrato Cobrado Vencido Staff Producción 8/8/26 Fiesta de Egresados - Promoción 2026 - Colegio San Martín Valentina Ortiz San Carlos graduates Confirmado 60 Aprobado $ 3.900.000 $ 0 0 No generada 8/8/26 Casamiento - Ana Bravo & Martín Coronel Melina Ortiz Villa Elisa wedding Reservado 90 Aprobado $ 4.075.000 $ 0 0 No generada 8/8/26 Evento corporativo - Cena anual Constructora del Plata SA Oscar García La Plata corporate Confirmado 55 Aprobado $ 7.700.000 $ 0 0 No generada Mostrando 3 de 3 · Generado 10/8/26 25 filas 50 filas 100 filas Página 1 de 1"
+  },
+  {
+    "slug": "reporte-contratos",
+    "title": "Reporte de contratos",
+    "route": "/admin/reports/contracts?from=2026-08-01&to=2026-08-10&sortOrder=desc&page=1&limit=25",
+    "screenshot": "88-reporte-contratos.png",
+    "headings": [
+      "Contratos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Salón Todo mi alcance San Carlos Villa Elisa La Plata",
+      "Estado Todos Borrador Pendiente de aprobación Aprobado Requiere cambios Cancelado Reemplazado",
+      "Buscar"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Aplicar",
+      "Limpiar",
+      "Guardar vista",
+      "Restaurar vista",
+      "Compartir URL",
+      "Imprimir",
+      "CSV",
+      "Excel",
+      "Alta",
+      "Contrato",
+      "Cliente",
+      "Evento",
+      "Fecha del evento",
+      "Salón",
+      "Estado",
+      "Aprobación",
+      "Contratado",
+      "Seña",
+      "Cobrado",
+      "Saldo",
+      "Vencido",
+      "Cuotas",
+      "Próximo vencimiento"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver al centro de reportes Contratos Valor contratado, cobranzas, saldos y vencimientos. Desde Hasta Salón Todo mi alcance San Carlos Villa Elisa La Plata Estado Todos Borrador Pendiente de aprobación Aprobado Requiere cambios Cancelado Reemplazado Buscar Aplicar Limpiar Guardar vista Restaurar vista Compartir URL Imprimir CSV Excel CONTRATOS 41 TOTAL CONTRATADO $ 258.212.000 TOTAL COBRADO $ 229.577.000 SALDO PENDIENTE $ 28.635.000 Alta Contrato Cliente Evento Fecha del evento Salón Estado Aprobación Contratado Seña Cobrado Saldo Vencido Cuotas Próximo vencimiento 10/8/26 C-2026-00041 Valeria Díaz Bautismo y comunión de Lucas López 31/7/26 Villa Elisa Aprobado 14/7/26 $ 5.320.000 $ 500.000 $ 5.320.000 $ 0 $ 0 0 — 10/8/26 C-2026-00040 Ignacio Pérez Cumpleaños de Mariana Gómez 25/7/26 Villa Elisa Aprobado 13/7/26 $ 650.000 $ 162.500 $ 650.000 $ 0 $ 0 0 — 10/8/26 C-2026-00039 Julieta Gómez Fiesta de 15 de Sebastián Martínez 24/7/26 Villa Elisa Aprobado 22/6/26 $ 400.000 $ 100.000 $ 400.000 $ 0 $ 0 0 — 10/8/26 C-2026-00038 Gonzalo Castro Egresados de Valeria Fernández 18/7/26 Villa Elisa Aprobado 28/6/26 $ 6.912.000 $ 500.000 $ 6.912.000 $ 0 $ 0 0 — 10/8/26 C-2026-00037 Paula Torres Aniversario de Ignacio Castro 17/7/26 Villa Elisa Aprobado 2/7/26 $ 4.692.000 $ 500.000 $ 4.692.000 $ 0 $ 0 0 — 10/8/26 C-2026-00036 Martín Romero Casamiento de Julieta Medina 11/7/26 Villa Elisa Aprobado 6/6/26 $ 4.032.000 $ 400.000 $ 4.032.000 $ 0 $ 0 0 — 10/8/26 C-2026-00035 Florencia Rodríguez Encuentro corporativo de Gonzalo Ruiz 10/7/26 Villa Elisa Aprobado 13/6/26 $ 5.396.000 $ 500.000 $ 5.396.000 $ 0 $ 0 0 — 10/8/26 C-2026-00034 Nicolás Martínez Bautismo y comunión de Paula Torres 4/7/26 Villa Elisa Aprobado 16/6/26 $ 650.000 $ 162.500 $ 650.000 $ 0 $ 0 0 — 10/8/26 C-2026-00033 Agustina Medina Cumpleaños de Martín Álvarez 3/7/26 Villa Elisa Aprobado 20/6/26 $ 400.000 $ 100.000 $ 400.000 $ 0 $ 0 0 — 10/8/26 C-2026-00032 Federico Álvarez Aniversario de Florencia Díaz 31/7/26 San Carlos Aprobado 1/7/26 $ 6.720.000 $ 600.000 $ 6.720.000 $ 0 $ 0 0 — 10/8/26 C-2026-00031 Carolina Sánchez Casamiento de Nicolás Romero 25/7/26 San Carlos Aprobado 30/6/26 $ 4.680.000 $ 400.000 $ 4.680.000 $ 0 $ 0 0 — 10/8/26 C-2026-00030 Lucas López Encuentro corporativo de Agustina Sánchez 24/7/26 San Carlos Aprobado 8/7/26 $ 6.600.000 $ 550.000 $ 6.600.000 $ 0 $ 0 0 — 10/8/26 C-2026-00029 Mariana Fernández Bautismo y comunión de Federico Pérez 18/7/26 San Carlos Aprobado 15/6/26 $ 3.500.000 $ 400.000 $ 3.500.000 $ 0 $ 0 0 — 10/8/26 C-2026-00028 Sebastián Ruiz Cumpleaños de Carolina Rodríguez 17/7/26 San Carlos Aprobado 19/6/26 $ 2.500.000 $ 600.000 $ 2.500.000 $ 0 $ 0 0 — 10/8/26 C-2026-00027 Valeria Díaz Fiesta de 15 de Lucas López 11/7/26 San Carlos Aprobado 18/6/26 $ 650.000 $ 162.500 $ 650.000 $ 0 $ 0 0 — 10/8/26 C-2026-00026 Ignacio Pérez Egresados de Mariana Gómez 10/7/26 San Carlos Aprobado 29/6/26 $ 400.000 $ 100.000 $ 400.000 $ 0 $ 0 0 — 10/8/26 C-2026-00025 Julieta Gómez Aniversario de Sebastián Martínez 4/7/26 San Carlos Aprobado 3/6/26 $ 1.500.000 $ 400.000 $ 1.500.000 $ 0 $ 0 0 — 10/8/26 C-2026-00024 Gonzalo Castro Casamiento de Valeria Fernández 3/7/26 San Carlos Aprobado 7/6/26 $ 5.200.000 $ 600.000 $ 5.200.000 $ 0 $ 0 0 — 10/8/26 C-2026-00023 Paula Torres Cumpleaños de Ignacio Castro 31/7/26 La Plata Aprobado 13/7/26 $ 14.140.000 $ 1.000.000 $ 14.140.000 $ 0 $ 0 0 — 10/8/26 C-2026-00022 Martín Romero Fiesta de 15 de Julieta Medina 25/7/26 La Plata Aprobado 21/6/26 $ 20.150.000 $ 1.000.000 $ 20.150.000 $ 0 $ 0 0 — 10/8/26 C-2026-00021 Florencia Rodríguez Egresados de Gonzalo Ruiz 24/7/26 La Plata Aprobado 25/6/26 $ 8.075.000 $ 1.000.000 $ 8.075.000 $ 0 $ 0 0 — 10/8/26 C-2026-00020 Nicolás Martínez Aniversario de Paula Torres 18/7/26 La Plata Aprobado 27/6/26 $ 15.240.000 $ 1.000.000 $ 15.240.000 $ 0 $ 0 0 — 10/8/26 C-2026-00019 Agustina Medina Casamiento de Martín Álvarez 17/7/26 La Plata Aprobado 1/7/26 $ 5.000.000 $ 700.000 $ 5.000.000 $ 0 $ 0 0 — 10/8/26 C-2026-00018 Federico Álvarez Encuentro corporativo de Florencia Díaz 11/7/26 La Plata Aprobado 9/6/26 $ 11.060.000 $ 1.000.000 $ 11.060.000 $ 0 $ 0 0 — 10/8/26 C-2026-00017 Carolina Sánchez Bautismo y comunión de Nicolás Romero 10/7/26 La Plata Aprobado 16/6/26 $ 20.020.000 $ 1.000.000 $ 20.020.000 $ 0 $ 0 0 — Mostrando 25 de 41 · Generado 10/8/26 25 filas 50 filas 100 filas Página 1 de 2"
+  },
+  {
+    "slug": "reporte-pagos",
+    "title": "Reporte de pagos",
+    "route": "/admin/reports/payments?from=2026-08-01&to=2026-08-10&sortOrder=desc&page=1&limit=25",
+    "screenshot": "89-reporte-pagos.png",
+    "headings": [
+      "Pagos y cobranzas"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Salón Todo mi alcance San Carlos Villa Elisa La Plata",
+      "Estado Todos Pendiente Cobrado Cancelado Reembolsado",
+      "Buscar"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Aplicar",
+      "Limpiar",
+      "Guardar vista",
+      "Restaurar vista",
+      "Compartir URL",
+      "Imprimir",
+      "CSV",
+      "Excel",
+      "Fecha",
+      "Movimiento",
+      "Cliente",
+      "Evento",
+      "Salón",
+      "Tipo",
+      "Medio",
+      "Estado",
+      "Vencimiento",
+      "Importe",
+      "Comprobante"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver al centro de reportes Pagos y cobranzas Movimientos, cuotas, medios y vencimientos. Desde Hasta Salón Todo mi alcance San Carlos Villa Elisa La Plata Estado Todos Pendiente Cobrado Cancelado Reembolsado Buscar Aplicar Limpiar Guardar vista Restaurar vista Compartir URL Imprimir CSV Excel MOVIMIENTOS 30 COBRADO NETO $ 16.855.500 PENDIENTE $ 0 VENCIDO $ 0 Fecha Movimiento Cliente Evento Salón Tipo Medio Estado Vencimiento Importe Comprobante 8/8/26 PAY-2026-00009 Melina Ortiz Casamiento - Ana Bravo & Martín Coronel Villa Elisa Seña Efectivo Pagado — $ 500.000 Disponible 8/8/26 PAY-2026-00013 Oscar García Evento corporativo - Cena anual Constructora del Plata SA La Plata Cuota Efectivo Pagado — $ 3.350.000 Disponible 8/8/26 PAY-2026-00008 Valentina Ortiz Fiesta de Egresados - Promoción 2026 - Colegio San Martín San Carlos Cuota Efectivo Pagado — $ 1.750.000 Disponible 8/8/26 PAY-2026-00007 Valentina Ortiz Fiesta de Egresados - Promoción 2026 - Colegio San Martín San Carlos Cuota Transferencia Pagado — $ 1.750.000 Disponible 8/8/26 PAY-2026-00011 Oscar García Evento corporativo - Cena anual Constructora del Plata SA La Plata Seña Transferencia Pagado — $ 1.000.000 Disponible 8/8/26 PAY-2026-00010 Melina Ortiz Casamiento - Ana Bravo & Martín Coronel Villa Elisa Cuota Transferencia Pagado — $ 3.575.000 Disponible 8/8/26 PAY-2026-00012 Oscar García Evento corporativo - Cena anual Constructora del Plata SA La Plata Cuota Efectivo Pagado — $ 3.350.000 Disponible 8/8/26 PAY-2026-00006 Valentina Ortiz Fiesta de Egresados - Promoción 2026 - Colegio San Martín San Carlos Seña Transferencia Pagado — $ 400.000 Disponible 5/8/26 PAY-2026-00046 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 12.000 Pendiente 5/8/26 PAY-2026-00045 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 12.000 Pendiente 5/8/26 PAY-2026-00044 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 12.000 Pendiente 5/8/26 PAY-2026-00043 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 60.000 Pendiente 5/8/26 PAY-2026-00042 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 36.000 Pendiente 5/8/26 PAY-2026-00041 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 30.000 Pendiente 5/8/26 PAY-2026-00040 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 40.000 Pendiente 5/8/26 PAY-2026-00039 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 60.000 Pendiente 5/8/26 PAY-2026-00038 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 50.000 Pendiente 5/8/26 PAY-2026-00037 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 70.000 Pendiente 5/8/26 PAY-2026-00036 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 80.000 Pendiente 5/8/26 PAY-2026-00035 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 18.000 Pendiente 5/8/26 PAY-2026-00034 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 24.000 Pendiente 5/8/26 PAY-2026-00033 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 6.000 Pendiente 5/8/26 PAY-2026-00032 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 6.000 Pendiente 5/8/26 PAY-2026-00031 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 12.000 Pendiente 5/8/26 PAY-2026-00029 Sin datos Sin evento Sin salón Otro Otro Pagado — $ 15.000 Pendiente Mostrando 25 de 30 · Generado 10/8/26 25 filas 50 filas 100 filas Página 1 de 2"
+  },
+  {
+    "slug": "reporte-control-pagos",
+    "title": "Control mensual de pagos",
+    "route": "/admin/reports/payment-control?from=2026-08-01&to=2026-08-10&sortOrder=desc&page=1&limit=25",
+    "screenshot": "90-reporte-control-pagos.png",
+    "headings": [
+      "Control de pagos mensual"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Salón Todo mi alcance San Carlos Villa Elisa La Plata",
+      "Estado Todos",
+      "Buscar"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Aplicar",
+      "Limpiar",
+      "Guardar vista",
+      "Restaurar vista",
+      "Compartir URL",
+      "Imprimir",
+      "CSV",
+      "Excel",
+      "Contrato",
+      "Cliente",
+      "Evento",
+      "Fecha del evento",
+      "Salón",
+      "Total del evento",
+      "Cobrado",
+      "Saldo",
+      "Cuotas restantes",
+      "Valor de cuota",
+      "Ventana de pago",
+      "Observaciones"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver al centro de reportes Control de pagos mensual Vista por cliente: contrato, saldo, cuotas restantes y ventana de vencimiento del período. Desde Hasta Salón Todo mi alcance San Carlos Villa Elisa La Plata Estado Todos Buscar Aplicar Limpiar Guardar vista Restaurar vista Compartir URL Imprimir CSV Excel CLIENTES CON VENCIMIENTO 0 A COBRAR EN EL PERÍODO $ 0 SALDO PENDIENTE TOTAL $ 0 Contrato Cliente Evento Fecha del evento Salón Total del evento Cobrado Saldo Cuotas restantes Valor de cuota Ventana de pago Observaciones No hay registros para los filtros seleccionados. Mostrando 0 de 0 · Generado 10/8/26 25 filas 50 filas 100 filas Página 1 de 1"
+  },
+  {
+    "slug": "reporte-gastos",
+    "title": "Reporte de gastos",
+    "route": "/admin/reports/expenses?from=2026-08-01&to=2026-08-10&sortOrder=desc&page=1&limit=25",
+    "screenshot": "91-reporte-gastos.png",
+    "headings": [
+      "Gastos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Salón Todo mi alcance San Carlos Villa Elisa La Plata",
+      "Estado Todos",
+      "Buscar"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Aplicar",
+      "Limpiar",
+      "Guardar vista",
+      "Restaurar vista",
+      "Compartir URL",
+      "Imprimir",
+      "CSV",
+      "Excel",
+      "Fecha",
+      "Concepto",
+      "Categoría",
+      "Salón",
+      "Evento",
+      "Proveedor",
+      "Estado",
+      "Importe"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Reportes Producción Analítica Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver al centro de reportes Gastos Costos por fecha efectiva, categoría, salón y evento. Desde Hasta Salón Todo mi alcance San Carlos Villa Elisa La Plata Estado Todos Buscar Aplicar Limpiar Guardar vista Restaurar vista Compartir URL Imprimir CSV Excel GASTOS 0 TOTAL REGISTRADO $ 0 TOTAL PAGADO $ 0 Fecha Concepto Categoría Salón Evento Proveedor Estado Importe No hay registros para los filtros seleccionados. Mostrando 0 de 0 · Generado 10/8/26 25 filas 50 filas 100 filas Página 1 de 1"
+  },
+  {
+    "slug": "marketing-campanas",
+    "title": "Marketing — campañas",
+    "route": "/admin/marketing/campaigns",
+    "screenshot": "92-marketing-campanas.png",
+    "headings": [
+      "Marketing",
+      "Campañas"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Nueva campaña"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Marketing Campañas de email dirigidas a leads y clientes. Resumen Campañas Plantillas Audiencias Historial de envíos Configuración Campañas Creá, programá y seguí el resultado de cada envío. Nueva campaña Todos los estados Borrador Programada Preparando Enviando Pausada Completada Completada con errores Cancelada Fallida NOMBRE ESTADO DESTINATARIOS ENVIADOS FALLIDOS PROGRAMADA / COMPLETADA ACCIONES No hay campañas todavía. 0 campañas Página 1 de 1"
+  },
+  {
+    "slug": "marketing-plantillas",
+    "title": "Marketing — plantillas",
+    "route": "/admin/marketing/templates",
+    "screenshot": "93-marketing-plantillas.png",
+    "headings": [
+      "Marketing",
+      "Plantillas"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Nueva plantilla",
+      "Editar",
+      "Duplicar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Marketing Plantillas de email reutilizables en campañas. Resumen Campañas Plantillas Audiencias Historial de envíos Configuración Plantillas Diseños prearmados y personalizados para tus campañas. Nueva plantilla Todas las categorías Promoción general Descuento por fecha especial Salón disponible Seguimiento de presupuesto Recuperación de lead Cumpleaños Aniversario Invitación a conocer el salón Beneficio para antiguos clientes Últimos lugares disponibles Nueva propuesta o paquete Campaña informativa Plantilla en blanco Últimos lugares disponibles Últimos lugares disponibles Sistema Activa M&M · Todo para tu evento en un solo lugar Campaña informativa Sistema Activa M&M · Retomemos tu presupuesto Seguimiento de presupuesto Sistema Activa M&M · Egresados con organización integral Nueva propuesta o paquete Sistema Activa M&M · Visitá nuestros salones Invitación a conocer el salón Sistema Activa M&M · Cumples infantiles sin complicaciones Nueva propuesta o paquete Sistema Activa M&M · Tu fiesta de 15, hecha a medida Promoción general Sistema Activa Plantilla en blanco Plantilla en blanco Sistema Activa Campaña informativa Campaña informativa Sistema Activa Nuevo paquete o servicio Nueva propuesta o paquete Sistema Activa Aniversario Aniversario Sistema Activa Beneficio para antiguos clientes Beneficio para antiguos clientes Sistema Activa Invitación a conocer el salón Invitación a conocer el salón Sistema Activa Cumpleaños Cumpleaños Sistema Activa Recuperación de lead Recuperación de lead Sistema Activa Promoción general Promoción general Sistema Activa Seguimiento de presupuesto Seguimiento de presupuesto Sistema Activa Salón disponible Salón disponible Sistema Activa Descuento por fecha especial Descuento por fecha especial Sistema Activa"
+  },
+  {
+    "slug": "marketing-audiencias",
+    "title": "Marketing — audiencias",
+    "route": "/admin/marketing/audiences",
+    "screenshot": "94-marketing-audiencias.png",
+    "headings": [
+      "Marketing",
+      "Audiencias"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Nueva audiencia",
+      "Editar",
+      "Eliminar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Marketing Segmentos reutilizables de leads y clientes para dirigir campañas. Resumen Campañas Plantillas Audiencias Historial de envíos Configuración Audiencias Definí a quién le llega una campaña combinando filtros de leads y clientes. Nueva audiencia NOMBRE FUENTES SALÓN ESTIMADO ÚLTIMA ACTUALIZACIÓN TIPO ACCIONES Todos los clientes Esta plantilla se usara para enviar campañas a todos los clientes de todos los salones customer Todos 0 28/7/2026, 01:20:18 Dinámica Todos Leads Esta audiencia seran todos los leads registrados de todos los salones lead Todos 0 28/7/2026, 01:19:11 Dinámica"
+  },
+  {
+    "slug": "marketing-historial",
+    "title": "Marketing — historial",
+    "route": "/admin/marketing/history",
+    "screenshot": "95-marketing-historial.png",
+    "headings": [
+      "Marketing",
+      "Historial de envíos"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Marketing Historial de envíos ya iniciados, completados o cancelados. Resumen Campañas Plantillas Audiencias Historial de envíos Configuración Historial de envíos Seguimiento de resultados de campañas ya procesadas. Todos los estados relevantes Enviando Pausada Completada Completada con errores Cancelada Fallida CAMPAÑA ESTADO INICIO FIN ENVIADOS ENTREGADOS FALLIDOS Todavía no hay envíos registrados."
+  },
+  {
+    "slug": "marketing-configuracion",
+    "title": "Marketing — configuración",
+    "route": "/admin/marketing/settings",
+    "screenshot": "96-marketing-configuracion.png",
+    "headings": [
+      "Marketing",
+      "Configuración"
+    ],
+    "fields": [
+      "Reemplazar archivo",
+      "Adjuntar archivo",
+      "Color primario",
+      "Color secundario",
+      "Color de botones",
+      "Color de fondo"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Reemplazar archivo",
+      "Quitar de la configuración",
+      "Adjuntar archivo",
+      "Guardar cambios"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Marketing Identidad institucional reutilizada por todas las campañas de email. Resumen Campañas Plantillas Audiencias Historial de envíos Configuración Configuración Adjuntá los logos e imágenes institucionales, y definí los colores, remitente y pie de las campañas. Identidad Logo principal Identidad principal de los emails. Reemplazar archivo Quitar de la configuración Logo alternativo Versión secundaria para diseños que la necesiten. Reemplazar archivo Quitar de la configuración Imagen por defecto Imagen de respaldo para los diseños de email. Adjuntar archivo Todavía no hay un archivo adjunto. Colores Color primario Color secundario Color de botones Color de fondo Remitente Pie institucional Guardar cambios"
+  },
+  {
+    "slug": "perfil",
+    "title": "Mi perfil",
+    "route": "/admin/profile",
+    "screenshot": "97-perfil.png",
+    "headings": [
+      "Mi perfil",
+      "Datos básicos y personales",
+      "Contraseña"
+    ],
+    "fields": [
+      "Nombre",
+      "Apellido",
+      "Email",
+      "Teléfono",
+      "Tipo de documento",
+      "Número de documento",
+      "Subir avatar",
+      "Contraseña actual",
+      "Nueva contraseña",
+      "Confirmar contraseña"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Subir avatar",
+      "Quitar avatar",
+      "Guardar perfil",
+      "Cambiar contraseña"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Mi perfil Gestioná tus datos personales, avatar y contraseña de acceso al backoffice. Usuario administrador usuario@ejemplo.com ADMIN SALON_MANAGER ACCOUNTING SALES MANAGER STAFF OPERATIONS VALIDATOR Los cambios de nombre, contacto y avatar impactan en el encabezado del backoffice después de guardar. Datos básicos y personales Información visible para operaciones internas. Nombre Apellido Email Teléfono Tipo de documento Número de documento Avatar Subir avatar Quitar avatar La imagen se guarda en la nube. Guardar perfil Contraseña Actualizá tu clave usando la contraseña actual. Contraseña actual Nueva contraseña Confirmar contraseña Cambiar contraseña"
+  },
+  {
+    "slug": "configuracion",
+    "title": "Configuración",
+    "route": "/admin/settings",
+    "screenshot": "98-configuracion.png",
+    "headings": [
+      "Configuración"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Guardar cambios"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Configuración Parámetros persistidos del sistema. Guardar cambios CLAVE VALOR DESCRIPCIÓN ACTUALIZADO application Configuración inicial de la aplicación 9 jul 2026, 2:07 p. m."
+  },
+  {
+    "slug": "presupuestos-listado",
+    "title": "Presupuestos — listado",
+    "route": "/admin/quotes",
+    "screenshot": "99-presupuestos-listado.png",
+    "headings": [
+      "Presupuestos"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Nuevo presupuesto",
+      "Solicitudes",
+      "Presupuestos",
+      "Ver detalle",
+      "Editar presupuesto",
+      "Duplicar presupuesto",
+      "Marcar como aceptado",
+      "Marcar como rechazado",
+      "Eliminar presupuesto",
+      "Anterior",
+      "Siguiente"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Presupuestos Solicitudes comerciales y presupuestos emitidos por salón. Nuevo presupuesto Solicitudes Presupuestos Todos los estados Borrador Enviado En seguimiento Aceptado Rechazado Vencido Convertido Todos los salones San Carlos Villa Elisa La Plata 10 por página 20 por página 50 por página NÚMERO LEAD / CLIENTE TELÉFONO FECHA TENTATIVA PERSONAS SALÓN PAQUETE TOTAL ESTADO ACCIONES QA-JUL26-027 Valeria Díaz Cliente asociado +54 9 (221) 000-0000 31 jul 2026 70 Villa Elisa Exclusive Night $ 5.320.000 Convertido QA-JUL26-026 Ignacio Pérez Cliente asociado +54 9 (221) 000-0000 25 jul 2026 76 Villa Elisa Promo Infantil Sonrisitas $ 650.000 Convertido QA-JUL26-025 Julieta Gómez Cliente asociado +54 9 (221) 000-0000 24 jul 2026 76 Villa Elisa Promo Infantil Risitas $ 400.000 Convertido QA-JUL26-024 Gonzalo Castro Cliente asociado +54 9 (221) 000-0000 18 jul 2026 96 Villa Elisa Platinum Night $ 6.912.000 Convertido QA-JUL26-023 Paula Torres Cliente asociado +54 9 (221) 000-0000 17 jul 2026 69 Villa Elisa Magic Night $ 4.692.000 Convertido QA-JUL26-022 Martín Romero Cliente asociado +54 9 (221) 000-0000 11 jul 2026 96 Villa Elisa Fiesta Platinum $ 4.032.000 Convertido QA-JUL26-021 Florencia Rodríguez Cliente asociado +54 9 (221) 000-0000 10 jul 2026 71 Villa Elisa Exclusive Night $ 5.396.000 Convertido QA-JUL26-020 Nicolás Martínez Cliente asociado +54 9 (221) 000-0000 4 jul 2026 82 Villa Elisa Promo Infantil Sonrisitas $ 650.000 Convertido QA-JUL26-019 Agustina Medina Cliente asociado +54 9 (221) 000-0000 3 jul 2026 83 Villa Elisa Promo Infantil Risitas $ 400.000 Convertido QA-JUL26-018 Federico Álvarez Cliente asociado +54 9 (221) 000-0000 31 jul 2026 84 San Carlos Luxury Night $ 6.720.000 Convertido QA-JUL26-017 Carolina Sánchez Cliente asociado +54 9 (221) 000-0000 25 jul 2026 72 San Carlos Fiesta de Egresados $ 4.680.000 Convertido QA-JUL26-016 Lucas López Cliente asociado +54 9 (221) 000-0000 24 jul 2026 88 San Carlos Banquete Premium $ 6.600.000 Convertido QA-JUL26-015 Mariana Fernández Cliente asociado +54 9 (221) 000-0000 18 jul 2026 100 San Carlos Servicio por 5 horas $ 3.500.000 Convertido QA-JUL26-014 Sebastián Ruiz Cliente asociado +54 9 (221) 000-0000 17 jul 2026 90 San Carlos Promo Salón Full $ 2.500.000 Convertido QA-JUL26-013 Valeria Díaz Cliente asociado +54 9 (221) 000-0000 11 jul 2026 86 San Carlos Promo Infantil Sonrisitas $ 650.000 Convertido QA-JUL26-012 Ignacio Pérez Cliente asociado +54 9 (221) 000-0000 10 jul 2026 98 San Carlos Promo Infantil Risitas $ 400.000 Convertido QA-JUL26-011 Julieta Gómez Cliente asociado +54 9 (221) 000-0000 4 jul 2026 68 San Carlos Opción Bássic $ 1.500.000 Convertido QA-JUL26-010 Gonzalo Castro Cliente asociado +54 9 (221) 000-0000 3 jul 2026 65 San Carlos Luxury Night $ 5.200.000 Convertido QA-JUL26-009 Paula Torres Cliente asociado +54 9 (221) 000-0000 31 jul 2026 101 La Plata Gold Service $ 14.140.000 Convertido QA-JUL26-008 Martín Romero Cliente asociado +54 9 (221) 000-0000 25 jul 2026 155 La Plata Gala y Gourmet $ 20.150.000 Convertido Mostrando 20 de 42 Anterior Página 1 de 3 Siguiente"
+  },
+  {
+    "slug": "entradas-panel-publicacion",
+    "title": "Entradas — panel de publicación",
+    "route": "/admin/digital-tickets",
+    "screenshot": "100-entradas-panel-publicacion.png",
+    "headings": [
+      "Entradas digitales"
+    ],
+    "fields": [
+      "Buscar publicación",
+      "Estado Todos Borrador Programada Activa Pausada Agotada Finalizada Cerrada Cancelada Archivada",
+      "Fecha de inicio"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Escanear entradas",
+      "Ver catálogo público",
+      "Nueva publicación",
+      "Panel",
+      "Ventas",
+      "Compradores",
+      "Ver detalle",
+      "Pausar",
+      "Archivar",
+      "Activar",
+      "Anterior",
+      "Siguiente"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Entradas digitales Gestioná publicaciones, ventas, compradores, ingresos y devoluciones. Escanear entradas Ver catálogo público Nueva publicación Panel Ventas Compradores Publicaciones activas 4 Entradas vendidas 40 Disponibles 1760 Ventas del mes $ 693.000 Recaudación $ 884.000 Pagos pendientes 0 Reembolsos $ 45.000 Ingresos registrados 0 Buscar publicación Estado Todos Borrador Programada Activa Pausada Agotada Finalizada Cerrada Cancelada Archivada Fecha de inicio PUBLICACIÓN ESTADO FECHA Y LUGAR VENDIDAS DISPONIBLES RECAUDACIÓN MODIFICADA ACCIONES Fiesta de Halloween M&M Fiesta temática · /fiesta-halloween-mym-2026 Activa 31 oct 2026, 10:00 p. m. M&M Eventos - Salón La Plata 4 346 $ 96.000 5 ago 2026, 8:56 a. m. Ver detalle Pausar Archivar Torneo Solidario de Truco Evento solidario · /torneo-solidario-truco-2026 Pausada 25 jul 2026, 8:00 p. m. M&M Eventos - Salón Villa Elisa 5 96 $ 24.000 5 ago 2026, 8:56 a. m. Ver detalle Activar Archivar Expo Gastronómica & Feria de Cerveza Artesanal Feria / Gastronomía · /expo-gastronomica-feria-cerveza Activa 3 oct 2026, 6:00 p. m. M&M Eventos - Salón Villa Elisa 7 493 $ 70.000 5 ago 2026, 8:55 a. m. Ver detalle Pausar Archivar Recital Tributo Queen Recital / Tributo · /recital-tributo-queen Activa 18 sept 2026, 9:00 p. m. M&M Eventos - Salón San Carlos 10 390 $ 240.000 5 ago 2026, 8:54 a. m. Ver detalle Pausar Archivar Stand Up: Noche de Comedia Espectáculo / Humor · /standup-noche-de-comedia Activa 22 ago 2026, 9:30 p. m. M&M Eventos - Salón La Plata 6 144 $ 78.000 5 ago 2026, 8:54 a. m. Ver detalle Pausar Archivar Fiesta Neón - Apertura de Temporada Fiesta electrónica · /fiesta-neon-apertura-temporada Pausada 18 jul 2026, 10:00 p. m. M&M Eventos - Salón San Carlos 9 291 $ 140.000 5 ago 2026, 8:24 a. m. Ver detalle Activar Archivar 6 publicaciones Anterior Siguiente"
+  },
+  {
+    "slug": "scanner-validacion",
+    "title": "Escáner y validación",
+    "route": "/admin/ticket-scanner",
+    "error": "TimeoutError"
+  },
+  {
+    "slug": "asistencia-historial",
+    "title": "Asistencia — historial",
+    "route": "/admin/attendance",
+    "screenshot": "102-asistencia-historial.png",
+    "headings": [
+      "Asistencia y app móvil"
+    ],
+    "fields": [
+      "Estado Todos Activa Completada Incompleta En revisión Ajustada Cancelada",
+      "Salón Todos San Carlos Villa Elisa La Plata",
+      "Desde",
+      "Hasta",
+      "Solo marcadas para revisión"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Activos",
+      "Historial",
+      "Incidencias",
+      "Correcciones",
+      "Configuración",
+      "Ver detalle",
+      "Revisar estado",
+      "Anterior",
+      "Siguiente"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Asistencia y app móvil Jornadas del personal fichadas desde la app móvil: control en vivo, historial, incidencias y correcciones. Activos Historial Incidencias Correcciones Configuración Estado Todos Activa Completada Incompleta En revisión Ajustada Cancelada Salón Todos San Carlos Villa Elisa La Plata Desde Hasta Solo marcadas para revisión EMPLEADO SALÓN INICIO FIN HORAS ESTADO ACCIONES Sebastián Tomás Villa Elisa 31 jul 2026, 3:35 p. m. 1 ago 2026, 3:08 a. m. 11h 33m Completada Ver detalle Dilan González La Plata 31 jul 2026, 3:35 p. m. 1 ago 2026, 3:12 a. m. 11h 37m Completada Ver detalle Lucas Biviani La Plata 31 jul 2026, 3:34 p. m. 1 ago 2026, 3:08 a. m. 11h 34m Completada Ver detalle Pedro Álvarez Villa Elisa 31 jul 2026, 3:34 p. m. 1 ago 2026, 3:09 a. m. 11h 35m Completada Ver detalle Patricia de Castro San Carlos 31 jul 2026, 3:33 p. m. 1 ago 2026, 3:11 a. m. 11h 38m Completada Ver detalle Macarena da Silva Villa Elisa 31 jul 2026, 3:33 p. m. 1 ago 2026, 3:12 a. m. 11h 39m Completada Ver detalle Liliana Quintero La Plata 31 jul 2026, 3:32 p. m. 1 ago 2026, 3:10 a. m. 11h 38m Completada Ver detalle Gloria Elizabeth La Plata 31 jul 2026, 3:32 p. m. 1 ago 2026, 3:14 a. m. 11h 42m Completada Ver detalle Verónica Britez Villa Elisa 31 jul 2026, 3:31 p. m. 1 ago 2026, 3:12 a. m. 11h 41m Completada Ver detalle Ángeles Fernández La Plata 31 jul 2026, 3:31 p. m. 1 ago 2026, 3:14 a. m. 11h 43m Completada Ver detalle Lucas Campo La Plata 31 jul 2026, 3:31 p. m. 1 ago 2026, 3:15 a. m. 11h 44m Completada Ver detalle Rocío Mena San Carlos 31 jul 2026, 3:31 p. m. 1 ago 2026, 3:09 a. m. 11h 38m Completada Ver detalle Santino Rodríguez San Carlos 31 jul 2026, 3:31 p. m. 1 ago 2026, 3:13 a. m. 11h 42m Completada Ver detalle Mariana Fernández Villa Elisa 31 jul 2026, 3:30 p. m. 1 ago 2026, 3:10 a. m. 11h 40m Completada Ver detalle Solange Biviani San Carlos 31 jul 2026, 3:30 p. m. 1 ago 2026, 3:15 a. m. 11h 45m Completada Ver detalle Ludmila da Silva San Carlos 31 jul 2026, 3:30 p. m. 1 ago 2026, 3:10 a. m. 11h 40m Completada Ver detalle Sin asignar San Carlos 27 jul 2026, 12:07 a. m. 27 jul 2026, 12:08 a. m. 0h 0m En revisión Ver detalle Revisar estado Sin asignar San Carlos 27 jul 2026, 12:01 a. m. 27 jul 2026, 12:06 a. m. 0h 5m En revisión Ver detalle Revisar estado Solange Biviani San Carlos 25 jul 2026, 3:34 p. m. 26 jul 2026, 3:11 a. m. 11h 37m Completada Ver detalle Dilan González La Plata 25 jul 2026, 3:34 p. m. 26 jul 2026, 3:09 a. m. 11h 35m Completada Ver detalle 148 jornadas en total Anterior Siguiente"
+  },
+  {
+    "slug": "asistencia-incidencias",
+    "title": "Asistencia — incidencias",
+    "route": "/admin/attendance",
+    "screenshot": "103-asistencia-incidencias.png",
+    "headings": [
+      "Asistencia y app móvil"
+    ],
+    "fields": [
+      "Estado Todas Pendiente En revisión Resuelta Rechazada"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Activos",
+      "Historial",
+      "Incidencias",
+      "Correcciones",
+      "Configuración"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Asistencia y app móvil Jornadas del personal fichadas desde la app móvil: control en vivo, historial, incidencias y correcciones. Activos Historial Incidencias Correcciones Configuración Estado Todas Pendiente En revisión Resuelta Rechazada No hay incidencias para el filtro seleccionado."
+  },
+  {
+    "slug": "asistencia-correcciones",
+    "title": "Asistencia — correcciones",
+    "route": "/admin/attendance",
+    "screenshot": "104-asistencia-correcciones.png",
+    "headings": [
+      "Asistencia y app móvil"
+    ],
+    "fields": [
+      "Estado Todas Pendiente Aprobada Rechazada Cancelada"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Activos",
+      "Historial",
+      "Incidencias",
+      "Correcciones",
+      "Configuración"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Asistencia y app móvil Jornadas del personal fichadas desde la app móvil: control en vivo, historial, incidencias y correcciones. Activos Historial Incidencias Correcciones Configuración Estado Todas Pendiente Aprobada Rechazada Cancelada No hay solicitudes de corrección para el filtro seleccionado."
+  },
+  {
+    "slug": "asistencia-configuracion",
+    "title": "Asistencia — configuración",
+    "route": "/admin/attendance",
+    "screenshot": "105-asistencia-configuracion.png",
+    "headings": [
+      "Asistencia y app móvil"
+    ],
+    "fields": [
+      "Zona horaria",
+      "Precisión mínima de ubicación (m)",
+      "Radio de geocerca por defecto (m)",
+      "Tolerancia de llegada (minutos)",
+      "Tolerancia de salida (minutos)",
+      "Jornada máxima (horas)",
+      "Requerir turno asignado para fichar",
+      "Permitir reportar incidencias"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Activos",
+      "Historial",
+      "Incidencias",
+      "Correcciones",
+      "Configuración",
+      "Guardar configuración"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Asistencia y app móvil Jornadas del personal fichadas desde la app móvil: control en vivo, historial, incidencias y correcciones. Activos Historial Incidencias Correcciones Configuración Zona horaria Precisión mínima de ubicación (m) Radio de geocerca por defecto (m) Tolerancia de llegada (minutos) Tolerancia de salida (minutos) Jornada máxima (horas) Requerir turno asignado para fichar Permitir reportar incidencias Guardar configuración"
+  },
+  {
+    "slug": "sueldos-asistencias",
+    "title": "Liquidación — asistencias",
+    "route": "/admin/payroll",
+    "screenshot": "106-sueldos-asistencias.png",
+    "headings": [
+      "Liquidación de Sueldos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Estado Todos Pendiente Aprobada Rechazada",
+      "Salón Todos San Carlos Villa Elisa La Plata",
+      "Sólo observadas",
+      "Sólo incompletas"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Liquidación individual",
+      "Nuevo lote",
+      "Resumen",
+      "Asistencias",
+      "Liquidaciones",
+      "Lotes de liquidación",
+      "Adelantos y ajustes",
+      "Configuración de empleados",
+      "Conceptos",
+      "Historial y auditoría",
+      "Actualizar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Liquidación de Sueldos Herramienta administrativa interna para validar jornadas, calcular haberes y registrar pagos. Los importes se muestran en pesos y se calculan de forma segura en el servidor. Liquidación individual Nuevo lote Resumen Asistencias Liquidaciones Lotes de liquidación Adelantos y ajustes Configuración de empleados Conceptos Historial y auditoría Desde Hasta Actualizar Estado Todos Pendiente Aprobada Rechazada Salón Todos San Carlos Villa Elisa La Plata Sólo observadas Sólo incompletas EMPLEADO SALÓN / EVENTO ENTRADA / SALIDA HORAS APROBADAS ESTADO OBSERVACIONES No hay asistencias para los filtros seleccionados."
+  },
+  {
+    "slug": "sueldos-liquidaciones",
+    "title": "Liquidación — liquidaciones",
+    "route": "/admin/payroll",
+    "screenshot": "107-sueldos-liquidaciones.png",
+    "headings": [
+      "Liquidación de Sueldos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Liquidación individual",
+      "Nuevo lote",
+      "Resumen",
+      "Asistencias",
+      "Liquidaciones",
+      "Lotes de liquidación",
+      "Adelantos y ajustes",
+      "Configuración de empleados",
+      "Conceptos",
+      "Historial y auditoría",
+      "Actualizar",
+      "CSV",
+      "Excel"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Liquidación de Sueldos Herramienta administrativa interna para validar jornadas, calcular haberes y registrar pagos. Los importes se muestran en pesos y se calculan de forma segura en el servidor. Liquidación individual Nuevo lote Resumen Asistencias Liquidaciones Lotes de liquidación Adelantos y ajustes Configuración de empleados Conceptos Historial y auditoría Desde Hasta Actualizar CSV Excel EMPLEADO PERÍODO HABERES DESCUENTOS NETO ESTADO PAGO No hay liquidaciones para el período seleccionado."
+  },
+  {
+    "slug": "sueldos-lotes",
+    "title": "Liquidación — lotes",
+    "route": "/admin/payroll",
+    "screenshot": "108-sueldos-lotes.png",
+    "headings": [
+      "Liquidación de Sueldos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Liquidación individual",
+      "Nuevo lote",
+      "Resumen",
+      "Asistencias",
+      "Liquidaciones",
+      "Lotes de liquidación",
+      "Adelantos y ajustes",
+      "Configuración de empleados",
+      "Conceptos",
+      "Historial y auditoría",
+      "Actualizar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Liquidación de Sueldos Herramienta administrativa interna para validar jornadas, calcular haberes y registrar pagos. Los importes se muestran en pesos y se calculan de forma segura en el servidor. Liquidación individual Nuevo lote Resumen Asistencias Liquidaciones Lotes de liquidación Adelantos y ajustes Configuración de empleados Conceptos Historial y auditoría Desde Hasta Actualizar Nuevo lote LOTE PERÍODO LIQUIDACIONES NETO ESTADO Todavía no hay lotes de liquidación."
+  },
+  {
+    "slug": "sueldos-ajustes",
+    "title": "Liquidación — adelantos y ajustes",
+    "route": "/admin/payroll",
+    "screenshot": "109-sueldos-ajustes.png",
+    "headings": [
+      "Liquidación de Sueldos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Liquidación individual",
+      "Nuevo lote",
+      "Resumen",
+      "Asistencias",
+      "Liquidaciones",
+      "Lotes de liquidación",
+      "Adelantos y ajustes",
+      "Configuración de empleados",
+      "Conceptos",
+      "Historial y auditoría",
+      "Actualizar",
+      "Registrar adelanto"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Liquidación de Sueldos Herramienta administrativa interna para validar jornadas, calcular haberes y registrar pagos. Los importes se muestran en pesos y se calculan de forma segura en el servidor. Liquidación individual Nuevo lote Resumen Asistencias Liquidaciones Lotes de liquidación Adelantos y ajustes Configuración de empleados Conceptos Historial y auditoría Desde Hasta Actualizar Registrar adelanto EMPLEADO FECHA IMPORTE MOTIVO ESTADO No hay adelantos registrados."
+  },
+  {
+    "slug": "sueldos-empleados",
+    "title": "Liquidación — empleados",
+    "route": "/admin/payroll",
+    "screenshot": "110-sueldos-empleados.png",
+    "headings": [
+      "Liquidación de Sueldos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Liquidación individual",
+      "Nuevo lote",
+      "Resumen",
+      "Asistencias",
+      "Liquidaciones",
+      "Lotes de liquidación",
+      "Adelantos y ajustes",
+      "Configuración de empleados",
+      "Conceptos",
+      "Historial y auditoría",
+      "Actualizar",
+      "Nueva configuración"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Liquidación de Sueldos Herramienta administrativa interna para validar jornadas, calcular haberes y registrar pagos. Los importes se muestran en pesos y se calculan de forma segura en el servidor. Liquidación individual Nuevo lote Resumen Asistencias Liquidaciones Lotes de liquidación Adelantos y ajustes Configuración de empleados Conceptos Historial y auditoría Desde Hasta Actualizar Nueva configuración EMPLEADO TIPO FRECUENCIA TARIFAS VIGENCIA VERSIÓN No hay configuraciones salariales cargadas."
+  },
+  {
+    "slug": "sueldos-conceptos",
+    "title": "Liquidación — conceptos",
+    "route": "/admin/payroll",
+    "screenshot": "111-sueldos-conceptos.png",
+    "headings": [
+      "Liquidación de Sueldos"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Liquidación individual",
+      "Nuevo lote",
+      "Resumen",
+      "Asistencias",
+      "Liquidaciones",
+      "Lotes de liquidación",
+      "Adelantos y ajustes",
+      "Configuración de empleados",
+      "Conceptos",
+      "Historial y auditoría",
+      "Actualizar",
+      "Nuevo concepto"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Liquidación de Sueldos Herramienta administrativa interna para validar jornadas, calcular haberes y registrar pagos. Los importes se muestran en pesos y se calculan de forma segura en el servidor. Liquidación individual Nuevo lote Resumen Asistencias Liquidaciones Lotes de liquidación Adelantos y ajustes Configuración de empleados Conceptos Historial y auditoría Desde Hasta Actualizar Nuevo concepto CÓDIGO NOMBRE TIPO ORIGEN USO ESTADO NORMAL_HOURS Horas normales Haber attendance Automático Activo OVERTIME_HOURS Horas extra Haber overtime Automático Activo WORK_DAYS Jornadas Haber attendance Automático Activo WORKED_EVENTS Eventos trabajados Haber event Automático Activo SHIFT_PREMIUM Adicional nocturno o fin de semana Haber overtime Automático Activo NIGHT_PREMIUM Adicional nocturno Haber overtime Automático Activo WEEKEND_PREMIUM Adicional fin de semana Haber overtime Automático Activo HOLIDAY_PREMIUM Adicional feriado Haber overtime Automático Activo BONUS Bonificación Haber bonus Manual Activo REIMBURSEMENT Viático o reintegro Haber reimbursement Manual Activo ADVANCE Adelanto Descuento advance Automático Activo ABSENCE Ausencia Descuento attendance Manual Activo MANUAL_ADJUSTMENT Ajuste manual Haber adjustment Manual Activo OTHER_EARNING Otro haber Haber manual Manual Activo OTHER_DEDUCTION Otro descuento Descuento manual Manual Activo"
+  },
+  {
+    "slug": "sueldos-historial",
+    "title": "Liquidación — auditoría",
+    "route": "/admin/payroll",
+    "screenshot": "112-sueldos-historial.png",
+    "headings": [
+      "Liquidación de Sueldos",
+      "Auditoría de liquidaciones"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Liquidación individual",
+      "Nuevo lote",
+      "Resumen",
+      "Asistencias",
+      "Liquidaciones",
+      "Lotes de liquidación",
+      "Adelantos y ajustes",
+      "Configuración de empleados",
+      "Conceptos",
+      "Historial y auditoría",
+      "Actualizar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Liquidación de Sueldos Herramienta administrativa interna para validar jornadas, calcular haberes y registrar pagos. Los importes se muestran en pesos y se calculan de forma segura en el servidor. Liquidación individual Nuevo lote Resumen Asistencias Liquidaciones Lotes de liquidación Adelantos y ajustes Configuración de empleados Conceptos Historial y auditoría Desde Hasta Actualizar Auditoría de liquidaciones Incluye perfiles, correcciones, cálculos, aprobaciones, pagos y exportaciones. No hay acciones auditadas para mostrar."
+  },
+  {
+    "slug": "landing-promociones",
+    "title": "Landing — promociones",
+    "route": "/admin/landing",
+    "screenshot": "113-landing-promociones.png",
+    "headings": [
+      "Landing pública"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Ver landing",
+      "Hero",
+      "Promociones",
+      "Galería",
+      "FAQ",
+      "Testimonios",
+      "Servicios",
+      "Tipos de evento",
+      "Cómo trabajamos",
+      "Nuevo",
+      "Desactivar",
+      "Editar",
+      "Eliminar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Landing pública Administrá el contenido comercial visible en la web pública. Ver landing Hero Promociones Galería FAQ Testimonios Servicios Tipos de evento Cómo trabajamos 5 elementos Nuevo TÍTULO ESTADO ORDEN DETALLE SIN IMG Beneficio en días seleccionados Activo 0 Consultanos por condiciones especiales para eventos realizados de domingo a jueves o en fechas seleccionadas. SIN IMG Fechas disponibles Activo 1 Últimas fechas seleccionadas para reservar con condiciones vigentes. SIN IMG Promos especiales Activo 2 Beneficios comerciales para eventos sociales y empresariales. SIN IMG Congelá valor con seña Activo 3 Reservá tu fecha y conservá las condiciones acordadas. SIN IMG Stand de glitter de regalo Activo 4 Un beneficio para sumar experiencia y fotos durante la fiesta."
+  },
+  {
+    "slug": "landing-galeria",
+    "title": "Landing — galería",
+    "route": "/admin/landing",
+    "screenshot": "114-landing-galeria.png",
+    "headings": [
+      "Landing pública"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Ver landing",
+      "Hero",
+      "Promociones",
+      "Galería",
+      "FAQ",
+      "Testimonios",
+      "Servicios",
+      "Tipos de evento",
+      "Cómo trabajamos",
+      "Nuevo",
+      "Mover Salón ambientado",
+      "Desactivar",
+      "Editar",
+      "Eliminar",
+      "Mover Recepción premium",
+      "Mover Mesa principal",
+      "Mover Catering servido",
+      "Mover Noche de fiesta",
+      "Mover Mesa dulce",
+      "Mover Momento especial"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Landing pública Administrá el contenido comercial visible en la web pública. Ver landing Hero Promociones Galería FAQ Testimonios Servicios Tipos de evento Cómo trabajamos 7 elementos Nuevo Arrastrá las filas desde el ícono para cambiar el orden de la galería pública. MOVER TÍTULO ESTADO ORDEN DETALLE Salón ambientado https://res.cloudinary.com/ujgqo14q/image/upload/v1783888286/mym-eventos/general/file_jalbje.png Activo 1 Recepción premium https://res.cloudinary.com/ujgqo14q/image/upload/v1783888436/mym-eventos/general/file_m8poj6.jpg Activo 2 Mesa principal https://res.cloudinary.com/ujgqo14q/image/upload/v1783888485/mym-eventos/general/file_rnjr2p.jpg Activo 3 Catering servido https://res.cloudinary.com/ujgqo14q/image/upload/v1783888515/mym-eventos/general/file_zbqv6q.jpg Activo 4 Noche de fiesta https://res.cloudinary.com/ujgqo14q/image/upload/v1783888531/mym-eventos/general/file_ngkxzz.jpg Activo 5 Mesa dulce https://res.cloudinary.com/de9naonho/image/upload/v1782935879/mym-eventos/general/file_c4u3dy.jpg Activo 6 Momento especial https://res.cloudinary.com/ujgqo14q/image/upload/v1783888561/mym-eventos/general/file_pc9phx.jpg Activo 6"
+  },
+  {
+    "slug": "landing-faq",
+    "title": "Landing — preguntas frecuentes",
+    "route": "/admin/landing",
+    "screenshot": "115-landing-faq.png",
+    "headings": [
+      "Landing pública"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Ver landing",
+      "Hero",
+      "Promociones",
+      "Galería",
+      "FAQ",
+      "Testimonios",
+      "Servicios",
+      "Tipos de evento",
+      "Cómo trabajamos",
+      "Nuevo",
+      "Desactivar",
+      "Editar",
+      "Eliminar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Landing pública Administrá el contenido comercial visible en la web pública. Ver landing Hero Promociones Galería FAQ Testimonios Servicios Tipos de evento Cómo trabajamos 10 elementos Nuevo TÍTULO ESTADO ORDEN DETALLE SIN IMG ¿Qué elementos están incluidos con el alquiler del salón? Activo 0 Los elementos incluidos dependen de la propuesta contratada. Según el servicio, puede contemplar mobiliario, mantelería, vajilla, personal, catering, bebidas, DJ y ambientación. SIN IMG ¿Con cuánta anticipación debo reservar? Activo 1 Recomendamos consultar cuanto antes para asegurar disponibilidad y congelar condiciones comerciales. SIN IMG ¿Qué incluye el servicio de catering? Activo 2 Recepción, entrada, plato principal, postre, mesa dulce, fin de fiesta (no siempre pero en la mayoría de servicios), bebidas y barra. SIN IMG ¿Puedo llevar mi propia bebida o DJ? Activo 3 Lo revisamos caso por caso según el salón, el tipo de evento y la propuesta contratada. SIN IMG ¿Cómo reservo mi fecha? Activo 4 Luego de recibir la propuesta, coordinamos seña y condiciones para bloquear la fecha. SIN IMG ¿Qué formas de pago aceptan? Activo 5 Trabajamos con seña y saldo según condiciones comerciales vigentes. Consultanos para armar un plan. SIN IMG ¿Se puede visitar el salón antes del evento? Activo 6 Sí, coordinamos una visita para que conozcas el espacio y conversemos tu idea. SIN IMG ¿Qué tipos de eventos realizan? Activo 7 Organizamos cumpleaños, fiestas de 15, casamientos, aniversarios, egresados, bautismos, comuniones, eventos infantiles, empresariales y celebraciones personalizadas. SIN IMG ¿Ofrecen opciones vegetarianas, veganas o para personas celíacas? Activo 8 Sí, podemos contemplar menús especiales y restricciones alimentarias. Es importante informarlas con anticipación para organizar correctamente el servicio. SIN IMG ¿Los niños pagan lo mismo que los adultos? Activo 9 La cantidad y tarifa de menores se determina según sus edades, el menú elegido y las condiciones de la propuesta contratada."
+  },
+  {
+    "slug": "landing-testimonios",
+    "title": "Landing — testimonios",
+    "route": "/admin/landing",
+    "screenshot": "116-landing-testimonios.png",
+    "headings": [
+      "Landing pública"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Ver landing",
+      "Hero",
+      "Promociones",
+      "Galería",
+      "FAQ",
+      "Testimonios",
+      "Servicios",
+      "Tipos de evento",
+      "Cómo trabajamos",
+      "Nuevo",
+      "Desactivar",
+      "Editar",
+      "Eliminar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Landing pública Administrá el contenido comercial visible en la web pública. Ver landing Hero Promociones Galería FAQ Testimonios Servicios Tipos de evento Cómo trabajamos 3 elementos Nuevo TÍTULO ESTADO ORDEN DETALLE SIN IMG Valentina S. Activo 1 El mejor salón de La Plata, todo salió perfecto. El equipo de M&M nos acompañó en cada detalle. SIN IMG María & Juan Activo 2 Increíble la calidad del servicio y la ambientación. Nuestros invitados no pararon de felicitarnos. SIN IMG Luciano R. Activo 3 Profesionales, atentos y súper organizados. Hicieron de nuestro evento algo inolvidable."
+  },
+  {
+    "slug": "landing-servicios",
+    "title": "Landing — servicios",
+    "route": "/admin/landing",
+    "screenshot": "117-landing-servicios.png",
+    "headings": [
+      "Landing pública"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Ver landing",
+      "Hero",
+      "Promociones",
+      "Galería",
+      "FAQ",
+      "Testimonios",
+      "Servicios",
+      "Tipos de evento",
+      "Cómo trabajamos",
+      "Nuevo",
+      "Desactivar",
+      "Editar",
+      "Eliminar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Landing pública Administrá el contenido comercial visible en la web pública. Ver landing Hero Promociones Galería FAQ Testimonios Servicios Tipos de evento Cómo trabajamos 6 elementos Nuevo TÍTULO ESTADO ORDEN DETALLE SIN IMG Catering Activo 1 Menús gourmet y opciones para cada tipo de evento. SIN IMG Barra y bebidas Activo 2 Tragos y bebidas premium durante la noche. SIN IMG DJ e iluminación Activo 3 Sonido profesional e iluminación para pista y ambientación. SIN IMG Ambientación Activo 4 Diseño y decoración para crear una experiencia elegante. SIN IMG Sector de fotos Activo 5 Espacios pensados para recuerdos y contenido social. SIN IMG Organización completa Activo 6 Coordinación integral para que disfrutes sin preocupaciones."
+  },
+  {
+    "slug": "landing-tipos-evento",
+    "title": "Landing — tipos de evento",
+    "route": "/admin/landing",
+    "screenshot": "118-landing-tipos-evento.png",
+    "headings": [
+      "Landing pública"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Ver landing",
+      "Hero",
+      "Promociones",
+      "Galería",
+      "FAQ",
+      "Testimonios",
+      "Servicios",
+      "Tipos de evento",
+      "Cómo trabajamos",
+      "Nuevo",
+      "Desactivar",
+      "Editar",
+      "Eliminar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Landing pública Administrá el contenido comercial visible en la web pública. Ver landing Hero Promociones Galería FAQ Testimonios Servicios Tipos de evento Cómo trabajamos 6 elementos Nuevo TÍTULO ESTADO ORDEN DETALLE SIN IMG 15 años Activo 1 Propuestas a medida para celebrar con estética, servicio y coordinación M&M. SIN IMG Casamientos Activo 2 Propuestas a medida para celebrar con estética, servicio y coordinación M&M. SIN IMG Cumpleaños Activo 3 Propuestas a medida para celebrar con estética, servicio y coordinación M&M. SIN IMG Egresados Activo 4 Propuestas a medida para celebrar con estética, servicio y coordinación M&M. SIN IMG Empresariales Activo 5 Propuestas a medida para celebrar con estética, servicio y coordinación M&M. SIN IMG Infantiles Activo 6 Propuestas a medida para celebrar con estética, servicio y coordinación M&M."
+  },
+  {
+    "slug": "landing-como-trabajamos",
+    "title": "Landing — cómo trabajamos",
+    "route": "/admin/landing",
+    "screenshot": "119-landing-como-trabajamos.png",
+    "headings": [
+      "Landing pública"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Ver landing",
+      "Hero",
+      "Promociones",
+      "Galería",
+      "FAQ",
+      "Testimonios",
+      "Servicios",
+      "Tipos de evento",
+      "Cómo trabajamos",
+      "Nuevo",
+      "Desactivar",
+      "Editar",
+      "Eliminar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Landing pública Administrá el contenido comercial visible en la web pública. Ver landing Hero Promociones Galería FAQ Testimonios Servicios Tipos de evento Cómo trabajamos 4 elementos Nuevo TÍTULO ESTADO ORDEN DETALLE Nos contás tu idea https://res.cloudinary.com/ujgqo14q/image/upload/v1785379745/mym-eventos/general/file_tvq5y6.jpg Activo 1 Escuchamos lo que soñás para tu evento. Te asesoramos https://res.cloudinary.com/ujgqo14q/image/upload/v1785379746/mym-eventos/general/file_naogpr.jpg Activo 2 Te guiamos para elegir salón, menú y servicios. Armamos tu propuesta https://res.cloudinary.com/ujgqo14q/image/upload/v1785379747/mym-eventos/general/file_qds9d7.jpg Activo 3 Diseñamos una propuesta clara y personalizada. Reservás tu fecha https://res.cloudinary.com/ujgqo14q/image/upload/v1785379748/mym-eventos/general/file_fei1di.jpg Activo 4 Confirmás y asegurás tu fecha."
+  }
+]

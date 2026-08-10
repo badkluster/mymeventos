@@ -170,15 +170,7 @@ export type PackageRule = {
   notes?: string;
 };
 
-export const eventTypeLabels: Record<EventType, string> = {
-  birthday: 'Cumpleaños',
-  wedding: 'Casamiento',
-  fifteen: '15 años',
-  graduates: 'Egresados',
-  corporate: 'Evento empresarial',
-  baptism_communion: 'Bautismo/comunión',
-  other: 'Otro'
-};
+export const eventTypeLabels: Record<EventType, string> = sharedEventTypeLabels;
 
 export const eventTypeOptions = Object.entries(eventTypeLabels) as [EventType, string][];
 
@@ -194,3 +186,4 @@ export function textToMenu(value: string): MenuSection[] {
     return { title: title.trim(), items: items.split('|').map((item) => item.trim()).filter(Boolean) };
   }).filter((section) => section.title && section.items.length);
 }
+import { eventTypeLabels as sharedEventTypeLabels } from '@/lib/display-labels';

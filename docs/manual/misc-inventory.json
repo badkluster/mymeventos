@@ -1,0 +1,189 @@
+[
+  {
+    "title": "Menú de la cuenta",
+    "route": "/admin/dashboard",
+    "screenshot": "136-menu-cuenta.png",
+    "headings": [
+      "Hola, Usuario",
+      "Pipeline de conversión",
+      "Agenda de hoy",
+      "Alertas y pendientes"
+    ],
+    "fields": [
+      "Desde",
+      "Hasta",
+      "Salón Todos los salones San Carlos Villa Elisa La Plata"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Cerrar todas las sesiones",
+      "Cerrar sesión",
+      "Actualizar",
+      "Alta · 4",
+      "Media · 18"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Usuario administrador usuario@ejemplo.com Editar perfil Cerrar todas las sesiones Cerrar sesión Hola, Usuario Primero se muestran las acciones y pendientes que requieren atención. El análisis detallado queda disponible sin recargar la vista diaria. Actualizar Desde Hasta Salón Todos los salones San Carlos Villa Elisa La Plata Actualizado 10/8/26, 2:23 a. m. Nuevo lead 2 pendientes Nuevo presupuesto Nuevo evento Gestionar ingresos Generar producción 3 pendientes NECESITA TU ATENCIÓN EVENTOS PRÓXIMOS Estado actual 7 Estado actual de eventos activos de los próximos 30 días desde hoy. LEADS PENDIENTES Estado actual 2 Estado actual de todos los leads que todavía requieren gestión, aunque hayan sido creados antes del período. SALDO VENCIDO Estado actual $ 0 Estado actual de cuotas pendientes cuya fecha de vencimiento ya pasó. PRODUCCIONES PENDIENTES Sin base 3 Período anterior: 0 PULSO DEL PERÍODO LEADS NUEVOS 4.200% 43 EVENTOS CONFIRMADOS 80% 2 TOTAL COBRADO 18,3% $ 17.237.500 Pipeline de conversión De la primera consulta al evento confirmado, en el orden real del proceso comercial. 5% llega a evento confirmado Leads creados 43 sin caída respecto a la etapa anterior Presupuestos creados 43 62,8% no avanzó a esta etapa Presupuestos aceptados 16 18,8% no avanzó a esta etapa Contratos aprobados 13 84,6% no avanzó a esta etapa Eventos confirmados 2 Agenda de hoy lun, 10 ago 9:00 a. m. Iniciar cierre operativo del evento San Carlos 9:00 a. m. Iniciar cierre operativo del evento Villa Elisa 9:00 a. m. Iniciar cierre operativo del evento La Plata Ver calendario completo Alertas y pendientes Ordenados por prioridad y fecha. Alta · 4 Media · 18 ALTA vie, 14 ago Evento sin seña registrada Evento corporativo - Aniversario 20 años Laboratorio Vega no tiene cobros registrados en el contrato. Registrar o verificar la seña. ALTA sáb, 15 ago Contrato pendiente de aprobación Cumple de 40 años - Manuela tiene el contrato en estado draft. Revisar y aprobar el contrato. ALTA vie, 04 sept Contrato pendiente de aprobación Fiesta de 15 - Abril Vargas tiene el contrato en estado pending_approval. Revisar y aprobar el contrato. ALTA vie, 04 sept Evento sin seña registrada Fiesta de 15 - Abril Vargas no tiene cobros registrados en el contrato. Registrar o verificar la seña. MEDIA vie, 14 ago Evento sin personal asignado Cumpleaños infantil - Benjamín Torres (5 años) no tiene staff asignado. Asignar responsables y turnos. MEDIA vie, 14 ago Evento sin producción generada Cumpleaños infantil - Benjamín Torres (5 años) no tiene un plan de producción. Generar la producción del evento. MEDIA vie, 14 ago Evento sin personal asignado Casamiento - Florencia Ojeda & Nicolás Herrera no tiene staff asignado. Asignar responsables y turnos. MEDIA vie, 14 ago Evento sin producción generada Casamiento - Florencia Ojeda & Nicolás Herrera no tiene un plan de producción. Generar la producción del evento. MEDIA vie, 14 ago Evento sin personal asignado Evento corporativo - Aniversario 20 años Laboratorio Vega no tiene staff asignado. Asignar responsables y turnos. MEDIA vie, 14 ago Evento sin producción generada Evento corporativo - Aniversario 20 años Laboratorio Vega no tiene un plan de producción. Generar la producción del evento. MEDIA sáb, 15 ago Evento sin personal asignado Cumple de 40 años - Manuela no tiene staff asignado. Asignar responsables y turnos. MEDIA sáb, 15 ago Evento sin producción generada Cumple de 40 años - Manuela no tiene un plan de producción. Generar la producción del evento. MEDIA vie, 21 ago Evento sin personal asignado Casamiento - Carla Maldonado & Diego Ferreyra no tiene staff asignado. Asignar responsables y turnos. MEDIA vie, 21 ago Evento sin producción generada Casamiento - Carla Maldonado & Diego Ferreyra no tiene un plan de producción. Generar la producción del evento. MEDIA vie, 28 ago Evento sin personal asignado Comunión - Comunión de Mía Domínguez no tiene staff asignado. Asignar responsables y turnos. MEDIA vie, 28 ago Producción incompleta Comunión - Comunión de Mía Domínguez tiene producción en estado pending. Completar y chequear los ítems pendientes. MEDIA vie, 04 sept Evento sin personal asignado Fiesta de 15 - Abril Vargas no tiene staff asignado. Asignar responsables y turnos. MEDIA vie, 04 sept Evento sin producción generada Fiesta de 15 - Abril Vargas no tiene un plan de producción. Generar la producción del evento. MEDIA vie, 11 sept Evento sin personal asignado Fiesta de Egresados - Promoción 2026 - Instituto La Plata no tiene staff asignado. Asignar responsables y turnos. MEDIA vie, 11 sept Evento sin producción generada Fiesta de Egresados - Promoción 2026 - Instituto La Plata no tiene un plan de producción. Generar la producción del evento. Ver análisis completo del período 8 indicadores y distribuciones"
+  },
+  {
+    "title": "Roles y permisos",
+    "route": "/admin/users/6a66c9ec453238fe1fb53bdf?tab=access",
+    "screenshot": "137-roles-permisos.png",
+    "headings": [
+      "Lucas Campo",
+      "Accesos y permisos",
+      "Rol base",
+      "Áreas del backoffice"
+    ],
+    "fields": [
+      "Administrador",
+      "Manager",
+      "Encargado salón",
+      "Staff"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Volver",
+      "Perfil",
+      "Roles y permisos",
+      "Empleado",
+      "Operación",
+      "Asistencia",
+      "Guardar accesos",
+      "Dar acceso a Leads",
+      "Dar acceso a Clientes",
+      "Dar acceso a Presupuestos",
+      "Quitar acceso a Eventos y calendario",
+      "Ver· rol",
+      "Crear",
+      "Editar",
+      "Cancelar",
+      "Eliminar",
+      "Dar acceso a Contratos",
+      "Dar acceso a Pagos",
+      "Dar acceso a Proveedores",
+      "Dar acceso a Salones",
+      "Dar acceso a Landing pública",
+      "Dar acceso a Usuarios y staff",
+      "Dar acceso a Configuración general",
+      "Dar acceso a Promociones",
+      "Dar acceso a Campañas",
+      "Dar acceso a Plantillas de marketing",
+      "Dar acceso a Audiencias de marketing",
+      "Dar acceso a Configuración de marketing",
+      "Dar acceso a Invitaciones",
+      "Dar acceso a Entradas",
+      "Dar acceso a Liquidación de sueldos",
+      "Quitar acceso a App móvil de personal",
+      "Acceso a la app· rol",
+      "Fichar entrada/salida· rol",
+      "Ver su historial· rol",
+      "Ver sus turnos· rol",
+      "Reportar incidencias· rol",
+      "Solicitar correcciones· rol",
+      "Ver liquidaciones propias· rol",
+      "Ver su perfil· rol",
+      "Editar su perfil· rol",
+      "Cambiar su avatar· rol",
+      "Cambiar su contraseña· rol",
+      "Dar acceso a Gestión de asistencia",
+      "Dar acceso a Dashboard gerencial",
+      "Dar acceso a Reportes",
+      "Dar acceso a Producción",
+      "Dar acceso a Gastos y rentabilidad",
+      "Dar acceso a Analítica propia"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Lucas Campo usuario@ejemplo.com · Activo Volver ROLES Staff SALÓN PRINCIPAL San Carlos SALÓN A CARGO Sin principal a cargo ÚLTIMO ACCESO Sin acceso Perfil Roles y permisos Notificaciones Empleado Operación Asistencia Accesos y permisos Guardar accesos Rol base El rol propone permisos iniciales. Los accesos por área de abajo permiten ajustarlos de forma simple. Administrador Manager Encargado salón Staff Áreas del backoffice El interruptor controla si el área aparece en el menú y si el usuario puede ingresar. Al habilitarla se muestran sus acciones. Leads Consultas y oportunidades comerciales. No visible en el menú y sin acceso a la sección. Clientes Clientes e historial comercial. No visible en el menú y sin acceso a la sección. Presupuestos Solicitudes y propuestas comerciales. No visible en el menú y sin acceso a la sección. Eventos y calendario Agenda, eventos y operación. ACCIONES PERMITIDAS Ver· rol Crear Editar Cancelar Eliminar Contratos Contratos, adendas y aprobaciones. No visible en el menú y sin acceso a la sección. Pagos Señas, cuotas, saldos y devoluciones. No visible en el menú y sin acceso a la sección. Proveedores Proveedores y compras. No visible en el menú y sin acceso a la sección. Salones Salones, paquetes y reglas comerciales. No visible en el menú y sin acceso a la sección. Landing pública Contenido y visualización del sitio. No visible en el menú y sin acceso a la sección. Usuarios y staff Usuarios, roles, accesos y personal. No visible en el menú y sin acceso a la sección. Configuración general Parámetros generales del sistema. No visible en el menú y sin acceso a la sección. Promociones Promociones comerciales disponibles. No visible en el menú y sin acceso a la sección. Campañas Campañas y comunicaciones comerciales. No visible en el menú y sin acceso a la sección. Plantillas de marketing Plantillas de email reutilizables para campañas. No visible en el menú y sin acceso a la sección. Audiencias de marketing Segmentos de leads y clientes para campañas. No visible en el menú y sin acceso a la sección. Configuración de marketing Identidad institucional para campañas de email. No visible en el menú y sin acceso a la sección. Invitaciones Invitaciones digitales para eventos. No visible en el menú y sin acceso a la sección. Entradas Entradas y validación de accesos. No visible en el menú y sin acceso a la sección. Liquidación de sueldos Perfiles, asistencias aprobadas, liquidaciones, pagos y auditoría salarial. No visible en el menú y sin acceso a la sección. App móvil de personal Acceso a la app móvil y autogestión de asistencia (fichaje, historial, turnos, perfil y liquidaciones propias). No depende únicamente del rol Staff. ACCIONES PERMITIDAS Acceso a la app· rol Fichar entrada/salida· rol Ver su historial· rol Ver sus turnos· rol Reportar incidencias· rol Solicitar correcciones· rol Ver liquidaciones propias· rol Ver su perfil· rol Editar su perfil· rol Cambiar su avatar· rol Cambiar su contraseña· rol Gestión de asistencia Supervisión de jornadas activas, incidencias, correcciones, configuración y dispositivos del personal. No visible en el menú y sin acceso a la sección. Dashboard gerencial Indicadores generales, financieros y alcance multi-salón. No visible en el menú y sin acceso a la sección. Reportes Consulta segmentada y exportación de información. No visible en el menú y sin acceso a la sección. Producción Planes, ítems, estados y reglas automáticas de producción. No visible en el menú y sin acceso a la sección. Gastos y rentabilidad Gastos directos, categorías e información de rentabilidad. No visible en el menú y sin acceso a la sección. Analítica propia Visitas, consultas, interacciones y configuración de privacidad. No visible en el menú y sin acceso a la sección."
+  },
+  {
+    "title": "Validación de entradas",
+    "route": "/admin/ticket-scanner",
+    "screenshot": "138-scanner-validacion.png",
+    "headings": [
+      "Control de ingreso",
+      "Escanear QR",
+      "Código manual"
+    ],
+    "fields": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Elegir otra publicación",
+      "Abrir cámara",
+      "Validar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Elegir otra publicación Escaneando para Stand Up: Noche de Comedia · M&M Eventos - Salón La Plata Control de ingreso Validá cada QR contra el servidor antes de permitir el acceso. Escanear QR La cámara es opcional; el ingreso manual siempre está disponible. Abrir cámara Código manual Validar No se confirma ningún ingreso desde el navegador: el resultado proviene de la validación protegida."
+  },
+  {
+    "title": "Detalle de publicación de entradas",
+    "route": "/admin/digital-tickets",
+    "screenshot": "139-entrada-publicacion-detalle.png",
+    "headings": [
+      "Entradas digitales"
+    ],
+    "fields": [
+      "Buscar publicación",
+      "Estado Todos Borrador Programada Activa Pausada Agotada Finalizada Cerrada Cancelada Archivada",
+      "Fecha de inicio"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Escanear entradas",
+      "Ver catálogo público",
+      "Nueva publicación",
+      "Panel",
+      "Ventas",
+      "Compradores",
+      "Ver detalle",
+      "Pausar",
+      "Archivar",
+      "Activar",
+      "Anterior",
+      "Siguiente",
+      "Rendering..."
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Entradas digitales Gestioná publicaciones, ventas, compradores, ingresos y devoluciones. Escanear entradas Ver catálogo público Nueva publicación Panel Ventas Compradores Publicaciones activas 4 Entradas vendidas 40 Disponibles 1760 Ventas del mes $ 693.000 Recaudación $ 884.000 Pagos pendientes 0 Reembolsos $ 45.000 Ingresos registrados 0 Buscar publicación Estado Todos Borrador Programada Activa Pausada Agotada Finalizada Cerrada Cancelada Archivada Fecha de inicio PUBLICACIÓN ESTADO FECHA Y LUGAR VENDIDAS DISPONIBLES RECAUDACIÓN MODIFICADA ACCIONES Fiesta de Halloween M&M Fiesta temática · /fiesta-halloween-mym-2026 Activa 31 oct 2026, 10:00 p. m. M&M Eventos - Salón La Plata 4 346 $ 96.000 5 ago 2026, 8:56 a. m. Ver detalle Pausar Archivar Torneo Solidario de Truco Evento solidario · /torneo-solidario-truco-2026 Pausada 25 jul 2026, 8:00 p. m. M&M Eventos - Salón Villa Elisa 5 96 $ 24.000 5 ago 2026, 8:56 a. m. Ver detalle Activar Archivar Expo Gastronómica & Feria de Cerveza Artesanal Feria / Gastronomía · /expo-gastronomica-feria-cerveza Activa 3 oct 2026, 6:00 p. m. M&M Eventos - Salón Villa Elisa 7 493 $ 70.000 5 ago 2026, 8:55 a. m. Ver detalle Pausar Archivar Recital Tributo Queen Recital / Tributo · /recital-tributo-queen Activa 18 sept 2026, 9:00 p. m. M&M Eventos - Salón San Carlos 10 390 $ 240.000 5 ago 2026, 8:54 a. m. Ver detalle Pausar Archivar Stand Up: Noche de Comedia Espectáculo / Humor · /standup-noche-de-comedia Activa 22 ago 2026, 9:30 p. m. M&M Eventos - Salón La Plata 6 144 $ 78.000 5 ago 2026, 8:54 a. m. Ver detalle Pausar Archivar Fiesta Neón - Apertura de Temporada Fiesta electrónica · /fiesta-neon-apertura-temporada Pausada 18 jul 2026, 10:00 p. m. M&M Eventos - Salón San Carlos 9 291 $ 140.000 5 ago 2026, 8:24 a. m. Ver detalle Activar Archivar 6 publicaciones Anterior Siguiente"
+  },
+  {
+    "title": "Catálogo público de entradas",
+    "route": "/entradas",
+    "screenshot": "140-entradas-catalogo-publico.png",
+    "headings": [
+      "Experiencias para vivir y recordar.",
+      "Stand Up: Noche de Comedia",
+      "Recital Tributo Queen",
+      "Expo Gastronómica & Feria de Cerveza Artesanal",
+      "Fiesta de Halloween M&M"
+    ],
+    "fields": [
+      "Buscar experiencia",
+      "Fecha"
+    ],
+    "buttons": [
+      "Ver detalle"
+    ],
+    "visible_text": "← Volver al inicio M&M EVENTOS Experiencias para vivir y recordar. Descubrí las próximas entradas disponibles y reservá tu lugar de forma simple y segura. Buscar experiencia Fecha Espectáculo / Humor Stand Up: Noche de Comedia sábado, 22 de agosto de 2026, 9:30 p. m. M&M Eventos - Salón La Plata DESDE $ 12.000 Ver detalle Recital / Tributo Recital Tributo Queen viernes, 18 de septiembre de 2026, 9:00 p. m. M&M Eventos - Salón San Carlos DESDE $ 20.000 Ver detalle Feria / Gastronomía Expo Gastronómica & Feria de Cerveza Artesanal sábado, 3 de octubre de 2026, 6:00 p. m. M&M Eventos - Salón Villa Elisa DESDE $ 8.000 Ver detalle Fiesta temática Fiesta de Halloween M&M sábado, 31 de octubre de 2026, 10:00 p. m. M&M Eventos - Salón La Plata DESDE $ 18.000 Ver detalle"
+  }
+]

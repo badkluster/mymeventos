@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Contract, ContractAddendum, Event } from './crm.models';
 import { ApiError } from '../../middlewares/errorHandler';
 import { recalculateContractTotals } from './contract-financials.service';
@@ -185,14 +186,46 @@ function validateContractForApproval(contract: any): void {
 }
 
 export async function approveContract(contractId: string, userId: string): Promise<any> {
-  const contract: any = await recalculateContractTotals(contractId);
-  validateContractForApproval(contract);
-  contract.status = 'approved';
-  contract.approvedAt = contract.approvedAt ?? new Date();
-  contract.approvedByUserId = userId;
-  contract.updatedBy = userId;
-  await contract.save();
-  return contract;
+  // The financial snapshot is refreshed before the state transition. The approval itself and
+  // its corresponding commercial Event transition happen in one transaction below.
+  await recalculateContractTotals(contractId);
+  const session = await mongoose.startSession();
+  let approvedContract: any;
+
+  try {
+    await session.withTransaction(async () => {
+      const contract: any = await Contract.findOne({ _id: contractId, deletedAt: null }).session(session);
+      if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
+      validateContractForApproval(contract);
+
+      const event: any = contract.eventId
+        ? await Event.findOne({ _id: contract.eventId, deletedAt: null }).session(session)
+        : null;
+      if (!event) throw new ApiError(422, 'CONTRACT_EVENT_INCONSISTENT', 'El contrato no tiene un evento activo asociado.');
+
+      // Replaying an approval is intentionally safe. It also repairs a legacy inconsistency
+      // left by the previous implementation without moving events backwards from later states.
+      if (contract.status !== 'approved') {
+        if (contract.status !== 'pending_approval') throw new ApiError(422, 'CONTRACT_NOT_APPROVABLE');
+        contract.status = 'approved';
+        contract.approvedAt = new Date();
+        contract.approvedByUserId = userId;
+        contract.updatedBy = userId;
+        await contract.save({ session });
+      }
+
+      if (event.status === 'contract_draft') {
+        event.status = 'deposit_pending';
+        event.updatedBy = userId;
+        await event.save({ session });
+      }
+      approvedContract = contract;
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  return approvedContract;
 }
 
 export async function requestContractChanges(contractId: string, userId: string): Promise<any> {

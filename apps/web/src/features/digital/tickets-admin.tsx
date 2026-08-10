@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
+  Eye,
   ExternalLink,
   MapPin,
   MoreHorizontal,
@@ -431,6 +432,15 @@ export function TicketPublicationsAdmin() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex justify-end gap-1">
+                        <Link
+                          title="Ver estado operativo"
+                          href={`/admin/digital-tickets/publications/${item._id}`}
+                        >
+                          <Button variant="secondary" className="px-3">
+                            <Eye className="h-4 w-4" />
+                            <span className="sr-only">Ver detalle</span>
+                          </Button>
+                        </Link>
                         <Link
                           title="Editar"
                           href={`/admin/digital-tickets/publications/${item._id}/edit`}

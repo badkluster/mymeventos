@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Permission } from '@mym/shared';
 
 const mocks = vi.hoisted(() => ({
   uploadBuffer: vi.fn(),
@@ -11,7 +12,7 @@ vi.mock('../src/middlewares/auth', async (importOriginal) => {
   return {
     ...actual,
     requireAuth: (req: any, _res: any, next: () => void) => {
-      req.user = { id: '507f1f77bcf86cd799439011', roles: ['STAFF'], permissionOverrides: [], permissionDeniedOverrides: [], salonIds: [], managedSalonIds: [], active: true };
+      req.user = { id: '507f1f77bcf86cd799439011', roles: ['STAFF'], permissionOverrides: [Permission.EXPENSES_CREATE], permissionDeniedOverrides: [], salonIds: [], managedSalonIds: [], active: true };
       next();
     }
   };
@@ -46,5 +47,15 @@ describe('uploads routes', () => {
 
     expect(response.status).toBe(403);
     expect(mocks.deleteAsset).not.toHaveBeenCalled();
+  });
+
+  it('allows a user with expense creation permission to upload an expense receipt', async () => {
+    const response = await request(app)
+      .post('/api/uploads')
+      .field('context', 'expenses')
+      .attach('file', Buffer.from('receipt'), { filename: 'ticket.pdf', contentType: 'application/pdf' });
+
+    expect(response.status).toBe(201);
+    expect(mocks.uploadBuffer).toHaveBeenCalledWith(expect.any(Buffer), expect.objectContaining({ folder: 'mym-eventos/expenses', resource_type: 'raw' }));
   });
 });

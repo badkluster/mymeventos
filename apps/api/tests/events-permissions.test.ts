@@ -11,20 +11,26 @@ const mocks = vi.hoisted(() => ({
   writeAuditLog: vi.fn(),
   syncEventSupplierExpenses: vi.fn(),
   eventExpenses: vi.fn(),
-  productionPlanFindOne: vi.fn()
+  productionPlanFindOne: vi.fn(),
+  staffAssignmentExists: vi.fn(),
+  staffAssignmentCreate: vi.fn(),
+  staffAssignmentFindOne: vi.fn(),
+  salonStockFind: vi.fn(),
+  tablewareFind: vi.fn(),
+  tablewareInsertMany: vi.fn()
 }));
 
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne, find: vi.fn() } }));
 vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: vi.fn(), exists: vi.fn(), find: vi.fn() } }));
-vi.mock('../src/modules/salons/salonStockItem.model', () => ({ SalonStockItem: { find: vi.fn() }, salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'] }));
-vi.mock('../src/modules/crm/eventTablewareAllocation.model', () => ({ EventTablewareAllocation: { find: vi.fn(), deleteMany: mocks.tablewareDeleteMany } }));
+vi.mock('../src/modules/salons/salonStockItem.model', () => ({ SalonStockItem: { find: mocks.salonStockFind }, salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'] }));
+vi.mock('../src/modules/crm/eventTablewareAllocation.model', () => ({ EventTablewareAllocation: { find: mocks.tablewareFind, deleteMany: mocks.tablewareDeleteMany, insertMany: mocks.tablewareInsertMany } }));
 vi.mock('../src/modules/crm/crm.models', () => ({
   Lead: {}, LeadActivity: { create: vi.fn() }, Customer: { findOne: vi.fn() }, ContactPerson: {},
   PackageTemplate: { find: vi.fn(), findOne: vi.fn(), exists: vi.fn() },
   VenuePackageRule: { find: vi.fn(), findOne: vi.fn(), findOneAndUpdate: vi.fn() },
   Quote: { findOne: vi.fn() }, QuoteRevision: {},
   Event: { findOne: mocks.eventFindOne, find: mocks.eventFind },
-  EventStaffAssignment: { find: vi.fn() },
+  EventStaffAssignment: { find: vi.fn(), findOne: mocks.staffAssignmentFindOne, exists: mocks.staffAssignmentExists, create: mocks.staffAssignmentCreate },
   CalendarItem: { findOneAndUpdate: vi.fn(), updateMany: vi.fn().mockResolvedValue({}) },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
   Contract: { findOne: vi.fn() }, ContractAddendum: {}, Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn() }
@@ -139,7 +145,7 @@ describe('event venue/date time-slot availability', () => {
   it('rejects reserving an event whose time slot overlaps another reserved event at the same salon and day', async () => {
     const event: any = { _id: eventId, salonId, status: 'quoted', eventDate: new Date('2026-12-05T00:00:00.000Z'), startTime: '21:00', endTime: '23:00', save: vi.fn().mockResolvedValue(undefined) };
     mocks.eventFindOne.mockResolvedValue(event);
-    mocks.eventFind.mockReturnValue(queryChain([{ startTime: '22:00', endTime: '23:30', eventName: 'Otro cumpleaños' }]));
+    mocks.eventFind.mockReturnValue(queryChain([{ eventDate: new Date('2026-12-05T00:00:00.000Z'), startTime: '22:00', endTime: '23:30', eventName: 'Otro cumpleaños' }]));
 
     const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'reserved' });
 
@@ -162,7 +168,7 @@ describe('event venue/date time-slot availability', () => {
   it('allows two events at the same salon and day when their time slots do not overlap', async () => {
     const event: any = { _id: eventId, salonId, status: 'quoted', eventDate: new Date('2026-12-05T00:00:00.000Z'), startTime: '13:00', endTime: '17:00', save: vi.fn().mockResolvedValue(undefined) };
     mocks.eventFindOne.mockResolvedValue(event);
-    mocks.eventFind.mockReturnValue(queryChain([{ startTime: '21:00', endTime: '05:00', eventName: 'Fiesta nocturna' }]));
+    mocks.eventFind.mockReturnValue(queryChain([{ eventDate: new Date('2026-12-05T00:00:00.000Z'), startTime: '21:00', endTime: '05:00', eventName: 'Fiesta nocturna' }]));
 
     const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'reserved' });
 
@@ -170,10 +176,31 @@ describe('event venue/date time-slot availability', () => {
     expect(event.status).toBe('reserved');
   });
 
+  it('rejects an early event that overlaps a nocturnal event started the previous day', async () => {
+    const event: any = { _id: eventId, salonId, status: 'quoted', eventDate: new Date('2026-07-11T00:00:00.000Z'), startTime: '03:00', endTime: '06:00', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.eventFind.mockReturnValue(queryChain([{ eventDate: new Date('2026-07-10T00:00:00.000Z'), startTime: '21:00', endTime: '05:00', eventName: 'Fiesta nocturna' }]));
+
+    const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'reserved' });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('EVENT_VENUE_SLOT_CONFLICT');
+  });
+
+  it('allows a slot that starts exactly when the previous event ends', async () => {
+    const event: any = { _id: eventId, salonId, status: 'quoted', eventDate: new Date('2026-07-11T00:00:00.000Z'), startTime: '05:00', endTime: '08:00', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.eventFind.mockReturnValue(queryChain([{ eventDate: new Date('2026-07-10T00:00:00.000Z'), startTime: '21:00', endTime: '05:00', eventName: 'Fiesta nocturna' }]));
+
+    const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'reserved' });
+
+    expect(response.status).toBe(200);
+  });
+
   it('treats a candidate event with no recorded time as occupying the whole day', async () => {
     const event: any = { _id: eventId, salonId, status: 'quoted', eventDate: new Date('2026-12-05T00:00:00.000Z'), startTime: '13:00', endTime: '17:00', save: vi.fn().mockResolvedValue(undefined) };
     mocks.eventFindOne.mockResolvedValue(event);
-    mocks.eventFind.mockReturnValue(queryChain([{ eventName: 'Evento sin horario cargado' }]));
+    mocks.eventFind.mockReturnValue(queryChain([{ eventDate: new Date('2026-12-05T00:00:00.000Z'), eventName: 'Evento sin horario cargado' }]));
 
     const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'reserved' });
 
@@ -189,6 +216,148 @@ describe('event venue/date time-slot availability', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.eventFind).not.toHaveBeenCalled();
+  });
+});
+
+describe('event staff concurrent assignment', () => {
+  beforeEach(() => { vi.resetAllMocks(); });
+
+  it('rejects assigning the same staff user to an overlapping shift on another event', async () => {
+    const staffId = '507f1f77bcf86cd799439018';
+    mocks.userFindOne
+      .mockReturnValueOnce(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }))
+      .mockReturnValueOnce(chainLean({ _id: staffId, roles: [Role.STAFF], salonIds: [salonId], active: true }));
+    mocks.eventFindOne.mockReturnValue(chainLean({ _id: eventId, salonId, status: 'confirmed' }));
+    mocks.staffAssignmentExists.mockImplementation((query: any) => Promise.resolve(
+      query.eventId?.$ne === eventId && query.shiftStart?.$lt && query.shiftEnd?.$gt
+        ? { _id: '507f1f77bcf86cd799439019' }
+        : null,
+    ));
+    mocks.staffAssignmentCreate.mockResolvedValue({ _id: '507f1f77bcf86cd799439020' });
+
+    const response = await request(app).post(`/api/events/${eventId}/staff`).set('Cookie', adminCookie).send({
+      staffUserId: staffId, staffSubrole: 'WAITER', shiftStart: '2026-07-10T23:00:00.000Z', shiftEnd: '2026-07-11T05:00:00.000Z', status: 'assigned',
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('STAFF_ASSIGNMENT_TIME_CONFLICT');
+    expect(mocks.staffAssignmentCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('event staff lifecycle transitions', () => {
+  const assignmentId = '507f1f77bcf86cd799439019';
+
+  function prepareAssignment(status: string, assignmentSalonId = salonId) {
+    const assignment: any = { _id: assignmentId, eventId, salonId: assignmentSalonId, status, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+    mocks.eventFindOne.mockReturnValue(chainLean({ _id: eventId, salonId }));
+    mocks.staffAssignmentFindOne.mockResolvedValue(assignment);
+    return assignment;
+  }
+
+  beforeEach(() => { vi.resetAllMocks(); });
+
+  it.each([
+    ['complete', 'completed'],
+    ['no-show', 'no_show'],
+    ['cancel', 'cancelled'],
+  ])('allows confirmed -> %s', async (path, expectedStatus) => {
+    const assignment = prepareAssignment('confirmed');
+
+    const response = await request(app).post(`/api/events/${eventId}/staff/${assignmentId}/${path}`).set('Cookie', adminCookie).send({});
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(assignment.status).toBe(expectedStatus);
+    expect(assignment.save).toHaveBeenCalledOnce();
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), `EVENT_STAFF_${expectedStatus.toUpperCase()}`, 'EventStaffAssignment', assignmentId, expect.objectContaining({ previousStatus: 'confirmed', status: expectedStatus }));
+  });
+
+  it('applies the same transition through the existing staff PATCH endpoint used by the web', async () => {
+    const assignment = prepareAssignment('confirmed');
+
+    const response = await request(app).patch(`/api/events/${eventId}/staff/${assignmentId}`).set('Cookie', adminCookie).send({ status: 'completed' });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(assignment.status).toBe('completed');
+    expect(assignment.save).toHaveBeenCalledOnce();
+  });
+
+  it('allows confirmed -> checked_in -> completed', async () => {
+    const assignment = prepareAssignment('confirmed');
+
+    const checkedIn = await request(app).post(`/api/events/${eventId}/staff/${assignmentId}/check-in`).set('Cookie', adminCookie).send({});
+    expect(checkedIn.status, JSON.stringify(checkedIn.body)).toBe(200);
+    expect(assignment.status).toBe('checked_in');
+
+    const completed = await request(app).post(`/api/events/${eventId}/staff/${assignmentId}/complete`).set('Cookie', adminCookie).send({});
+    expect(completed.status, JSON.stringify(completed.body)).toBe(200);
+    expect(assignment.status).toBe('completed');
+  });
+
+  it('rejects completed -> confirmed', async () => {
+    const assignment = prepareAssignment('completed');
+
+    const response = await request(app).post(`/api/events/${eventId}/staff/${assignmentId}/confirm`).set('Cookie', adminCookie).send({});
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('STAFF_ASSIGNMENT_INVALID_TRANSITION');
+    expect(assignment.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid lifecycle status before reaching the data layer', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+
+    const response = await request(app).post(`/api/events/${eventId}/staff/${assignmentId}/status`).set('Cookie', adminCookie).send({ status: 'invalid' });
+
+    expect(response.status).toBe(400);
+    expect(mocks.eventFindOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects a user without event update permission', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: managerId, roles: [Role.MANAGER], permissionOverrides: [], permissionDeniedOverrides: [Permission.EVENTS_UPDATE], salonIds: [salonId], active: true }));
+
+    const response = await request(app).post(`/api/events/${eventId}/staff/${assignmentId}/complete`).set('Cookie', managerCookie).send({});
+
+    expect(response.status).toBe(403);
+    expect(mocks.eventFindOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects a staff assignment belonging to another salon', async () => {
+    const assignment = prepareAssignment('confirmed', '507f1f77bcf86cd799439099');
+
+    const response = await request(app).post(`/api/events/${eventId}/staff/${assignmentId}/complete`).set('Cookie', adminCookie).send({});
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
+    expect(assignment.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('event tableware concurrent availability', () => {
+  const stockItemId = '507f1f77bcf86cd799439021';
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+    mocks.eventFindOne.mockResolvedValue({ _id: eventId, salonId, eventDate: new Date('2026-07-10T00:00:00.000Z'), resourcePlanSnapshot: {}, save: vi.fn() });
+    mocks.salonStockFind.mockReturnValue({ sort: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue([{ _id: stockItemId, salonId, name: 'Plato playo', currentQuantity: 100, unitOfMeasure: 'unidad' }]) });
+    mocks.tablewareFind.mockReturnValue({ lean: vi.fn().mockResolvedValue([{ _id: 'allocation-other', eventId: '507f1f77bcf86cd799439022', salonId, salonStockItemId: stockItemId, source: 'salon_stock', quantity: 80, eventDay: '2026-07-10' }]) });
+  });
+
+  it('rejects the second allocation when total reservations would exceed physical stock', async () => {
+    const response = await request(app).put(`/api/events/${eventId}/tableware`).set('Cookie', adminCookie).send({ salonItems: [{ stockItemId, quantity: 30 }], externalItems: [] });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('TABLEWARE_STOCK_INSUFFICIENT');
+    expect(response.body.error.message).toContain('Disponible: 20');
+    expect(mocks.tablewareDeleteMany).not.toHaveBeenCalled();
+    expect(mocks.tablewareInsertMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects negative quantities as input validation instead of returning 500', async () => {
+    const response = await request(app).put(`/api/events/${eventId}/tableware`).set('Cookie', adminCookie).send({ salonItems: [{ stockItemId, quantity: -1 }], externalItems: [] });
+    expect(response.status).toBe(400);
+    expect(mocks.eventFindOne).not.toHaveBeenCalled();
   });
 });
 

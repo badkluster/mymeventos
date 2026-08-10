@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileText, Printer, Search, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
-import { contractStatusLabels, displayLabel } from '@/lib/display-labels';
+import { contractStatusLabels, displayLabel, eventTypeLabels } from '@/lib/display-labels';
 import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
@@ -20,7 +20,7 @@ const statusTone: Record<string, string> = { draft: 'bg-zinc-100 text-zinc-700',
 function entityName(value: unknown) {
   if (!value || typeof value === 'string') return 'Sin datos';
   const item = value as { fullName?: string; name?: string; eventName?: string; eventType?: string };
-  return item.fullName || item.name || item.eventName || item.eventType || 'Sin datos';
+  return item.fullName || item.name || item.eventName || (item.eventType ? displayLabel(eventTypeLabels, item.eventType) : 'Sin datos');
 }
 function normalize(response: ListResponse): { items: Contract[]; meta: PaginationMeta } {
   const items = response.items ?? [];

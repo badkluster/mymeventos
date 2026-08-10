@@ -9,6 +9,7 @@ import { LoadingState } from '../../components/LoadingState';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api, ApiClientError } from '../../lib/api';
+import { eventStaffStatusLabels } from '@mym/shared';
 import { colors, spacing, typography } from '../../theme/tokens';
 import type { ScheduleAssignment } from '../../types/attendance';
 
@@ -50,7 +51,7 @@ export function ScheduleScreen() {
             <AppCard>
               <View style={styles.row}>
                 <Text style={styles.title}>{item.eventId?.eventName || 'Turno de salón'}</Text>
-                <StatusBadge label={item.status} tone={item.status === 'confirmed' || item.status === 'checked_in' ? 'ok' : 'neutral'} />
+                <StatusBadge label={eventStaffStatusLabels[item.status] ?? item.status} tone={item.status === 'confirmed' || item.status === 'checked_in' ? 'ok' : 'neutral'} />
               </View>
               <Text style={styles.meta}>{formatDate(item.eventId?.eventDate ?? item.shiftStart)}</Text>
               <Text style={styles.meta}>{item.salonId?.name ?? 'Salón a confirmar'}{item.roleLabel ? ` · ${item.roleLabel}` : ''}</Text>

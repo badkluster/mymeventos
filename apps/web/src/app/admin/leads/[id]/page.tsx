@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CalendarDays, ChevronLeft, Mail, MessageCircle, Pencil, StickyNote, Trash2, Users } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { activityTypeLabels, displayLabel, leadSourceLabels, leadStatusLabels, quoteRequestSourceLabels, quoteRequestStatusLabels, quoteStatusLabels } from '@/lib/display-labels';
+import { activityTypeLabels, displayLabel, eventStatusLabels, eventTypeLabels, leadSourceLabels, leadStatusLabels, quoteRequestSourceLabels, quoteRequestStatusLabels, quoteStatusLabels } from '@/lib/display-labels';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { formatCivilDate } from '@/lib/dates';
@@ -220,7 +220,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3"><h1 className="truncate text-3xl font-semibold tracking-tight text-zinc-950">{lead.fullName}</h1><StatusBadge status={lead.status} /></div>
-            <p className="mt-2 text-sm text-zinc-500">Origen: {displayLabel(leadSourceLabels, lead.source)} · {lead.eventType}</p>
+             <p className="mt-2 text-sm text-zinc-500">Origen: {displayLabel(leadSourceLabels, lead.source)} · {displayLabel(eventTypeLabels, lead.eventType)}</p>
             <label className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-700">Estado
               <Select value={lead.status} disabled={isUpdatingStatus} onChange={(event) => void updateStatus(event.target.value)} className="w-52 py-2">
                 {Object.entries(leadStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -255,7 +255,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
         <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:col-span-2">
           <h2 className="text-base font-semibold text-zinc-950">Información comercial</h2>
           <dl className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2">
-            <div><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Tipo de evento</dt><dd className="mt-1 font-medium text-zinc-800">{lead.eventType || 'Sin especificar'}</dd></div>
+            <div><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Tipo de evento</dt><dd className="mt-1 font-medium text-zinc-800">{displayLabel(eventTypeLabels, lead.eventType)}</dd></div>
             <div><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Origen</dt><dd className="mt-1 font-medium text-zinc-800">{displayLabel(leadSourceLabels, lead.source)}</dd></div>
             <div className="sm:col-span-2"><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Salones de interés</dt><dd className="mt-1 font-medium text-zinc-800">{selectedSalonNames.length ? selectedSalonNames.join(' · ') : 'Sin salón asociado'}</dd></div>
             <div className="sm:col-span-2"><dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">Cliente convertido</dt><dd className="mt-1 font-medium text-zinc-800">{convertedCustomer ? <Link href={`/admin/customers/${convertedCustomer._id}`} className="underline">{convertedCustomer.fullName || 'Ver cliente'}</Link> : 'No convertido'}</dd></div>
@@ -289,7 +289,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
       <div className="grid gap-5 lg:grid-cols-2">
         <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-zinc-950">Solicitudes de presupuesto</h2>
-          {quoteRequests.length === 0 ? <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay solicitudes asociadas visibles.</p> : <div className="mt-5 space-y-3">{quoteRequests.map((item) => <Link key={item._id} href={`/admin/quotes/requests/${item._id}`} className="block rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition hover:bg-zinc-100"><p className="font-medium text-zinc-900">{formatDate(item.createdAt)} · {displayLabel(quoteRequestStatusLabels, item.status)}</p><p className="mt-1 text-sm text-zinc-500">{displayLabel(quoteRequestSourceLabels, item.source)} · {item.eventType || 'Sin tipo de evento'}</p></Link>)}</div>}
+           {quoteRequests.length === 0 ? <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay solicitudes asociadas visibles.</p> : <div className="mt-5 space-y-3">{quoteRequests.map((item) => <Link key={item._id} href={`/admin/quotes/requests/${item._id}`} className="block rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition hover:bg-zinc-100"><p className="font-medium text-zinc-900">{formatDate(item.createdAt)} · {displayLabel(quoteRequestStatusLabels, item.status)}</p><p className="mt-1 text-sm text-zinc-500">{displayLabel(quoteRequestSourceLabels, item.source)} · {displayLabel(eventTypeLabels, item.eventType || '')}</p></Link>)}</div>}
         </article>
         <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-zinc-950">Presupuestos asociados</h2>
@@ -299,7 +299,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
 
       <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
         <h2 className="text-base font-semibold text-zinc-950">Eventos generados</h2>
-        {events.length === 0 ? <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay eventos generados desde este lead.</p> : <div className="mt-5 grid gap-3 md:grid-cols-2">{events.map((item) => <Link key={item._id} href={`/admin/events/${item._id}`} className="block rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition hover:bg-zinc-100"><p className="font-medium text-zinc-900">{item.eventName || item.eventType || 'Evento'} · {displayLabel({ quoted: 'Pendiente de contrato', draft: 'Borrador', reserved: 'Reservado', confirmed: 'Confirmado', cancelled: 'Cancelado', lost: 'Perdido' }, item.status)}</p><p className="mt-1 text-sm text-zinc-500">{formatDate(item.eventDate)} · {typeof item.salonId === 'string' ? 'Sin salón' : item.salonId?.name || 'Sin salón'}</p></Link>)}</div>}
+         {events.length === 0 ? <p className="mt-5 rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay eventos generados desde este lead.</p> : <div className="mt-5 grid gap-3 md:grid-cols-2">{events.map((item) => <Link key={item._id} href={`/admin/events/${item._id}`} className="block rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 transition hover:bg-zinc-100"><p className="font-medium text-zinc-900">{item.eventName || displayLabel(eventTypeLabels, item.eventType || '')} · {displayLabel(eventStatusLabels, item.status)}</p><p className="mt-1 text-sm text-zinc-500">{formatDate(item.eventDate)} · {typeof item.salonId === 'string' ? 'Sin salón' : item.salonId?.name || 'Sin salón'}</p></Link>)}</div>}
       </article>
 
       <Modal open={isEditOpen} onClose={() => setIsEditOpen(false)} title="Editar lead" description="Actualizá los datos de esta oportunidad comercial.">

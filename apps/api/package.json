@@ -18,7 +18,10 @@
     "migrate:unique-user-email-index": "ts-node src/scripts/restoreUniqueUserEmailIndex.ts",
     "migrate:remove-ticket-payment-credentials": "ts-node src/scripts/removeTicketPaymentCredentials.ts",
     "migrate:unique-user-email-index": "ts-node src/scripts/restoreUniqueUserEmailIndex.ts",
-    "migrate:digital-ticket-public-token-index": "ts-node src/scripts/removeLegacyDigitalTicketPublicTokenIndex.ts"
+    "migrate:digital-ticket-public-token-index": "ts-node src/scripts/removeLegacyDigitalTicketPublicTokenIndex.ts",
+    "seed:july-2026-full-events": "ts-node --files src/scripts/seedJuly2026FullEvents.ts",
+    "validate:july-2026-full-events": "ts-node --files src/scripts/validateJuly2026FullEvents.ts",
+    "test:july-2026-full-events": "vitest run tests/seed-july-2026-full-events.test.ts tests/event-closure-workflow.test.ts tests/events-permissions.test.ts"
   },
   "dependencies": {
     "@mym/shared": "workspace:*",

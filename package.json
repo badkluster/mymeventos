@@ -13,7 +13,9 @@
     "build:mobile:apk": "pnpm --filter @mym/mobile run build",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test"
+    "test": "pnpm -r run test",
+    "validate:july-2026-full-events": "pnpm --filter @mym/api run validate:july-2026-full-events",
+    "test:july-2026-full-events": "pnpm --filter @mym/api run test:july-2026-full-events"
   },
   "devDependencies": {
     "next": "16.2.11",

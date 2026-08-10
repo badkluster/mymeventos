@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Save, Settings } from 'lucide-react';
 import { api } from '@/lib/api';
+import { displayLabel, settingKeyLabels } from '@/lib/display-labels';
 import { Button, PageHeader, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 
@@ -66,10 +67,10 @@ export default function SettingsPage() {
     <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm">
       <div className="overflow-x-auto">
         <table className="min-w-[900px] w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50/80 text-zinc-500"><tr>{['Clave', 'Valor', 'Descripción', 'Actualizado'].map((label) => <th key={label} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide">{label}</th>)}</tr></thead>
+          <thead className="border-b border-zinc-200 bg-zinc-50/80 text-zinc-500"><tr>{['Parámetro', 'Valor', 'Descripción', 'Actualizado'].map((label) => <th key={label} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide">{label}</th>)}</tr></thead>
           <tbody className="divide-y divide-zinc-100">{items.map((setting) => <tr key={setting.key} className="align-top">
-            <td className="px-5 py-4 font-mono text-xs font-semibold text-zinc-900">{setting.key}</td>
-            <td className="w-[42rem] px-5 py-4"><Textarea aria-label={`Valor de ${setting.key}`} value={setting.rawValue} onChange={(event) => updateRawValue(setting.key, event.target.value)} className="min-h-28 font-mono text-xs" /></td>
+            <td className="px-5 py-4 text-sm font-semibold text-zinc-900">{displayLabel(settingKeyLabels, setting.key)}</td>
+            <td className="w-[42rem] px-5 py-4"><Textarea aria-label={`Valor de ${displayLabel(settingKeyLabels, setting.key)}`} value={setting.rawValue} onChange={(event) => updateRawValue(setting.key, event.target.value)} className="min-h-28 font-mono text-xs" /></td>
             <td className="px-5 py-4 text-zinc-700">{setting.description || 'Sin descripción'}</td>
             <td className="px-5 py-4 text-zinc-700">{formatDate(setting.updatedAt)}</td>
           </tr>)}</tbody>

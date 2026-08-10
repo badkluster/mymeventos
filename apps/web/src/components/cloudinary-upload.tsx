@@ -19,7 +19,7 @@ export type UploadedAsset = {
 };
 
 type CloudinaryUploadProps = {
-  context: 'salons' | 'users' | 'quotes' | 'documents' | 'invitations' | 'tickets' | 'marketing' | 'general';
+  context: 'salons' | 'users' | 'quotes' | 'documents' | 'invitations' | 'tickets' | 'marketing' | 'expenses' | 'general';
   salonId?: string;
   quoteId?: string;
   accept?: string;

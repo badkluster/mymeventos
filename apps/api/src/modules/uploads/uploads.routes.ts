@@ -10,7 +10,7 @@ import { deleteAsset, uploadBuffer } from './cloudinary.service';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
-const contexts = ['salons', 'users', 'quotes', 'documents', 'invitations', 'tickets', 'marketing', 'general'] as const;
+const contexts = ['salons', 'users', 'quotes', 'documents', 'invitations', 'tickets', 'marketing', 'expenses', 'general'] as const;
 const uploadSchema = z.object({ context: z.enum(contexts).default('general'), folder: z.string().trim().optional(), salonId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(), quoteId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional() });
 const deleteSchema = z.object({
   query: z.object({
@@ -60,6 +60,10 @@ function canUpload(request: Express.Request, context: z.infer<typeof uploadSchem
   const user = request.user;
   if (!user) return false;
   if (context === 'users') return true;
+  if (context === 'expenses') return user.roles.some((role) => (
+    hasPermission(role, Permission.EXPENSES_CREATE, user.permissionOverrides, user.permissionDeniedOverrides)
+    || hasPermission(role, Permission.EXPENSES_UPDATE, user.permissionOverrides, user.permissionDeniedOverrides)
+  ));
   const needed = context === 'salons' ? Permission.SALONS_UPDATE : context === 'invitations' ? Permission.INVITATIONS_UPDATE : context === 'tickets' ? Permission.TICKETS_UPDATE : context === 'marketing' ? Permission.MARKETING_SETTINGS_UPDATE : context === 'general' ? Permission.LANDING_UPDATE : Permission.SALONS_UPDATE;
   return user.roles.some((role) => hasPermission(role, needed, user.permissionOverrides, user.permissionDeniedOverrides));
 }

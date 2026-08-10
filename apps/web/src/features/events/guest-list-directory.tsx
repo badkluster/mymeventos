@@ -4,6 +4,7 @@ import { useMemo, useState, type DragEvent } from 'react';
 import { Check, GripVertical, Search, SlidersHorizontal, Users } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui/primitives';
 import type { EventGuest, EventGuestTable } from '@/features/quotes/types';
+import { guestAgeGroupLabel, guestAgeGroupMeta } from '@/features/events/guest-age-group';
 
 type GuestDirectoryProps = {
   guests: EventGuest[];
@@ -26,21 +27,23 @@ function restrictionLabel(value?: string): string {
   return ({ vegetarian: 'Vegetariano/a', vegan: 'Vegano/a', celiac: 'Celíaco/a', lactose_free: 'Sin lactosa' } as Record<string, string>)[value ?? ''] ?? '';
 }
 
-function ageGroupLabel(value?: string): string {
-  return ({ adult: 'Adulto', child_1_4: '1 a 4 años · sin cargo', child_5_9: '5 a 9 años · media tarifa', minor_10_17: '10 a 17 años · menor' } as Record<string, string>)[value ?? ''] ?? 'Adulto';
+function ageGroupLabel(value?: string) {
+  const ageMeta = guestAgeGroupMeta(value);
+  return <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${ageMeta.chipClassName}`}>{guestAgeGroupLabel(value)}</span>;
 }
 
 function guestSubtitle(guest: EventGuest): string {
-  return [ageGroupLabel(guest.ageGroup), guest.meal || 'Sin menú', restrictionLabel(guest.dietaryPreference)].filter(Boolean).join(' · ');
+  return [guestAgeGroupLabel(guest.ageGroup), guest.meal || 'Sin menú', restrictionLabel(guest.dietaryPreference)].filter(Boolean).join(' · ');
 }
 
 function GuestListItem({ guest, selected, onToggle, onEdit }: { guest: EventGuest; selected: boolean; onToggle: () => void; onEdit: () => void }) {
+  const ageMeta = guestAgeGroupMeta(guest.ageGroup);
   const startDrag = (event: DragEvent<HTMLDivElement>) => {
     if (!guest.id) return;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/mym-event-guest-id', guest.id);
   };
-  return <article draggable onDragStart={startDrag} onClick={onEdit} className="group flex cursor-pointer items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 shadow-sm transition hover:border-amber-300 hover:bg-amber-50/40"><button type="button" aria-label={`Seleccionar ${guest.fullName}`} onClick={(event) => { event.stopPropagation(); onToggle(); }} className={`grid h-5 w-5 shrink-0 place-items-center rounded border ${selected ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-300 bg-white text-transparent'}`}><Check className="h-3.5 w-3.5" /></button><GripVertical className="h-4 w-4 shrink-0 text-zinc-300 group-hover:text-amber-500" /><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-100 text-xs font-semibold text-zinc-500">{guest.fullName.slice(0, 1).toUpperCase() || '?'}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-zinc-950">{guest.fullName}</p><p className="truncate text-xs text-zinc-500">{guestSubtitle(guest)}</p></div><Users className="h-3.5 w-3.5 shrink-0 text-zinc-400" /></article>;
+  return <article draggable onDragStart={startDrag} onClick={onEdit} className={`group flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 shadow-sm transition ${ageMeta.chipClassName}`}><button type="button" aria-label={`Seleccionar ${guest.fullName}`} onClick={(event) => { event.stopPropagation(); onToggle(); }} className={`grid h-5 w-5 shrink-0 place-items-center rounded border ${selected ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-300 bg-white text-transparent'}`}><Check className="h-3.5 w-3.5" /></button><GripVertical className="h-4 w-4 shrink-0 text-zinc-400 group-hover:text-zinc-700" /><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-semibold ${ageMeta.avatarClassName}`}>{guest.fullName.slice(0, 1).toUpperCase() || '?'}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-zinc-950">{guest.fullName}</p><p className="truncate text-xs text-zinc-600">{guestSubtitle(guest)}</p></div><Users className="h-3.5 w-3.5 shrink-0 text-zinc-400" /></article>;
 }
 
 function AgeFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {

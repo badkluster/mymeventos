@@ -1,0 +1,1070 @@
+[
+  {
+    "slug": "calendario-nuevo-item",
+    "route": "/admin/calendar",
+    "action": "Crear item",
+    "captured": true,
+    "result_route": "/admin/calendar",
+    "screenshot": "27-calendario-nuevo-item.png",
+    "headings": [
+      "Crear item de calendario"
+    ],
+    "fields": [
+      "Tipo Alerta Recordatorio Nota Tarea Rango de pago Reunión",
+      "Prioridad Baja Normal Alta Critica",
+      "Visibilidad Personal: solo yo Visible para todos",
+      "Título",
+      "Fecha",
+      "Todo el día",
+      "Inicio",
+      "Fin",
+      "Salón General San Carlos Villa Elisa La Plata",
+      "Preparar recordatorio",
+      "Avisar antes",
+      "Unidad Minutos Horas Días Semanas",
+      "Detalle"
+    ],
+    "placeholders": [
+      "Ej: Revisar documentación del evento",
+      "Notas internas, faltantes, condiciones de pago o contexto operativo."
+    ],
+    "buttons": [
+      "×",
+      "Sin usuario vinculado",
+      "Sin lead vinculado",
+      "Sin cliente vinculado",
+      "Sin evento vinculado",
+      "Sin presupuesto vinculado",
+      "Sin contrato vinculado",
+      "Sin pago vinculado",
+      "Sin proveedor vinculado",
+      "Cancelar",
+      "Crear"
+    ],
+    "visible_text": "Crear item de calendario Agenda una alerta, recordatorio, nota, tarea, reunión o rango operativo. × Tipo Alerta Recordatorio Nota Tarea Rango de pago Reunión Prioridad Baja Normal Alta Critica Visibilidad Personal: solo yo Visible para todos Título Fecha Todo el día Inicio Fin Salón General San Carlos Villa Elisa La Plata Preparar recordatorio Vínculos rápidos Relacioná este item con personas o registros para abrirlos directo desde el detalle. Usuario Sin usuario vinculado Lead Sin lead vinculado Cliente Sin cliente vinculado Evento Sin evento vinculado Presupuesto Sin presupuesto vinculado Contrato Sin contrato vinculado Pago Sin pago vinculado Proveedor Sin proveedor vinculado Avisar antes Unidad Minutos Horas Días Semanas Detalle Cancelar Crear"
+  },
+  {
+    "slug": "lead-nuevo",
+    "route": "/admin/leads",
+    "action": "Nuevo lead",
+    "captured": true,
+    "result_route": "/admin/leads",
+    "screenshot": "28-lead-nuevo.png",
+    "headings": [
+      "Nuevo lead"
+    ],
+    "fields": [
+      "Nombre",
+      "Apellido",
+      "Teléfono",
+      "Teléfono alternativo",
+      "Email",
+      "Origen Formulario web Cotización rápida WhatsApp Manual Promoción Entrada Invitación Otro",
+      "Tipo de evento",
+      "Fecha estimativa del evento",
+      "Cantidad de personas",
+      "Salones de interés San Carlos Villa Elisa La Plata",
+      "Mensaje",
+      "Notas internas"
+    ],
+    "placeholders": [
+      "Nombre",
+      "Apellido",
+      "Ej. 221 555 1234",
+      "Opcional",
+      "nombre@email.com",
+      "source",
+      "Ej. Casamiento",
+      "eventDate",
+      "Ej. 120",
+      "Consulta inicial del lead",
+      "Información útil para el equipo"
+    ],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Guardar lead"
+    ],
+    "visible_text": "Nuevo lead Cargá una nueva consulta comercial. × Nombre Apellido Teléfono Teléfono alternativo Email Origen Formulario web Cotización rápida WhatsApp Manual Promoción Entrada Invitación Otro Tipo de evento Fecha estimativa del evento Cantidad de personas Salones de interés San Carlos Villa Elisa La Plata Mantené presionada la tecla Ctrl o Cmd para seleccionar más de un salón. Mensaje Notas internas Cancelar Guardar lead"
+  },
+  {
+    "slug": "cliente-nuevo",
+    "route": "/admin/customers",
+    "action": "Nuevo cliente",
+    "captured": true,
+    "result_route": "/admin/customers",
+    "screenshot": "29-cliente-nuevo.png",
+    "headings": [
+      "Nuevo cliente"
+    ],
+    "fields": [
+      "Nombre",
+      "Apellido",
+      "Teléfono",
+      "Email",
+      "Documento / DNI",
+      "Ocupación",
+      "Fecha de nacimiento Opcional — habilita el saludo automático de cumpleaños.",
+      "Domicilio",
+      "Salones asociados San Carlos Villa Elisa La Plata",
+      "Notas internas"
+    ],
+    "placeholders": [
+      "Nombre",
+      "Apellido",
+      "Ej. 221 555 1234",
+      "nombre@email.com",
+      "Opcional",
+      "birthDate",
+      "Información útil para el equipo"
+    ],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Guardar cliente"
+    ],
+    "visible_text": "Nuevo cliente Cargá un cliente manualmente, sin pasar por un lead o presupuesto. × Nombre Apellido Teléfono Email Documento / DNI Ocupación Fecha de nacimiento Opcional — habilita el saludo automático de cumpleaños. Domicilio Salones asociados San Carlos Villa Elisa La Plata Mantené presionada la tecla Ctrl o Cmd para seleccionar más de un salón. Notas internas Cancelar Guardar cliente"
+  },
+  {
+    "slug": "presupuesto-nuevo",
+    "route": "/admin/quotes",
+    "action": "Nuevo presupuesto",
+    "captured": true,
+    "result_route": "/admin/quotes",
+    "screenshot": "30-presupuesto-nuevo.png",
+    "headings": [
+      "Nuevo presupuesto"
+    ],
+    "fields": [
+      "Nombre y apellido",
+      "Teléfono",
+      "Email",
+      "Tipo de evento",
+      "Fecha tentativa",
+      "Cantidad de personas",
+      "Agasajado/a",
+      "Color de mantelería",
+      "Vegetarianos",
+      "Veganos",
+      "Celíacos",
+      "Intolerancia a lactosa",
+      "San Carlos",
+      "Villa Elisa",
+      "La Plata",
+      "Paquete Presupuesto manual / Sin plantilla Alquiler de salón Banquete Premium Black Service La Plata Exclusive Night Fiesta Dorada Fiesta de Egresados Fiesta de egresados M&M La Plata Fiesta platinum Gala y Gourmet Gold Service Luxury Night Magic Night Opción Bássic Platinum Night Promo Infantil Risitas Promo Infantil Sonrisitas Promo Salón Full Salón completo M&M La Plata Servicio por 5 horas",
+      "Nombre comercial",
+      "Duración (horas)",
+      "Inicio",
+      "Fin",
+      "Modalidad de cobro Precio por persona Precio total del evento El precio total no cambia aunque varíe la cantidad de invitados.",
+      "Valor por persona",
+      "Descuento (%)",
+      "Seña",
+      "Promoción",
+      "Regalo",
+      "Condiciones de pago",
+      "Observaciones internas"
+    ],
+    "placeholders": [
+      "contactName",
+      "phone",
+      "email",
+      "eventType",
+      "eventDate",
+      "honoreeName",
+      "Blanco, negro, combinado…",
+      "vegetarianCount",
+      "veganCount",
+      "celiacCount",
+      "lactoseIntolerantCount",
+      "packageName"
+    ],
+    "buttons": [
+      "×",
+      "Buscar",
+      "Persona nueva",
+      "Agregar sección",
+      "Agregar",
+      "Cancelar",
+      "Crear presupuesto"
+    ],
+    "visible_text": "Nuevo presupuesto Cada salón seleccionado genera un presupuesto independiente. × ¿Para quién es el presupuesto? Buscá lead/cliente existente o cargá una persona nueva. Buscar Persona nueva Nombre y apellido Teléfono Email Tipo de evento Fecha tentativa Cantidad de personas Agasajado/a Color de mantelería Vegetarianos Veganos Celíacos Intolerancia a lactosa Salones a cotizar San Carlos Villa Elisa La Plata Paquete Presupuesto manual / Sin plantilla Alquiler de salón Banquete Premium Black Service La Plata Exclusive Night Fiesta Dorada Fiesta de Egresados Fiesta de egresados M&M La Plata Fiesta platinum Gala y Gourmet Gold Service Luxury Night Magic Night Opción Bássic Platinum Night Promo Infantil Risitas Promo Infantil Sonrisitas Promo Salón Full Salón completo M&M La Plata Servicio por 5 horas Vista previa por salón Seleccioná uno o más salones para ver el cálculo. Nombre comercial Duración (horas) Inicio Fin Modalidad de cobro Precio por persona Precio total del evento El precio total no cambia aunque varíe la cantidad de invitados. Valor por persona Descuento (%) Valor final por persona $ 0 Seña Promoción Regalo Condiciones de pago Menú Agregar sección Todavía no hay secciones de menú. Servicios incluidos Agregar Todavía no hay ítems. Usá “Agregar” para cargar uno. Observaciones internas Cancelar Crear presupuesto"
+  },
+  {
+    "slug": "evento-nuevo",
+    "route": "/admin/events",
+    "action": "Nuevo evento",
+    "captured": true,
+    "result_route": "/admin/events",
+    "screenshot": "31-evento-nuevo.png",
+    "headings": [
+      "Nuevo evento",
+      "Cronograma inicial"
+    ],
+    "fields": [
+      "SALÓN Seleccionar salón San Carlos Villa Elisa La Plata",
+      "CLIENTE Crear cliente nuevo Usar cliente existente",
+      "NOMBRE COMPLETO",
+      "TELÉFONO",
+      "EMAIL",
+      "DNI / DOCUMENTO",
+      "DOMICILIO",
+      "OCUPACIÓN",
+      "NOMBRE DEL EVENTO",
+      "TIPO",
+      "HOMENAJEADO",
+      "FECHA",
+      "INICIO",
+      "FIN",
+      "INVITADOS",
+      "VEGETARIANOS",
+      "VEGANOS",
+      "CELÍACOS",
+      "SIN LACTOSA",
+      "MANTELERÍA",
+      "PAQUETE / PROPUESTA",
+      "MODALIDAD Precio total Precio por persona",
+      "PRECIO TOTAL",
+      "SEÑA",
+      "CONDICIONES DE PAGO",
+      "NOTAS INTERNAS",
+      "Crear contrato al guardar si el evento tiene los datos mínimos. Si falta información, el evento se guarda y el contrato queda pendiente."
+    ],
+    "placeholders": [
+      "21:00",
+      "05:00",
+      "Ej: Personalizado infantil",
+      "Nombre de sección: Recepción, Plato principal…",
+      "Área",
+      "Responsable",
+      "Notas del cronograma"
+    ],
+    "buttons": [
+      "×",
+      "Evento directo",
+      "Desde presupuesto",
+      "Agregar sección",
+      "Eliminar sección 1",
+      "Agregar",
+      "Agregar ítem",
+      "Quitar ítem",
+      "Cancelar",
+      "Crear evento"
+    ],
+    "visible_text": "Nuevo evento Creá un evento directo o desde un presupuesto existente. × Evento directo Desde presupuesto SALÓN Seleccionar salón San Carlos Villa Elisa La Plata CLIENTE Crear cliente nuevo Usar cliente existente NOMBRE COMPLETO TELÉFONO EMAIL DNI / DOCUMENTO DOMICILIO OCUPACIÓN NOMBRE DEL EVENTO TIPO HOMENAJEADO FECHA INICIO FIN INVITADOS VEGETARIANOS VEGANOS CELÍACOS SIN LACTOSA MANTELERÍA PAQUETE / PROPUESTA MODALIDAD Precio total Precio por persona PRECIO TOTAL SEÑA CONDICIONES DE PAGO Menú Agregar sección Pendiente: agregá un nombre y al menos un ítem. Esta sección no se guardará. Platos o ítems Agregar Todavía no hay ítems. Usá “Agregar” para cargar uno. Servicios incluidos Agregar Todavía no hay ítems. Usá “Agregar” para cargar uno. Cronograma inicial Agregar ítem NOTAS INTERNAS Crear contrato al guardar si el evento tiene los datos mínimos. Si falta información, el evento se guarda y el contrato queda pendiente. Cancelar Crear evento"
+  },
+  {
+    "slug": "invitacion-nueva",
+    "route": "/admin/digital-invitations",
+    "action": "Nueva invitación",
+    "captured": true,
+    "result_route": "/admin/digital-invitations/new",
+    "screenshot": "32-invitacion-nueva.png",
+    "headings": [
+      "Nueva invitación digital",
+      "Diseños sugeridos"
+    ],
+    "fields": [
+      "Tipo de celebración Casamiento Quince años Cumpleaños Cumple infantil Baby shower Bautismo Comunión Aniversario Corporativo General Otra celebración",
+      "Título público",
+      "Homenajeado/a o anfitriones",
+      "Fecha y hora",
+      "Cierre de confirmaciones",
+      "Lugar o dirección",
+      "Enlace de Maps",
+      "Mensaje de bienvenida"
+    ],
+    "placeholders": [
+      "Ej.: Los 15 de Mica",
+      "Ej.: Micaela",
+      "Ej.: Salón M&M, La Plata",
+      "https://maps.google.com/...",
+      "Nos encantaría que nos acompañes..."
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "General BASIC Basic Elegant Diseño claro, elegante y versátil para cumpleaños, bautismos y aniversarios. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 basic elegante versátil",
+      "General BASIC Celebración Esencial Un diseño neutro, cálido y adaptable a cualquier ocasión. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 general neutro otro",
+      "Aniversario BASIC Aniversario Minimal Tipografía protagonista y elegancia minimalista. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 aniversario pareja minimalista",
+      "Baby shower BASIC Baby Shower Suave Tonos pastel y un estilo delicado para celebrar una llegada especial. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 baby shower bebé pastel",
+      "Cumpleaños BASIC Basic Modern Bloques de color, hero visual y una configuración simple pero impactante. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 basic moderno cumpleaños",
+      "Casamiento ✦ PREMIUM Boda Botánica Verdes profundos y detalles orgánicos para una celebración al aire libre. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 casamiento boda verde",
+      "Casamiento ✦ PREMIUM Boda Clásica Marfil, champagne y una estética atemporal. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 casamiento boda clásico",
+      "Corporativo BASIC Corporativo Executive Sobrio, claro y profesional para lanzamientos y encuentros de empresa. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 corporativo empresa profesional",
+      "Cumpleaños BASIC Cumple Bloom Una paleta coral y lavanda, fresca y con energía femenina. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños femenino coral",
+      "Cumpleaños BASIC Cumple Moderno Diseño oscuro, vibrante y versátil para festejos adultos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños adultos moderno",
+      "Cumpleaños BASIC Cumple Urban Azul eléctrico y grafito para un festejo masculino o urbano. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños masculino azul",
+      "Cumple infantil BASIC Infantil Arcoíris Color, formas suaves y alegría para los más chicos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 infantil niños nenas",
+      "Cumple infantil BASIC Infantil Aventura Una propuesta en azul, verde y naranja para pequeños exploradores. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 infantil niños aventura",
+      "Cumple infantil ✦ PREMIUM Premium Infantil Colores configurables, agenda, galería y animaciones suaves para festejos infantiles. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium infantil colorido",
+      "Casamiento ✦ PREMIUM Premium Wedding Portada personalizada, fotos, agenda, regalos, música y RSVP para bodas. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium casamiento música",
+      "Quince años ✦ PREMIUM Premium XV Una experiencia inmersiva con portada, música, galería editorial, agenda y regalos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium xv música",
+      "Quince años ✦ PREMIUM Quince Dorado Noche elegante con negro, dorado y destellos sutiles. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 xv quince elegante",
+      "Quince años ✦ PREMIUM Quince Rosa Una propuesta romántica, luminosa y contemporánea para tus XV. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 xv quince rosa",
+      "Cancelar",
+      "Guardar invitación"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Nueva invitación digital Primero elegí el tipo de celebración: el sistema te sugiere diseños acordes. Tipo de celebración Casamiento Quince años Cumpleaños Cumple infantil Baby shower Bautismo Comunión Aniversario Corporativo General Otra celebración Diseños sugeridos Podés elegir infantil, femenino, masculino, XV o cualquier estilo y luego personalizar los textos. General BASIC Basic Elegant Diseño claro, elegante y versátil para cumpleaños, bautismos y aniversarios. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 basic elegante versátil General BASIC Celebración Esencial Un diseño neutro, cálido y adaptable a cualquier ocasión. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 general neutro otro Aniversario BASIC Aniversario Minimal Tipografía protagonista y elegancia minimalista. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 aniversario pareja minimalista Baby shower BASIC Baby Shower Suave Tonos pastel y un estilo delicado para celebrar una llegada especial. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 baby shower bebé pastel Cumpleaños BASIC Basic Modern Bloques de color, hero visual y una configuración simple pero impactante. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 basic moderno cumpleaños Casamiento ✦ PREMIUM Boda Botánica Verdes profundos y detalles orgánicos para una celebración al aire libre. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 casamiento boda verde Casamiento ✦ PREMIUM Boda Clásica Marfil, champagne y una estética atemporal. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 casamiento boda clásico Corporativo BASIC Corporativo Executive Sobrio, claro y profesional para lanzamientos y encuentros de empresa. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 corporativo empresa profesional Cumpleaños BASIC Cumple Bloom Una paleta coral y lavanda, fresca y con energía femenina. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños femenino coral Cumpleaños BASIC Cumple Moderno Diseño oscuro, vibrante y versátil para festejos adultos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños adultos moderno Cumpleaños BASIC Cumple Urban Azul eléctrico y grafito para un festejo masculino o urbano. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 cumpleaños masculino azul Cumple infantil BASIC Infantil Arcoíris Color, formas suaves y alegría para los más chicos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 infantil niños nenas Cumple infantil BASIC Infantil Aventura Una propuesta en azul, verde y naranja para pequeños exploradores. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia — Música de fondo: no incluido en Basic ✓ Galería de fotos: hasta 4 imágenes — Agenda y regalos: no incluido en Basic — Fondos por sección: no incluido en Basic ✓ Secciones editables: hasta 10 infantil niños aventura Cumple infantil ✦ PREMIUM Premium Infantil Colores configurables, agenda, galería y animaciones suaves para festejos infantiles. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium infantil colorido Casamiento ✦ PREMIUM Premium Wedding Portada personalizada, fotos, agenda, regalos, música y RSVP para bodas. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium casamiento música Quince años ✦ PREMIUM Premium XV Una experiencia inmersiva con portada, música, galería editorial, agenda y regalos. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 premium xv música Quince años ✦ PREMIUM Quince Dorado Noche elegante con negro, dorado y destellos sutiles. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 xv quince elegante Quince años ✦ PREMIUM Quince Rosa Una propuesta romántica, luminosa y contemporánea para tus XV. QUÉ INCLUYE ESTA INVITACIÓN ✓ Confirmación RSVP: formulario de asistencia ✓ Música de fondo: MP3 o URL de audio ✓ Galería de fotos: hasta 20 imágenes ✓ Agenda y regalos: secciones especiales ✓ Fondos por sección: imagen y estilo individual ✓ Secciones editables: hasta 18 xv quince rosa Título público Homenajeado/a o anfitriones Fecha y hora Cierre de confirmaciones Lugar o dirección Enlace de Maps Mensaje de bienvenida Cancelar Guardar invitación"
+  },
+  {
+    "slug": "entrada-nueva-publicacion",
+    "route": "/admin/digital-tickets",
+    "action": "Nueva publicación",
+    "captured": true,
+    "result_route": "/admin/digital-tickets/publications/new",
+    "screenshot": "33-entrada-nueva-publicacion.png",
+    "headings": [
+      "Nueva publicación"
+    ],
+    "fields": [
+      "Nombre interno",
+      "Título público",
+      "Slug público Se genera automáticamente a partir del título público. Editalo solo si necesitás uno distinto.",
+      "Categoría",
+      "Descripción pública"
+    ],
+    "placeholders": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Volver",
+      "Guardar cambios",
+      "General",
+      "Multimedia",
+      "Fecha y ubicación",
+      "Entradas y precios",
+      "Compradores",
+      "Pagos",
+      "Políticas",
+      "Apariencia",
+      "Publicación"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Nueva publicación Configurá la experiencia de venta sin asociarla a un evento. Volver Guardar cambios General Multimedia Fecha y ubicación Entradas y precios Compradores Pagos Políticas Apariencia Publicación Nombre interno Título público Slug público Se genera automáticamente a partir del título público. Editalo solo si necesitás uno distinto. Categoría Descripción pública"
+  },
+  {
+    "slug": "gasto-nueva-categoria",
+    "route": "/admin/expenses",
+    "action": "Nueva categoría",
+    "captured": true,
+    "result_route": "/admin/expenses",
+    "screenshot": "34-gasto-nueva-categoria.png",
+    "headings": [
+      "Nueva categoría"
+    ],
+    "fields": [
+      "Nombre",
+      "Código",
+      "Tipo Costo directo Costo indirecto Staff Servicio Otro"
+    ],
+    "placeholders": [
+      "name",
+      "code",
+      "type"
+    ],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Crear categoría"
+    ],
+    "visible_text": "Nueva categoría Las categorías son configurables y se usan en reportes y rentabilidad. × Nombre Código Tipo Costo directo Costo indirecto Staff Servicio Otro Cancelar Crear categoría"
+  },
+  {
+    "slug": "gasto-registrar",
+    "route": "/admin/expenses",
+    "action": "Registrar gasto",
+    "captured": true,
+    "result_route": "/admin/expenses",
+    "screenshot": "35-gasto-registrar.png",
+    "headings": [
+      "Registrar gasto"
+    ],
+    "fields": [
+      "Fecha",
+      "Concepto",
+      "Salón Seleccionar… San Carlos Villa Elisa La Plata",
+      "Evento Gasto general Bautismo y comunión de Lucas López Cumpleaños de Mariana Gómez Fiesta de 15 de Sebastián Martínez Egresados de Valeria Fernández Aniversario de Ignacio Castro Casamiento de Julieta Medina Encuentro corporativo de Gonzalo Ruiz Bautismo y comunión de Paula Torres Cumpleaños de Martín Álvarez Aniversario de Florencia Díaz Casamiento de Nicolás Romero Encuentro corporativo de Agustina Sánchez Bautismo y comunión de Federico Pérez Cumpleaños de Carolina Rodríguez Fiesta de 15 de Lucas López Egresados de Mariana Gómez Aniversario de Sebastián Martínez Casamiento de Valeria Fernández Cumpleaños de Ignacio Castro Fiesta de 15 de Julieta Medina Egresados de Gonzalo Ruiz Aniversario de Paula Torres Casamiento de Martín Álvarez Encuentro corporativo de Florencia Díaz Bautismo y comunión de Nicolás Romero Cumpleaños de Agustina Sánchez Fiesta de 15 de Federico Pérez Evento corporativo - Aniversario 20 años Laboratorio Vega Evento corporativo - Almuerzo de fin de año Estudio Contable Bustos Casamiento - Paula Reyes & Federico Silva Fiesta de Egresados - Promoción 2026 - Instituto La Plata Fiesta de 15 - Abril Vargas Comunión - Comunión de Mía Domínguez Casamiento - Carla Maldonado & Diego Ferreyra Evento corporativo - Aniversario 20 años Laboratorio Vega Casamiento - Florencia Ojeda & Nicolás Herrera Cumpleaños infantil - Benjamín Torres (5 años) Evento corporativo - Cena anual Constructora del Plata SA Casamiento - Ana Bravo & Martín Coronel Fiesta de Egresados - Promoción 2026 - Colegio San Martín Fiesta de 15 - Valentina Ríos Cumple de 40 años - Manuela",
+      "Proveedor Sin proveedor Ambientaciones Luna Apoyo Operativo QA DJ Sonido Total Dulce Julio QA Estudio Prisma QA Juan Carlos",
+      "Categoría Sin categoría Ambientación Bebidas Carnicería DJ Fiambres Gastos varios Helados Impresiones Insumos Limpieza Mantelería Oficina Panadería Proyector Servicios Staff Verdulería Viajes",
+      "Estimado inicial",
+      "Importe final",
+      "Adicional",
+      "Impuestos",
+      "Estado Pendiente Pagado Cancelado",
+      "Medio de pago Sin informar Efectivo Transferencia Mercado Pago Tarjeta Otro",
+      "URL del comprobante",
+      "Notas"
+    ],
+    "placeholders": [
+      "date",
+      "description",
+      "salonId",
+      "eventId",
+      "supplierId",
+      "categoryId",
+      "initialEstimatedAmount",
+      "finalAmount",
+      "additionalAmount",
+      "taxAmount",
+      "status",
+      "paymentMethod",
+      "https://…",
+      "notes"
+    ],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Guardar gasto"
+    ],
+    "visible_text": "Registrar gasto El total se calcula como final + adicional + impuestos. El estimado se conserva para medir desvíos. × Fecha Concepto Salón Seleccionar… San Carlos Villa Elisa La Plata Evento Gasto general Bautismo y comunión de Lucas López Cumpleaños de Mariana Gómez Fiesta de 15 de Sebastián Martínez Egresados de Valeria Fernández Aniversario de Ignacio Castro Casamiento de Julieta Medina Encuentro corporativo de Gonzalo Ruiz Bautismo y comunión de Paula Torres Cumpleaños de Martín Álvarez Aniversario de Florencia Díaz Casamiento de Nicolás Romero Encuentro corporativo de Agustina Sánchez Bautismo y comunión de Federico Pérez Cumpleaños de Carolina Rodríguez Fiesta de 15 de Lucas López Egresados de Mariana Gómez Aniversario de Sebastián Martínez Casamiento de Valeria Fernández Cumpleaños de Ignacio Castro Fiesta de 15 de Julieta Medina Egresados de Gonzalo Ruiz Aniversario de Paula Torres Casamiento de Martín Álvarez Encuentro corporativo de Florencia Díaz Bautismo y comunión de Nicolás Romero Cumpleaños de Agustina Sánchez Fiesta de 15 de Federico Pérez Evento corporativo - Aniversario 20 años Laboratorio Vega Evento corporativo - Almuerzo de fin de año Estudio Contable Bustos Casamiento - Paula Reyes & Federico Silva Fiesta de Egresados - Promoción 2026 - Instituto La Plata Fiesta de 15 - Abril Vargas Comunión - Comunión de Mía Domínguez Casamiento - Carla Maldonado & Diego Ferreyra Evento corporativo - Aniversario 20 años Laboratorio Vega Casamiento - Florencia Ojeda & Nicolás Herrera Cumpleaños infantil - Benjamín Torres (5 años) Evento corporativo - Cena anual Constructora del Plata SA Casamiento - Ana Bravo & Martín Coronel Fiesta de Egresados - Promoción 2026 - Colegio San Martín Fiesta de 15 - Valentina Ríos Cumple de 40 años - Manuela Proveedor Sin proveedor Ambientaciones Luna Apoyo Operativo QA DJ Sonido Total Dulce Julio QA Estudio Prisma QA Juan Carlos Categoría Sin categoría Ambientación Bebidas Carnicería DJ Fiambres Gastos varios Helados Impresiones Insumos Limpieza Mantelería Oficina Panadería Proyector Servicios Staff Verdulería Viajes Estimado inicial Importe final Adicional Impuestos Estado Pendiente Pagado Cancelado Medio de pago Sin informar Efectivo Transferencia Mercado Pago Tarjeta Otro URL del comprobante Notas Cancelar Guardar gasto"
+  },
+  {
+    "slug": "produccion-generar",
+    "route": "/admin/production",
+    "action": "Generar producción",
+    "captured": true,
+    "result_route": "/admin/production",
+    "screenshot": "36-produccion-generar.png",
+    "headings": [
+      "Generar producción"
+    ],
+    "fields": [
+      "Evento Seleccionar evento… 15 ago 2026 · Cumpleaños infantil - Benjamín Torres (5 años) · San Carlos 15 ago 2026 · Casamiento - Florencia Ojeda & Nicolás Herrera · San Carlos 15 ago 2026 · Evento corporativo - Aniversario 20 años Laboratorio Vega · Villa Elisa 16 ago 2026 · Cumple de 40 años - Manuela · San Carlos 22 ago 2026 · Casamiento - Carla Maldonado & Diego Ferreyra · La Plata 5 sept 2026 · Fiesta de 15 - Abril Vargas · San Carlos 12 sept 2026 · Fiesta de Egresados - Promoción 2026 - Instituto La Plata · La Plata 19 sept 2026 · Casamiento - Paula Reyes & Federico Silva · Villa Elisa 26 sept 2026 · Evento corporativo - Almuerzo de fin de año Estudio Contable Bustos · San Carlos"
+    ],
+    "placeholders": [],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Generar"
+    ],
+    "visible_text": "Generar producción Seleccioná un evento próximo. La operación es idempotente: volver a ejecutarla no duplica productos. × Evento Seleccionar evento… 15 ago 2026 · Cumpleaños infantil - Benjamín Torres (5 años) · San Carlos 15 ago 2026 · Casamiento - Florencia Ojeda & Nicolás Herrera · San Carlos 15 ago 2026 · Evento corporativo - Aniversario 20 años Laboratorio Vega · Villa Elisa 16 ago 2026 · Cumple de 40 años - Manuela · San Carlos 22 ago 2026 · Casamiento - Carla Maldonado & Diego Ferreyra · La Plata 5 sept 2026 · Fiesta de 15 - Abril Vargas · San Carlos 12 sept 2026 · Fiesta de Egresados - Promoción 2026 - Instituto La Plata · La Plata 19 sept 2026 · Casamiento - Paula Reyes & Federico Silva · Villa Elisa 26 sept 2026 · Evento corporativo - Almuerzo de fin de año Estudio Contable Bustos · San Carlos Cancelar Generar"
+  },
+  {
+    "slug": "sueldos-liquidacion-individual",
+    "route": "/admin/payroll",
+    "action": "Liquidación individual",
+    "captured": true,
+    "result_route": "/admin/payroll",
+    "screenshot": "37-sueldos-liquidacion-individual.png",
+    "headings": [
+      "Generar liquidación individual"
+    ],
+    "fields": [
+      "Empleado Lucas Campo Dilan González Santino Rodríguez Sebastián Tomás Mariana Fernández Macarena da Silva Ludmila da Silva Gloria Elizabeth Patricia de Castro Verónica Britez Rocío Mena Lucas Biviani Solange Biviani Ángeles Fernández Pedro Álvarez Liliana Quintero Usuario administrador",
+      "Desde",
+      "Hasta",
+      "Observaciones"
+    ],
+    "placeholders": [],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Generar borrador"
+    ],
+    "visible_text": "Generar liquidación individual Sólo se incluirán asistencias aprobadas que todavía no estén reservadas. × Empleado Lucas Campo Dilan González Santino Rodríguez Sebastián Tomás Mariana Fernández Macarena da Silva Ludmila da Silva Gloria Elizabeth Patricia de Castro Verónica Britez Rocío Mena Lucas Biviani Solange Biviani Ángeles Fernández Pedro Álvarez Liliana Quintero Usuario administrador Desde Hasta Observaciones Cancelar Generar borrador"
+  },
+  {
+    "slug": "sueldos-nuevo-lote",
+    "route": "/admin/payroll",
+    "action": "Nuevo lote",
+    "captured": true,
+    "result_route": "/admin/payroll",
+    "screenshot": "38-sueldos-nuevo-lote.png",
+    "headings": [
+      "Asistente de lote de liquidación"
+    ],
+    "fields": [
+      "Nombre",
+      "Frecuencia Semanal Quincenal Mensual Personalizada",
+      "Desde",
+      "Hasta",
+      "Salones San Carlos Villa Elisa La Plata",
+      "Empleados (vacío = todos los habilitados del alcance) Lucas Campo Dilan González Santino Rodríguez Sebastián Tomás Mariana Fernández Macarena da Silva Ludmila da Silva Gloria Elizabeth Patricia de Castro Verónica Britez Rocío Mena Lucas Biviani Solange Biviani Ángeles Fernández Pedro Álvarez Liliana Quintero Usuario administrador"
+    ],
+    "placeholders": [],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Validar alcance"
+    ],
+    "visible_text": "Asistente de lote de liquidación Paso 1 de 5 × 1 2 3 4 5 Nombre Frecuencia Semanal Quincenal Mensual Personalizada Desde Hasta Salones San Carlos Villa Elisa La Plata Empleados (vacío = todos los habilitados del alcance) Lucas Campo Dilan González Santino Rodríguez Sebastián Tomás Mariana Fernández Macarena da Silva Ludmila da Silva Gloria Elizabeth Patricia de Castro Verónica Britez Rocío Mena Lucas Biviani Solange Biviani Ángeles Fernández Pedro Álvarez Liliana Quintero Usuario administrador Cancelar Validar alcance"
+  },
+  {
+    "slug": "proveedor-nuevo",
+    "route": "/admin/suppliers",
+    "action": "Nuevo proveedor",
+    "captured": true,
+    "result_route": "/admin/suppliers",
+    "screenshot": "39-proveedor-nuevo.png",
+    "headings": [
+      "Nuevo proveedor"
+    ],
+    "fields": [
+      "Activo"
+    ],
+    "placeholders": [
+      "Nombre",
+      "Razón social",
+      "CUIT",
+      "Contacto",
+      "Teléfono",
+      "WhatsApp",
+      "Email",
+      "Notas"
+    ],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Guardar"
+    ],
+    "visible_text": "Nuevo proveedor × Bebidas Comida Panadería Pastelería Carnes Decoración Sonido/DJ Fotografía Limpieza Descartables Vajilla Mantelería Personal Otro Activo Cancelar Guardar"
+  },
+  {
+    "slug": "marketing-nueva-campana",
+    "route": "/admin/marketing",
+    "action": "Nueva campaña",
+    "captured": true,
+    "result_route": "/admin/marketing/campaigns/new",
+    "screenshot": "40-marketing-nueva-campana.png",
+    "headings": [
+      "Nueva campaña"
+    ],
+    "fields": [
+      "Nombre interno",
+      "Salón Todos los salones San Carlos Villa Elisa La Plata",
+      "Audiencia inicial La seleccionaré después Todos los clientes (0 estimados) Todos Leads (0 estimados)",
+      "Descripción interna"
+    ],
+    "placeholders": [
+      "Ej.: Seguimiento de presupuestos de agosto",
+      "Objetivo o contexto de esta campaña (opcional)"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Volver a campañas",
+      "Cancelar",
+      "Guardar y continuar"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver a campañas Nueva campaña Completá los datos iniciales y guardá para crear el borrador. Hasta entonces no se creará ninguna campaña. Nombre interno Salón Todos los salones San Carlos Villa Elisa La Plata Audiencia inicial La seleccionaré después Todos los clientes (0 estimados) Todos Leads (0 estimados) Descripción interna Cancelar Guardar y continuar"
+  },
+  {
+    "slug": "salon-nuevo",
+    "route": "/admin/salons",
+    "action": "Nuevo salón",
+    "captured": true,
+    "result_route": "/admin/salons",
+    "screenshot": "41-salon-nuevo.png",
+    "headings": [
+      "Nuevo salón"
+    ],
+    "fields": [
+      "Nombre",
+      "Slug",
+      "Dirección",
+      "Localidad",
+      "WhatsApp",
+      "Email",
+      "Instagram",
+      "Facebook",
+      "TikTok",
+      "Encargado del salón Sin encargado asignado Alumine Alessandrini · usuario@ejemplo.com · SALON_MANAGER Dilan González · usuario@ejemplo.com · STAFF Gloria Elizabeth · usuario@ejemplo.com · STAFF Liliana Quintero · usuario@ejemplo.com · STAFF Lucas Biviani · usuario@ejemplo.com · STAFF Lucas Campo · usuario@ejemplo.com · STAFF Ludmila da Silva · usuario@ejemplo.com · STAFF Macarena da Silva · usuario@ejemplo.com · STAFF Mariana Fernández · usuario@ejemplo.com · STAFF Usuario administrador · usuario@ejemplo.com · ADMIN, SALON_MANAGER, ACCOUNTING, SALES, MANAGER, STAFF, OPERATIONS, VALIDATOR Patricia Luna · usuario@ejemplo.com · SALON_MANAGER Patricia de Castro · usuario@ejemplo.com · STAFF Pedro Álvarez · usuario@ejemplo.com · STAFF Rocío Mena · usuario@ejemplo.com · STAFF Santino Rodríguez · usuario@ejemplo.com · STAFF Sebastián Tomás · usuario@ejemplo.com · STAFF Solange Biviani · usuario@ejemplo.com · STAFF Verónica Britez · usuario@ejemplo.com · STAFF Wallendy Arenas · usuario@ejemplo.com · SALON_MANAGER, MANAGER Ángeles Fernández · usuario@ejemplo.com · STAFF",
+      "Capacidad máxima",
+      "Descripción corta pública",
+      "Activo",
+      "Visible en web"
+    ],
+    "placeholders": [
+      "https://instagram.com/...",
+      "https://facebook.com/...",
+      "https://tiktok.com/@..."
+    ],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Crear salón"
+    ],
+    "visible_text": "Nuevo salón Datos principales del salón. La configuración completa se puede ajustar en el detalle. × Nombre Slug Dirección Localidad WhatsApp Email Instagram Facebook TikTok Encargado del salón Sin encargado asignado Alumine Alessandrini · usuario@ejemplo.com · SALON_MANAGER Dilan González · usuario@ejemplo.com · STAFF Gloria Elizabeth · usuario@ejemplo.com · STAFF Liliana Quintero · usuario@ejemplo.com · STAFF Lucas Biviani · usuario@ejemplo.com · STAFF Lucas Campo · usuario@ejemplo.com · STAFF Ludmila da Silva · usuario@ejemplo.com · STAFF Macarena da Silva · usuario@ejemplo.com · STAFF Mariana Fernández · usuario@ejemplo.com · STAFF Usuario administrador · usuario@ejemplo.com · ADMIN, SALON_MANAGER, ACCOUNTING, SALES, MANAGER, STAFF, OPERATIONS, VALIDATOR Patricia Luna · usuario@ejemplo.com · SALON_MANAGER Patricia de Castro · usuario@ejemplo.com · STAFF Pedro Álvarez · usuario@ejemplo.com · STAFF Rocío Mena · usuario@ejemplo.com · STAFF Santino Rodríguez · usuario@ejemplo.com · STAFF Sebastián Tomás · usuario@ejemplo.com · STAFF Solange Biviani · usuario@ejemplo.com · STAFF Verónica Britez · usuario@ejemplo.com · STAFF Wallendy Arenas · usuario@ejemplo.com · SALON_MANAGER, MANAGER Ángeles Fernández · usuario@ejemplo.com · STAFF Capacidad máxima Descripción corta pública Activo Visible en web Cancelar Crear salón"
+  },
+  {
+    "slug": "usuario-nuevo",
+    "route": "/admin/users",
+    "action": "Nuevo usuario",
+    "captured": true,
+    "result_route": "/admin/users",
+    "screenshot": "42-usuario-nuevo.png",
+    "headings": [
+      "Nuevo usuario",
+      "Roles",
+      "Salones con acceso",
+      "Salones a cargo"
+    ],
+    "fields": [
+      "Contraseña inicial Es obligatoria y permite iniciar sesión. Un usuario Staff activo queda habilitado para entrar a la app móvil.",
+      "Administrador",
+      "Manager",
+      "Encargado salón",
+      "Staff",
+      "San Carlos",
+      "Villa Elisa",
+      "La Plata",
+      "Usuario activo",
+      "Acceso al backoffice"
+    ],
+    "placeholders": [
+      "Nombre",
+      "Apellido",
+      "Usuario",
+      "Email",
+      "Teléfono",
+      "Número de documento",
+      "Mínimo 8 caracteres"
+    ],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Guardar"
+    ],
+    "visible_text": "Nuevo usuario × DNI CUIL CUIT Pasaporte Otro Contraseña inicial Es obligatoria y permite iniciar sesión. Un usuario Staff activo queda habilitado para entrar a la app móvil. Roles Administrador Manager Encargado salón Staff Salones con acceso San Carlos Villa Elisa La Plata Salón principal Salones a cargo San Carlos Villa Elisa La Plata Salón principal a cargo Usuario activo Acceso al backoffice Cancelar Guardar"
+  },
+  {
+    "slug": "lead-detalle",
+    "route": "/admin/leads",
+    "action": "Ver detalle",
+    "captured": true,
+    "result_route": "/admin/leads/6a7953396a5c2bc205cd9238",
+    "screenshot": "43-lead-detalle.png",
+    "headings": [
+      "Valeria Díaz",
+      "Datos de contacto",
+      "Información comercial",
+      "Mensaje y notas",
+      "Agregar nota",
+      "Actividad",
+      "Solicitudes de presupuesto",
+      "Presupuestos asociados",
+      "Eventos generados"
+    ],
+    "fields": [
+      "Estado Nuevo Contactado Seguimiento Presupuesto enviado Negociación Ganado Perdido Convertido"
+    ],
+    "placeholders": [
+      "Escribí una nota para el equipo…"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Email",
+      "WhatsApp",
+      "Editar lead",
+      "Eliminar",
+      "Agregar nota"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver a Leads Valeria Díaz Convertido Origen: Sin especificar · baptism_communion Estado Nuevo Contactado Seguimiento Presupuesto enviado Negociación Ganado Perdido Convertido Email WhatsApp Editar lead Eliminar Datos de contacto TELÉFONO +54 9 (221) 000-0000 TELÉFONO ALTERNATIVO No informado EMAIL usuario@ejemplo.com Fecha estimativa 31 de julio de 2026 70 personas Información comercial TIPO DE EVENTO baptism_communion ORIGEN Sin especificar SALONES DE INTERÉS Villa Elisa CLIENTE CONVERTIDO Valeria Díaz Mensaje y notas Mensaje Consulta sintética para Bautismo y comunión de Lucas López. Notas internas [FULL_EVENTS_JULY_2026_V1:E027] Cliente sintético QA. Localidad ficticia: La Plata. No corresponde a una persona real. Agregar nota Agregar nota Actividad Convertido 10 ago 2026, 1:27 a. m. Se creó el evento desde el presupuesto QA-JUL26-027. Solicitudes de presupuesto No hay solicitudes asociadas visibles. Presupuestos asociados QA-JUL26-027 · Convertido Exclusive Night Eventos generados Bautismo y comunión de Lucas López · Confirmado 31 de julio de 2026 · Villa Elisa"
+  },
+  {
+    "slug": "cliente-detalle",
+    "route": "/admin/customers",
+    "action": "Ver cliente",
+    "captured": true,
+    "result_route": "/admin/customers/6a7953396a5c2bc205cd923c",
+    "screenshot": "44-cliente-detalle.png",
+    "headings": [
+      "Valeria Díaz",
+      "Datos principales",
+      "Origen",
+      "Contratado",
+      "Cobrado",
+      "Pendiente",
+      "Garantía",
+      "Presupuestos del cliente",
+      "Eventos del cliente",
+      "Contratos del cliente",
+      "Historial financiero",
+      "Solicitudes asociadas",
+      "Actividad"
+    ],
+    "fields": [],
+    "placeholders": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Editar datos",
+      "WhatsApp",
+      "Email",
+      "Crear presupuesto"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver a Clientes Valeria Díaz +54 9 (221) 000-0000 · usuario@ejemplo.com Editar datos WhatsApp Email Crear presupuesto Datos principales NOMBRE Valeria Díaz DOCUMENTO 10205894 DOMICILIO Calle Ficticia 1226, La Plata, Buenos Aires OCUPACIÓN Profesional independiente TELÉFONO +54 9 (221) 000-0000 EMAIL usuario@ejemplo.com FECHA DE ALTA 10 ago 2026 Origen LEAD DE ORIGEN Valeria Díaz Ver lead de origen Historial comercial 1 presupuestos 1 eventos asociados Contratado TOTAL CONTRATADO $ 5.320.000 SALDO PENDIENTE $ 0 Cobrado IMPACTA SALDO $ 5.320.000 Pendiente PROGRAMADO $ 0 Garantía DEPÓSITO RECIBIDO $ 0 Presupuestos del cliente NÚMERO FECHA SALÓN PAQUETE TOTAL ESTADO QA-JUL26-027 10 ago 2026 Villa Elisa Exclusive Night $ 5.320.000 Convertido Eventos del cliente Bautismo y comunión de Lucas López 31 jul 2026 · Villa Elisa Confirmado Contratos del cliente C-2026-00041 31 jul 2026 · Villa Elisa Aprobado Historial financiero NÚMERO EVENTO CONTRATO TIPO ESTADO MEDIO IMPORTE FECHA PAY-2026-00127 Bautismo y comunión de Lucas López C-2026-00041 Saldo Cobrado Efectivo $ 2.120.800 27 jul 2026 PAY-2026-00126 Bautismo y comunión de Lucas López C-2026-00041 Cuota Cobrado Transferencia $ 2.699.200 23 jul 2026 PAY-2026-00125 Bautismo y comunión de Lucas López C-2026-00041 Seña Cobrado Tarjeta $ 500.000 14 jul 2026 Solicitudes asociadas No hay solicitudes asociadas. Actividad Convertido 10 ago 2026 Se creó el evento desde el presupuesto QA-JUL26-027."
+  },
+  {
+    "slug": "evento-detalle",
+    "route": "/admin/events",
+    "action": "Ver evento",
+    "captured": true,
+    "result_route": "/admin/events/6a7953396a5c2bc205cd9249",
+    "screenshot": "45-evento-detalle.png",
+    "headings": [
+      "Bautismo y comunión de Lucas López",
+      "Gastos de proveedores",
+      "Evento",
+      "Notas",
+      "Pulso operativo",
+      "Progreso de tareas"
+    ],
+    "fields": [
+      "Estado Borrador Pendiente de contrato Contrato borrador Seña pendiente Reservado Confirmado Cancelado Perdido",
+      "Confirmar cliente y protocolo· Coordinación",
+      "Cerrar lista de invitados· Coordinación",
+      "Confirmar menú definitivo· Coordinación",
+      "Revisar restricciones alimentarias· Coordinación",
+      "Confirmar proveedores externos· Coordinación",
+      "Reservar vajilla interna y externa· Logística",
+      "Asignar staff· Logística",
+      "Confirmar DJ, sonido e iluminación· Logística",
+      "Verificar decoración y plano de mesas· Logística",
+      "Realizar briefing de cocina· Logística",
+      "Controlar salón antes del montaje· Logística",
+      "Completar armado· Responsable de cierre",
+      "Realizar control previo a apertura· Responsable de cierre",
+      "Cerrar cocina y barra· Responsable de cierre",
+      "Contar vajilla y mantelería· Responsable de cierre",
+      "Desmontar y devolver elementos· Responsable de cierre",
+      "Conciliar gastos, pagos y sobrantes· Responsable de cierre"
+    ],
+    "placeholders": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Resumen",
+      "Ficha",
+      "Cliente",
+      "Comercial",
+      "Menú",
+      "Servicios",
+      "Contrato",
+      "Proveedores",
+      "Staff",
+      "Tareas",
+      "Cronograma",
+      "Invitación digital",
+      "Pagos",
+      "Actividad"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver a Eventos Bautismo y comunión de Lucas López Confirmado Valeria Díaz · Villa Elisa Estado Borrador Pendiente de contrato Contrato borrador Seña pendiente Reservado Confirmado Cancelado Perdido Resumen Ficha Cliente Comercial Menú Servicios Contrato Proveedores Staff Tareas Cronograma Invitación digital Pagos Actividad Importe total $ 5.320.000 Ya abonado $ 5.320.000 Restante a pagar $ 0 Gastos de proveedores GASTOS CONFIRMADOS $ 3.351.600 3 pagos activos RESULTADO ESTIMADO $ 1.968.400 importe del evento menos gastos confirmados GASTOS ANULADOS $ 0 0 registros históricos PROVEEDOR SERVICIO ESTADO IMPORTE Ambientaciones Luna Ambientación y decoración Pagado $ 877.800 Juan Carlos Bebidas y reposición de barra Pagado $ 1.117.200 Estudio Prisma QA Fotografía y registro audiovisual Pagado $ 1.356.600 Evento TIPO baptism_communion FECHA 31 de julio de 2026 HORARIO 21:00 - 05:00 PERSONAS 70 SALÓN Villa Elisa Importe estimado $ 5.320.000 Contrato y plan de pagos generados. Notas [FULL_EVENTS_JULY_2026_V1:E027] Evento histórico sintético de QA. Cliente, invitados y documentación son ficticios. Pulso operativo CRONOGRAMA 0/22 momentos hechos STOCK E INSUMOS 16 sin alertas PROVEEDORES 3 servicios externos TAREAS 0/17 0 alertas Progreso de tareas Confirmar cliente y protocolo· Coordinación Cerrar lista de invitados· Coordinación Confirmar menú definitivo· Coordinación Revisar restricciones alimentarias· Coordinación Confirmar proveedores externos· Coordinación Reservar vajilla interna y externa· Logística Asignar staff· Logística Confirmar DJ, sonido e iluminación· Logística Verificar decoración y plano de mesas· Logística Realizar briefing de cocina· Logística Controlar salón antes del montaje· Logística Completar armado· Responsable de cierre Realizar control previo a apertura· Responsable de cierre Cerrar cocina y barra· Responsable de cierre Contar vajilla y mantelería· Responsable de cierre Desmontar y devolver elementos· Responsable de cierre Conciliar gastos, pagos y sobrantes· Responsable de cierre"
+  },
+  {
+    "slug": "contrato-detalle",
+    "route": "/admin/contracts",
+    "action": "Ver contrato",
+    "captured": true,
+    "result_route": "/admin/contracts/6a79536a6a5c2bc205cd9768",
+    "screenshot": "46-contrato-detalle.png",
+    "headings": [
+      "C-2026-00041",
+      "Contrato",
+      "Cliente y evento"
+    ],
+    "fields": [],
+    "placeholders": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Actualizar datos",
+      "Vista previa",
+      "Aprobar",
+      "Generar PDF",
+      "Requiere cambios",
+      "Cancelar",
+      "Resumen",
+      "Cliente",
+      "Evento",
+      "Servicios",
+      "Menú",
+      "Valores",
+      "Adendas",
+      "Condiciones",
+      "Actividad"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver a Contratos C-2026-00041 Aprobado Valeria Díaz · baptism_communion Actualizar datos Vista previa Aprobar Generar PDF Requiere cambios Cancelar Ver evento Ver cliente Resumen Cliente Evento Servicios Menú Valores Adendas Condiciones Actividad Contrato NÚMERO C-2026-00041 ESTADO Aprobado APROBADO 14 de julio de 2026 Cliente y evento CLIENTE Valeria Díaz EVENTO Bautismo y comunión de Lucas López FECHA 31 de julio de 2026 Total contractual $ 5.320.000 Saldo: $ 0"
+  },
+  {
+    "slug": "invitacion-editar",
+    "route": "/admin/digital-invitations",
+    "action": "Editar",
+    "captured": true,
+    "result_route": "/admin/digital-invitations/6a72b9f6ef5cd95cbf9f13f8",
+    "screenshot": "47-invitacion-editar.png",
+    "headings": [
+      "Cumple de 40 años - Manuela",
+      "Editor visual",
+      "Una celebración especial",
+      "Falta muy poco",
+      "Dónde nos encontramos",
+      "Dress code",
+      "Confirmá tu asistencia",
+      "Diseño global",
+      "Fondo general",
+      "Hero",
+      "Fondo de sección",
+      "Biblioteca multimedia"
+    ],
+    "fields": [
+      "AGREGAR SECCIÓN Elegir sección Contenido personalizado Mensaje Galería Mapa Dress code Contacto Cierre",
+      "Apellido y nombre",
+      "¿Vas a asistir? Sí, voy a asistir No voy a poder asistir",
+      "Restricción alimentaria",
+      "Música que no puede faltar",
+      "Mensaje",
+      "Color principal",
+      "Color secundario",
+      "Fondo general",
+      "Color de texto",
+      "Tipografía de títulos Georgia Playfair Display Cormorant Garamond Cinzel Poppins DM Serif Display Great Vibes Inter Montserrat Lato DM Sans system-ui",
+      "Tipografía de cuerpo Georgia Playfair Display Cormorant Garamond Cinzel Poppins DM Serif Display Great Vibes Inter Montserrat Lato DM Sans system-ui",
+      "Tipo de fondo Transparente Color sólido Degradado Imagen",
+      "Título",
+      "Subtítulo",
+      "Imagen del hero",
+      "Altura del hero 70% de pantalla 85% de pantalla Pantalla completa",
+      "Alineación Izquierda Centrada Derecha",
+      "Fuente de títulos Usar tema Georgia Playfair Display Cormorant Garamond Cinzel Poppins DM Serif Display Great Vibes Inter Montserrat Lato DM Sans system-ui",
+      "Fuente de cuerpo Usar tema Georgia Playfair Display Cormorant Garamond Cinzel Poppins DM Serif Display Great Vibes Inter Montserrat Lato DM Sans system-ui",
+      "Tamaño de títulos",
+      "Tamaño de cuerpo",
+      "Color de títulos",
+      "Color de cuerpo",
+      "Espacio superior",
+      "Espacio inferior",
+      "Tipo de fondo Transparente Color sólido Degradado",
+      "Subir medios"
+    ],
+    "placeholders": [
+      "Ej.: Martínez Sofía",
+      "Ej.: Celíaco/a, vegetariano/a o ninguna",
+      "Ej.: Un tema o artista favorito",
+      "Dejá un mensaje para los anfitriones"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Todas las invitaciones",
+      "Datos principales",
+      "Publicar",
+      "Vista pública",
+      "Cambiar plantilla",
+      "Copiar URL",
+      "Correo",
+      "WhatsApp",
+      "Guardar",
+      "Secciones",
+      "Diseño",
+      "Vista previa",
+      "Hero",
+      "Ocultar Hero",
+      "Subir sección",
+      "Bajar sección",
+      "Bienvenida",
+      "Ocultar Bienvenida",
+      "Datos del evento",
+      "Ocultar Datos del evento",
+      "Cuenta regresiva",
+      "Ocultar Cuenta regresiva",
+      "Ubicación",
+      "Ocultar Ubicación",
+      "Galería",
+      "Ocultar Galería",
+      "Dress code",
+      "Ocultar Dress code",
+      "RSVP",
+      "Ocultar RSVP",
+      "Cierre",
+      "Ocultar Cierre",
+      "Vista desktop",
+      "Vista mobile",
+      "DÓNDE San Carlos, Calle 144 N°664 e/ 45 y 46, San Carlos Ver mapa →",
+      "Vista previa de RSVP",
+      "Duplicar sección",
+      "Eliminar sección",
+      "Subir medios"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Cumple de 40 años - Manuela Cumpleaños · Borrador Todas las invitaciones Datos principales Publicar Vista pública Plantilla de la invitación Podés cambiarla antes de continuar con la personalización. Cambiar plantilla Copiar URL Correo WhatsApp Editor visual La vista previa usa el mismo renderer de la invitación pública. Guardado Guardar SECCIONES Hero Bienvenida Datos del evento Cuenta regresiva Ubicación Galería Dress code RSVP Cierre AGREGAR SECCIÓN Elegir sección Contenido personalizado Mensaje Galería Mapa Dress code Contacto Cierre 9 de 10 secciones permitidas M&M EVENTOS Cumple de 40 años - Manuela Manuela viernes, 9 de abril de 2027, 1:00 p. m. Una celebración especial Nos encantaría que nos acompañes a celebrar Manuela. AGENDÁ LA FECHA viernes, 9 de abril de 2027, 1:00 p. m. Agendar en Google Calendar → DÓNDE San Carlos, Calle 144 N°664 e/ 45 y 46, San Carlos Ver mapa → Falta muy poco 242 DÍAS 10 HORAS 57 MIN 35 SEG Dónde nos encontramos San Carlos, Calle 144 N°664 e/ 45 y 46, San Carlos Cómo llegar La galería aparecerá aquí cuando subas fotografías. Dress code Confirmá tu asistencia Tu presencia es muy importante para nosotros. Apellido y nombre ¿Vas a asistir? Sí, voy a asistir No voy a poder asistir Restricción alimentaria Música que no puede faltar Mensaje Vista previa de RSVP ¡Te esperamos! Diseño global Color principal Color secundario Fondo general Color de texto Tipografía de títulos Georgia Playfair Display Cormorant Garamond Cinzel Poppins DM Serif Display Great Vibes Inter Montserrat Lato DM Sans system-ui Tipografía de cuerpo Georgia Playfair Display Cormorant Garamond Cinzel Poppins DM Serif Display Great Vibes Inter Montserrat Lato DM Sans system-ui Fondo general Tipo de fondo Transparente Color sólido Degradado Imagen Hero Título Subtítulo Imagen del hero Altura del hero 70% de pantalla 85% de pantalla Pantalla completa Alineación Izquierda Centrada Derecha Fuente de títulos Usar tema Georgia Playfair Display Cormorant Garamond Cinzel Poppins DM Serif Display Great Vibes Inter Montserrat Lato DM Sans system-ui Fuente de cuerpo Usar tema Georgia Playfair Display Cormorant Garamond Cinzel Poppins DM Serif Display Great Vibes Inter Montserrat Lato DM Sans system-ui Tamaño de títulos Tamaño de cuerpo Color de títulos Color de cuerpo Espacio superior Espacio inferior Fondo de sección Tipo de fondo Transparente Color sólido Degradado Biblioteca multimedia Subí y reutilizá imágenes, videos o audio. El ícono de papelera elimina el archivo de esta invitación y de la nube. Subir medios"
+  },
+  {
+    "slug": "ingreso-detalle",
+    "route": "/admin/payments",
+    "action": "Ver pago",
+    "captured": true,
+    "result_route": "/admin/payments/6a73002a94e8bb0b0fda0c62",
+    "screenshot": "48-ingreso-detalle.png",
+    "headings": [
+      "PAY-2026-00024",
+      "Pago",
+      "Asociaciones",
+      "Cobro",
+      "Referencias"
+    ],
+    "fields": [
+      "Medio Efectivo Transferencia Mercado Pago Tarjeta Otro"
+    ],
+    "placeholders": [
+      "Notas internas"
+    ],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Marcar cobrado",
+      "Reembolsar",
+      "Cancelar",
+      "Guardar notas"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Administración Usuario administrador usuario@ejemplo.com Volver a Ingresos PAY-2026-00024 Cuota · Cobrado Marcar cobrado Reembolsar Cancelar Pago IMPORTE $ 3.710.000 ESTADO Cobrado TIPO Cuota MEDIO Efectivo VENCIMIENTO Sin fecha COBRADO 18 sept 2026, 9:00 p. m. Asociaciones CLIENTE Karen Fernández Ver cliente EVENTO Casamiento - Paula Reyes & Federico Silva Ver evento CONTRATO C-2026-00013 Ver contrato Cobro Medio Efectivo Transferencia Mercado Pago Tarjeta Otro Guardar notas Referencias RECIBO No informado REFERENCIA No informado AFECTA SALDO CONTRACTUAL Sí"
+  },
+  {
+    "slug": "proveedor-editar",
+    "route": "/admin/suppliers",
+    "action": "Editar",
+    "captured": true,
+    "result_route": "/admin/suppliers",
+    "screenshot": "49-proveedor-editar.png",
+    "headings": [
+      "Editar proveedor"
+    ],
+    "fields": [
+      "Activo"
+    ],
+    "placeholders": [
+      "Nombre",
+      "Razón social",
+      "CUIT",
+      "Contacto",
+      "Teléfono",
+      "WhatsApp",
+      "Email",
+      "Notas"
+    ],
+    "buttons": [
+      "×",
+      "Cancelar",
+      "Guardar"
+    ],
+    "visible_text": "Editar proveedor × Bebidas Comida Panadería Pastelería Carnes Decoración Sonido/DJ Fotografía Limpieza Descartables Vajilla Mantelería Personal Otro Activo Cancelar Guardar"
+  },
+  {
+    "slug": "salon-detalle",
+    "route": "/admin/salons",
+    "action": "Ver detalle",
+    "captured": true,
+    "result_route": "/admin/salons/6a3a7b01e07b5dce06768bd2",
+    "screenshot": "50-salon-detalle.png",
+    "headings": [],
+    "fields": [],
+    "placeholders": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Cargando salón…"
+  },
+  {
+    "slug": "salon-paquetes",
+    "route": "/admin/salons",
+    "action": "Configurar paquetes",
+    "captured": true,
+    "result_route": "/admin/salons/6a3a7b01e07b5dce06768bd2?tab=packages",
+    "screenshot": "51-salon-paquetes.png",
+    "headings": [
+      "San Carlos",
+      "Encargado del salón",
+      "Paquetes y reglas del salón",
+      "Alquiler de salón",
+      "Banquete Premium",
+      "Fiesta Dorada",
+      "Fiesta de Egresados",
+      "Fiesta platinum",
+      "Luxury Night",
+      "Opción Bássic",
+      "Promo Infantil Risitas",
+      "Promo Infantil Sonrisitas",
+      "Promo Salón Full",
+      "Servicio por 5 horas"
+    ],
+    "fields": [],
+    "placeholders": [],
+    "buttons": [
+      "Contraer menú lateral",
+      "Reportes y análisis",
+      "Configuración y herramientas",
+      "Abrir menú",
+      "Notificaciones",
+      "Cambiar tema",
+      "Usuario administrador usuario@ejemplo.com",
+      "Editar",
+      "Desactivar",
+      "Eliminar",
+      "General",
+      "Comercial",
+      "Paquetes",
+      "Extras",
+      "Stock",
+      "Asistencia",
+      "Landing",
+      "Nuevo paquete para este salón",
+      "Nuevo paquete global",
+      "Editar regla",
+      "Activar en este salón",
+      "Eliminar regla",
+      "Desactivar en este salón"
+    ],
+    "visible_text": "Dashboard Calendario Leads Clientes Presupuestos 1 Eventos Contratos Invitaciones Digitales Entradas Digitales Escanear Entradas Ingresos Gastos Reportes y análisis Liquidación de Sueldos Proveedores Marketing Notificaciones Configuración y herramientas Salones Usuarios Asistencia Landing Administración Usuario administrador usuario@ejemplo.com Volver a Salones San Carlos San Carlos · Calle 144 N°664 e/ 45 y 46, San Carlos Activo Visible en web Editar Desactivar Eliminar General Comercial Paquetes Extras Stock Asistencia Landing Encargado del salón NOMBRE Usuario administrador EMAIL usuario@ejemplo.com TELÉFONO +54 9 (221) 000-0000 ROL ADMIN, SALON_MANAGER, ACCOUNTING, SALES, MANAGER, STAFF, OPERATIONS, VALIDATOR Paquetes y reglas del salón Los paquetes nuevos se asignan sólo a San Carlos. Creá uno global únicamente si debe estar disponible para todos los salones. Nuevo paquete para este salón Nuevo paquete global Alquiler de salón Plantilla global: se puede activar o desactivar sólo para este salón. · Regla específica del salón Editar regla Activar en este salón ESTADO Inactivo HORARIO 21:00 a 05:00 DURACIÓN 8 h MODALIDAD Precio total VALOR FINAL $ 2.200.000 PROMOCIÓN Congelá el valor abonando $500.000 y el resto en cuotas fijas!!! REGALO Sin regalo CONDICIONES Valor hasta 100 personas: $2.200.000 (El precio no varía si la cantidad de personas disminuye) Banquete Premium Paquete propio del salón · Regla específica del salón Editar regla Desactivar Eliminar regla ESTADO Activo HORARIO 21:00 a 05:00 DURACIÓN 8 h MODALIDAD Por persona VALOR FINAL $ 75.000 PROMOCIÓN Valor para 80 personas: $6.000.000. Se congela el valor con seña. REGALO RESERVANDO EN JUNIO TE REGALAMOS EL STAND DE GLITTER PARA TU EVENTO CONDICIONES Seña de $550.000 para congelar el valor y saldo en cuotas. Fiesta Dorada Plantilla global: se puede activar o desactivar sólo para este salón. · Regla específica del salón Editar regla Activar en este salón ESTADO Inactivo HORARIO 13:00 a 02:00 DURACIÓN 5 h MODALIDAD Por persona VALOR FINAL $ 38.000 PROMOCIÓN Promo para 50 personas!! Servicio por 5 horas: - 1er turno 13hs a 18hs - 2do turno 21hs a 2 hs am REGALO Sin regalo CONDICIONES Valor para 50: $1.900.000. Abonas una seña de $400.000 y congelás el valor! Fiesta de Egresados Plantilla global: se puede activar o desactivar sólo para este salón. · Regla específica del salón Editar regla Desactivar en este salón ESTADO Activo HORARIO 21:00 a 05:00 DURACIÓN 8 h MODALIDAD Por persona VALOR FINAL $ 65.000 PROMOCIÓN Adicional disponible: - 1am a 5am barra de tragos 🍹 Valor por persona $15.000 (incluye 5 tragos x persona) - Fernet con coca cola - Gancia con Sprite - Vodka con jugo de naranja - Gin con tónica REGALO Sin regalo CONDICIONES Valor para 100 personas: $6.500.000 Fiesta platinum Plantilla global: se puede activar o desactivar sólo para este salón. · Regla específica del salón Editar regla Activar en este salón ESTADO Inactivo HORARIO 13:00 a 02:00 DURACIÓN 5 h MODALIDAD Por persona VALOR FINAL $ 42.000 PROMOCIÓN Servicio por 5 hs - 1er turno 13hs a 18hs - 2do turno 21hs a 2hs am REGALO Sin regalo CONDICIONES Valor por 50 personas: $2.100.000. Aboná una seña de $400.000 para congelar el valor y el resto en cuotas! Luxury Night Paquete propio del salón · Regla específica del salón Editar regla Desactivar Eliminar regla ESTADO Activo HORARIO 21:00 a 05:00 DURACIÓN 8 h MODALIDAD Por persona VALOR FINAL $ 80.000 PROMOCIÓN Valor para 80 personas: $6.400.000. Promo de salón y catering por 8 hs. REGALO Sin regalo CONDICIONES Seña de $600.000 para congelar el valor y saldo en cuotas sin interés. Opción Bássic Paquete propio del salón · Regla específica del salón Editar regla Desactivar Eliminar regla ESTADO Activo HORARIO Sin definir DURACIÓN Sin definir MODALIDAD Precio total VALOR FINAL $ 1.500.000 PROMOCIÓN Alquiler de salón por $1.500.000 para eventos de hasta 120 personas. REGALO Sin regalo CONDICIONES Podés señar con $400.000 para congelar el valor. Promo Infantil Risitas Paquete propio del salón · Regla específica del salón Editar regla Desactivar Eliminar regla ESTADO Activo HORARIO 13:00 a 16:00 DURACIÓN 3 h MODALIDAD Precio total VALOR FINAL $ 400.000 PROMOCIÓN Valor fijo: $400.000 hasta 100 personas. REGALO Sin regalo CONDICIONES Seña de $100.000 para congelar el valor. Promo Infantil Sonrisitas Paquete propio del salón · Regla específica del salón Editar regla Desactivar Eliminar regla ESTADO Activo HORARIO 13:00 a 16:00 DURACIÓN 3 h MODALIDAD Precio total VALOR FINAL $ 650.000 PROMOCIÓN Valor fijo: $650.000 hasta 100 personas. REGALO Piñata de regalo. CONDICIONES Consultar condiciones de reserva vigentes. Promo Salón Full Paquete propio del salón · Regla específica del salón Editar regla Desactivar Eliminar regla ESTADO Activo HORARIO 21:00 a 05:00 DURACIÓN 8 h MODALIDAD Precio total VALOR FINAL $ 2.500.000 PROMOCIÓN Valor fijo para eventos 2027: $2.500.000 hasta 100 personas. REGALO 20% de descuento abonando el total del servicio. CONDICIONES Seña de $600.000 para congelar el valor. Servicio por 5 horas Paquete propio del salón · Regla específica del salón Editar regla Desactivar Eliminar regla ESTADO Activo HORARIO 13:00 a 18:00 DURACIÓN 5 h MODALIDAD Por persona VALOR FINAL $ 35.000 PROMOCIÓN Valor de $35.000 por persona. Referencia para 50 personas: $1.750.000. REGALO Sin regalo CONDICIONES Valor de referencia para 50 personas: $1.750.000. Podés señar con $400.000 para congelar el valor."
+  }
+]

@@ -27,12 +27,23 @@ import { generateOperationalPdf, generateOperationalWord, type OperationalDocume
 import { eventExpenses, syncEventSupplierExpenses } from './event-supplier-expenses.service';
 import { syncEventAlertCalendarItems } from './event-alert-calendar-sync.service';
 import { cancelCurrentProductionPlan } from '../production/production.service';
-import { argentinaDateKey, civilDateInput, daysBetweenDateKeys, dueDateKey } from '../../utils/argentina-date';
+import { addDaysToDateKey, argentinaDateKey, civilDateInput, daysBetweenDateKeys, dueDateKey } from '../../utils/argentina-date';
 import { installmentDueDateKey, isOpenInstallment, planFor } from './financial-reminders.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const optionalObjectId = objectId.optional().or(z.literal(''));
 const eventStatuses = ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'] as const;
+const staffAssignmentStatuses = ['proposed', 'assigned', 'confirmed', 'checked_in', 'completed', 'cancelled', 'no_show'] as const;
+type StaffAssignmentStatus = typeof staffAssignmentStatuses[number];
+const staffStatusTransitions: Record<StaffAssignmentStatus, readonly StaffAssignmentStatus[]> = {
+  proposed: ['assigned', 'cancelled'],
+  assigned: ['confirmed', 'cancelled'],
+  confirmed: ['checked_in', 'completed', 'cancelled', 'no_show'],
+  checked_in: ['completed'],
+  completed: [],
+  cancelled: [],
+  no_show: [],
+};
 const pricingModes = ['per_person', 'fixed'] as const;
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const assignmentIdSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
@@ -100,12 +111,12 @@ const assignmentBaseBody = z.object({
   staffSubrole: z.nativeEnum(StaffSubrole).optional(),
   shiftStart: z.coerce.date().optional(),
   shiftEnd: z.coerce.date().optional(),
-  status: z.enum(['proposed', 'assigned', 'confirmed', 'checked_in', 'completed', 'cancelled', 'no_show']).optional(),
   notes: z.string().trim().optional()
 });
-const assignmentBody = assignmentBaseBody.refine((body) => body.roleLabel || body.staffSubrole, 'Debe indicar rol o subrol.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.');
+const assignmentBody = assignmentBaseBody.extend({ status: z.enum(['proposed', 'assigned'] as const).optional() }).refine((body) => body.roleLabel || body.staffSubrole, 'Debe indicar rol o subrol.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.');
 const createAssignmentSchema = z.object({ body: assignmentBody, params: z.object({ id: objectId }), query: z.object({}) });
-const updateAssignmentSchema = z.object({ body: assignmentBaseBody.partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.'), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
+const updateAssignmentSchema = z.object({ body: assignmentBaseBody.partial().extend({ status: z.enum(staffAssignmentStatuses).optional() }).refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.').refine((body) => !body.status || Object.keys(body).length === 1, 'El estado debe actualizarse sin otros campos.'), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
+const assignmentStatusSchema = z.object({ body: z.object({ status: z.enum(staffAssignmentStatuses) }), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
 const statusSchema = z.object({ body: z.object({ status: z.enum(eventStatuses), reason: z.string().trim().optional() }), params: z.object({ id: objectId }), query: z.object({}) });
 const updateSchema = z.object({
   body: z.object({
@@ -226,11 +237,12 @@ function timeToMinutes(value: unknown): number | undefined {
  * An end time at or before the start time is interpreted as crossing midnight (common for
  * parties running e.g. 21:00–05:00), extending the slot past 1440.
  */
-function timeSlot(startTime: unknown, endTime: unknown): { start: number; end: number } {
+function timeSlot(day: string, startTime: unknown, endTime: unknown): { start: number; end: number } {
   const start = timeToMinutes(startTime);
   const end = timeToMinutes(endTime);
-  if (start === undefined || end === undefined) return { start: 0, end: 1440 };
-  return { start, end: end <= start ? end + 1440 : end };
+  const dayStart = new Date(`${day}T00:00:00.000Z`).getTime() / 60_000;
+  if (start === undefined || end === undefined) return { start: dayStart, end: dayStart + 1_440 };
+  return { start: dayStart + start, end: dayStart + (end <= start ? end + 1_440 : end) };
 }
 
 function slotsOverlap(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
@@ -238,22 +250,25 @@ function slotsOverlap(a: { start: number; end: number }, b: { start: number; end
 }
 
 /**
- * Venue/date availability lock (time-slot based, not full-day): only events already
- * `reserved`/`confirmed` at the same salón on the same calendar day are considered —
+ * Venue/date availability lock (time-slot based, not full-day): events already
+ * `reserved`/`confirmed` from the previous, requested and following calendar day are considered —
  * draft/quoted events remain free to overlap (speculative quoting for the same date/salon
  * is allowed until one of them actually gets reserved). No setup/breakdown buffer is added
  * between events; this is a deliberate simplification, not an oversight.
  */
 async function assertVenueAvailable(input: { salonId: string; day: string; startTime?: string; endTime?: string; excludeEventId?: string }): Promise<void> {
   const { salonId, day, startTime, endTime, excludeEventId } = input;
-  const dayStart = new Date(`${day}T00:00:00.000Z`);
-  const dayEnd = new Date(`${day}T23:59:59.999Z`);
+  const dayStart = new Date(`${addDaysToDateKey(day, -1)}T00:00:00.000Z`);
+  const dayEnd = new Date(`${addDaysToDateKey(day, 1)}T23:59:59.999Z`);
   const query: Record<string, unknown> = { salonId, status: { $in: Array.from(lockedEventStatuses) }, eventDate: { $gte: dayStart, $lte: dayEnd }, deletedAt: null };
   if (excludeEventId) query._id = { $ne: excludeEventId };
-  const candidates: any[] = await Event.find(query).select('startTime endTime eventName eventType').lean();
+  const candidates: any[] = await Event.find(query).select('eventDate startTime endTime eventName eventType').lean();
   if (!candidates.length) return;
-  const requested = timeSlot(startTime, endTime);
-  const conflict = candidates.find((candidate) => slotsOverlap(requested, timeSlot(candidate.startTime, candidate.endTime)));
+  const requested = timeSlot(day, startTime, endTime);
+  const conflict = candidates.find((candidate) => {
+    const candidateDay = eventDay(candidate.eventDate);
+    return !candidateDay || slotsOverlap(requested, timeSlot(candidateDay, candidate.startTime, candidate.endTime));
+  });
   if (conflict) throw new ApiError(422, 'EVENT_VENUE_SLOT_CONFLICT', `El salón ya tiene "${conflict.eventName || conflict.eventType || 'otro evento'}" reservado en un horario superpuesto ese día. Elegí otro horario o coordiná con ese evento antes de confirmar el cambio.`);
 }
 
@@ -297,6 +312,23 @@ async function tablewareAvailability(salonId: string, day: string, eventId?: str
 async function ensureEventAccess(request: Request, event: any): Promise<void> {
   if (!event || event.deletedAt) throw new ApiError(404, 'EVENT_NOT_FOUND');
   if (event.salonId && !canAccessSalon(request.user!, event.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+}
+
+async function transitionStaffAssignment(request: Request, event: any, assignmentId: string, nextStatus: StaffAssignmentStatus) {
+  const assignment: any = await EventStaffAssignment.findOne({ _id: assignmentId, eventId: event._id, deletedAt: null });
+  if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
+  if (String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
+
+  const currentStatus = assignment.status as StaffAssignmentStatus;
+  if (!staffStatusTransitions[currentStatus]?.includes(nextStatus)) {
+    throw new ApiError(422, 'STAFF_ASSIGNMENT_INVALID_TRANSITION', `No se puede pasar una asignación de ${currentStatus} a ${nextStatus}.`);
+  }
+
+  assignment.status = nextStatus;
+  assignment.updatedBy = request.user!.id;
+  await assignment.save();
+  await writeAuditLog(request, `EVENT_STAFF_${nextStatus.toUpperCase()}`, 'EventStaffAssignment', assignmentId, { eventId: event._id, previousStatus: currentStatus, status: nextStatus });
+  return assignment;
 }
 
 async function getEventForOperationalDocument(request: Request, eventId: string, type?: OperationalDocumentType): Promise<any> {
@@ -668,7 +700,16 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
     await writeAuditLog(request, 'PAYMENT_OVERPAYMENT_OVERRIDE', 'Payment', payment._id.toString(), { contractId: contract._id, eventId: request.params.id, requestedAmount: payment.amount, previousBalance, resultingBalance: contractAfter?.balanceAmount, reason: request.body.overrideReason });
   }
   await LeadActivity.create({ eventId: event._id, customerId: event.customerId, type: 'payment_registered', title: 'Pago registrado', description: `Se registró el pago ${payment.paymentNumber} por $ ${Number(payment.amount || 0).toLocaleString('es-AR')}.`, metadata: { paymentId: payment._id, amount: payment.amount, type: payment.type }, createdBy: request.user!.id });
-  return sendSuccess(response, { payment, paymentPlanSnapshot: event.paymentPlanSnapshot, planOverpaymentAmount, receiptEmailSent }, 201, getApiMessage('PAYMENT_CREATED'));
+  const [items, summary] = await Promise.all([
+    Payment.find({ eventId: request.params.id, deletedAt: null })
+      .populate('customerId', 'fullName phone email')
+      .populate('contractId', 'contractNumber totalAmount balanceAmount status')
+      .populate('salonId', 'name')
+      .sort({ paidAt: -1, dueDate: 1, createdAt: -1 })
+      .lean(),
+    paymentSummary({ eventId: request.params.id }),
+  ]);
+  return sendSuccess(response, { payment, items, summary, contract, paymentPlanSnapshot: event.paymentPlanSnapshot, planOverpaymentAmount, receiptEmailSent }, 201, getApiMessage('PAYMENT_CREATED'));
 }));
 
 router.post('/:id/payments/:paymentId/receipt-email', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(paymentReceiptSchema), asyncHandler(async (request, response) => {
@@ -698,6 +739,14 @@ router.post('/:id/staff', requirePermission(Permission.EVENTS_UPDATE), validateR
   const staffSalonIds = (staff.salonIds ?? []).map((id: { toString(): string }) => id.toString());
   const salonId = event.salonId?.toString();
   if (!staff.roles?.includes(Role.ADMIN) && salonId && !staffSalonIds.includes(salonId)) throw new ApiError(403, 'STAFF_SALON_SCOPE_FORBIDDEN');
+  if (request.body.shiftStart && request.body.shiftEnd) {
+    const conflict = await EventStaffAssignment.exists({
+      eventId: { $ne: request.params.id }, staffUserId: request.body.staffUserId,
+      shiftStart: { $lt: request.body.shiftEnd }, shiftEnd: { $gt: request.body.shiftStart },
+      deletedAt: null, status: { $nin: ['cancelled', 'no_show'] },
+    });
+    if (conflict) throw new ApiError(409, 'STAFF_ASSIGNMENT_TIME_CONFLICT', 'La persona ya tiene otro turno superpuesto.');
+  }
   const duplicate = await EventStaffAssignment.exists({ eventId: request.params.id, staffUserId: request.body.staffUserId, shiftStart: request.body.shiftStart ?? null, shiftEnd: request.body.shiftEnd ?? null, deletedAt: null, status: { $nin: ['cancelled', 'no_show'] } });
   if (duplicate) throw new ApiError(409, 'STAFF_ASSIGNMENT_DUPLICATED');
   const assignment = await EventStaffAssignment.create({ ...request.body, eventId: request.params.id, salonId, createdBy: request.user!.id, updatedBy: request.user!.id });
@@ -706,30 +755,48 @@ router.post('/:id/staff', requirePermission(Permission.EVENTS_UPDATE), validateR
 }));
 
 router.patch('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UPDATE), validateRequest(updateAssignmentSchema), asyncHandler(async (request, response) => {
-  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
-  const assignment = await EventStaffAssignment.findOneAndUpdate({ _id: request.params.assignmentId, eventId: request.params.id, deletedAt: null }, { ...request.body, updatedBy: request.user!.id }, { new: true, runValidators: true });
+  if (request.body.status) {
+    const assignment = await transitionStaffAssignment(request, event, request.params.assignmentId, request.body.status);
+    return sendSuccess(response, { assignment });
+  }
+  const assignment: any = await EventStaffAssignment.findOne({ _id: request.params.assignmentId, eventId: event._id, deletedAt: null });
   if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
+  if (String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
+  Object.assign(assignment, request.body, { updatedBy: request.user!.id });
+  await assignment.save();
   await writeAuditLog(request, 'EVENT_STAFF_UPDATE', 'EventStaffAssignment', request.params.assignmentId);
   return sendSuccess(response, { assignment });
 }));
 
 router.delete('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UPDATE), validateRequest(assignmentIdSchema), asyncHandler(async (request, response) => {
-  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
-  const assignment = await EventStaffAssignment.findOneAndUpdate({ _id: request.params.assignmentId, eventId: request.params.id, deletedAt: null }, { deletedAt: new Date(), deletedBy: request.user!.id, updatedBy: request.user!.id }, { new: true });
+  const assignment: any = await EventStaffAssignment.findOne({ _id: request.params.assignmentId, eventId: event._id, deletedAt: null });
   if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
+  if (String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
+  if (!['proposed', 'assigned'].includes(assignment.status)) throw new ApiError(422, 'STAFF_ASSIGNMENT_DELETE_NOT_ALLOWED');
+  assignment.deletedAt = new Date();
+  assignment.deletedBy = request.user!.id;
+  assignment.updatedBy = request.user!.id;
+  await assignment.save();
   await writeAuditLog(request, 'EVENT_STAFF_DELETE', 'EventStaffAssignment', request.params.assignmentId);
   return sendSuccess(response, { deleted: true });
 }));
 
-for (const [path, status] of [['confirm', 'confirmed'], ['cancel', 'cancelled']] as const) {
+router.post('/:id/staff/:assignmentId/status', requirePermission(Permission.EVENTS_UPDATE), validateRequest(assignmentStatusSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  const assignment = await transitionStaffAssignment(request, event, request.params.assignmentId, request.body.status);
+  return sendSuccess(response, { assignment });
+}));
+
+for (const [path, status] of [['assign', 'assigned'], ['confirm', 'confirmed'], ['check-in', 'checked_in'], ['complete', 'completed'], ['no-show', 'no_show'], ['cancel', 'cancelled']] as const) {
   router.post(`/:id/staff/:assignmentId/${path}`, requirePermission(Permission.EVENTS_UPDATE), validateRequest(assignmentIdSchema), asyncHandler(async (request, response) => {
-    const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+    const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
     await ensureEventAccess(request, event);
-    const assignment = await EventStaffAssignment.findOneAndUpdate({ _id: request.params.assignmentId, eventId: request.params.id, deletedAt: null }, { status, updatedBy: request.user!.id }, { new: true });
-    if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
-    await writeAuditLog(request, `EVENT_STAFF_${status.toUpperCase()}`, 'EventStaffAssignment', request.params.assignmentId);
+    const assignment = await transitionStaffAssignment(request, event, request.params.assignmentId, status);
     return sendSuccess(response, { assignment });
   }));
 }
@@ -835,9 +902,11 @@ router.put('/:id/tableware', requirePermission(Permission.EVENTS_UPDATE), valida
   const byId = new Map(availability.map((item: any) => [item._id.toString(), item]));
   for (const [stockItemId, requestedItem] of requested) {
     const item: any = byId.get(stockItemId);
-    if (!item) throw new ApiError(404, 'El artículo de vajilla seleccionado no pertenece al salón o no está activo.');
+    if (!item) throw new ApiError(404, 'TABLEWARE_STOCK_ITEM_NOT_FOUND', 'El artículo de vajilla seleccionado no pertenece al salón o no está activo.');
     if (requestedItem.quantity > item.maxAssignableQuantity) {
-      throw new ApiError(422, `No hay stock suficiente de ${item.name} para el ${day}. Disponible: ${item.maxAssignableQuantity}.`);
+      throw new ApiError(422, 'TABLEWARE_STOCK_INSUFFICIENT', `No hay stock suficiente de ${item.name} para el ${day}. Disponible: ${item.maxAssignableQuantity}.`, {
+        stockItemId, eventDay: day, requestedQuantity: requestedItem.quantity, availableQuantity: item.maxAssignableQuantity,
+      });
     }
   }
 
