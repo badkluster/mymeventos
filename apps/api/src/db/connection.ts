@@ -62,7 +62,7 @@ export function isDatabaseUnavailableError(error: unknown): boolean {
 }
 
 async function waitForConnectionAlreadyOpening(): Promise<void> {
-  let timeout: NodeJS.Timeout | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
       mongoose.connection.asPromise().then(() => undefined),
