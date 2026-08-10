@@ -1,13 +1,17 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { Permission } from '@mym/shared';
-import { requireAuth, requirePermission } from '../../middlewares/auth';
+import { Role } from '@mym/shared';
+import { requireAuth } from '../../middlewares/auth';
+import { ApiError } from '../../middlewares/errorHandler';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
 import { LoginHistory } from './loginHistory.model';
 
 const router = Router();
-router.use(requireAuth, requirePermission(Permission.LOGIN_HISTORY_READ));
+router.use(requireAuth, (request, _response, next) => {
+  if (!request.user?.roles.includes(Role.ADMIN)) return next(new ApiError(403, 'FORBIDDEN'));
+  return next();
+});
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
