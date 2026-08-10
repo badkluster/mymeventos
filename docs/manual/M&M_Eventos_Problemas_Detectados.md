@@ -1,129 +1,113 @@
-# M&M Eventos — Problemas detectados durante el recorrido
+# M&M Eventos - Problemas detectados durante el recorrido
 
-Fecha de revisión: 10 de agosto de 2026  
-Entorno: aplicación local  
+Fecha de revisión inicial: 10 de agosto de 2026  
+Última actualización: 10 de agosto de 2026  
+Entorno revisado: aplicación local  
 Alcance: landing pública y backoffice con una cuenta administradora.
 
 Este reporte está separado del Manual de Usuario. No contiene credenciales, secretos ni datos personales reales.
 
-## Resumen
+## Estado actual
 
-| Prioridad | Problema | Estado observado |
+Los problemas encontrados durante el primer recorrido fueron corregidos y el Manual de Usuario v1.1 ya no indica workarounds para ellos.
+
+| Prioridad | Problema | Estado actual |
 |---|---|---|
-| Alta | El estado del evento no se sincroniza al aprobar el contrato | Reproducible en el flujo sintético del manual |
-| Media | Un pago registrado puede no reflejarse hasta volver a cargar la pantalla | Reproducible en el flujo sintético del manual |
-| Media | El formulario de proveedores depende de textos dentro de los campos | Visible en “Nuevo proveedor” y “Editar proveedor” |
-| Baja | El botón “Aprobar” permanece visible después de aprobar un contrato | Visible en contratos aprobados |
-| Baja | Se muestran códigos o términos internos en inglés al usuario final | Visible en eventos, contratos, staff y configuración |
+| Alta | El estado del evento no se sincronizaba al aprobar el contrato | **Corregido** - la aprobación sincroniza el evento al estado comercial correspondiente |
+| Media | Un pago registrado podía no reflejarse hasta recargar la pantalla | **Corregido** - indicadores e historial se actualizan en la misma vista |
+| Media | El formulario de proveedores dependía de placeholders | **Corregido** - alta/edición usan rótulos persistentes |
+| Baja | “Aprobar” permanecía visible en contratos ya aprobados | **Corregido** - las acciones respetan el estado contractual |
+| Baja | Códigos internos en inglés llegaban al usuario final | **Corregido en las vistas relevadas** - se usan rótulos de presentación en español |
+| Alta | Staff confirmado no podía finalizarse desde la UI y bloqueaba el cierre operativo | **Corregido** - se implementó el ciclo de estados y las acciones de finalización |
 
-## 1. El evento conserva “Contrato borrador” después de aprobar el contrato
+## 1. Sincronización contrato -> evento
 
-Prioridad: Alta
+### Problema original
 
-### Recorrido
+Al aprobar un contrato, el contrato quedaba Aprobado pero el evento podía permanecer en “Contrato borrador”.
 
-1. Se creó un lead sintético.
-2. Se generó y convirtió un presupuesto.
-3. Se completaron documento y domicilio del cliente.
-4. El checklist del contrato quedó completamente en “OK”.
-5. Se creó el contrato y se aprobó.
-6. Al volver al evento, el contrato aparecía aprobado, pero el evento continuaba en “Contrato borrador”.
+### Estado actual
 
-### Resultado esperado
+La aprobación del contrato sincroniza el evento al siguiente estado comercial cuando corresponde. Para el flujo estándar, el operador ya no debe cambiar manualmente el evento a “Seña pendiente”.
 
-El evento debería avanzar automáticamente a “Seña pendiente”, o la interfaz debería explicar claramente que el cambio de estado es manual.
+El comportamiento repetido de aprobación debe mantenerse controlado e idempotente.
 
-### Impacto
+## 2. Actualización de pagos
 
-- Puede bloquear o confundir el registro de la seña.
-- El panel puede mostrar alertas que ya no representan el estado real.
-- Un operador nuevo puede intentar aprobar el contrato nuevamente.
+### Problema original
 
-### Solución temporal
+El pago se guardaba en backend pero la pestaña Pagos podía seguir mostrando saldo e historial anteriores hasta abandonar y volver a la vista.
 
-Verificar que el contrato figure Aprobado y cambiar manualmente el evento a “Seña pendiente”.
+### Estado actual
 
-## 2. El pago se guarda, pero la pantalla puede seguir mostrando saldo sin cambios
+Después de un registro exitoso, la vista vuelve a consultar/actualiza los datos relacionados y muestra en la misma pantalla:
 
-Prioridad: Media
+- total abonado;
+- saldo restante;
+- historial del movimiento;
+- estado relacionado cuando corresponda.
 
-### Recorrido
+No debe utilizarse una recarga manual como parte normal del procedimiento.
 
-1. Desde el evento de prueba se completó una seña por transferencia.
-2. Se hizo clic en “Registrar pago”.
-3. La misma vista continuó mostrando “No hay pagos registrados” y el total abonado en cero.
-4. Al salir, volver al evento y abrir Pagos, el movimiento sí aparecía en el historial y el total abonado había aumentado.
+## 3. Formularios de proveedores
 
-### Resultado esperado
+### Problema original
 
-Después de guardar, los indicadores y el historial deberían actualizarse inmediatamente o mostrar un mensaje que pida recargar.
+Nombre, Razón social, CUIT, Contacto, Teléfono, WhatsApp, Email y Notas utilizaban el placeholder como única identificación visual.
 
-### Impacto
+### Estado actual
 
-El operador puede cargar el mismo cobro por segunda vez creyendo que la primera operación falló.
+Los formularios de alta y edición conservan rótulos visibles y la asociación correspondiente con sus controles. El placeholder, cuando existe, funciona como ejemplo y no como reemplazo del rótulo.
 
-### Solución temporal
+## 4. Acción Aprobar en contratos aprobados
 
-No repetir el registro. Salir de la pestaña Pagos, volver a entrar y verificar el historial y el saldo.
+### Problema original
 
-## 3. Campos de proveedor sin rótulos permanentes
+Un contrato ya aprobado continuaba mostrando “Aprobar”.
 
-Prioridad: Media
+### Estado actual
 
-### Observación
+La interfaz condiciona las acciones al estado real del contrato y el backend continúa siendo la autoridad para validar transiciones.
 
-“Nuevo proveedor” y “Editar proveedor” muestran Nombre, Razón social, CUIT, Contacto, Teléfono, WhatsApp, Email y Notas como texto dentro del campo. Al escribir, ese texto desaparece.
+## 5. Rótulos de estados, tipos y roles
 
-### Resultado esperado
+### Problema original
 
-Cada campo debería conservar un rótulo visible por encima o al lado, especialmente para accesibilidad, impresión y revisión de formularios completos.
+Se observaban valores como:
 
-### Impacto
+- `baptism_communion`;
+- `approved`, `draft`, `pending_approval`;
+- `WAITER`, `KITCHEN_ASSISTANT`, `OTHER`;
+- claves técnicas de configuración.
 
-- Puede resultar difícil recordar qué dato se está editando.
-- Reduce la accesibilidad para lectores de pantalla y herramientas de asistencia.
-- Aumenta el riesgo de cargar teléfono y WhatsApp en campos equivocados.
+### Estado actual
 
-## 4. “Aprobar” continúa visible en contratos ya aprobados
+Las vistas relevadas utilizan helpers/rótulos de presentación y conservan los enums internos únicamente como valores del dominio. Los filtros y formularios deben seguir enviando los valores internos al backend aunque el usuario vea sus nombres en español.
 
-Prioridad: Baja
+## 6. Ciclo de Staff y Cierre Integral
 
-### Observación
+### Problema detectado posteriormente
 
-El detalle de un contrato Aprobado continúa mostrando la acción “Aprobar”.
+Cierre Integral exigía que cada `EventStaffAssignment` estuviera en un estado final (`completed`, `cancelled` o `no_show`), pero la pestaña Staff sólo permitía confirmar, cancelar o eliminar. Un evento con personal `confirmed` quedaba sin camino correcto para cerrar.
 
-### Resultado esperado
+### Estado actual
 
-La acción debería ocultarse, deshabilitarse con una explicación, o cambiar a una acción coherente con el estado actual.
+La interfaz y el backend contemplan el ciclo de vida del personal. Los estados visibles se presentan en español y permiten registrar lo que realmente ocurrió.
 
-### Impacto
+Flujo operativo esperado:
 
-Puede generar dudas o intentos redundantes, especialmente en personal nuevo.
+- Asignado -> Confirmado;
+- Confirmado -> Ingresó, Completado, Cancelado o Ausente según corresponda;
+- Ingresó -> Completado;
+- Completado / Cancelado / Ausente son terminales para el cierre operativo.
 
-## 5. Códigos internos visibles en pantallas para usuarios
-
-Prioridad: Baja
-
-### Ejemplos observados
-
-- Tipos de evento como `baptism_communion`.
-- Estados contractuales mostrados como `approved`, `draft` o `pending_approval` en algunos textos.
-- Roles operativos como `WAITER`, `KITCHEN ASSISTANT` u `OTHER`.
-- La clave `application` en Configuración.
-
-### Resultado esperado
-
-Mostrar nombres consistentes en español: “Bautismo/Comunión”, “Aprobado”, “Borrador”, “Pendiente de aprobación”, “Mozo/a”, “Ayudante de cocina”, etc.
-
-### Impacto
-
-El operador necesita interpretar términos que no pertenecen al lenguaje habitual del negocio y el manual debe explicar excepciones evitables.
+No se considera `Confirmado` como finalizado solamente para evitar el blocker: debe registrarse el resultado real de la asignación.
 
 ## Observaciones que no se clasificaron como fallas
 
-- Gastos no tenía registros para los filtros revisados.
-- Marketing no tenía campañas enviadas o programadas.
-- Asistencia no tenía jornadas activas.
-- El plan de producción disponible se había generado sin ítems porque todavía no existían productos explícitos ni reglas aplicables.
-- El cierre integral bloqueó correctamente las etapas posteriores cuando faltaban requisitos.
-
+- Gastos podía no tener registros para determinados filtros.
+- Marketing podía no tener campañas enviadas o programadas.
+- Asistencia podía no tener jornadas activas.
+- Un plan de producción puede generarse sin ítems si el evento no tiene productos explícitos ni reglas aplicables; la interfaz debe explicar esta situación.
+- Cierre Integral bloquea correctamente las etapas posteriores cuando faltan requisitos.
+- Las capturas del Manual v1.0 fueron tomadas antes de algunas de estas correcciones. El Manual v1.1 identifica las capturas históricas que no pudieron recapturarse y documenta el comportamiento vigente.
