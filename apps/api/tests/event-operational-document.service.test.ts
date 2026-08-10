@@ -104,6 +104,26 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(countOccurrences(body, 'Invitados y mesas')).toBe(1);
   });
 
+  it('uses Spanish status labels even when legacy data sends English status values', () => {
+    const eventWithLegacyStatuses: any = {
+      ...fullEvent,
+      resourcePlanSnapshot: {
+        ...fullEvent.resourcePlanSnapshot,
+        timelineItems: [{ ...fullEvent.resourcePlanSnapshot.timelineItems[0], status: 'Completed' }],
+        inventoryItems: [{ ...fullEvent.resourcePlanSnapshot.inventoryItems[0], status: 'COMPLETED' }],
+        productItems: [{ ...fullEvent.resourcePlanSnapshot.productItems[0], status: 'completed' }],
+        supplierAssignments: [{ ...fullEvent.resourcePlanSnapshot.supplierAssignments[0], status: 'Completed' }]
+      },
+      staffAssignments: [{ ...fullEvent.staffAssignments[0], status: 'COMPLETED' }]
+    };
+    const body = html(generateOperationalWord(eventWithLegacyStatuses, 'full').buffer);
+
+    expect(body).toContain('Hecho');
+    expect(countOccurrences(body, 'Completado')).toBeGreaterThanOrEqual(4);
+    expect(body).not.toContain('Completed');
+    expect(body).toContain('.area:first-of-type{break-before:auto;page-break-before:auto}');
+  });
+
   it('produces a valid, non-trivial PDF buffer for the full report and a bigger one when there is more content', async () => {
     const empty = await generateOperationalPdf(minimalEvent, 'full');
     const full = await generateOperationalPdf(fullEvent, 'full');

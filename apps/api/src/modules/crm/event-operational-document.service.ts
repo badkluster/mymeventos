@@ -6,7 +6,7 @@ export type OperationalDocumentType = 'timeline' | 'logistics' | 'guest_list' | 
 
 const page = { width: 595.28, height: 841.89, left: 42, right: 553, bottom: 790 };
 const color = { ink: '#101827', gold: '#b8965a', cream: '#fbf8f1', card: '#f4f6f8', muted: '#667085', line: '#dfe3e8', white: '#ffffff' };
-const timelineStatuses: Record<string, string> = { pending: 'Pendiente', ready: 'Preparado', done: 'Hecho', cancelled: 'Cancelado' };
+const timelineStatuses: Record<string, string> = { pending: 'Pendiente', ready: 'Preparado', done: 'Hecho', completed: 'Hecho', cancelled: 'Cancelado' };
 const dietaryPreferenceLabels: Record<string, string> = { vegetarian: 'Vegetariano/a', vegan: 'Vegano/a', celiac: 'Celíaco/a', lactose_free: 'Sin lactosa' };
 const guestAgeGroupLabels: Record<string, string> = { child_1_4: '1 a 4 años · sin cargo', child_5_9: '5 a 9 años · media tarifa', minor_10_17: '10 a 17 años · menor' };
 const tableAudienceLabels: Record<string, string> = { children: 'Chicos', family: 'Familia', open: 'Libre' };
@@ -20,14 +20,33 @@ const logisticSections: Array<[string, string]> = [
   ['Cierre y puntos críticos', 'riskNotes']
 ];
 // Cubre tanto EventProductItem como EventInventoryItem: ambos comparten el mismo vocabulario de estados en el frontend.
-const resourceStatusLabels: Record<string, string> = { planned: 'Planificado', reserved: 'Reservado', purchased: 'Comprado', used: 'Usado', delivered: 'Entregado', returned: 'Devuelto', missing: 'Faltante', damaged: 'Roto' };
-const supplierAssignmentStatusLabels: Record<string, string> = { pending: 'Pendiente', confirmed: 'Confirmado', paid: 'Pagado', cancelled: 'Cancelado' };
+const resourceStatusLabels: Record<string, string> = { planned: 'Planificado', reserved: 'Reservado', purchased: 'Comprado', used: 'Usado', completed: 'Completado', delivered: 'Entregado', returned: 'Devuelto', missing: 'Faltante', damaged: 'Roto' };
+const supplierAssignmentStatusLabels: Record<string, string> = { pending: 'Pendiente', confirmed: 'Confirmado', completed: 'Completado', paid: 'Pagado', cancelled: 'Cancelado' };
 const staffSubroleLabels: Record<string, string> = { WAITER: 'Mozo', MAITRE: 'Metre', COOK: 'Cocinero', KITCHEN_ASSISTANT: 'Ayudante de cocina', BARTENDER: 'Barman', DJ: 'DJ', DECORATION: 'Decoración', CLEANING: 'Limpieza', SECURITY: 'Seguridad', COORDINATOR: 'Coordinador', RECEPTION: 'Recepción', OTHER: 'Otro' };
 const staffAssignmentStatusLabels: Record<string, string> = { proposed: 'Propuesto', assigned: 'Asignado', confirmed: 'Confirmado', checked_in: 'Fichado', completed: 'Completado', cancelled: 'Cancelado', no_show: 'Ausente' };
 const productionCategoryGroups: Array<[string, string]> = [['savory', 'Salados'], ['sweet', 'Dulces'], ['beverages', 'Bebidas'], ['other', 'Otros']];
 
 function text(value: unknown, fallback = 'A confirmar'): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+/**
+ * Los planes antiguos y algunas integraciones pueden traer la misma etapa con otra
+ * convención (`Completed`, `complete`, `canceled`, etc.). El documento es para
+ * operación y se imprime o comparte con terceros: nunca debe exponer esos valores
+ * internos ni depender de la capitalización con la que llegaron.
+ */
+function statusLabel(value: unknown, labels: Record<string, string>, fallback: string): string {
+  const normalized = String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const aliases: Record<string, string> = {
+    complete: 'completed',
+    completed: 'completed',
+    canceled: 'cancelled',
+    cancelled: 'cancelled',
+    checkedin: 'checked_in',
+    no_show: 'no_show'
+  };
+  return labels[normalized] ?? labels[aliases[normalized]] ?? fallback;
 }
 
 // `event.eventDate` (la única fecha que pasa por acá) es una fecha civil normalizada a
@@ -240,7 +259,7 @@ function timeline(document: PDFKit.PDFDocument, event: any, type: OperationalDoc
       if (document.y + contentHeight > page.bottom - 30) { newPage(document, event, type); drawHeader(); }
       const y = document.y;
       document.roundedRect(page.left, y, page.right - page.left, contentHeight, 5).fill(index % 2 ? color.cream : color.card);
-      const values = [text(item.time, '—'), text(item.title), text(item.area), text(item.owner), timelineStatuses[item.status] ?? text(item.status, 'Pendiente')];
+      const values = [text(item.time, '—'), text(item.title), text(item.area), text(item.owner), statusLabel(item.status, timelineStatuses, 'Pendiente')];
       columns.forEach((column, columnIndex) => document.font(columnIndex === 1 ? 'Helvetica-Bold' : 'Helvetica').fontSize(8.2).fillColor(color.ink).text(values[columnIndex], column.x, y + 10, { width: column.width, height: 16, ellipsis: true }));
       if (note) {
         document.font('Helvetica-Bold').fontSize(6.8).fillColor(color.muted).text('NOTAS', page.left + 75, y + 27);
@@ -417,7 +436,7 @@ function inventoryTable(document: PDFKit.PDFDocument, event: any, type: Operatio
   const rows = inventoryRows(event);
   if (!rows.length) return;
   section(document, event, type, 'Mantelería, mobiliario y equipos', `${rows.length} recurso${rows.length === 1 ? '' : 's'}`);
-  renderTable(document, event, type, layoutColumns(inventoryColumnDefs), rows.map((item: any) => [text(item.name), text(item.category, '—'), item.quantityRequired != null ? String(item.quantityRequired) : '—', text(item.unit, '—'), resourceStatusLabels[item.status] ?? 'Planificado', text(item.notes, '—')]));
+  renderTable(document, event, type, layoutColumns(inventoryColumnDefs), rows.map((item: any) => [text(item.name), text(item.category, '—'), item.quantityRequired != null ? String(item.quantityRequired) : '—', text(item.unit, '—'), statusLabel(item.status, resourceStatusLabels, 'Planificado'), text(item.notes, '—')]));
 }
 
 function productItemRows(event: any): any[] {
@@ -436,7 +455,7 @@ function products(document: PDFKit.PDFDocument, event: any, type: OperationalDoc
     section(document, event, type, label, `${rows.length} insumo${rows.length === 1 ? '' : 's'}`);
     rows.forEach((item: any) => {
       const cost = productCost(item);
-      const meta = [text(item.category, ''), item.quantity ? `${item.quantity} ${text(item.unit, 'u.')}` : '', item.supplierName ? `Proveedor: ${item.supplierName}` : '', cost ? `Costo: ${moneyAr(cost)}` : '', resourceStatusLabels[item.status] ?? 'Planificado'].filter(Boolean).join(' · ');
+      const meta = [text(item.category, ''), item.quantity ? `${item.quantity} ${text(item.unit, 'u.')}` : '', item.supplierName ? `Proveedor: ${item.supplierName}` : '', cost ? `Costo: ${moneyAr(cost)}` : '', statusLabel(item.status, resourceStatusLabels, 'Planificado')].filter(Boolean).join(' · ');
       card(document, event, type, text(item.name), meta, text(item.notes, ''));
     });
   });
@@ -447,7 +466,7 @@ function supplierAssignmentRows(event: any): any[] {
 }
 
 function supplierMeta(item: any): string {
-  return [text(item.serviceType, 'Servicio a definir'), item.contactName ? `Contacto: ${item.contactName}` : '', item.phone ? `Tel.: ${item.phone}` : '', item.arrivalTime ? `Llegada: ${item.arrivalTime}` : '', item.agreedAmount ? `Monto acordado: ${moneyAr(Number(item.agreedAmount))}` : '', supplierAssignmentStatusLabels[item.status] ?? 'Pendiente'].filter(Boolean).join(' · ');
+  return [text(item.serviceType, 'Servicio a definir'), item.contactName ? `Contacto: ${item.contactName}` : '', item.phone ? `Tel.: ${item.phone}` : '', item.arrivalTime ? `Llegada: ${item.arrivalTime}` : '', item.agreedAmount ? `Monto acordado: ${moneyAr(Number(item.agreedAmount))}` : '', statusLabel(item.status, supplierAssignmentStatusLabels, 'Pendiente')].filter(Boolean).join(' · ');
 }
 
 function suppliers(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType): void {
@@ -464,7 +483,7 @@ function staffAssignmentRows(event: any): any[] {
 function staffTitleAndMeta(item: any): { title: string; meta: string } {
   const role = text(item.roleLabel, staffSubroleLabels[item.staffSubrole ?? ''] ?? 'Sin rol asignado');
   const shift = [timeOf(item.shiftStart), timeOf(item.shiftEnd)].filter(Boolean).join(' – ');
-  return { title: `${personName(item.staffUserId)} · ${role}`, meta: [shift || 'Horario a confirmar', staffAssignmentStatusLabels[item.status] ?? 'Asignado'].filter(Boolean).join(' · ') };
+  return { title: `${personName(item.staffUserId)} · ${role}`, meta: [shift || 'Horario a confirmar', statusLabel(item.status, staffAssignmentStatusLabels, 'Asignado')].filter(Boolean).join(' · ') };
 }
 
 function staffRoster(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType): void {
@@ -495,12 +514,14 @@ function fullReport(document: PDFKit.PDFDocument, event: any): void {
   ];
   const visible = areas.filter((area) => area.hasContent);
   if (!visible.length) {
-    newPage(document, event, 'full');
     emptyNote(document, event, 'Todavía no se cargó contenido operativo para este evento. Completá momentos, invitados, logística, vajilla, productos, proveedores o staff para generar el cronograma integral.');
     return;
   }
-  visible.forEach((area) => {
-    newPage(document, event, 'full');
+  visible.forEach((area, index) => {
+    // La ficha del evento deja espacio suficiente para iniciar el primer bloque. Evitar
+    // este salto conserva la portada como una página de trabajo y elimina el vacío que
+    // antes quedaba entre los datos principales y “Momentos del evento”.
+    if (index > 0) newPage(document, event, 'full');
     section(document, event, 'full', area.title, area.hint);
     area.render();
   });
@@ -530,7 +551,7 @@ function escapeHtml(value: unknown): string {
 function timelineWordHtml(event: any): string {
   const items = timelineItemRows(event);
   const table = items.length
-    ? `<table><thead><tr><th>Hora</th><th>Momento</th><th>Área</th><th>Responsable</th><th>Estado</th><th>Notas</th></tr></thead><tbody>${items.map((item: any) => `<tr><td>${escapeHtml(text(item.time, '—'))}</td><td><b>${escapeHtml(text(item.title))}</b></td><td>${escapeHtml(text(item.area, '—'))}</td><td>${escapeHtml(text(item.owner, '—'))}</td><td>${escapeHtml(timelineStatuses[item.status] ?? text(item.status, 'Pendiente'))}</td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`
+    ? `<table><thead><tr><th>Hora</th><th>Momento</th><th>Área</th><th>Responsable</th><th>Estado</th><th>Notas</th></tr></thead><tbody>${items.map((item: any) => `<tr><td>${escapeHtml(text(item.time, '—'))}</td><td><b>${escapeHtml(text(item.title))}</b></td><td>${escapeHtml(text(item.area, '—'))}</td><td>${escapeHtml(text(item.owner, '—'))}</td><td>${escapeHtml(statusLabel(item.status, timelineStatuses, 'Pendiente'))}</td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`
     : '<p class="empty">Todavía no hay momentos cargados en el cronograma.</p>';
   const staffNotes = timelineStaffNotes(event, items);
   const staffNotesHtml = staffNotes.length ? `<h2>Notas para staff</h2><p class="staff-hint">Indicaciones clave para el equipo durante el evento.</p>${staffNotes.map((item) => `<section class="note"><h3>${escapeHtml(item.reference)}</h3><small>${escapeHtml(item.meta)}</small><p>${escapeHtml(item.note).replace(/\n/g, '<br>')}</p></section>`).join('')}` : '';
@@ -561,7 +582,7 @@ function tablewareWordHtml(event: any): string {
 function inventoryWordHtml(event: any): string {
   const rows = inventoryRows(event);
   if (!rows.length) return '';
-  return `<h2>Mantelería, mobiliario y equipos</h2><table><thead><tr><th>Recurso</th><th>Categoría</th><th>Necesaria</th><th>Unidad</th><th>Estado</th><th>Notas</th></tr></thead><tbody>${rows.map((item: any) => `<tr><td><b>${escapeHtml(text(item.name))}</b></td><td>${escapeHtml(text(item.category, '—'))}</td><td>${escapeHtml(item.quantityRequired != null ? String(item.quantityRequired) : '—')}</td><td>${escapeHtml(text(item.unit, '—'))}</td><td>${escapeHtml(resourceStatusLabels[item.status] ?? 'Planificado')}</td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`;
+  return `<h2>Mantelería, mobiliario y equipos</h2><table><thead><tr><th>Recurso</th><th>Categoría</th><th>Necesaria</th><th>Unidad</th><th>Estado</th><th>Notas</th></tr></thead><tbody>${rows.map((item: any) => `<tr><td><b>${escapeHtml(text(item.name))}</b></td><td>${escapeHtml(text(item.category, '—'))}</td><td>${escapeHtml(item.quantityRequired != null ? String(item.quantityRequired) : '—')}</td><td>${escapeHtml(text(item.unit, '—'))}</td><td>${escapeHtml(statusLabel(item.status, resourceStatusLabels, 'Planificado'))}</td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function logisticsWordHtml(event: any): string {
@@ -576,7 +597,7 @@ function productsWordHtml(event: any): string {
     if (!rows.length) return '';
     return `<h2>${escapeHtml(label)}</h2>${rows.map((item: any) => {
       const cost = productCost(item);
-      const meta = [text(item.category, ''), item.quantity ? `${item.quantity} ${text(item.unit, 'u.')}` : '', item.supplierName ? `Proveedor: ${item.supplierName}` : '', cost ? `Costo: ${moneyAr(cost)}` : '', resourceStatusLabels[item.status] ?? 'Planificado'].filter(Boolean).join(' · ');
+      const meta = [text(item.category, ''), item.quantity ? `${item.quantity} ${text(item.unit, 'u.')}` : '', item.supplierName ? `Proveedor: ${item.supplierName}` : '', cost ? `Costo: ${moneyAr(cost)}` : '', statusLabel(item.status, resourceStatusLabels, 'Planificado')].filter(Boolean).join(' · ');
       return `<section class="note"><h3>${escapeHtml(text(item.name))}</h3><small>${escapeHtml(meta)}</small>${item.notes ? `<p>${escapeHtml(item.notes)}</p>` : ''}</section>`;
     }).join('')}`;
   }).join('');
@@ -645,6 +666,6 @@ export function generateOperationalWord(event: any, type: OperationalDocumentTyp
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Control de mesas</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#1f1f1f;font-size:10pt}.guest-header{text-align:center;border-bottom:2px solid #b8965a;padding:4px 0 13px;margin-bottom:15px}.guest-header .brand{color:#a68244;font-size:8pt;font-weight:bold;letter-spacing:1px}.guest-header h1{font-size:18pt;letter-spacing:.6px;margin:7px 0 5px}.guest-header p{color:#7a7368;margin:0;font-size:9.5pt}.control-legend{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #d8ccaf;margin:0 0 13px}.control-legend div{padding:8px 10px;border-right:1px solid #d8ccaf;min-height:31px}.control-legend div:last-child{border-right:0}.control-legend b{display:block;font-size:8pt;color:#1f1f1f}.control-legend span{display:block;color:#7a7368;font-size:7.5pt;margin-top:3px}.mesa-sheet{border:1px solid #d8ccaf;margin:0 0 10px;break-inside:avoid}.mesa-sheet h3{background:#fbf8f1;margin:0;padding:7px 10px;border-bottom:1px solid #d8ccaf;font-size:9.5pt}.mesa-sheet small{display:block;padding:5px 10px 0;color:#7a7368}.mesa-list{border-collapse:collapse;width:100%;font-size:9pt}.mesa-list td{padding:5px 8px;border-bottom:1px solid #eee8dc;vertical-align:top}.mesa-list tr:last-child td{border-bottom:0}.mesa-list .number{width:28px;text-align:right;color:#7a7368;font-weight:bold}.mesa-list .guest-name{width:57%}.mesa-list .guest-detail{color:#7a7368;font-size:8pt}.empty{color:#7a7368;background:#fbf8f1;padding:14px}</style></head><body><header class="guest-header"><div class="brand">M&M EVENTOS</div><h1>CONTROL DE MESAS</h1><p>${escapeHtml(subtitle)}</p></header>${content}</body></html>`;
     return { buffer: Buffer.from(html, 'utf8'), fileName: `${fileStem(event, type)}.doc` };
   }
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(documentTitle(type))}</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#101827;font-size:10pt}.header{background:#101827;color:white;padding:18px 22px;margin:-18mm -18mm 18px}.brand{color:#ddc99f;letter-spacing:1px;font-size:9pt}.header h1{margin:6px 0 0;font-size:20pt}.subtitle{color:#dfe3e8;margin-top:5px}.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f4f6f8;padding:14px 16px;border-radius:8px}.detail b{display:block;color:#667085;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}.detail span{display:block;margin-top:3px}h2{font-size:12pt;margin:22px 0 8px;border-bottom:2px solid #b8965a;padding-bottom:6px}.area{page-break-before:always}.area-title{font-size:14pt;margin-top:0}table{border-collapse:collapse;width:100%;font-size:8.5pt}th{background:#101827;color:white;text-align:left;padding:8px}td{vertical-align:top;padding:8px;border-bottom:1px solid #dfe3e8}tr:nth-child(even){background:#fbf8f1}.note{background:#f4f6f8;border-left:4px solid #b8965a;padding:10px 14px;margin:10px 0}.note h2,.note h3{margin:0 0 7px;border:0;padding:0;font-size:10.5pt}.note small{display:block;color:#667085;margin:-3px 0 7px}.note p{margin:0;line-height:1.45}.guest-items{margin:7px 0 0;padding-left:18px}.guest-items li{margin:3px 0}.guest-items span{color:#667085}.entry-table{break-inside:avoid}.entry-control{margin-top:8px}.entry-control .number{width:26px;font-weight:bold;text-align:center}.entry-control .check{width:46px;font-weight:bold;white-space:nowrap}.staff-hint{color:#667085;margin:-2px 0 10px}.empty{color:#667085;background:#fbf8f1;padding:14px}</style></head><body><header class="header"><div class="brand">M&M EVENTOS · DOCUMENTO OPERATIVO</div><h1>${escapeHtml(documentTitle(type))}</h1><div class="subtitle">${escapeHtml(text(event.eventName || event.eventType, 'Evento'))}</div></header><div class="details">${detailsHtml}</div>${type === 'full' ? '' : `<h2>${escapeHtml(documentTitle(type))}</h2>`}${content}</body></html>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(documentTitle(type))}</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#101827;font-size:10pt}.header{background:#101827;color:white;padding:18px 22px;margin:-18mm -18mm 18px}.brand{color:#ddc99f;letter-spacing:1px;font-size:9pt}.header h1{margin:6px 0 0;font-size:20pt}.subtitle{color:#dfe3e8;margin-top:5px}.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f4f6f8;padding:14px 16px;border-radius:8px}.detail b{display:block;color:#667085;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}.detail span{display:block;margin-top:3px}h2{font-size:12pt;margin:22px 0 8px;border-bottom:2px solid #b8965a;padding-bottom:6px}.area{break-before:page;page-break-before:always}.area:first-of-type{break-before:auto;page-break-before:auto}.area-title{font-size:14pt;margin-top:22px}table{border-collapse:collapse;width:100%;font-size:8.5pt}th{background:#101827;color:white;text-align:left;padding:8px}td{vertical-align:top;padding:8px;border-bottom:1px solid #dfe3e8}tr:nth-child(even){background:#fbf8f1}.note{background:#f4f6f8;border-left:4px solid #b8965a;padding:10px 14px;margin:10px 0}.note h2,.note h3{margin:0 0 7px;border:0;padding:0;font-size:10.5pt}.note small{display:block;color:#667085;margin:-3px 0 7px}.note p{margin:0;line-height:1.45}.guest-items{margin:7px 0 0;padding-left:18px}.guest-items li{margin:3px 0}.guest-items span{color:#667085}.entry-table{break-inside:avoid}.entry-control{margin-top:8px}.entry-control .number{width:26px;font-weight:bold;text-align:center}.entry-control .check{width:46px;font-weight:bold;white-space:nowrap}.staff-hint{color:#667085;margin:-2px 0 10px}.empty{color:#667085;background:#fbf8f1;padding:14px}</style></head><body><header class="header"><div class="brand">M&M EVENTOS · DOCUMENTO OPERATIVO</div><h1>${escapeHtml(documentTitle(type))}</h1><div class="subtitle">${escapeHtml(text(event.eventName || event.eventType, 'Evento'))}</div></header><div class="details">${detailsHtml}</div>${type === 'full' ? '' : `<h2>${escapeHtml(documentTitle(type))}</h2>`}${content}</body></html>`;
   return { buffer: Buffer.from(html, 'utf8'), fileName: `${fileStem(event, type)}.doc` };
 }
