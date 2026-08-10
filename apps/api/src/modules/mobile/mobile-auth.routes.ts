@@ -5,6 +5,7 @@ import { Permission, StaffEmploymentStatus } from '@mym/shared';
 import { User, normalizeUserEmail } from '../users/user.model';
 import { sanitizeUser } from '../users/user.service';
 import { RefreshToken } from '../auth/refreshToken.model';
+import { recordSuccessfulLogin } from '../auth/loginHistory.service';
 import { MobileDevice } from './mobileDevice.model';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -131,10 +132,27 @@ router.post('/login', publicRateLimit({ windowMs: 15 * 60_000, max: 10 }), valid
   await User.updateOne({ _id: user._id }, { lastLoginAt: new Date(), failedLoginAttempts: 0, $unset: { lockedUntil: 1 } });
   await upsertDevice(user._id.toString(), request.body.device, request);
   const tokens = await issueMobileTokens(user, request.body.device.installationId, request);
-  await writeAuditLog(request, 'AUTH_MOBILE_LOGIN_SUCCESS', 'User', user._id.toString(), {
-    channel: 'mobile', installationId: request.body.device.installationId, platform: request.body.device.platform,
-    appVersion: request.body.device.appVersion, deviceModel: request.body.device.deviceModel
-  }, user._id.toString());
+  await Promise.all([
+    writeAuditLog(request, 'AUTH_MOBILE_LOGIN_SUCCESS', 'User', user._id.toString(), {
+      channel: 'mobile', installationId: request.body.device.installationId, platform: request.body.device.platform,
+      appVersion: request.body.device.appVersion, deviceModel: request.body.device.deviceModel
+    }, user._id.toString()),
+    recordSuccessfulLogin(request, user, {
+      channel: 'mobile',
+      platform: request.body.device.platform,
+      device: {
+        installationId: request.body.device.installationId,
+        deviceModel: request.body.device.deviceModel,
+        deviceName: request.body.device.deviceName,
+        manufacturer: request.body.device.manufacturer,
+        osName: request.body.device.osName,
+        osVersion: request.body.device.osVersion,
+        appVersion: request.body.device.appVersion,
+        appBuildVersion: request.body.device.appBuildVersion,
+        applicationId: request.body.device.applicationId,
+      }
+    })
+  ]);
   return sendSuccess(response, { ...tokens, user: sanitizeUser(user) });
 }));
 
