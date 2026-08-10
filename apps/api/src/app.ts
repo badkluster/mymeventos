@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -8,7 +9,7 @@ import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
-import { sendSuccess } from './utils/api';
+import { pingDatabase } from './db/connection';
 
 export const app = express();
 
@@ -20,11 +21,65 @@ app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 // re-serialized (and potentially non-identical) JSON.stringify of req.body.
 app.use(express.json({ verify: (request, _response, buffer) => { (request as express.Request).rawBody = buffer; } }));
 app.use(cookieParser());
+
+// Structured timing is intentionally separate from morgan: morgan remains useful for
+// access logs while this entry tells us whether a slow/failed request spent its time in
+// authentication or in the controller after the DB connection was already established.
+app.use((request, response, next) => {
+  const startedAt = Date.now();
+  const requestId = request.get('x-vercel-id') || request.get('x-request-id') || randomUUID();
+  response.setHeader('X-Request-Id', requestId);
+  response.on('finish', () => {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs < 750 && response.statusCode < 500) return;
+    const log = {
+      event: 'api_request_timing',
+      requestId,
+      method: request.method,
+      path: request.originalUrl || request.url,
+      statusCode: response.statusCode,
+      elapsedMs,
+      authMs: typeof response.locals.authMs === 'number' ? response.locals.authMs : null,
+      region: process.env.VERCEL_REGION ?? null,
+    };
+    if (response.statusCode >= 500) console.error(JSON.stringify(log));
+    else console.warn(JSON.stringify(log));
+  });
+  next();
+});
+
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Basic health route
-app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'mymeventos-backend' }));
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'mymeventos-backend' }));
+// Liveness never depends on MongoDB. Readiness does.
+const liveResponse = (_req: express.Request, res: express.Response) => res.json({
+  status: 'ok',
+  service: 'mymeventos-backend',
+  region: process.env.VERCEL_REGION ?? null,
+});
+app.get('/health', liveResponse);
+app.get('/api/health', liveResponse);
+app.get('/health/live', liveResponse);
+app.get('/api/health/live', liveResponse);
+const readyResponse = async (_req: express.Request, res: express.Response) => {
+  try {
+    const databasePingMs = await pingDatabase();
+    res.setHeader('Server-Timing', `db;dur=${databasePingMs}`);
+    return res.status(200).json({ status: 'ready', service: 'mymeventos-backend', databasePingMs });
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'database_readiness_failed',
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    }));
+    return res.status(503).json({
+      success: false,
+      error: { code: 'DATABASE_UNAVAILABLE', message: 'La base de datos no está disponible temporalmente.' },
+    });
+  }
+};
+app.get('/health/ready', readyResponse);
+app.get('/api/health/ready', readyResponse);
+
 app.use('/api', routes);
 if (env.NODE_ENV === 'development') {
   const secure = [{ cookieAuth: [] }];
@@ -45,6 +100,7 @@ if (env.NODE_ENV === 'development') {
   }, apis: [] });
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapi));
 }
-app.use(notFoundHandler); app.use(errorHandler);
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 export default app;
