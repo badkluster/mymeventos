@@ -25,7 +25,7 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
       errorName: error instanceof Error ? error.name : 'UnknownError',
       errorMessage: error instanceof Error ? error.message : String(error),
     }));
-    return sendError(response, 503, 'DATABASE_UNAVAILABLE', getApiMessage('DATABASE_UNAVAILABLE'));
+    return sendError(response, 503, 'DATABASE_UNAVAILABLE', 'La base de datos no está disponible temporalmente. Reintentá en unos segundos.');
   }
   if (typeof error === 'object' && error && (error as { code?: number }).code === 11000) {
     const duplicateFields = Object.keys((error as { keyPattern?: Record<string, unknown> }).keyPattern ?? {});
