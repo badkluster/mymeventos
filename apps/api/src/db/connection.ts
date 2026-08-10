@@ -111,15 +111,19 @@ export async function connectDatabase(): Promise<DatabaseConnectionInfo> {
     }
   }
 
-  if (mongoose.connection.readyState !== 1) {
-    throw Object.assign(new Error(`MongoDB is not connected (readyState=${mongoose.connection.readyState})`), { name: 'MongooseServerSelectionError' });
+  // TypeScript keeps the narrowing from the early readyState check across awaits even
+  // though the Mongo driver mutates this value asynchronously. Convert it to a number so
+  // the runtime state, not the stale compile-time narrowing, is evaluated here.
+  const readyState = Number(mongoose.connection.readyState);
+  if (readyState !== 1) {
+    throw Object.assign(new Error(`MongoDB is not connected (readyState=${readyState})`), { name: 'MongooseServerSelectionError' });
   }
 
   return {
     reused: waitedForExistingConnection,
     waitedForExistingConnection,
     elapsedMs: Date.now() - startedAt,
-    readyState: mongoose.connection.readyState,
+    readyState,
     host: mongoose.connection.host,
   };
 }
