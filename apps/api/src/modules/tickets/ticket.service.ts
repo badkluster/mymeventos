@@ -160,6 +160,75 @@ export async function issueTicketsForPaidOrder(orderId: string) {
 
 const maskEmail = (email: string) =>
   email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2");
+
+function confirmedTicketEmailHtml(
+  order: any,
+  publication: any,
+  tickets: any[],
+  portalUrl: string,
+) {
+  const buyer = escapeHtml(order.buyer?.name || '');
+  const title = escapeHtml(publication?.title || 'M&M Eventos');
+  const ticketCount = tickets.length;
+  const eventDate = publication?.startsAt
+    ? new Intl.DateTimeFormat('es-AR', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires',
+      }).format(new Date(publication.startsAt))
+    : 'Fecha a confirmar';
+  const location = escapeHtml(publication?.venueName || publication?.address || 'Ubicación a confirmar');
+  const accent = /^#[0-9a-f]{6}$/i.test(publication?.appearance?.secondaryColor ?? '')
+    ? publication.appearance.secondaryColor
+    : '#d4a373';
+  let coverUrl = '';
+  try {
+    const parsed = new URL(String(publication?.coverImage ?? ''));
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') coverUrl = escapeHtml(parsed.href);
+  } catch {
+    // La portada es decorativa: una URL inválida no debe evitar que se envíen las entradas.
+  }
+  const ticketRows = tickets.map((ticket: any) => `<tr><td style="padding:10px 0;border-bottom:1px solid #e4e4e7;font:600 14px/20px 'Trebuchet MS',Helvetica,sans-serif;color:#18181b">${escapeHtml(ticket.ticketTypeSnapshot?.name || 'Entrada')}<br/><span style="font:400 12px/18px 'Trebuchet MS',Helvetica,sans-serif;color:#71717a">Código ${escapeHtml(ticket.ticketCode)}</span></td></tr>`).join('');
+  const cover = coverUrl
+    ? `<tr><td><img src="${coverUrl}" alt="${title}" width="600" style="display:block;width:100%;height:192px;object-fit:cover;border:0" /></td></tr>`
+    : '';
+
+  return `<!doctype html>
+<html lang="es"><body style="margin:0;padding:0;background:#f4f4f5;color:#18181b">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f4f5"><tr><td align="center" style="padding:32px 16px">
+    <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#ffffff">
+      <tr><td style="height:7px;background:${accent};font-size:0;line-height:0">&nbsp;</td></tr>
+      ${cover}
+      <tr><td style="padding:34px 38px 28px;background:#18181b;color:#ffffff">
+        <p style="margin:0 0 10px;font:700 11px/16px 'Trebuchet MS',Helvetica,sans-serif;letter-spacing:1.4px;color:${accent}">COMPRA CONFIRMADA</p>
+        <h1 style="margin:0;font:700 30px/36px 'Trebuchet MS',Helvetica,sans-serif;color:#ffffff">Tus entradas ya están listas</h1>
+        <p style="margin:16px 0 0;font:400 16px/24px 'Trebuchet MS',Helvetica,sans-serif;color:#e4e4e7">Hola ${buyer}. Emitimos ${ticketCount} entrada${ticketCount === 1 ? '' : 's'} para ${title}.</p>
+      </td></tr>
+      <tr><td style="padding:28px 38px 8px">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e4e4e7">
+          <tr>
+            <td style="padding:22px 20px;vertical-align:top">
+              <p style="margin:0 0 6px;font:700 11px/16px 'Trebuchet MS',Helvetica,sans-serif;letter-spacing:1px;color:#71717a">EVENTO</p>
+              <p style="margin:0;font:700 20px/26px 'Trebuchet MS',Helvetica,sans-serif;color:#18181b">${title}</p>
+              <p style="margin:18px 0 0;font:700 11px/16px 'Trebuchet MS',Helvetica,sans-serif;letter-spacing:1px;color:#71717a">FECHA Y HORA</p>
+              <p style="margin:3px 0 0;font:400 14px/21px 'Trebuchet MS',Helvetica,sans-serif;color:#3f3f46">${escapeHtml(eventDate)}</p>
+              <p style="margin:14px 0 0;font:700 11px/16px 'Trebuchet MS',Helvetica,sans-serif;letter-spacing:1px;color:#71717a">LUGAR</p>
+              <p style="margin:3px 0 0;font:400 14px/21px 'Trebuchet MS',Helvetica,sans-serif;color:#3f3f46">${location}</p>
+            </td>
+            <td width="128" align="center" style="width:128px;padding:20px 12px;border-left:1px dashed #d4d4d8;vertical-align:middle;background:#fafafa">
+              <p style="margin:0;font:700 11px/16px 'Trebuchet MS',Helvetica,sans-serif;letter-spacing:1px;color:#71717a">ENTRADAS</p>
+              <p style="margin:5px 0;font:700 34px/40px 'Trebuchet MS',Helvetica,sans-serif;color:#18181b">${ticketCount}</p>
+              <p style="margin:0;font:400 12px/18px 'Trebuchet MS',Helvetica,sans-serif;color:#52525b">Código QR incluido<br/>en el PDF</p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+      <tr><td style="padding:20px 38px 0"><p style="margin:0 0 8px;font:700 11px/16px 'Trebuchet MS',Helvetica,sans-serif;letter-spacing:1px;color:#71717a">TUS ENTRADAS</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">${ticketRows}</table></td></tr>
+      <tr><td align="center" style="padding:30px 38px 12px"><a href="${escapeHtml(portalUrl)}" style="display:inline-block;padding:14px 24px;background:#18181b;color:#ffffff;font:700 14px/20px 'Trebuchet MS',Helvetica,sans-serif;text-decoration:none">Ver mis entradas y códigos QR</a></td></tr>
+      <tr><td align="center" style="padding:12px 38px 34px"><p style="margin:0;font:400 12px/18px 'Trebuchet MS',Helvetica,sans-serif;color:#71717a">Orden ${escapeHtml(order.publicId)} · También podés presentar las entradas desde tu teléfono.</p></td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+}
+
 export async function sendOrderTicketsEmail(
   orderId: string,
   channel: "email" | "admin_resend" | "automatic_retry" = "email",
@@ -196,7 +265,7 @@ export async function sendOrderTicketsEmail(
     ).lean();
     const portalUrl = `${publicAppUrl()}/entradas/compra/${order.publicId}?token=${orderAccessToken(order)}`;
     const text = `Hola ${order.buyer.name}. Tu compra para ${publication?.title ?? "M&M Eventos"} fue confirmada. Orden: ${order.publicId}. Ver tus entradas: ${portalUrl}`;
-    const html = `<main style="font-family:Arial,sans-serif;color:#18181b"><h1>Tu compra fue confirmada</h1><p>Hola ${order.buyer.name}, ya emitimos ${tickets.length} entrada${tickets.length === 1 ? "" : "s"} para <b>${publication?.title ?? "M&M Eventos"}</b>.</p><p>Orden: <b>${order.publicId}</b></p><p><a href="${portalUrl}">Ver mis entradas y códigos QR</a></p><ul>${tickets.map((ticket: any) => `<li>${ticket.ticketTypeSnapshot?.name ?? "Entrada"} · ${ticket.ticketCode}</li>`).join("")}</ul></main>`;
+    const html = confirmedTicketEmailHtml(order, publication, tickets, portalUrl);
     const attachment = documentedOrder?.ticketsPdf?.storageKey && documentedOrder.ticketsPdf.sizeBytes <= 7_000_000
       ? await fetch(getSignedDownloadUrl(documentedOrder.ticketsPdf.storageKey)).then(async (response) => response.ok ? Buffer.from(await response.arrayBuffer()) : undefined)
       : undefined;
@@ -332,7 +401,7 @@ function lifecycleEmailContent(
   return {
     subject: message.subject,
     text: `${message.heading}\n\nHola ${order.buyer?.name || ""}. ${message.body}\n\nOrden: ${order.publicId}\nEvento: ${publication?.title ?? "M&M Eventos"}\nFecha: ${eventDate}\nLugar: ${publication?.venueName || publication?.address || "A confirmar"}\n\n${portalUrl}`,
-    html: `<main style="font-family:Arial,sans-serif;color:#18181b;line-height:1.5"><h1>${message.heading}</h1><p>Hola ${buyer}.</p><p>${message.body}</p>${details}${link}</main>`,
+    html: `<main style="font-family:'Trebuchet MS',Helvetica,sans-serif;color:#18181b;line-height:1.5"><h1>${message.heading}</h1><p>Hola ${buyer}.</p><p>${message.body}</p>${details}${link}</main>`,
   };
 }
 
