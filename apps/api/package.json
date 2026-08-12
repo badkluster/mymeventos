@@ -15,6 +15,7 @@
     "migrate:package-template-names": "ts-node src/scripts/removePackageTemplateNameUniqueIndex.ts",
     "migrate:invitation-event-index": "ts-node src/scripts/removeLegacyInvitationEventIdIndex.ts",
     "migrate:ticket-type-sale-index": "ts-node src/scripts/removeLegacyTicketTypeSaleIndex.ts",
+    "migrate:payroll-settlement-run-employee-index": "ts-node src/scripts/migratePayrollSettlementRunEmployeeIndex.ts",
     "migrate:unique-user-email-index": "ts-node src/scripts/restoreUniqueUserEmailIndex.ts",
     "migrate:remove-ticket-payment-credentials": "ts-node src/scripts/removeTicketPaymentCredentials.ts",
     "migrate:unique-user-email-index": "ts-node src/scripts/restoreUniqueUserEmailIndex.ts",

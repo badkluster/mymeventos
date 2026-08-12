@@ -149,7 +149,13 @@ const payrollSettlementSchema = new Schema({
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
 }, { timestamps: true });
 payrollSettlementSchema.index({ employeeId: 1, periodStart: 1, periodEnd: 1, status: 1 });
-payrollSettlementSchema.index({ payrollRunId: 1, employeeId: 1 }, { unique: true, sparse: true });
+// A settlement created outside a payroll run has no payrollRunId. A sparse unique
+// index still indexes explicit null values, which would incorrectly allow only one
+// individual settlement per employee. Restrict this constraint to run settlements.
+payrollSettlementSchema.index(
+  { payrollRunId: 1, employeeId: 1 },
+  { unique: true, partialFilterExpression: { payrollRunId: { $type: 'objectId' } } }
+);
 payrollSettlementSchema.index({ attendanceRecordIds: 1, status: 1 });
 
 const salaryAdvanceSchema = new Schema({
