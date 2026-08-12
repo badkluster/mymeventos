@@ -81,6 +81,10 @@ describe('production consolidated exports', () => {
     expect(excel).toContain('ss:Name="Bebidas"');
     expect(excel).toContain('Empanadas');
     expect(excel).toContain('Agua');
+    expect(excel).toContain('<Styles>');
+    expect(excel).toContain('ss:StyleID="sHeader"');
+    expect(excel).toContain('<AutoFilter x:Range="R8C1:R9C10"/>');
+    expect(excel).toContain('ss:MergeAcross="9"');
   });
 
   it('builds a PDF containing every requested production type', async () => {

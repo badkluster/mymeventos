@@ -207,7 +207,7 @@ router.get('/consolidated/export', requirePermission(Permission.PRODUCTION_VIEW)
   if (format === 'excel') {
     response.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
     response.setHeader('Content-Disposition', `attachment; filename="produccion-consolidada-${suffix}-${date}.xls"`);
-    return response.send(consolidatedProductionExcel(selected, 'Producción consolidada'));
+    return response.send(consolidatedProductionExcel(selected, 'Producción consolidada', `${period.fromDate} al ${period.toDate}`));
   }
   const pdf = await consolidatedProductionPdf(selected, 'Producción consolidada', `${period.fromDate} al ${period.toDate}`);
   response.setHeader('Content-Type', 'application/pdf');

@@ -8,9 +8,42 @@ type ConsolidatedSection = { type: string; name: string; items: ConsolidatedItem
 
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 const escapeXml = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const cell = (value: unknown) => `<Cell><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`;
-const row = (values: unknown[]) => `<Row>${values.map(cell).join('')}</Row>`;
 const headers = ['Producto', 'Unidad', 'Eventos', 'Planificado', 'Completado', 'Disponible', 'Faltante', 'A comprar', 'A producir', 'Pendientes'];
+
+type SpreadsheetCell = { value: unknown; style?: string; type?: 'String' | 'Number'; mergeAcross?: number };
+
+function cell({ value, style = 'sText', type = 'String', mergeAcross }: SpreadsheetCell) {
+  const merge = mergeAcross ? ` ss:MergeAcross="${mergeAcross}"` : '';
+  return `<Cell ss:StyleID="${style}"${merge}><Data ss:Type="${type}">${escapeXml(value)}</Data></Cell>`;
+}
+
+function row(cells: SpreadsheetCell[], height?: number) {
+  return `<Row${height ? ` ss:Height="${height}"` : ''}>${cells.map(cell).join('')}</Row>`;
+}
+
+const textCell = (value: unknown, style = 'sText'): SpreadsheetCell => ({ value, style });
+const numericCell = (value: number, style = 'sNumber'): SpreadsheetCell => ({ value, style, type: 'Number' });
+
+const excelStyles = `<Styles>
+  <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1F2937"/></Style>
+  <Style ss:ID="sTitle"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="18" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#172554" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="sSubtitle"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="9" ss:Color="#475569"/><Interior ss:Color="#EAF0F8" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="sSection"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#1E3A5F"/><Interior ss:Color="#DCE8F5" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="sMetricLabel"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="8" ss:Bold="1" ss:Color="#475569"/><Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D8E1EC"/></Borders></Style>
+  <Style ss:ID="sMetricNumber"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D8E1EC"/></Borders></Style>
+  <Style ss:ID="sMetricInteger"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D8E1EC"/></Borders></Style>
+  <Style ss:ID="sMetricPercent"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><NumberFormat ss:Format="0.0%"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D8E1EC"/></Borders></Style>
+  <Style ss:ID="sHeader"><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#172554"/></Borders></Style>
+  <Style ss:ID="sText"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1F2937"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
+  <Style ss:ID="sNumber"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1F2937"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
+  <Style ss:ID="sInteger"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1F2937"/><NumberFormat ss:Format="#,##0"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
+  <Style ss:ID="sAttention"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#991B1B"/><Interior ss:Color="#FEF2F2" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FECACA"/></Borders></Style>
+  <Style ss:ID="sAction"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#92400E"/><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FDE68A"/></Borders></Style>
+  <Style ss:ID="sPending"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#6B21A8"/><Interior ss:Color="#FAF5FF" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E9D5FF"/></Borders></Style>
+  <Style ss:ID="sTotalLabel"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#DCE8F5" ss:Pattern="Solid"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#93B4D5"/></Borders></Style>
+  <Style ss:ID="sTotalNumber"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#DCE8F5" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#93B4D5"/></Borders></Style>
+  <Style ss:ID="sTotalInteger"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#DCE8F5" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#93B4D5"/></Borders></Style>
+</Styles>`;
 
 function sheetName(value: string, used: Set<string>) {
   const base = value.replace(/[\\/*?:\[\]]/g, ' ').trim().slice(0, 31) || 'Producción';
@@ -24,21 +57,69 @@ function sheetName(value: string, used: Set<string>) {
   return candidate;
 }
 
-function worksheet(name: string, items: ConsolidatedItem[]) {
-  const totals = items.reduce((sum, item) => ({ planned: sum.planned + item.plannedQuantity, completed: sum.completed + item.completedQuantity, missing: sum.missing + item.missingQuantity }), { planned: 0, completed: 0, missing: 0 });
+function worksheet(name: string, items: ConsolidatedItem[], title: string, period: string, generatedAt: string) {
+  const totals = items.reduce((sum, item) => ({
+    planned: sum.planned + item.plannedQuantity,
+    completed: sum.completed + item.completedQuantity,
+    available: sum.available + item.availableQuantity,
+    missing: sum.missing + item.missingQuantity,
+    toBuy: sum.toBuy + item.toBuyQuantity,
+    toProduce: sum.toProduce + item.toProduceQuantity,
+    pending: sum.pending + item.pendingItems,
+  }), { planned: 0, completed: 0, available: 0, missing: 0, toBuy: 0, toProduce: 0, pending: 0 });
+  const progress = totals.planned > 0 ? totals.completed / totals.planned : 0;
+  const productsWithActions = items.filter((item) => item.missingQuantity > 0 || item.toBuyQuantity > 0 || item.toProduceQuantity > 0 || item.pendingItems > 0).length;
+  const firstDataRow = 9;
+  const lastDataRow = firstDataRow + items.length - 1;
+  const totalRow = firstDataRow + items.length;
   const data = [
-    row(headers),
-    ...items.map((item) => row([item.productName, item.unit, item.eventCount, number.format(item.plannedQuantity), number.format(item.completedQuantity), number.format(item.availableQuantity), number.format(item.missingQuantity), number.format(item.toBuyQuantity), number.format(item.toProduceQuantity), item.pendingItems])),
-    row(['Total', '', '', number.format(totals.planned), number.format(totals.completed), '', number.format(totals.missing), '', '', '']),
+    row([{ value: title, style: 'sTitle', mergeAcross: 9 }], 32),
+    row([{ value: `${name} · Período: ${period} · Generado: ${generatedAt}`, style: 'sSubtitle', mergeAcross: 9 }], 21),
+    row([{ value: 'Resumen operativo', style: 'sSection', mergeAcross: 9 }], 20),
+    row([
+      textCell('Productos', 'sMetricLabel'), numericCell(items.length, 'sMetricInteger'),
+      textCell('Planificado', 'sMetricLabel'), numericCell(totals.planned, 'sMetricNumber'),
+      textCell('Completado', 'sMetricLabel'), numericCell(totals.completed, 'sMetricNumber'),
+      textCell('Faltante', 'sMetricLabel'), numericCell(totals.missing, 'sMetricNumber'),
+      textCell('A comprar', 'sMetricLabel'), numericCell(totals.toBuy, 'sMetricNumber'),
+    ], 21),
+    row([
+      textCell('A producir', 'sMetricLabel'), numericCell(totals.toProduce, 'sMetricNumber'),
+      textCell('Pendientes', 'sMetricLabel'), numericCell(totals.pending, 'sMetricInteger'),
+      textCell('Avance', 'sMetricLabel'), numericCell(progress, 'sMetricPercent'),
+      textCell('Con acción', 'sMetricLabel'), numericCell(productsWithActions, 'sMetricInteger'),
+    ], 21),
+    row([{ value: 'Las celdas resaltadas indican acciones que requieren seguimiento.', style: 'sSubtitle', mergeAcross: 9 }], 19),
+    row([], 8),
+    row(headers.map((header) => textCell(header, 'sHeader')), 28),
+    ...items.map((item) => row([
+      textCell(item.productName),
+      textCell(item.unit),
+      numericCell(item.eventCount, 'sInteger'),
+      numericCell(item.plannedQuantity),
+      numericCell(item.completedQuantity),
+      numericCell(item.availableQuantity),
+      numericCell(item.missingQuantity, item.missingQuantity > 0 ? 'sAttention' : 'sNumber'),
+      numericCell(item.toBuyQuantity, item.toBuyQuantity > 0 ? 'sAction' : 'sNumber'),
+      numericCell(item.toProduceQuantity, item.toProduceQuantity > 0 ? 'sAction' : 'sNumber'),
+      numericCell(item.pendingItems, item.pendingItems > 0 ? 'sPending' : 'sInteger'),
+    ], 20)),
+    row([
+      textCell('Total', 'sTotalLabel'), textCell('', 'sTotalLabel'), numericCell(items.reduce((sum, item) => sum + item.eventCount, 0), 'sTotalInteger'),
+      numericCell(totals.planned, 'sTotalNumber'), numericCell(totals.completed, 'sTotalNumber'), numericCell(totals.available, 'sTotalNumber'),
+      numericCell(totals.missing, 'sTotalNumber'), numericCell(totals.toBuy, 'sTotalNumber'), numericCell(totals.toProduce, 'sTotalNumber'), numericCell(totals.pending, 'sTotalInteger'),
+    ], 22),
   ];
-  return `<Worksheet ss:Name="${escapeXml(name)}"><Table>${data.join('')}</Table></Worksheet>`;
+  const filter = items.length ? `<AutoFilter x:Range="R8C1:R${lastDataRow}C10"/>` : '';
+  return `<Worksheet ss:Name="${escapeXml(name)}"><Table ss:ExpandedColumnCount="10" ss:ExpandedRowCount="${totalRow}"><Column ss:Width="205"/><Column ss:Width="72"/><Column ss:Width="62"/><Column ss:Width="84"/><Column ss:Width="88"/><Column ss:Width="84"/><Column ss:Width="84"/><Column ss:Width="84"/><Column ss:Width="88"/><Column ss:Width="76"/>${data.join('')}</Table>${filter}<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>7</SplitHorizontal><TopRowBottomPane>7</TopRowBottomPane><ActivePane>2</ActivePane><PageSetup><Layout x:Orientation="Landscape"/><PageMargins x:Bottom="0.4" x:Left="0.25" x:Right="0.25" x:Top="0.45"/></PageSetup><FitToPage/><Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight><ValidPrinterInfo/></Print><ProtectObjects>False</ProtectObjects><ProtectScenarios>False</ProtectScenarios></WorksheetOptions></Worksheet>`;
 }
 
-export function consolidatedProductionExcel(sections: ConsolidatedSection[], title: string) {
+export function consolidatedProductionExcel(sections: ConsolidatedSection[], title: string, period = 'Período seleccionado') {
   const used = new Set<string>();
   const totalItems = sections.flatMap((section) => section.items);
-  const sheets = [worksheet(sheetName('Total consolidado', used), totalItems), ...sections.map((section) => worksheet(sheetName(section.name, used), section.items))];
-  return `<?xml version="1.0" encoding="UTF-8"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><DocumentProperties xmlns="urn:schemas-microsoft-com:office:office"><Title>${escapeXml(title)}</Title><Author>M&amp;M Eventos</Author></DocumentProperties>${sheets.join('')}</Workbook>`;
+  const generatedAt = new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+  const sheets = [worksheet(sheetName('Total consolidado', used), totalItems, title, period, generatedAt), ...sections.map((section) => worksheet(sheetName(section.name, used), section.items, title, period, generatedAt))];
+  return `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><DocumentProperties xmlns="urn:schemas-microsoft-com:office:office"><Title>${escapeXml(title)}</Title><Author>M&amp;M Eventos</Author><Company>M&amp;M Eventos</Company></DocumentProperties>${excelStyles}${sheets.join('')}</Workbook>`;
 }
 
 function collect(document: PDFKit.PDFDocument): Promise<Buffer> {
@@ -50,47 +131,192 @@ function collect(document: PDFKit.PDFDocument): Promise<Buffer> {
   });
 }
 
+type ProductionTotals = { planned: number; completed: number; available: number; missing: number; toBuy: number; toProduce: number; pending: number };
+
+const productionColumns = [
+  { label: 'PRODUCTO', x: 42, width: 175, align: 'left' as const },
+  { label: 'UNIDAD', x: 217, width: 62, align: 'left' as const },
+  { label: 'EVENTOS', x: 279, width: 54, align: 'right' as const },
+  { label: 'PLANIF.', x: 333, width: 67, align: 'right' as const },
+  { label: 'HECHO', x: 400, width: 67, align: 'right' as const },
+  { label: 'DISP.', x: 467, width: 67, align: 'right' as const },
+  { label: 'FALTANTE', x: 534, width: 70, align: 'right' as const },
+  { label: 'COMPRAR', x: 604, width: 66, align: 'right' as const },
+  { label: 'PRODUCIR', x: 670, width: 68, align: 'right' as const },
+  { label: 'PEND.', x: 738, width: 62, align: 'right' as const },
+];
+
+function productionTotals(items: ConsolidatedItem[]): ProductionTotals {
+  return items.reduce((sum, item) => ({
+    planned: sum.planned + item.plannedQuantity,
+    completed: sum.completed + item.completedQuantity,
+    available: sum.available + item.availableQuantity,
+    missing: sum.missing + item.missingQuantity,
+    toBuy: sum.toBuy + item.toBuyQuantity,
+    toProduce: sum.toProduce + item.toProduceQuantity,
+    pending: sum.pending + item.pendingItems,
+  }), { planned: 0, completed: 0, available: 0, missing: 0, toBuy: 0, toProduce: 0, pending: 0 });
+}
+
 function drawHeader(document: PDFKit.PDFDocument, title: string, subtitle: string) {
-  document.font('Helvetica-Bold').fontSize(17).fillColor('#18181b').text(title, 42, 34);
-  document.font('Helvetica').fontSize(9).fillColor('#52525b').text(subtitle, 42, 57);
-  document.moveTo(42, 76).lineTo(800, 76).strokeColor('#d4d4d8').stroke();
-  document.y = 92;
+  const width = document.page.width;
+  document.rect(0, 0, width, 88).fill('#172554');
+  document.font('Helvetica-Bold').fontSize(7.5).fillColor('#BFDBFE').text('M&M EVENTOS  /  OPERACIONES', 42, 22, { characterSpacing: .8 });
+  document.font('Helvetica-Bold').fontSize(18).fillColor('#FFFFFF').text(title, 42, 36);
+  document.font('Helvetica').fontSize(9).fillColor('#DBEAFE').text(subtitle, 42, 62);
+  document.y = 106;
+}
+
+function drawFooter(document: PDFKit.PDFDocument, page: number) {
+  const y = document.page.height - 25;
+  document.moveTo(42, y - 7).lineTo(document.page.width - 42, y - 7).strokeColor('#CBD5E1').lineWidth(.5).stroke();
+  document.font('Helvetica').fontSize(7).fillColor('#64748B').text('M&M Eventos · Producción consolidada', 42, y, { width: 280 });
+  document.text(`Página ${page}`, document.page.width - 142, y, { width: 100, align: 'right' });
+}
+
+function drawMetricCards(document: PDFKit.PDFDocument, y: number, metrics: Array<{ label: string; value: string; accent?: boolean }>) {
+  const x = 42;
+  const gap = 9;
+  const width = (document.page.width - 84 - gap * (metrics.length - 1)) / metrics.length;
+  metrics.forEach((metric, index) => {
+    const cardX = x + index * (width + gap);
+    const background = metric.accent ? '#FFF7ED' : '#F1F5F9';
+    const labelColor = metric.accent ? '#9A3412' : '#475569';
+    const valueColor = metric.accent ? '#C2410C' : '#0F172A';
+    document.roundedRect(cardX, y, width, 56, 5).fill(background);
+    document.font('Helvetica-Bold').fontSize(6.5).fillColor(labelColor).text(metric.label, cardX + 10, y + 10, { width: width - 20, characterSpacing: .45 });
+    document.font('Helvetica-Bold').fontSize(14).fillColor(valueColor).text(metric.value, cardX + 10, y + 25, { width: width - 20, ellipsis: true });
+  });
+}
+
+function drawOverviewTableHeader(document: PDFKit.PDFDocument, y: number) {
+  const columns = [
+    { label: 'CATEGORÍA', x: 42, width: 248, align: 'left' as const },
+    { label: 'PRODUCTOS', x: 290, width: 77, align: 'right' as const },
+    { label: 'PLANIF.', x: 367, width: 98, align: 'right' as const },
+    { label: 'FALTANTE', x: 465, width: 100, align: 'right' as const },
+    { label: 'COMPRAR', x: 565, width: 100, align: 'right' as const },
+    { label: 'PRODUCIR', x: 665, width: 90, align: 'right' as const },
+    { label: 'PEND.', x: 755, width: 45, align: 'right' as const },
+  ];
+  document.roundedRect(42, y, document.page.width - 84, 22, 4).fill('#1E3A5F');
+  document.font('Helvetica-Bold').fontSize(6.6).fillColor('#FFFFFF');
+  columns.forEach((column) => document.text(column.label, column.x + 6, y + 8, { width: column.width - 12, align: column.align, ellipsis: true }));
+  return columns;
+}
+
+function drawOverview(document: PDFKit.PDFDocument, sections: ConsolidatedSection[]) {
+  const items = sections.flatMap((section) => section.items);
+  const totals = productionTotals(items);
+  const progress = totals.planned > 0 ? `${number.format((totals.completed / totals.planned) * 100)}%` : '0%';
+  const productsWithActions = items.filter((item) => item.missingQuantity > 0 || item.toBuyQuantity > 0 || item.toProduceQuantity > 0 || item.pendingItems > 0).length;
+
+  document.font('Helvetica-Bold').fontSize(11).fillColor('#0F172A').text('Resumen operativo', 42, document.y);
+  document.font('Helvetica').fontSize(8.5).fillColor('#64748B').text('Visión general para organizar compras, producción y controles pendientes.', 42, document.y + 3);
+  const cardsY = document.y + 22;
+  drawMetricCards(document, cardsY, [
+    { label: 'CATEGORÍAS', value: String(sections.length) },
+    { label: 'PRODUCTOS', value: String(items.length) },
+    { label: 'PLANIFICADO', value: number.format(totals.planned) },
+    { label: 'FALTANTE', value: number.format(totals.missing), accent: totals.missing > 0 },
+    { label: 'CON ACCIÓN', value: String(productsWithActions), accent: productsWithActions > 0 },
+  ]);
+  document.font('Helvetica-Bold').fontSize(9).fillColor('#1E3A5F').text(`Avance general: ${progress}`, 42, cardsY + 69);
+  document.font('Helvetica').fontSize(8).fillColor('#64748B').text(`A comprar: ${number.format(totals.toBuy)} · A producir: ${number.format(totals.toProduce)} · Ítems pendientes: ${number.format(totals.pending)}`, 42, cardsY + 84);
+
+  const tableY = cardsY + 108;
+  const columns = drawOverviewTableHeader(document, tableY);
+  sections.forEach((section, index) => {
+    const y = tableY + 22 + index * 23;
+    const totalsBySection = productionTotals(section.items);
+    if (index % 2 === 0) document.rect(42, y, document.page.width - 84, 23).fill('#F8FAFC');
+    if (totalsBySection.missing > 0 || totalsBySection.toBuy > 0 || totalsBySection.toProduce > 0 || totalsBySection.pending > 0) document.rect(42, y, 3, 23).fill('#F59E0B');
+    const values = [section.name, section.items.length, totalsBySection.planned, totalsBySection.missing, totalsBySection.toBuy, totalsBySection.toProduce, totalsBySection.pending];
+    document.font('Helvetica').fontSize(8).fillColor('#334155');
+    values.forEach((value, columnIndex) => document.text(typeof value === 'number' ? number.format(value) : value, columns[columnIndex].x + 6, y + 8, { width: columns[columnIndex].width - 12, align: columns[columnIndex].align, ellipsis: true }));
+  });
+}
+
+function drawSectionSummary(document: PDFKit.PDFDocument, section: ConsolidatedSection) {
+  const totals = productionTotals(section.items);
+  const progress = totals.planned > 0 ? `${number.format((totals.completed / totals.planned) * 100)}%` : '0%';
+  const sectionY = document.y;
+  document.roundedRect(42, sectionY, document.page.width - 84, 26, 5).fill('#EAF0F8');
+  document.font('Helvetica-Bold').fontSize(10).fillColor('#1E3A5F').text(section.name, 53, sectionY + 8, { width: 470, ellipsis: true });
+  document.font('Helvetica').fontSize(8).fillColor('#475569').text(`${section.items.length} productos consolidados`, 600, sectionY + 9, { width: 189, align: 'right' });
+  const cardsY = sectionY + 39;
+  drawMetricCards(document, cardsY, [
+    { label: 'PLANIFICADO', value: number.format(totals.planned) },
+    { label: 'COMPLETADO', value: number.format(totals.completed) },
+    { label: 'FALTANTE', value: number.format(totals.missing), accent: totals.missing > 0 },
+    { label: 'A COMPRAR', value: number.format(totals.toBuy), accent: totals.toBuy > 0 },
+    { label: 'AVANCE', value: progress },
+  ]);
+  document.font('Helvetica').fontSize(8).fillColor('#64748B').text(`A producir: ${number.format(totals.toProduce)} · Ítems pendientes: ${number.format(totals.pending)} · Las alertas se destacan en color.`, 42, cardsY + 65);
+  document.y = cardsY + 84;
 }
 
 function tableHeader(document: PDFKit.PDFDocument) {
-  const columns = [42, 208, 266, 316, 378, 440, 502, 562, 626, 690];
-  const labels = ['Producto', 'Unidad', 'Eventos', 'Plan', 'Hecho', 'Disp.', 'Falta', 'Comprar', 'Producir', 'Pend.'];
-  document.font('Helvetica-Bold').fontSize(7).fillColor('#52525b');
-  labels.forEach((label, index) => document.text(label, columns[index], document.y, { width: index === 0 ? 158 : 54, ellipsis: true }));
-  document.moveDown(1.45);
-  return columns;
+  const y = document.y;
+  document.roundedRect(42, y, document.page.width - 84, 23, 4).fill('#1E3A5F');
+  document.font('Helvetica-Bold').fontSize(6.5).fillColor('#FFFFFF');
+  productionColumns.forEach((column) => document.text(column.label, column.x + 5, y + 8, { width: column.width - 10, align: column.align, ellipsis: true }));
+  document.y = y + 29;
+}
+
+function drawProductionRow(document: PDFKit.PDFDocument, item: ConsolidatedItem, index: number) {
+  const y = document.y;
+  if (index % 2 === 0) document.rect(42, y - 3, document.page.width - 84, 21).fill('#F8FAFC');
+  const actionColumns = [
+    { index: 6, value: item.missingQuantity, background: '#FEE2E2', color: '#991B1B' },
+    { index: 7, value: item.toBuyQuantity, background: '#FEF3C7', color: '#92400E' },
+    { index: 8, value: item.toProduceQuantity, background: '#FEF3C7', color: '#92400E' },
+    { index: 9, value: item.pendingItems, background: '#F3E8FF', color: '#6B21A8' },
+  ];
+  actionColumns.filter((column) => column.value > 0).forEach((column) => document.roundedRect(productionColumns[column.index].x + 2, y - 2, productionColumns[column.index].width - 4, 17, 3).fill(column.background));
+  const values = [item.productName, item.unit, item.eventCount, item.plannedQuantity, item.completedQuantity, item.availableQuantity, item.missingQuantity, item.toBuyQuantity, item.toProduceQuantity, item.pendingItems];
+  values.forEach((value, columnIndex) => {
+    const action = actionColumns.find((column) => column.index === columnIndex && column.value > 0);
+    document.font(columnIndex === 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(7.4).fillColor(action?.color ?? '#334155').text(typeof value === 'number' ? number.format(value) : value, productionColumns[columnIndex].x + 5, y + 3, { width: productionColumns[columnIndex].width - 10, align: productionColumns[columnIndex].align, ellipsis: true });
+  });
+  document.moveTo(42, y + 18).lineTo(document.page.width - 42, y + 18).strokeColor('#E2E8F0').lineWidth(.35).stroke();
+  document.y = y + 21;
 }
 
 export async function consolidatedProductionPdf(sections: ConsolidatedSection[], title: string, period: string) {
   const document = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 0, info: { Title: title, Author: 'M&M Eventos' } });
   const result = collect(document);
-  const bottom = 550;
+  const bottom = document.page.height - 42;
+  let page = 1;
 
-  sections.forEach((section, sectionIndex) => {
-    if (sectionIndex) document.addPage();
-    drawHeader(document, title, `${period} · ${section.name}`);
-    document.font('Helvetica-Bold').fontSize(11).fillColor('#18181b').text(section.name, 42, document.y);
-    document.moveDown(.8);
-    let columns = tableHeader(document);
-    section.items.forEach((item) => {
-      if (document.y > bottom) {
+  drawHeader(document, title, `${period} · Informe consolidado`);
+  drawOverview(document, sections);
+  drawFooter(document, page);
+
+  sections.forEach((section) => {
+    document.addPage();
+    page += 1;
+    drawHeader(document, title, `${period} · Detalle por categoría`);
+    drawSectionSummary(document, section);
+    tableHeader(document);
+    section.items.forEach((item, index) => {
+      if (document.y + 22 > bottom) {
+        drawFooter(document, page);
         document.addPage();
+        page += 1;
         drawHeader(document, title, `${period} · ${section.name} (continuación)`);
-        columns = tableHeader(document);
+        const continuationY = document.y;
+        document.roundedRect(42, continuationY, document.page.width - 84, 24, 5).fill('#EAF0F8');
+        document.font('Helvetica-Bold').fontSize(9).fillColor('#1E3A5F').text(section.name, 53, continuationY + 8, { width: 600, ellipsis: true });
+        document.y = continuationY + 35;
+        tableHeader(document);
       }
-      const y = document.y;
-      const values = [item.productName, item.unit, item.eventCount, number.format(item.plannedQuantity), number.format(item.completedQuantity), number.format(item.availableQuantity), number.format(item.missingQuantity), number.format(item.toBuyQuantity), number.format(item.toProduceQuantity), item.pendingItems];
-      document.font('Helvetica').fontSize(7.5).fillColor('#27272a');
-      values.forEach((value, index) => document.text(String(value), columns[index], y, { width: index === 0 ? 158 : 54, ellipsis: true }));
-      document.moveTo(42, y + 13).lineTo(800, y + 13).strokeColor('#e4e4e7').stroke();
-      document.y = y + 17;
+      drawProductionRow(document, item, index);
     });
-    if (!section.items.length) document.font('Helvetica').fontSize(9).fillColor('#71717a').text('No hay ítems de producción para este tipo en el período seleccionado.');
+    if (!section.items.length) {
+      document.font('Helvetica').fontSize(9).fillColor('#64748B').text('No hay ítems de producción para esta categoría en el período seleccionado.', 42, document.y + 12);
+    }
+    drawFooter(document, page);
   });
   document.end();
   return result;
