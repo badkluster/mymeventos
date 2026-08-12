@@ -1,14 +1,19 @@
 import PDFDocument from 'pdfkit';
 
+type EventBreakdown = {
+  planId: string; eventId?: string; eventName?: string; eventType?: string; customerName?: string; eventDate: string | Date;
+  plannedQuantity: number; completedQuantity: number;
+};
 type ConsolidatedItem = {
   productName: string; unit: string; plannedQuantity: number; completedQuantity: number; eventCount: number;
   availableQuantity: number; missingQuantity: number; toBuyQuantity: number; toProduceQuantity: number; pendingItems: number;
+  byEvent?: EventBreakdown[];
 };
-type ConsolidatedSection = { type: string; name: string; items: ConsolidatedItem[] };
+type ConsolidatedSection = { type: string; name: string; events?: EventBreakdown[]; items: ConsolidatedItem[] };
 
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 const escapeXml = (value: unknown) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const headers = ['Producto', 'Unidad', 'Eventos', 'Planificado', 'Completado', 'Disponible', 'Faltante', 'A comprar', 'A producir', 'Pendientes'];
+const summaryHeaders = ['Total', 'Completado', 'Disponible', 'Faltante', 'A comprar', 'A producir', 'Pendientes'];
 
 type SpreadsheetCell = { value: unknown; style?: string; type?: 'String' | 'Number'; mergeAcross?: number };
 
@@ -35,6 +40,8 @@ const excelStyles = `<Styles>
   <Style ss:ID="sMetricPercent"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><NumberFormat ss:Format="0.0%"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D8E1EC"/></Borders></Style>
   <Style ss:ID="sHeader"><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#172554"/></Borders></Style>
   <Style ss:ID="sText"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1F2937"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
+  <Style ss:ID="sEventNumber"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1E3A5F"/><Interior ss:Color="#F8FBFF" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#DCE8F5"/></Borders></Style>
+  <Style ss:ID="sEmpty"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#94A3B8"/><Interior ss:Color="#F8FBFF" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#DCE8F5"/></Borders></Style>
   <Style ss:ID="sNumber"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1F2937"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
   <Style ss:ID="sInteger"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1F2937"/><NumberFormat ss:Format="#,##0"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
   <Style ss:ID="sAttention"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#991B1B"/><Interior ss:Color="#FEF2F2" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FECACA"/></Borders></Style>
@@ -57,7 +64,22 @@ function sheetName(value: string, used: Set<string>) {
   return candidate;
 }
 
-function worksheet(name: string, items: ConsolidatedItem[], title: string, period: string, generatedAt: string) {
+function eventDateLabel(event: EventBreakdown) {
+  const date = new Date(event.eventDate);
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', day: '2-digit', month: '2-digit' }).format(date);
+}
+
+function eventLabel(event: EventBreakdown) {
+  const name = event.customerName || event.eventName || event.eventType || 'Evento';
+  const date = eventDateLabel(event);
+  return date ? `${name}\n${date}` : name;
+}
+
+function sortedEvents(events: EventBreakdown[]) {
+  return [...events].sort((left, right) => new Date(left.eventDate).getTime() - new Date(right.eventDate).getTime());
+}
+
+function worksheet(name: string, items: ConsolidatedItem[], events: EventBreakdown[], title: string, period: string, generatedAt: string) {
   const totals = items.reduce((sum, item) => ({
     planned: sum.planned + item.plannedQuantity,
     completed: sum.completed + item.completedQuantity,
@@ -69,13 +91,17 @@ function worksheet(name: string, items: ConsolidatedItem[], title: string, perio
   }), { planned: 0, completed: 0, available: 0, missing: 0, toBuy: 0, toProduce: 0, pending: 0 });
   const progress = totals.planned > 0 ? totals.completed / totals.planned : 0;
   const productsWithActions = items.filter((item) => item.missingQuantity > 0 || item.toBuyQuantity > 0 || item.toProduceQuantity > 0 || item.pendingItems > 0).length;
+  const headers = ['Producto', 'Unidad', 'Eventos', ...events.map(eventLabel), ...summaryHeaders];
+  const columnCount = headers.length;
+  const eventTotals = new Map(events.map((event) => [event.planId, 0]));
+  items.forEach((item) => (item.byEvent ?? []).forEach((event) => eventTotals.set(event.planId, (eventTotals.get(event.planId) ?? 0) + event.plannedQuantity)));
   const firstDataRow = 9;
   const lastDataRow = firstDataRow + items.length - 1;
   const totalRow = firstDataRow + items.length;
   const data = [
-    row([{ value: title, style: 'sTitle', mergeAcross: 9 }], 32),
-    row([{ value: `${name} · Período: ${period} · Generado: ${generatedAt}`, style: 'sSubtitle', mergeAcross: 9 }], 21),
-    row([{ value: 'Resumen operativo', style: 'sSection', mergeAcross: 9 }], 20),
+    row([{ value: title, style: 'sTitle', mergeAcross: columnCount - 1 }], 32),
+    row([{ value: `${name} · Período: ${period} · Generado: ${generatedAt}`, style: 'sSubtitle', mergeAcross: columnCount - 1 }], 21),
+    row([{ value: 'Resumen operativo', style: 'sSection', mergeAcross: columnCount - 1 }], 20),
     row([
       textCell('Productos', 'sMetricLabel'), numericCell(items.length, 'sMetricInteger'),
       textCell('Planificado', 'sMetricLabel'), numericCell(totals.planned, 'sMetricNumber'),
@@ -89,36 +115,46 @@ function worksheet(name: string, items: ConsolidatedItem[], title: string, perio
       textCell('Avance', 'sMetricLabel'), numericCell(progress, 'sMetricPercent'),
       textCell('Con acción', 'sMetricLabel'), numericCell(productsWithActions, 'sMetricInteger'),
     ], 21),
-    row([{ value: 'Las celdas resaltadas indican acciones que requieren seguimiento.', style: 'sSubtitle', mergeAcross: 9 }], 19),
+    row([{ value: 'Cada columna de cliente / evento replica las cantidades planificadas que se ven en Producción consolidada.', style: 'sSubtitle', mergeAcross: columnCount - 1 }], 19),
     row([], 8),
     row(headers.map((header) => textCell(header, 'sHeader')), 28),
-    ...items.map((item) => row([
-      textCell(item.productName),
-      textCell(item.unit),
-      numericCell(item.eventCount, 'sInteger'),
-      numericCell(item.plannedQuantity),
-      numericCell(item.completedQuantity),
-      numericCell(item.availableQuantity),
-      numericCell(item.missingQuantity, item.missingQuantity > 0 ? 'sAttention' : 'sNumber'),
-      numericCell(item.toBuyQuantity, item.toBuyQuantity > 0 ? 'sAction' : 'sNumber'),
-      numericCell(item.toProduceQuantity, item.toProduceQuantity > 0 ? 'sAction' : 'sNumber'),
-      numericCell(item.pendingItems, item.pendingItems > 0 ? 'sPending' : 'sInteger'),
-    ], 20)),
+    ...items.map((item) => {
+      const byPlanId = new Map((item.byEvent ?? []).map((event) => [event.planId, event]));
+      return row([
+        textCell(item.productName),
+        textCell(item.unit),
+        numericCell(item.eventCount, 'sInteger'),
+        ...events.map((event) => {
+          const detail = byPlanId.get(event.planId);
+          return detail ? numericCell(detail.plannedQuantity, 'sEventNumber') : textCell('—', 'sEmpty');
+        }),
+        numericCell(item.plannedQuantity),
+        numericCell(item.completedQuantity),
+        numericCell(item.availableQuantity),
+        numericCell(item.missingQuantity, item.missingQuantity > 0 ? 'sAttention' : 'sNumber'),
+        numericCell(item.toBuyQuantity, item.toBuyQuantity > 0 ? 'sAction' : 'sNumber'),
+        numericCell(item.toProduceQuantity, item.toProduceQuantity > 0 ? 'sAction' : 'sNumber'),
+        numericCell(item.pendingItems, item.pendingItems > 0 ? 'sPending' : 'sInteger'),
+      ], 20);
+    }),
     row([
       textCell('Total', 'sTotalLabel'), textCell('', 'sTotalLabel'), numericCell(items.reduce((sum, item) => sum + item.eventCount, 0), 'sTotalInteger'),
+      ...events.map((event) => numericCell(eventTotals.get(event.planId) ?? 0, 'sTotalNumber')),
       numericCell(totals.planned, 'sTotalNumber'), numericCell(totals.completed, 'sTotalNumber'), numericCell(totals.available, 'sTotalNumber'),
       numericCell(totals.missing, 'sTotalNumber'), numericCell(totals.toBuy, 'sTotalNumber'), numericCell(totals.toProduce, 'sTotalNumber'), numericCell(totals.pending, 'sTotalInteger'),
     ], 22),
   ];
-  const filter = items.length ? `<AutoFilter x:Range="R8C1:R${lastDataRow}C10"/>` : '';
-  return `<Worksheet ss:Name="${escapeXml(name)}"><Table ss:ExpandedColumnCount="10" ss:ExpandedRowCount="${totalRow}"><Column ss:Width="205"/><Column ss:Width="72"/><Column ss:Width="62"/><Column ss:Width="84"/><Column ss:Width="88"/><Column ss:Width="84"/><Column ss:Width="84"/><Column ss:Width="84"/><Column ss:Width="88"/><Column ss:Width="76"/>${data.join('')}</Table>${filter}<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>7</SplitHorizontal><TopRowBottomPane>7</TopRowBottomPane><ActivePane>2</ActivePane><PageSetup><Layout x:Orientation="Landscape"/><PageMargins x:Bottom="0.4" x:Left="0.25" x:Right="0.25" x:Top="0.45"/></PageSetup><FitToPage/><Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight><ValidPrinterInfo/></Print><ProtectObjects>False</ProtectObjects><ProtectScenarios>False</ProtectScenarios></WorksheetOptions></Worksheet>`;
+  const filter = items.length ? `<AutoFilter x:Range="R8C1:R${lastDataRow}C${columnCount}"/>` : '';
+  const columns = ['<Column ss:Width="205"/>', '<Column ss:Width="72"/>', '<Column ss:Width="62"/>', ...events.map(() => '<Column ss:Width="102"/>'), ...summaryHeaders.map((_, index) => `<Column ss:Width="${index === 0 ? 88 : index === 6 ? 76 : 84}"/>`)];
+  return `<Worksheet ss:Name="${escapeXml(name)}"><Table ss:ExpandedColumnCount="${columnCount}" ss:ExpandedRowCount="${totalRow}">${columns.join('')}${data.join('')}</Table>${filter}<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>7</SplitHorizontal><TopRowBottomPane>7</TopRowBottomPane><ActivePane>2</ActivePane><PageSetup><Layout x:Orientation="Landscape"/><PageMargins x:Bottom="0.4" x:Left="0.25" x:Right="0.25" x:Top="0.45"/></PageSetup><FitToPage/><Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight><ValidPrinterInfo/></Print><ProtectObjects>False</ProtectObjects><ProtectScenarios>False</ProtectScenarios></WorksheetOptions></Worksheet>`;
 }
 
 export function consolidatedProductionExcel(sections: ConsolidatedSection[], title: string, period = 'Período seleccionado') {
   const used = new Set<string>();
   const totalItems = sections.flatMap((section) => section.items);
+  const totalEvents = sortedEvents([...new Map(sections.flatMap((section) => (section.events ?? []).map((event) => [event.planId, event]))).values()]);
   const generatedAt = new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
-  const sheets = [worksheet(sheetName('Total consolidado', used), totalItems, title, period, generatedAt), ...sections.map((section) => worksheet(sheetName(section.name, used), section.items, title, period, generatedAt))];
+  const sheets = [worksheet(sheetName('Total consolidado', used), totalItems, totalEvents, title, period, generatedAt), ...sections.map((section) => worksheet(sheetName(section.name, used), section.items, sortedEvents(section.events ?? []), title, period, generatedAt))];
   return `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><DocumentProperties xmlns="urn:schemas-microsoft-com:office:office"><Title>${escapeXml(title)}</Title><Author>M&amp;M Eventos</Author><Company>M&amp;M Eventos</Company></DocumentProperties>${excelStyles}${sheets.join('')}</Workbook>`;
 }
 
@@ -283,6 +319,53 @@ function drawProductionRow(document: PDFKit.PDFDocument, item: ConsolidatedItem,
   document.y = y + 21;
 }
 
+function eventGroups(events: EventBreakdown[], size = 5): EventBreakdown[][] {
+  const groups: EventBreakdown[][] = [];
+  for (let index = 0; index < events.length; index += size) groups.push(events.slice(index, index + size));
+  return groups;
+}
+
+function drawEventDetailHeader(document: PDFKit.PDFDocument, section: ConsolidatedSection, events: EventBreakdown[], groupIndex: number, groupCount: number) {
+  const contextY = document.y;
+  document.roundedRect(42, contextY, document.page.width - 84, 28, 5).fill('#EAF0F8');
+  document.font('Helvetica-Bold').fontSize(9.5).fillColor('#1E3A5F').text('Detalle por cliente / evento', 53, contextY + 10);
+  document.font('Helvetica').fontSize(7.5).fillColor('#475569').text(`${section.name} · Eventos ${groupIndex + 1}–${groupIndex + events.length} de ${groupCount}`, 380, contextY + 10, { width: 409, align: 'right', ellipsis: true });
+
+  const productWidth = 175;
+  const unitWidth = 55;
+  const totalWidth = 68;
+  const eventWidth = (document.page.width - 84 - productWidth - unitWidth - totalWidth) / events.length;
+  const columns = {
+    product: { x: 42, width: productWidth },
+    unit: { x: 42 + productWidth, width: unitWidth },
+    events: events.map((event, index) => ({ event, x: 42 + productWidth + unitWidth + index * eventWidth, width: eventWidth })),
+    total: { x: document.page.width - 42 - totalWidth, width: totalWidth },
+  };
+  const y = contextY + 40;
+  document.roundedRect(42, y, document.page.width - 84, 34, 4).fill('#1E3A5F');
+  document.font('Helvetica-Bold').fontSize(6.4).fillColor('#FFFFFF').text('PRODUCTO', columns.product.x + 5, y + 13, { width: columns.product.width - 10 });
+  document.text('UNIDAD', columns.unit.x + 5, y + 13, { width: columns.unit.width - 10 });
+  columns.events.forEach((column) => document.text(eventLabel(column.event), column.x + 4, y + 6, { width: column.width - 8, align: 'center', ellipsis: true }));
+  document.text('TOTAL', columns.total.x + 4, y + 13, { width: columns.total.width - 8, align: 'right' });
+  document.y = y + 41;
+  return columns;
+}
+
+function drawEventDetailRow(document: PDFKit.PDFDocument, item: ConsolidatedItem, index: number, columns: ReturnType<typeof drawEventDetailHeader>) {
+  const y = document.y;
+  if (index % 2 === 0) document.rect(42, y - 3, document.page.width - 84, 21).fill('#F8FAFC');
+  const byPlanId = new Map((item.byEvent ?? []).map((event) => [event.planId, event]));
+  document.font('Helvetica-Bold').fontSize(7.4).fillColor('#334155').text(item.productName, columns.product.x + 5, y + 3, { width: columns.product.width - 10, ellipsis: true });
+  document.font('Helvetica').fontSize(7.1).fillColor('#64748B').text(item.unit, columns.unit.x + 5, y + 3, { width: columns.unit.width - 10, ellipsis: true });
+  columns.events.forEach((column) => {
+    const event = byPlanId.get(column.event.planId);
+    document.font('Helvetica').fontSize(7.3).fillColor(event ? '#1E3A5F' : '#94A3B8').text(event ? number.format(event.plannedQuantity) : '—', column.x + 4, y + 3, { width: column.width - 8, align: 'right' });
+  });
+  document.font('Helvetica-Bold').fontSize(7.3).fillColor('#0F172A').text(number.format(item.plannedQuantity), columns.total.x + 4, y + 3, { width: columns.total.width - 8, align: 'right' });
+  document.moveTo(42, y + 18).lineTo(document.page.width - 42, y + 18).strokeColor('#E2E8F0').lineWidth(.35).stroke();
+  document.y = y + 21;
+}
+
 export async function consolidatedProductionPdf(sections: ConsolidatedSection[], title: string, period: string) {
   const document = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 0, info: { Title: title, Author: 'M&M Eventos' } });
   const result = collect(document);
@@ -317,6 +400,23 @@ export async function consolidatedProductionPdf(sections: ConsolidatedSection[],
       document.font('Helvetica').fontSize(9).fillColor('#64748B').text('No hay ítems de producción para esta categoría en el período seleccionado.', 42, document.y + 12);
     }
     drawFooter(document, page);
+
+    const groups = eventGroups(sortedEvents(section.events ?? []));
+    groups.forEach((events, groupIndex) => {
+      let itemIndex = 0;
+      do {
+        document.addPage();
+        page += 1;
+        drawHeader(document, title, `${period} · ${section.name} · Detalle por cliente / evento${itemIndex ? ' (continuación)' : ''}`);
+        const columns = drawEventDetailHeader(document, section, events, groupIndex * 5, (section.events ?? []).length);
+        if (!section.items.length) document.font('Helvetica').fontSize(9).fillColor('#64748B').text('No hay ítems de producción para mostrar.', 42, document.y + 12);
+        while (itemIndex < section.items.length && document.y + 22 <= bottom) {
+          drawEventDetailRow(document, section.items[itemIndex], itemIndex, columns);
+          itemIndex += 1;
+        }
+        drawFooter(document, page);
+      } while (itemIndex < section.items.length);
+    });
   });
   document.end();
   return result;

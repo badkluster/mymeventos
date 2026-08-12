@@ -120,8 +120,13 @@ router.post('/profiles', anyPayrollProfiles(), validateRequest(z.object({ body: 
 }));
 router.patch('/profiles/:id', anyPayrollProfiles(), validateRequest(z.object({ body: profileUpdateBody.refine((value) => Object.keys(value).length > 0), params: z.object({ id: ObjectIdSchema }), query: z.object({}) })), asyncHandler(async (request, response) => {
   const result = await payrollService.updatePayrollProfile(actor(request), request.params.id, request.body);
-  await writeAuditLog(request, 'PAYROLL_PROFILE_VERSION_CREATE', 'PayrollProfile', String(result.profile._id), { supersedesProfileId: request.params.id, before: result.previous, after: result.profile.toObject?.() ?? result.profile, changes: request.body });
+  await writeAuditLog(request, result.versioned ? 'PAYROLL_PROFILE_VERSION_CREATE' : 'PAYROLL_PROFILE_UPDATE', 'PayrollProfile', String(result.profile._id), { supersedesProfileId: result.versioned ? request.params.id : undefined, before: result.previous, after: result.profile.toObject?.() ?? result.profile, changes: request.body });
   return sendSuccess(response, { profile: result.profile });
+}));
+router.delete('/profiles/:id', anyPayrollProfiles(), validateRequest(idParam), asyncHandler(async (request, response) => {
+  const result = await payrollService.deletePayrollProfile(actor(request), request.params.id);
+  await writeAuditLog(request, result.deactivated ? 'PAYROLL_PROFILE_DEACTIVATE' : 'PAYROLL_PROFILE_DELETE', 'PayrollProfile', request.params.id, { before: result.previous, deleted: result.deleted, deactivated: result.deactivated });
+  return sendSuccess(response, { deleted: result.deleted, deactivated: result.deactivated });
 }));
 
 router.get('/attendance', anyPayrollView(), validateRequest(z.object({ body: bodyEmpty, params: z.object({}), query: z.object({ employeeId: ObjectIdSchema.optional(), salonId: ObjectIdSchema.optional(), eventId: ObjectIdSchema.optional(), status: z.enum(['pending', 'approved', 'rejected']).optional(), incomplete: z.enum(['true', 'false']).optional(), observed: z.enum(['true', 'false']).optional(), ...dateRange, ...pagination }) })), asyncHandler(async (request, response) => {

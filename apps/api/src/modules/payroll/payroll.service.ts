@@ -243,10 +243,55 @@ export async function updatePayrollProfile(actor: PayrollActor, id: string, inpu
   const current: any = await PayrollProfile.findById(id);
   if (!current) throw new ApiError(404, 'PAYROLL_PROFILE_NOT_FOUND');
   await assertEmployeeInScope(actor, String(current.employeeId));
-  if (!current.isActive) throw new ApiError(409, 'PAYROLL_PROFILE_HISTORICAL_LOCKED');
   const previous = profileSnapshot(current);
+  const next = { ...plain(current), ...input, employeeId: String(current.employeeId), effectiveFrom: input.effectiveFrom ?? current.effectiveFrom, effectiveTo: input.effectiveTo ?? current.effectiveTo };
+  validateProfileInput(next);
+  const { start, end } = normalizePayrollPeriod(new Date(next.effectiveFrom), new Date(next.effectiveTo ?? next.effectiveFrom));
+  const usedInSettlement = await PayrollSettlement.exists({ 'payrollProfileSnapshot.profileId': String(current._id) });
+
+  if (!usedInSettlement) {
+    const overlappingProfile = await PayrollProfile.exists({
+      _id: { $ne: current._id },
+      employeeId: current.employeeId,
+      effectiveFrom: { $lte: end },
+      $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }],
+    });
+    if (overlappingProfile) throw new ApiError(409, 'PAYROLL_PROFILE_EFFECTIVE_CONFLICT');
+    Object.assign(current, {
+      ...input,
+      currency: String(next.currency ?? 'ARS').toUpperCase(),
+      effectiveFrom: start,
+      effectiveTo: input.effectiveTo ? end : current.effectiveTo,
+      salonIds: input.salonIds === undefined ? current.salonIds : ids(input.salonIds),
+      updatedBy: actor.id,
+    });
+    await current.save();
+    return { profile: current, previous, versioned: false };
+  }
+
+  if (!current.isActive) throw new ApiError(409, 'PAYROLL_PROFILE_HISTORICAL_LOCKED');
   const profile = await createPayrollProfile(actor, { ...plain(current), ...input, employeeId: String(current.employeeId), effectiveFrom: input.effectiveFrom ?? new Date() });
-  return { profile, previous };
+  return { profile, previous, versioned: true };
+}
+
+export async function deletePayrollProfile(actor: PayrollActor, id: string): Promise<{ deleted: boolean; deactivated: boolean; previous: any }> {
+  const current: any = await PayrollProfile.findById(id);
+  if (!current) throw new ApiError(404, 'PAYROLL_PROFILE_NOT_FOUND');
+  await assertEmployeeInScope(actor, String(current.employeeId));
+  const previous = profileSnapshot(current);
+  const usedInSettlement = await PayrollSettlement.exists({ 'payrollProfileSnapshot.profileId': String(current._id) });
+
+  if (!usedInSettlement) {
+    await current.deleteOne();
+    return { deleted: true, deactivated: false, previous };
+  }
+  if (!current.isActive) throw new ApiError(409, 'PAYROLL_PROFILE_HISTORICAL_LOCKED');
+
+  current.isActive = false;
+  current.effectiveTo = new Date();
+  current.updatedBy = actor.id;
+  await current.save();
+  return { deleted: false, deactivated: true, previous };
 }
 
 export async function listPayrollAttendance(actor: PayrollActor, filters: any) {
