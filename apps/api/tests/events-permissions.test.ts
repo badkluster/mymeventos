@@ -5,8 +5,13 @@ import { generateAccessToken } from '../src/utils/tokens';
 
 const mocks = vi.hoisted(() => ({
   userFindOne: vi.fn(),
+  salonFindOne: vi.fn(),
+  packageFindOne: vi.fn(),
+  ruleFindOne: vi.fn(),
+  customerFindOne: vi.fn(),
   eventFindOne: vi.fn(),
   eventFind: vi.fn(),
+  eventCreate: vi.fn(),
   tablewareDeleteMany: vi.fn(),
   writeAuditLog: vi.fn(),
   syncEventSupplierExpenses: vi.fn(),
@@ -21,15 +26,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne, find: vi.fn() } }));
-vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: vi.fn(), exists: vi.fn(), find: vi.fn() } }));
+vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: vi.fn(), exists: vi.fn(), find: vi.fn(), findOne: mocks.salonFindOne } }));
 vi.mock('../src/modules/salons/salonStockItem.model', () => ({ SalonStockItem: { find: mocks.salonStockFind }, salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'] }));
 vi.mock('../src/modules/crm/eventTablewareAllocation.model', () => ({ EventTablewareAllocation: { find: mocks.tablewareFind, deleteMany: mocks.tablewareDeleteMany, insertMany: mocks.tablewareInsertMany } }));
 vi.mock('../src/modules/crm/crm.models', () => ({
-  Lead: {}, LeadActivity: { create: vi.fn() }, Customer: { findOne: vi.fn() }, ContactPerson: {},
-  PackageTemplate: { find: vi.fn(), findOne: vi.fn(), exists: vi.fn() },
-  VenuePackageRule: { find: vi.fn(), findOne: vi.fn(), findOneAndUpdate: vi.fn() },
+  Lead: {}, LeadActivity: { create: vi.fn() }, Customer: { findOne: mocks.customerFindOne }, ContactPerson: {},
+  PackageTemplate: { find: vi.fn(), findOne: mocks.packageFindOne, exists: vi.fn() },
+  VenuePackageRule: { find: vi.fn(), findOne: mocks.ruleFindOne, findOneAndUpdate: vi.fn() },
   Quote: { findOne: vi.fn() }, QuoteRevision: {},
-  Event: { findOne: mocks.eventFindOne, find: mocks.eventFind },
+  Event: { findOne: mocks.eventFindOne, find: mocks.eventFind, create: mocks.eventCreate },
   EventStaffAssignment: { find: vi.fn(), findOne: mocks.staffAssignmentFindOne, exists: mocks.staffAssignmentExists, create: mocks.staffAssignmentCreate },
   CalendarItem: { findOneAndUpdate: vi.fn(), updateMany: vi.fn().mockResolvedValue({}) },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
@@ -55,6 +60,39 @@ function chainLean(value: unknown) {
 function queryChain(value: unknown) {
   return { select: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
 }
+function populatedQuery(value: unknown) {
+  return { populate: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
+}
+
+describe('manual event creation from a package', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+  });
+
+  it('applies the applicable salon package while retaining the event-specific data', async () => {
+    const templateId = '507f1f77bcf86cd799439015';
+    const customer = { _id: '507f1f77bcf86cd799439016', salonIds: [salonId], fullName: 'Ana Pérez', phone: '1112345678', email: 'ana@example.com' };
+    const event = { _id: eventId, eventName: 'Cumple de Ana', resourcePlanSnapshot: {} };
+    mocks.salonFindOne.mockReturnValue(chainLean({ _id: salonId, active: true }));
+    mocks.customerFindOne.mockResolvedValue(customer);
+    mocks.packageFindOne.mockReturnValue(chainLean({ _id: templateId, name: 'Celebración clásica', isGlobal: true, pricingMode: 'per_person', pricePerPerson: 25000, finalPricePerPerson: 22000, depositAmount: 50000, startTime: '21:00', endTime: '05:00', menuSections: [{ title: 'Menú', items: ['Entrada'] }], includedServices: ['DJ'] }));
+    mocks.ruleFindOne.mockReturnValue(chainLean({ packageTemplateId: templateId, salonId, active: true, name: 'Clásico Salón Norte', paymentTerms: 'Saldo 7 días antes.' }));
+    mocks.eventCreate.mockResolvedValue(event);
+    mocks.eventFindOne.mockReturnValue(populatedQuery({ ...event, customerId: customer, salonId: { _id: salonId, name: 'Salón Norte' } }));
+
+    const response = await request(app).post('/api/events').set('Cookie', adminCookie).send({ salonId, customerId: customer._id, packageTemplateId: templateId, eventName: 'Cumple de Ana', eventType: 'Cumpleaños', eventDate: '2026-12-05', guestCount: 80 });
+
+    expect(response.status).toBe(201);
+    expect(mocks.eventCreate).toHaveBeenCalledWith(expect.objectContaining({
+      packageTemplateId: templateId,
+      quoteMode: 'PACKAGE',
+      menuSnapshot: [{ title: 'Menú', items: ['Entrada'] }],
+      servicesSnapshot: ['DJ'],
+      commercialSnapshot: expect.objectContaining({ packageName: 'Clásico Salón Norte', finalPricePerPerson: 22000, totalAmount: 1760000, paymentTerms: 'Saldo 7 días antes.' })
+    }));
+  });
+});
 
 describe('event cancellation permissions and reason', () => {
   beforeEach(() => {

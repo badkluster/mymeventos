@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { PackageCheck, PencilLine, Plus, Trash2 } from 'lucide-react';
 import { cleanMenuSections, cleanStringList, MenuSectionsEditor, StringListEditor, type MenuSectionValue } from '@/components/admin/structured-list-editors';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
 import { createDefaultResourcePlan } from '@/features/events/event-operations';
-import type { Customer, Event, EventResourcePlan, EventTimelineItem, Quote, Salon } from '@/features/quotes/types';
+import type { Customer, Event, EventResourcePlan, EventTimelineItem, PackageTemplate, Quote, Salon } from '@/features/quotes/types';
 
 type CreateResponse = { event?: Event; contractCreated?: boolean; contractError?: string };
 type Props = { open: boolean; salons: Salon[]; onClose: () => void; onCreated: (eventId: string, message?: string) => void; onError: (message: string) => void };
@@ -17,6 +17,7 @@ const emptyForm = {
   quoteId: '',
   customerId: '',
   salonId: '',
+  packageTemplateId: '',
   eventName: '',
   eventType: '',
   eventDate: '',
@@ -46,6 +47,8 @@ const emptyForm = {
   createContract: false
 };
 
+type ApplicablePackage = PackageTemplate & { packageTemplateId?: string; packageName?: string; active?: boolean; notes?: string };
+
 function numberOrUndefined(value: string): number | undefined {
   if (value === '') return undefined;
   const parsed = Number(value);
@@ -70,12 +73,19 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
   const [form, setForm] = useState(emptyForm);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [packages, setPackages] = useState<ApplicablePackage[]>([]);
+  const [packagesSalonId, setPackagesSalonId] = useState('');
+  const [packageMode, setPackageMode] = useState<'manual' | 'package'>('manual');
+  const [loadingPackages, setLoadingPackages] = useState(false);
+  const [packagesError, setPackagesError] = useState('');
   const [menuSections, setMenuSections] = useState<MenuSectionValue[]>([{ title: 'Menú', items: [] }]);
   const [services, setServices] = useState<string[]>([]);
   const [resourcePlan, setResourcePlan] = useState<EventResourcePlan>(() => defaultPlan());
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const selectedQuote = useMemo(() => quotes.find((quote) => quote._id === form.quoteId), [form.quoteId, quotes]);
+  const availablePackages = useMemo(() => packagesSalonId === form.salonId ? packages : [], [form.salonId, packages, packagesSalonId]);
+  const selectedPackage = useMemo(() => availablePackages.find((item) => item._id === form.packageTemplateId), [availablePackages, form.packageTemplateId]);
 
   useEffect(() => {
     if (!open) return;
@@ -90,7 +100,59 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
     }).finally(() => setLoadingOptions(false));
   }, [open, onError]);
 
+  useEffect(() => {
+    if (!open || !form.salonId || form.sourceMode !== 'direct') {
+      return;
+    }
+    let cancelled = false;
+    const salonId = form.salonId;
+    void Promise.resolve().then(async () => {
+      setLoadingPackages(true);
+      setPackagesError('');
+      try {
+        const response = await api.get<{ packageRules?: ApplicablePackage[] }>(`/salons/${salonId}/package-rules`);
+        if (cancelled) return;
+        setPackages((response.packageRules ?? []).filter((item) => item.active !== false).map((item) => ({ ...item, _id: item.packageTemplateId || item._id, name: item.packageName || item.name })));
+        setPackagesSalonId(salonId);
+      } catch (error) {
+        if (!cancelled) setPackagesError(error instanceof Error ? error.message : 'No se pudieron cargar los paquetes del salón.');
+      } finally {
+        if (!cancelled) setLoadingPackages(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [open, form.salonId, form.sourceMode]);
+
   const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
+  const selectSalon = (salonId: string) => {
+    setForm((current) => ({ ...current, salonId, packageTemplateId: '', packageName: '' }));
+    setPackageMode('manual');
+  };
+  const chooseManualLoad = () => {
+    setPackageMode('manual');
+    setForm((current) => ({ ...current, packageTemplateId: '', packageName: '' }));
+  };
+  const applyPackage = (packageId: string) => {
+    const selected = availablePackages.find((item) => item._id === packageId);
+    if (!selected) return;
+    const pricingMode = selected.pricingMode ?? 'fixed';
+    const pricePerPerson = selected.finalPricePerPerson ?? selected.pricePerPerson;
+    const fixedPrice = selected.finalFixedPrice ?? selected.fixedPrice;
+    setForm((current) => ({
+      ...current,
+      packageTemplateId: selected._id,
+      packageName: selected.name,
+      pricingMode,
+      startTime: selected.startTime ?? current.startTime,
+      endTime: selected.endTime ?? current.endTime,
+      pricePerPerson: pricePerPerson === undefined ? '' : String(pricePerPerson),
+      finalAmount: fixedPrice === undefined ? '' : String(fixedPrice),
+      depositAmount: selected.depositAmount === undefined ? '' : String(selected.depositAmount),
+      paymentTerms: selected.paymentTerms ?? current.paymentTerms
+    }));
+    setMenuSections((selected.menuSections ?? []).map((section) => ({ title: section.title ?? section.name ?? 'Menú', items: section.items ?? [] })));
+    setServices(selected.includedServices ?? []);
+  };
   const updateTimeline = (index: number, changes: Partial<EventTimelineItem>) => setResourcePlan((current) => {
     const items = current.timelineItems ?? [];
     return { ...current, timelineItems: items.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item) };
@@ -114,6 +176,7 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
         resourcePlanSnapshot: plan
       } : {
         salonId: form.salonId,
+        packageTemplateId: form.packageTemplateId || undefined,
         customerId: form.customerMode === 'existing' ? form.customerId : undefined,
         customer: form.customerMode === 'new' ? {
           fullName: form.customerFullName,
@@ -178,9 +241,17 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
         <Field label="Nombre de evento opcional"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} placeholder="Si querés sobrescribir el nombre generado" /></Field>
       </section> : <section className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Salón"><Select value={form.salonId} onChange={(event) => set('salonId', event.target.value)}><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field>
+          <Field label="Salón"><Select value={form.salonId} onChange={(event) => selectSalon(event.target.value)}><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field>
           <Field label="Cliente"><Select value={form.customerMode} onChange={(event) => set('customerMode', event.target.value)}><option value="new">Crear cliente nuevo</option><option value="existing">Usar cliente existente</option></Select></Field>
         </div>
+        {form.salonId ? <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+          <div><h3 className="text-sm font-semibold text-zinc-950">¿Cómo querés iniciar la carga?</h3><p className="mt-1 text-sm text-foreground/75">Elegí un paquete disponible para este salón y revisá sus datos, o completá el evento de forma manual.</p></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button type="button" onClick={() => setPackageMode('package')} className={`rounded-xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-zinc-900/20 ${packageMode === 'package' ? 'border-zinc-950 bg-white shadow-sm' : 'border-zinc-200 bg-white hover:border-zinc-400'}`}><span className="flex items-center gap-2 font-medium text-zinc-950"><PackageCheck className="h-4 w-4" />Usar un paquete</span><span className="mt-1 block text-sm text-foreground/75">Precarga valores, menú, servicios y condiciones.</span></button>
+            <button type="button" onClick={chooseManualLoad} className={`rounded-xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-zinc-900/20 ${packageMode === 'manual' ? 'border-zinc-950 bg-white shadow-sm' : 'border-zinc-200 bg-white hover:border-zinc-400'}`}><span className="flex items-center gap-2 font-medium text-zinc-950"><PencilLine className="h-4 w-4" />Carga manual</span><span className="mt-1 block text-sm text-foreground/75">Cargá cada dato a medida, como hasta ahora.</span></button>
+          </div>
+          {packageMode === 'package' ? <div className="space-y-2"><Field label="Paquete disponible"><Select value={form.packageTemplateId} disabled={loadingPackages || !availablePackages.length} onChange={(event) => applyPackage(event.target.value)}><option value="">{loadingPackages ? 'Cargando paquetes...' : availablePackages.length ? 'Seleccionar paquete' : 'No hay paquetes disponibles'}</option>{availablePackages.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</Select></Field>{packagesError ? <p className="text-sm text-red-700">No se pudieron cargar los paquetes: {packagesError}. Podés continuar con la carga manual.</p> : null}{!loadingPackages && !packagesError && !availablePackages.length ? <p className="text-sm text-foreground/75">Este salón no tiene paquetes activos. Podés continuar con la carga manual.</p> : null}{selectedPackage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><span className="font-medium">{selectedPackage.name}</span> aplicado. Podés ajustar los campos antes de crear el evento.</p> : null}</div> : null}
+        </section> : null}
         {form.customerMode === 'existing' ? <Field label="Cliente existente"><Select value={form.customerId} disabled={loadingOptions} onChange={(event) => set('customerId', event.target.value)}><option value="">Seleccionar cliente</option>{customers.map((customer) => <option key={customer._id} value={customer._id}>{customer.fullName || customer.phone || customer.email}</option>)}</Select></Field> : <div className="grid gap-4 md:grid-cols-2">
           <Field label="Nombre completo"><Input value={form.customerFullName} onChange={(event) => set('customerFullName', event.target.value)} /></Field>
           <Field label="Teléfono"><Input value={form.customerPhone} onChange={(event) => set('customerPhone', event.target.value)} /></Field>
@@ -221,7 +292,7 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
           <Input aria-label="Actividad" value={item.title} onChange={(event) => updateTimeline(index, { title: event.target.value })} />
           <Input aria-label="Área" placeholder="Área" value={item.area ?? ''} onChange={(event) => updateTimeline(index, { area: event.target.value })} />
           <Input aria-label="Responsable" placeholder="Responsable" value={item.owner ?? ''} onChange={(event) => updateTimeline(index, { owner: event.target.value })} />
-          <button type="button" aria-label="Quitar ítem" onClick={() => removeTimelineItem(index)} className="grid h-10 w-10 place-items-center rounded-lg text-zinc-500 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+          <button type="button" aria-label="Quitar ítem" onClick={() => removeTimelineItem(index)} className="grid h-10 w-10 place-items-center rounded-lg text-foreground/65 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-4 w-4" /></button>
           <Textarea aria-label="Notas" className="md:col-span-5" placeholder="Notas del cronograma" value={item.notes ?? ''} onChange={(event) => updateTimeline(index, { notes: event.target.value })} />
         </div>)}</div>
       </section>

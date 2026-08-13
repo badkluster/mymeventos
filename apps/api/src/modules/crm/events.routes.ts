@@ -2,7 +2,7 @@ import { Router, type Request } from 'express';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { Permission, Role, StaffSubrole } from '@mym/shared';
-import { Contract, Customer, Event, EventStaffAssignment, LeadActivity, Payment, Quote } from './crm.models';
+import { Contract, Customer, Event, EventStaffAssignment, LeadActivity, PackageTemplate, Payment, Quote, VenuePackageRule } from './crm.models';
 import { User } from '../users/user.model';
 import { Salon } from '../salons/salon.model';
 import { SalonStockItem } from '../salons/salonStockItem.model';
@@ -68,6 +68,7 @@ const createEventSchema = z.object({
     customer: newCustomerSchema.optional(),
     createContract: z.boolean().optional(),
     salonId: optionalObjectId,
+    packageTemplateId: optionalObjectId,
     eventType: z.string().trim().optional(),
     eventName: z.string().trim().optional(),
     eventDate: civilDateSchema.optional(),
@@ -415,7 +416,10 @@ function commercialSnapshotFromBody(body: any): Record<string, unknown> {
   const totalAmount = Number(body.finalAmount ?? body.estimatedAmount ?? (pricingMode === 'fixed' ? fixedTotal : perPersonTotal) ?? 0);
   const depositAmount = Number(body.depositAmount ?? 0);
   return {
+    packageTemplateId: body.packageTemplateId,
     packageName: body.packageName,
+    durationHours: body.durationHours,
+    discountPercentage: body.discountPercentage,
     pricingMode,
     startTime: body.startTime,
     endTime: body.endTime,
@@ -430,6 +434,44 @@ function commercialSnapshotFromBody(body: any): Record<string, unknown> {
     promotionText: body.promotionText,
     giftText: body.giftText
   };
+}
+
+const packageOverrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
+const packageEventOverrideKeys = ['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'packageName', 'pricingMode', 'pricePerPerson', 'finalPricePerPerson', 'fixedPrice', 'finalFixedPrice', 'estimatedAmount', 'finalAmount', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSnapshot', 'servicesSnapshot', 'resourcePlanSnapshot', 'notes'];
+
+async function getApplicablePackageForEvent(templateId: string, salonId: string): Promise<Record<string, any>> {
+  const template: any = await PackageTemplate.findOne({ _id: templateId, active: true, deletedAt: null }).lean();
+  if (!template || (!template.isGlobal && !(template.salonIds ?? []).some((id: { toString(): string }) => id.toString() === salonId))) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
+  const rule: any = await VenuePackageRule.findOne({ packageTemplateId: templateId, salonId, deletedAt: null }).lean();
+  if (rule && !rule.active) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
+  return { ...template, ...(rule ? pickDefined(rule, packageOverrideKeys) : {}), packageTemplateId: template._id.toString(), packageName: rule?.name ?? template.name, ruleConfigured: Boolean(rule) };
+}
+
+function applyPackageToEventBody(body: any, packageSnapshot: Record<string, any>): Record<string, any> {
+  const pricingMode = packageSnapshot.pricingMode ?? 'per_person';
+  const discountFactor = 1 - Number(packageSnapshot.discountPercentage ?? 0) / 100;
+  const pricePerPerson = packageSnapshot.finalPricePerPerson ?? (packageSnapshot.pricePerPerson === undefined ? undefined : Math.round(Number(packageSnapshot.pricePerPerson) * discountFactor));
+  const fixedPrice = packageSnapshot.finalFixedPrice ?? (packageSnapshot.fixedPrice === undefined ? undefined : Math.round(Number(packageSnapshot.fixedPrice) * discountFactor));
+  const packageDefaults = {
+    packageTemplateId: packageSnapshot.packageTemplateId,
+    packageName: packageSnapshot.packageName,
+    durationHours: packageSnapshot.durationHours,
+    pricingMode,
+    startTime: packageSnapshot.startTime,
+    endTime: packageSnapshot.endTime,
+    pricePerPerson,
+    finalPricePerPerson: pricePerPerson,
+    fixedPrice,
+    finalFixedPrice: fixedPrice,
+    depositAmount: packageSnapshot.depositAmount,
+    paymentTerms: packageSnapshot.paymentTerms,
+    promotionText: packageSnapshot.promotionText,
+    giftText: packageSnapshot.giftText,
+    menuSnapshot: packageSnapshot.menuSections,
+    servicesSnapshot: packageSnapshot.includedServices,
+    notes: packageSnapshot.notes
+  };
+  return { ...body, ...packageDefaults, ...pickDefined(body, packageEventOverrideKeys) };
 }
 
 function eventPatchFromCreateBody(body: any): Record<string, unknown> {
@@ -535,17 +577,20 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
 
   const salonId = cleanId(request.body.salonId)!;
   await ensureSalonAccess(request, salonId);
-  const customer = await resolveCustomerForEvent(request, request.body, salonId);
-  const commercialSnapshot = commercialSnapshotFromBody(request.body);
+  const selectedPackage = cleanId(request.body.packageTemplateId);
+  const packageSnapshot = selectedPackage ? await getApplicablePackageForEvent(selectedPackage, salonId) : undefined;
+  const eventBody = packageSnapshot ? applyPackageToEventBody(request.body, packageSnapshot) : request.body;
+  const customer = await resolveCustomerForEvent(request, eventBody, salonId);
+  const commercialSnapshot = commercialSnapshotFromBody(eventBody);
   const totalAmount = Number(commercialSnapshot.totalAmount ?? 0);
-  const resourcePlanSnapshot = request.body.resourcePlanSnapshot ?? buildInitialResourcePlan({ source: 'manual_event' });
+  const resourcePlanSnapshot = eventBody.resourcePlanSnapshot ?? buildInitialResourcePlan({ source: 'manual_event' });
   // Precarga alertas típicas (revisar invitados, coordinar reunión, etc.) solo cuando el
   // llamador no mandó su propio plan y ya sabemos la fecha del evento — el usuario sigue
   // pudiendo editarlas/borrarlas desde la pestaña "Tareas" igual que antes.
-  if (!request.body.resourcePlanSnapshot && request.body.eventDate) {
-    const derivedEventName = request.body.eventName || `${request.body.eventType || 'Evento'} - ${customer.fullName || 'Cliente'}`;
+  if (!eventBody.resourcePlanSnapshot && eventBody.eventDate) {
+    const derivedEventName = eventBody.eventName || `${eventBody.eventType || 'Evento'} - ${customer.fullName || 'Cliente'}`;
     resourcePlanSnapshot.alerts = buildDefaultEventAlerts({
-      eventDate: request.body.eventDate,
+      eventDate: eventBody.eventDate,
       customerName: customer.fullName,
       eventName: derivedEventName
     });
@@ -553,40 +598,42 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
   const event = await Event.create({
     customerId: customer._id,
     salonId,
-    ...eventPatchFromCreateBody(request.body),
-    eventName: request.body.eventName || `${request.body.eventType || 'Evento'} - ${customer.fullName || 'Cliente'}`,
-    quoteMode: 'CUSTOM',
+    ...eventPatchFromCreateBody(eventBody),
+    eventName: eventBody.eventName || `${eventBody.eventType || 'Evento'} - ${customer.fullName || 'Cliente'}`,
+    quoteMode: packageSnapshot ? 'PACKAGE' : 'CUSTOM',
+    packageTemplateId: packageSnapshot?.packageTemplateId,
     status: 'draft',
-    estimatedAmount: request.body.estimatedAmount ?? totalAmount,
-    finalAmount: request.body.finalAmount ?? totalAmount,
+    estimatedAmount: eventBody.estimatedAmount ?? totalAmount,
+    finalAmount: eventBody.finalAmount ?? totalAmount,
     commercialSnapshot,
-    menuSnapshot: request.body.menuSnapshot ?? [],
-    servicesSnapshot: request.body.servicesSnapshot ?? [],
+    packageSnapshot,
+    menuSnapshot: eventBody.menuSnapshot ?? [],
+    servicesSnapshot: eventBody.servicesSnapshot ?? [],
     resourcePlanSnapshot,
     paymentSnapshot: {
       depositAmount: commercialSnapshot.depositAmount,
       balanceAmount: commercialSnapshot.balanceAmount,
-      paymentTerms: request.body.paymentTerms
+      paymentTerms: eventBody.paymentTerms
     },
     contractReadyChecklist: {
       customerComplete: Boolean(customer.fullName && (customer.phone || customer.email)),
       document: Boolean(customer.documentNumber),
       address: Boolean(customer.address),
       salonDefined: true,
-      dateDefined: Boolean(request.body.eventDate),
-      timeDefined: Boolean(request.body.startTime && request.body.endTime),
-      guestCount: Boolean(request.body.guestCount),
+      dateDefined: Boolean(eventBody.eventDate),
+      timeDefined: Boolean(eventBody.startTime && eventBody.endTime),
+      guestCount: Boolean(eventBody.guestCount),
       totalPrice: Boolean(totalAmount),
-      deposit: Boolean(request.body.depositAmount),
-      paymentTerms: Boolean(request.body.paymentTerms),
-      menu: Boolean(request.body.menuSnapshot?.length),
-      includedServices: Boolean(request.body.servicesSnapshot?.length)
+      deposit: Boolean(eventBody.depositAmount),
+      paymentTerms: Boolean(eventBody.paymentTerms),
+      menu: Boolean(eventBody.menuSnapshot?.length),
+      includedServices: Boolean(eventBody.servicesSnapshot?.length)
     },
     createdBy: request.user!.id,
     updatedBy: request.user!.id
   });
   await LeadActivity.create({ customerId: customer._id, eventId: event._id, type: 'event_created', title: 'Evento creado', description: `Se creó el evento ${event.eventName}.`, createdBy: request.user!.id });
-  await writeAuditLog(request, 'EVENT_CREATE', 'Event', event._id.toString(), { customerId: customer._id.toString(), salonId });
+  await writeAuditLog(request, 'EVENT_CREATE', 'Event', event._id.toString(), { customerId: customer._id.toString(), salonId, packageTemplateId: packageSnapshot?.packageTemplateId });
   await syncEventAlertCalendarItems(event, event.resourcePlanSnapshot?.alerts, request.user!.id);
 
   let contract: any;
