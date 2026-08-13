@@ -67,6 +67,16 @@
           "backgroundColor": "#0B0B0F"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "appUpdates": {
+        "enabled": true,
+        "appStoreCountry": "AR"
+      },
+      "eas": {
+        "projectId": "8268a26a-bc2c-4377-846b-6c5f7a2f5757"
+      }
+    },
+    "owner": "badkluster"
   }
 }
