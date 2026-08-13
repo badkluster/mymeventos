@@ -11,7 +11,8 @@ import {
   PayrollProfile,
   PayrollRun,
   PayrollSettlement,
-  SalaryAdvance
+  SalaryAdvance,
+  ensurePayrollSettlementRunEmployeeIndex
 } from './payroll.models';
 import {
   calculateSettlement,
@@ -466,6 +467,7 @@ async function persistCalculation(settlement: any, profile: any, sessions: any[]
 
 export async function createIndividualSettlement(actor: PayrollActor, input: { employeeId: string; periodStart: Date; periodEnd: Date; paymentDate?: Date; eventId?: string; notes?: string }) {
   await assertEmployeeInScope(actor, input.employeeId);
+  await ensurePayrollSettlementRunEmployeeIndex();
   const { start, end, endExclusive } = normalizePayrollPeriod(input.periodStart, input.periodEnd);
   const duplicate = await PayrollSettlement.exists({ employeeId: input.employeeId, periodStart: start, periodEnd: end, status: { $ne: 'cancelled' } });
   if (duplicate) throw new ApiError(409, 'PAYROLL_SETTLEMENT_DUPLICATE');

@@ -10,6 +10,10 @@ export const PayrollPaymentStatuses = ['unpaid', 'paid'] as const;
 export const PayrollAttendanceStatuses = ['pending', 'approved', 'rejected'] as const;
 export const PaymentMethods = ['cash', 'bank_transfer', 'mercado_pago', 'card', 'other'] as const;
 
+const payrollSettlementRunEmployeeIndexName = 'payrollRunId_1_employeeId_1';
+const payrollSettlementRunEmployeeIndexKeys = { payrollRunId: 1, employeeId: 1 } as const;
+const payrollSettlementRunEmployeePartialFilter = { payrollRunId: { $type: 'objectId' } };
+
 const attachmentSchema = new Schema({
   url: { type: String, required: true },
   secureUrl: String,
@@ -153,8 +157,12 @@ payrollSettlementSchema.index({ employeeId: 1, periodStart: 1, periodEnd: 1, sta
 // index still indexes explicit null values, which would incorrectly allow only one
 // individual settlement per employee. Restrict this constraint to run settlements.
 payrollSettlementSchema.index(
-  { payrollRunId: 1, employeeId: 1 },
-  { unique: true, partialFilterExpression: { payrollRunId: { $type: 'objectId' } } }
+  payrollSettlementRunEmployeeIndexKeys,
+  {
+    name: payrollSettlementRunEmployeeIndexName,
+    unique: true,
+    partialFilterExpression: payrollSettlementRunEmployeePartialFilter
+  }
 );
 payrollSettlementSchema.index({ attendanceRecordIds: 1, status: 1 });
 
@@ -194,3 +202,81 @@ export const PayrollRun = models.PayrollRun || model('PayrollRun', payrollRunSch
 export const PayrollSettlement = models.PayrollSettlement || model('PayrollSettlement', payrollSettlementSchema);
 export const SalaryAdvance = models.SalaryAdvance || model('SalaryAdvance', salaryAdvanceSchema);
 export const PayrollAdjustment = models.PayrollAdjustment || model('PayrollAdjustment', payrollAdjustmentSchema);
+
+type PayrollSettlementIndexState = 'current' | 'migrated';
+
+let payrollSettlementRunEmployeeIndexPromise: Promise<PayrollSettlementIndexState> | null = null;
+
+function isRunEmployeeIndex(index: any): boolean {
+  return index?.key?.payrollRunId === 1
+    && index?.key?.employeeId === 1
+    && Object.keys(index.key).length === 2;
+}
+
+function isCurrentRunEmployeeIndex(index: any): boolean {
+  return isRunEmployeeIndex(index)
+    && index.unique === true
+    && index.partialFilterExpression?.payrollRunId?.$type === 'objectId';
+}
+
+async function repairPayrollSettlementRunEmployeeIndex(): Promise<PayrollSettlementIndexState> {
+  const database = PayrollSettlement.db.db;
+  if (!database) throw new Error('La conexión a la base de datos no está disponible.');
+
+  const collections = await database.listCollections({ name: PayrollSettlement.collection.name }, { nameOnly: true }).toArray();
+  if (!collections.length) {
+    await PayrollSettlement.collection.createIndex(payrollSettlementRunEmployeeIndexKeys, {
+      name: payrollSettlementRunEmployeeIndexName,
+      unique: true,
+      partialFilterExpression: payrollSettlementRunEmployeePartialFilter
+    });
+    return 'migrated';
+  }
+
+  const indexes: any[] = await PayrollSettlement.collection.indexes();
+  if (indexes.some(isCurrentRunEmployeeIndex)) return 'current';
+
+  const duplicateRuns = await PayrollSettlement.aggregate<{ count: number }>([
+    { $match: { payrollRunId: { $type: 'objectId' } } },
+    { $group: { _id: { payrollRunId: '$payrollRunId', employeeId: '$employeeId' }, count: { $sum: 1 } } },
+    { $match: { count: { $gt: 1 } } },
+    { $limit: 1 }
+  ]);
+  if (duplicateRuns.length) {
+    throw new Error('No se puede actualizar el índice: existen liquidaciones duplicadas dentro de un mismo lote.');
+  }
+
+  for (const legacyIndex of indexes.filter(isRunEmployeeIndex)) {
+    try {
+      await PayrollSettlement.collection.dropIndex(legacyIndex.name);
+    } catch (error: any) {
+      // Another serverless instance may have completed this repair first.
+      if (error?.code !== 27 && error?.codeName !== 'IndexNotFound') throw error;
+    }
+  }
+
+  try {
+    await PayrollSettlement.collection.createIndex(payrollSettlementRunEmployeeIndexKeys, {
+      name: payrollSettlementRunEmployeeIndexName,
+      unique: true,
+      partialFilterExpression: payrollSettlementRunEmployeePartialFilter
+    });
+  } catch (error) {
+    const refreshedIndexes: any[] = await PayrollSettlement.collection.indexes();
+    if (!refreshedIndexes.some(isCurrentRunEmployeeIndex)) throw error;
+  }
+  return 'migrated';
+}
+
+/** Ensures legacy deployments cannot keep blocking individual settlements with a null run ID. */
+export async function ensurePayrollSettlementRunEmployeeIndex(): Promise<PayrollSettlementIndexState> {
+  if (!payrollSettlementRunEmployeeIndexPromise) {
+    payrollSettlementRunEmployeeIndexPromise = repairPayrollSettlementRunEmployeeIndex();
+  }
+  try {
+    return await payrollSettlementRunEmployeeIndexPromise;
+  } catch (error) {
+    payrollSettlementRunEmployeeIndexPromise = null;
+    throw error;
+  }
+}
