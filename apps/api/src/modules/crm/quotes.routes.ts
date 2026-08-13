@@ -165,12 +165,13 @@ function calculateLineItems(lineItems: Array<Record<string, any>>): { lineItems:
   });
   return { lineItems: calculated, subtotalCost: calculated.reduce((sum, item) => sum + item.subtotalCost, 0), totalAmount: calculated.reduce((sum, item) => sum + item.totalPrice, 0) };
 }
-async function getApplicableTemplate(templateId: string, salonId: string, requireCommercialRule = false): Promise<Record<string, any>> {
+// Global template values are the commercial fallback. A venue rule is optional and
+// only overrides those values when the salon needs a different configuration.
+async function getApplicableTemplate(templateId: string, salonId: string): Promise<Record<string, any>> {
   const template: any = await PackageTemplate.findOne({ _id: templateId, active: true, deletedAt: null }).lean();
   if (!template || (!template.isGlobal && !(template.salonIds ?? []).some((id: { toString(): string }) => id.toString() === salonId))) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   const rule: any = await VenuePackageRule.findOne({ packageTemplateId: templateId, salonId, deletedAt: null }).lean();
   if (rule && !rule.active) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
-  if (requireCommercialRule && !rule) throw new ApiError(422, 'PACKAGE_RULE_NOT_CONFIGURED');
   const overrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
   return { ...template, ...(rule ? pickDefined(rule, overrideKeys) : {}), ruleConfigured: Boolean(rule) };
 }
@@ -367,7 +368,7 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
     const customerSalonIds = (customer.salonIds ?? []).map((id: { toString(): string }) => id.toString());
     if (customerSalonIds.length && !customerSalonIds.some((salonId: string) => salonIds.includes(salonId))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
   }
-  const templates: Array<Record<string, any>> = request.body.packageTemplateId ? await Promise.all(salonIds.map((salonId) => getApplicableTemplate(request.body.packageTemplateId!, salonId, true))) : salonIds.map(() => ({}));
+  const templates: Array<Record<string, any>> = request.body.packageTemplateId ? await Promise.all(salonIds.map((salonId) => getApplicableTemplate(request.body.packageTemplateId!, salonId))) : salonIds.map(() => ({}));
   if (!lead && !customer) {
     const result = await findOrCreateLead({
       contactName: request.body.contactName ?? `${request.body.firstName ?? ''} ${request.body.lastName ?? ''}`.trim(),
