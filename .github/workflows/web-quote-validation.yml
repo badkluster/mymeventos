@@ -1,0 +1,23 @@
+name: Web Quote Validation
+
+on:
+  push:
+    branches: ['fix/quote-manual-mode-rules-ux']
+
+jobs:
+  validate-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mym/shared run build
+      - run: pnpm --filter @mym/web run typecheck
+      - run: pnpm --filter @mym/web run build
