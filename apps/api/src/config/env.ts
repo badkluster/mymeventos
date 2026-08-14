@@ -23,6 +23,7 @@ const environmentSchema = z.object({
   COOKIE_SAME_SITE: sameSiteSchema.default('lax'),
   SMTP_HOST: z.string().optional(), SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_USER: z.string().optional(), SMTP_PASS: z.string().optional(), SMTP_FROM: z.string().optional(),
+  SUPPORT_EMAIL: z.string().email().optional(),
   EMAIL_NOTIFICATIONS_ENABLED: booleanSchema.default('false'),
   CLOUDINARY_CLOUD_NAME: z.string().optional(), CLOUDINARY_API_KEY: z.string().optional(), CLOUDINARY_API_SECRET: z.string().optional(), CLOUDINARY_URL: z.string().optional(),
   MERCADO_PAGO_ACCESS_TOKEN: z.string().optional(), MERCADO_PAGO_WEBHOOK_SECRET: z.string().optional(),

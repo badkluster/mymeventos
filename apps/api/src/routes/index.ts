@@ -39,6 +39,7 @@ import analyticsRoutes, { publicAnalyticsRoutes } from '../modules/analytics/ana
 import eventClosureRoutes from '../modules/event-closure/event-closure.routes';
 import payrollRoutes from '../modules/payroll/payroll.routes';
 import mobilePayrollRoutes from '../modules/payroll/mobile-payroll.routes';
+import publicSupportRoutes from '../modules/support/public-support.routes';
 
 const router = Router();
 
@@ -82,6 +83,7 @@ router.use('/mobile/schedule', mobileScheduleRoutes);
 router.use('/mobile/payroll', mobilePayrollRoutes);
 router.use('/public/analytics', publicRateLimit({ windowMs: 60_000, max: 120 }), publicAnalyticsRoutes);
 router.use('/public/invitations', publicRateLimit({ windowMs: 60_000, max: 30 }), publicInvitationRoutes);
+router.use('/public/support', publicRateLimit({ windowMs: 60_000, max: 10 }), publicSupportRoutes);
 router.use('/public', publicRateLimit({ windowMs: 60_000, max: 40 }), publicTicketRoutes);
 router.use('/public', publicRoutes);
 

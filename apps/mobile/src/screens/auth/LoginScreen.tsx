@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AmbientBackdrop } from '../../components/AmbientBackdrop';
@@ -9,6 +9,7 @@ import { AppTextInput } from '../../components/AppTextInput';
 import { PasswordInput } from '../../components/PasswordInput';
 import { useAuthStore } from '../../state/authStore';
 import { isBiometricSupported } from '../../lib/biometrics';
+import { PUBLIC_WEB_URL } from '../../config/environment';
 import { colors, radii, shadow, spacing, typography } from '../../theme/tokens';
 import type { AuthStackParamList } from '../../navigation/types';
 
@@ -54,6 +55,10 @@ export function LoginScreen({ navigation }: Props) {
     } finally {
       setBiometricBusy(false);
     }
+  }
+
+  function openPublicPage(path: string) {
+    void Linking.openURL(`${PUBLIC_WEB_URL}${path}`);
   }
 
   return (
@@ -111,7 +116,23 @@ export function LoginScreen({ navigation }: Props) {
         </AnimatedEntrance>
 
         <AnimatedEntrance delay={200} distance={12}>
-          <Text style={styles.footer}>El registro de nuevos usuarios lo gestiona tu administrador.</Text>
+          <View style={styles.footerBlock}>
+            <Text style={styles.footer}>El registro de nuevos usuarios lo gestiona tu administrador.</Text>
+            <View style={styles.legalLinks} accessibilityRole="none">
+              <Pressable onPress={() => openPublicPage('/privacidad')} accessibilityRole="link" accessibilityLabel="Abrir Política de Privacidad">
+                <Text style={styles.legalLink}>Privacidad</Text>
+              </Pressable>
+              <Pressable onPress={() => openPublicPage('/terminos')} accessibilityRole="link" accessibilityLabel="Abrir Términos y Condiciones">
+                <Text style={styles.legalLink}>Términos</Text>
+              </Pressable>
+              <Pressable onPress={() => openPublicPage('/privacidad#soporte')} accessibilityRole="link" accessibilityLabel="Solicitar soporte">
+                <Text style={styles.legalLink}>Soporte</Text>
+              </Pressable>
+              <Pressable onPress={() => openPublicPage('/privacidad#eliminar-cuenta')} accessibilityRole="link" accessibilityLabel="Solicitar eliminación de cuenta">
+                <Text style={styles.legalLink}>Eliminar cuenta</Text>
+              </Pressable>
+            </View>
+          </View>
         </AnimatedEntrance>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -137,5 +158,8 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerLabel: { ...typography.small, color: colors.textSubtle },
   forgot: { ...typography.small, color: colors.primarySoft, fontWeight: '700', textAlign: 'center' },
-  footer: { ...typography.caption, color: '#A9BAD0', textAlign: 'center', paddingHorizontal: spacing.lg }
+  footerBlock: { alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm },
+  footer: { ...typography.caption, color: '#A9BAD0', textAlign: 'center', paddingHorizontal: spacing.lg },
+  legalLinks: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: spacing.lg, rowGap: spacing.sm },
+  legalLink: { ...typography.caption, color: colors.primarySoft, fontWeight: '700', textDecorationLine: 'underline' },
 });

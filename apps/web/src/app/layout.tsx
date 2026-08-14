@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from '@/components/theme-provider';
 import { brandAssets } from '@/lib/brand-assets';
 import { AnalyticsTracker } from '@/components/analytics-tracker';
+import { LegalFooter } from '@/components/legal/legal-footer';
 
 const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-display', style: ['normal', 'italic'] });
 
@@ -34,7 +35,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`h-full antialiased ${fraunces.variable}`}
     >
-      <body className="min-h-full flex flex-col"><ThemeProvider>{children}<AnalyticsTracker /></ThemeProvider></body>
+      <body className="min-h-full flex flex-col"><ThemeProvider>{children}<LegalFooter /><AnalyticsTracker /></ThemeProvider></body>
     </html>
   );
 }

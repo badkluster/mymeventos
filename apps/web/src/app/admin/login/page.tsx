@@ -178,6 +178,13 @@ export default function LoginPage() {
               <Home className="h-4 w-4" />
               Volver a la página principal
             </Link>
+
+            <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-white/10 pt-4 text-xs text-zinc-500" aria-label="Información legal y soporte">
+              <Link href="/privacidad" className="transition hover:text-white">Privacidad</Link>
+              <Link href="/terminos" className="transition hover:text-white">Términos</Link>
+              <Link href="/privacidad#soporte" className="transition hover:text-white">Soporte</Link>
+              <Link href="/privacidad#eliminar-cuenta" className="transition hover:text-white">Eliminar cuenta</Link>
+            </nav>
           </div>
         </form>
       </section>
