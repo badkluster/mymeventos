@@ -1013,8 +1013,17 @@ function CalendarItemFormModal({ open, mode, form, salons, users, leads, custome
       <label className="text-sm font-medium text-zinc-700">Fecha<Input required type="date" className="mt-1.5" value={form.date} onChange={(event) => onChange((current) => ({ ...current, date: event.target.value }))} /></label>
       <label className="flex items-end gap-2 rounded-xl border border-zinc-200 px-3 py-2.5 text-sm font-medium text-zinc-700"><input type="checkbox" checked={form.allDay} onChange={(event) => onChange((current) => ({ ...current, allDay: event.target.checked }))} /> Todo el día</label>
       {!form.allDay ? <><label className="text-sm font-medium text-zinc-700">Inicio<Input type="time" className="mt-1.5" value={form.startTime} onChange={(event) => onChange((current) => ({ ...current, startTime: event.target.value }))} /></label><label className="text-sm font-medium text-zinc-700">Fin<Input type="time" className="mt-1.5" value={form.endTime} onChange={(event) => onChange((current) => ({ ...current, endTime: event.target.value }))} /></label></> : null}
-      <label className="text-sm font-medium text-zinc-700">Salón<Select className="mt-1.5" value={form.salonId} onChange={(event) => onChange((current) => ({ ...current, salonId: event.target.value }))}><option value="">General</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></label>
-      <label className="flex items-end gap-2 rounded-xl border border-zinc-200 px-3 py-2.5 text-sm font-medium text-zinc-700"><input type="checkbox" checked={form.notify} onChange={(event) => onChange((current) => ({ ...current, notify: event.target.checked }))} /> Preparar recordatorio</label>
+      <label className="text-sm font-medium text-zinc-700 md:col-span-2">Salón<Select className="mt-1.5" value={form.salonId} onChange={(event) => onChange((current) => ({ ...current, salonId: event.target.value }))}><option value="">General</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></label>
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 md:col-span-2">
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 bg-white px-4 py-3 text-sm font-medium text-zinc-800">
+          <input type="checkbox" checked={form.notify} onChange={(event) => onChange((current) => ({ ...current, notify: event.target.checked }))} />
+          <span>Preparar recordatorio</span>
+        </label>
+        {form.notify ? <div className="grid gap-4 border-t border-zinc-200 bg-zinc-50 p-4 md:grid-cols-2">
+          <label className="text-sm font-medium text-zinc-700">Avisar antes<Input type="number" min={1} className="mt-1.5 bg-white" value={form.offsetValue} onChange={(event) => onChange((current) => ({ ...current, offsetValue: Number(event.target.value) }))} /></label>
+          <label className="text-sm font-medium text-zinc-700">Unidad<Select className="mt-1.5 bg-white" value={form.offsetUnit} onChange={(event) => onChange((current) => ({ ...current, offsetUnit: event.target.value as CalendarForm['offsetUnit'] }))}><option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Días</option><option value="weeks">Semanas</option></Select></label>
+        </div> : null}
+      </div>
       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:col-span-2">
         <p className="text-sm font-semibold text-zinc-950">Vínculos rápidos</p>
         <p className="mt-1 text-xs text-zinc-500">Relacioná este item con personas o registros para abrirlos directo desde el detalle.</p>
@@ -1029,7 +1038,6 @@ function CalendarItemFormModal({ open, mode, form, salons, users, leads, custome
           <SearchableRelationSelect label="Proveedor" value={form.supplierId} options={suppliers} placeholder="Sin proveedor vinculado" searchPlaceholder="Buscar proveedor..." searchEndpoint="/suppliers/options?active=true&limit=50" onChange={(value) => onChange((current) => ({ ...current, supplierId: value }))} />
         </div>
       </div>
-      {form.notify ? <><label className="text-sm font-medium text-zinc-700">Avisar antes<Input type="number" min={1} className="mt-1.5" value={form.offsetValue} onChange={(event) => onChange((current) => ({ ...current, offsetValue: Number(event.target.value) }))} /></label><label className="text-sm font-medium text-zinc-700">Unidad<Select className="mt-1.5" value={form.offsetUnit} onChange={(event) => onChange((current) => ({ ...current, offsetUnit: event.target.value as CalendarForm['offsetUnit'] }))}><option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Días</option><option value="weeks">Semanas</option></Select></label></> : null}
       <label className="text-sm font-medium text-zinc-700 md:col-span-2">Detalle<Textarea className="mt-1.5" value={form.description} onChange={(event) => onChange((current) => ({ ...current, description: event.target.value }))} placeholder="Notas internas, faltantes, condiciones de pago o contexto operativo." /></label>
       <div className="flex justify-end gap-2 border-t border-zinc-200 pt-4 md:col-span-2"><Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={saving}>{saving ? 'Guardando...' : mode === 'edit' ? 'Guardar' : 'Crear'}</Button></div>
     </form>
