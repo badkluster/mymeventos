@@ -92,6 +92,17 @@ describe('manual event creation from a package', () => {
       commercialSnapshot: expect.objectContaining({ packageName: 'Clásico Salón Norte', finalPricePerPerson: 22000, totalAmount: 1760000, paymentTerms: 'Saldo 7 días antes.' })
     }));
   });
+
+  it('rejects malformed or incomplete event times before creating the event', async () => {
+    const invalidFormat = await request(app).post('/api/events').set('Cookie', adminCookie).send({ salonId, customerId: '507f1f77bcf86cd799439016', eventName: 'Cumple de Ana', startTime: 'asdf', endTime: '05:00' });
+    const missingEnd = await request(app).post('/api/events').set('Cookie', adminCookie).send({ salonId, customerId: '507f1f77bcf86cd799439016', eventName: 'Cumple de Ana', startTime: '21:00' });
+    const sameTime = await request(app).post('/api/events').set('Cookie', adminCookie).send({ salonId, customerId: '507f1f77bcf86cd799439016', eventName: 'Cumple de Ana', startTime: '21:00', endTime: '21:00' });
+
+    expect(invalidFormat.status).toBe(400);
+    expect(missingEnd.status).toBe(400);
+    expect(sameTime.status).toBe(400);
+    expect(mocks.eventCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe('event cancellation permissions and reason', () => {

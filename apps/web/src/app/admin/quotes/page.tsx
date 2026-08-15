@@ -8,7 +8,7 @@ import { displayLabel, quoteRequestSourceLabels, quoteRequestStatusLabels, quote
 import { Button, Input, Modal, PageHeader, Select } from '@/components/ui/primitives';
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
-import { QuoteFormModal } from '@/features/quotes/quote-form-modal';
+import { QuoteFormModal, type QuoteSlotDefaults } from '@/features/quotes/quote-form-modal';
 import { getLeadName, getSalonName, type Customer, type LeadOption, type PackageTemplate, type PaginationMeta, type Quote, type QuoteRequest, type Salon } from '@/features/quotes/types';
 import { formatCivilDate } from '@/lib/dates';
 
@@ -59,6 +59,7 @@ export default function QuotesPage() {
   const [formQuote, setFormQuote] = useState<Quote | undefined>();
   const [formRequest, setFormRequest] = useState<QuoteRequest | undefined>();
   const [initialCustomerId, setInitialCustomerId] = useState('');
+  const [initialSlot, setInitialSlot] = useState<QuoteSlotDefaults>();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [remove, setRemove] = useState<Quote | undefined>();
   const [discard, setDiscard] = useState<QuoteRequest | undefined>();
@@ -113,6 +114,12 @@ export default function QuotesPage() {
     const timer = window.setTimeout(() => {
       if (searchParams?.get('create') === '1') {
         setInitialCustomerId('');
+        setInitialSlot({
+          salonId: searchParams.get('salonId') || undefined,
+          eventDate: searchParams.get('eventDate') || undefined,
+          startTime: searchParams.get('startTime') || undefined,
+          endTime: searchParams.get('endTime') || undefined
+        });
         setFormQuote(undefined);
         setFormRequest(undefined);
         setIsFormOpen(true);
@@ -120,6 +127,7 @@ export default function QuotesPage() {
       }
       const customerId = searchParams?.get('customerId');
       if (!customerId || !customers.some((customer) => customer._id === customerId)) return;
+      setInitialSlot(undefined);
       setInitialCustomerId(customerId);
       setFormQuote(undefined);
       setFormRequest(undefined);
@@ -129,9 +137,9 @@ export default function QuotesPage() {
   }, [searchParams, customers]);
 
   const updateFilters = (changes: Partial<typeof filters>) => setFilters((current) => ({ ...current, ...changes }));
-  const openCreate = () => { setInitialCustomerId(''); setFormQuote(undefined); setFormRequest(undefined); setIsFormOpen(true); };
-  const openEdit = (quote: Quote) => { setInitialCustomerId(''); setFormQuote(quote); setFormRequest(undefined); setIsFormOpen(true); };
-  const openConvert = (request: QuoteRequest) => { setInitialCustomerId(''); setFormQuote(undefined); setFormRequest(request); setIsFormOpen(true); };
+  const openCreate = () => { setInitialCustomerId(''); setInitialSlot(undefined); setFormQuote(undefined); setFormRequest(undefined); setIsFormOpen(true); };
+  const openEdit = (quote: Quote) => { setInitialCustomerId(''); setInitialSlot(undefined); setFormQuote(quote); setFormRequest(undefined); setIsFormOpen(true); };
+  const openConvert = (request: QuoteRequest) => { setInitialCustomerId(''); setInitialSlot(undefined); setFormQuote(undefined); setFormRequest(request); setIsFormOpen(true); };
 
   const save = async (payload: Record<string, unknown>) => {
     setSaving(true);
@@ -186,7 +194,7 @@ export default function QuotesPage() {
       <span className="text-zinc-600">Mostrando <strong className="font-semibold text-zinc-950">{activeTab === 'requests' ? requests.length : quotes.length}</strong> de <strong className="font-semibold text-zinc-950">{meta.totalItems}</strong></span>
       <div className="flex items-center gap-2"><Button variant="secondary" className="px-3" disabled={!meta.hasPreviousPage} onClick={() => updateFilters({ page: meta.page - 1 })}><ChevronLeft className="h-4 w-4" /><span className="sr-only">Anterior</span></Button><span className="min-w-32 text-center text-zinc-600">Página {meta.page} de {meta.totalPages}</span><Button variant="secondary" className="px-3" disabled={!meta.hasNextPage} onClick={() => updateFilters({ page: meta.page + 1 })}><ChevronRight className="h-4 w-4" /><span className="sr-only">Siguiente</span></Button></div>
     </footer>
-    <QuoteFormModal open={isFormOpen} quote={formQuote} quoteRequest={formRequest} initialCustomerId={initialCustomerId} salons={salons} leads={leads} customers={customers} packages={packages} saving={saving} onClose={() => setIsFormOpen(false)} onSubmit={save} />
+    <QuoteFormModal open={isFormOpen} quote={formQuote} quoteRequest={formRequest} initialCustomerId={initialCustomerId} initialSlot={initialSlot} salons={salons} leads={leads} customers={customers} packages={packages} saving={saving} onClose={() => setIsFormOpen(false)} onSubmit={save} />
     <Modal open={Boolean(remove)} onClose={() => setRemove(undefined)} title="Eliminar presupuesto" description="Esta acción eliminará el presupuesto del listado, pero conservará el registro internamente."><div className="p-6"><footer className="flex justify-end gap-3"><Button variant="secondary" disabled={saving} onClick={() => setRemove(undefined)}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={() => void removeQuote()}>{saving ? 'Eliminando...' : 'Eliminar'}</Button></footer></div></Modal>
     <Modal open={Boolean(discard)} onClose={() => setDiscard(undefined)} title="Descartar solicitud" description="La solicitud quedará archivada como descartada."><div className="p-6"><footer className="flex justify-end gap-3"><Button variant="secondary" disabled={saving} onClick={() => setDiscard(undefined)}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={() => void discardRequest()}>{saving ? 'Descartando...' : 'Descartar'}</Button></footer></div></Modal>
   </section>;

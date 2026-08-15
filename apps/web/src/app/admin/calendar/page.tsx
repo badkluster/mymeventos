@@ -10,6 +10,7 @@ import {
   Bell,
   CalendarClock,
   CalendarDays,
+  CalendarRange,
   CheckCircle2,
   CheckSquare,
   ChevronLeft,
@@ -44,14 +45,18 @@ import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components
 import { useToast } from '@/components/ui/toast-provider';
 import { userCanAccess } from '@/lib/admin-permissions';
 import { useSession } from '@/components/session-provider';
+import { EventAvailabilityBoard, type AvailabilitySlot, type AvailabilityView } from '@/features/events/event-availability-board';
+import { EventCreateModal, type EventCreateDefaults } from '@/features/events/event-create-modal';
+import { civilDateKey, parseCivilDateKey } from '@/lib/dates';
 import type { Event, Salon } from '@/features/quotes/types';
 
 type CalendarView = 'day' | 'week' | 'month' | 'year';
+type CalendarMode = 'agenda' | 'availability';
 type CalendarItemType = 'event' | 'alert' | 'reminder' | 'note' | 'task' | 'payment_window' | 'meeting';
 type CalendarSourceFilter = 'all' | 'events' | 'alerts' | 'notes' | 'reminders' | 'tasks' | 'payments' | 'meetings';
 type Priority = 'low' | 'normal' | 'high' | 'critical';
 type CalendarFilters = { query: string; status: string; salonId: string; source: CalendarSourceFilter; priority: '' | Priority; notifications: 'all' | 'with' | 'without' };
-type ListResponse = { items?: Event[] };
+type ListResponse = { items?: Event[]; meta?: { totalPages?: number; hasNextPage?: boolean } };
 type LinkedEntity = { _id: string; fullName?: string; firstName?: string; lastName?: string; name?: string; username?: string; email?: string; phone?: string; quoteNumber?: string; contractNumber?: string; paymentNumber?: string; businessName?: string; contactPerson?: string; eventName?: string; eventType?: string };
 type CalendarItem = {
   _id: string;
@@ -205,20 +210,40 @@ function sameDay(a: Date, b: Date) {
 }
 
 function eventDate(event: Event) {
-  if (!event.eventDate) return undefined;
-  // `event.eventDate` llega normalizado a medianoche UTC (`civilDateInput`, ver
-  // apps/api/src/utils/argentina-date.ts) — parsearlo directo con `new Date(...)` y comparar con
-  // `sameDay`/getters locales (como hace el resto de esta página) corre el día para atrás en
-  // cualquier huso horario negativo (Argentina incluida): un evento el 16 aparecía en la celda
-  // del 15. Se reconstruye la fecha a partir de los componentes Y-M-D del string para que los
-  // getters locales devuelvan el día civil correcto sin importar el huso del navegador.
-  const match = String(event.eventDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return new Date(event.eventDate);
+  const key = civilDateKey(event.eventDate);
+  return key ? parseCivilDateKey(key) : undefined;
+}
+
+function eventDateTime(event: Event, time?: string) {
+  const date = eventDate(event);
+  if (!date) return undefined;
+  const match = time?.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return date;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), Number(match[1]), Number(match[2]));
 }
 
 function toDateInputValue(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function toMonthInputValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function civilRangeBoundary(date: Date, end = false) {
+  return `${toDateInputValue(date)}T${end ? '23:59:59.999' : '00:00:00.000'}Z`;
+}
+
+async function loadAllEvents(query: URLSearchParams): Promise<Event[]> {
+  const first = await api.get<ListResponse>(`/events?${query.toString()}`);
+  const totalPages = Math.max(1, first.meta?.totalPages ?? 1);
+  if (totalPages === 1) return first.items ?? [];
+  const remaining = await Promise.all(Array.from({ length: totalPages - 1 }, (_, index) => {
+    const pageQuery = new URLSearchParams(query);
+    pageQuery.set('page', String(index + 2));
+    return api.get<ListResponse>(`/events?${pageQuery.toString()}`);
+  }));
+  return [first, ...remaining].flatMap((response) => response.items ?? []);
 }
 
 function toTimeInputValue(date: Date) {
@@ -400,7 +425,9 @@ function Metric({ label, value, icon: Icon, tone = 'bg-zinc-100 text-zinc-700' }
 export default function CalendarPage() {
   const { showToast } = useToast();
   const { user } = useSession();
+  const [mode, setMode] = useState<CalendarMode>('agenda');
   const [view, setView] = useState<CalendarView>('month');
+  const [availabilityView, setAvailabilityView] = useState<AvailabilityView>('day');
   const [focusDate, setFocusDate] = useState(() => new Date());
   const [events, setEvents] = useState<Event[]>([]);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
@@ -423,12 +450,26 @@ export default function CalendarPage() {
   const [form, setForm] = useState<CalendarForm>(() => emptyForm());
   const [selectedEntry, setSelectedEntry] = useState<CalendarEntry | null>(null);
   const [dayStackDate, setDayStackDate] = useState<Date | null>(null);
+  const [selectedAvailabilitySlot, setSelectedAvailabilitySlot] = useState<AvailabilitySlot | null>(null);
+  const [eventCreateOpen, setEventCreateOpen] = useState(false);
+  const [eventCreateDefaults, setEventCreateDefaults] = useState<EventCreateDefaults>();
   const canReadEvents = userCanAccess(user, [Permission.EVENTS_READ]);
+  const canCreateEvents = userCanAccess(user, [Permission.EVENTS_CREATE]);
+  const canCreateQuotes = userCanAccess(user, [Permission.QUOTES_CREATE]);
   const currentUserId = user?._id ?? user?.id ?? '';
 
-  const visibleRange = useMemo(() => rangeFor(view, focusDate), [focusDate, view]);
-  const canShowEvents = filters.source === 'all' || filters.source === 'events';
-  const canShowItems = filters.source !== 'events';
+  const navigationView: CalendarView = mode === 'availability' ? availabilityView : view;
+  const visibleRange = useMemo(() => {
+    if (mode !== 'availability') return rangeFor(view, focusDate);
+    if (availabilityView === 'day') return { start: startOfDay(addDays(focusDate, -1)), end: endOfDay(addDays(focusDate, 1)) };
+    if (availabilityView === 'month') {
+      const days = monthDays(focusDate);
+      return { start: startOfDay(days[0]), end: endOfDay(days[days.length - 1]) };
+    }
+    return rangeFor('week', focusDate);
+  }, [availabilityView, focusDate, mode, view]);
+  const canShowEvents = mode === 'availability' || filters.source === 'all' || filters.source === 'events';
+  const canShowItems = mode === 'agenda' && filters.source !== 'events';
 
   const safeGet = useCallback(async <T,>(path: string, fallback: T): Promise<T> => {
     try {
@@ -441,26 +482,29 @@ export default function CalendarPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const query = new URLSearchParams({
+      const eventQuery = new URLSearchParams({
         page: '1',
-        limit: '200',
+        limit: '100',
         sortBy: 'eventDate',
         sortOrder: 'asc',
-        dateFrom: visibleRange.start.toISOString(),
-        dateTo: visibleRange.end.toISOString(),
-        search: filters.query
+        dateFrom: civilRangeBoundary(visibleRange.start),
+        dateTo: civilRangeBoundary(visibleRange.end, true),
+        search: mode === 'availability' ? '' : filters.query
       });
-      if (filters.status) query.set('status', filters.status);
-      if (filters.salonId) query.set('salonId', filters.salonId);
-      const itemQuery = new URLSearchParams(query);
+      if (mode === 'agenda' && filters.status) eventQuery.set('status', filters.status);
+      if (mode === 'agenda' && filters.salonId) eventQuery.set('salonId', filters.salonId);
+      const itemQuery = new URLSearchParams(eventQuery);
+      itemQuery.set('limit', '200');
+      itemQuery.set('dateFrom', visibleRange.start.toISOString());
+      itemQuery.set('dateTo', visibleRange.end.toISOString());
       const filteredType = sourceTypeByFilter[filters.source];
       if (filteredType) itemQuery.set('type', filteredType);
-      const [eventsResponse, itemsResponse, salonsResponse] = await Promise.all([
-        canReadEvents && canShowEvents ? api.get<ListResponse>(`/events?${query.toString()}`) : Promise.resolve({ items: [] }),
+      const [loadedEvents, itemsResponse, salonsResponse] = await Promise.all([
+        canReadEvents && canShowEvents ? loadAllEvents(eventQuery) : Promise.resolve([]),
         canShowItems ? api.get<CalendarItemResponse>(`/calendar-items?${itemQuery.toString()}`) : Promise.resolve({ items: [] }),
         api.get<{ salons?: Salon[] } | Salon[]>('/salons')
       ]);
-      setEvents(eventsResponse.items ?? []);
+      setEvents(loadedEvents);
       setCalendarItems(itemsResponse.items ?? []);
       setSalons(Array.isArray(salonsResponse) ? salonsResponse : salonsResponse.salons ?? []);
     } catch (error) {
@@ -468,7 +512,7 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [canReadEvents, canShowEvents, canShowItems, filters.query, filters.salonId, filters.source, filters.status, showToast, visibleRange.end, visibleRange.start]);
+  }, [canReadEvents, canShowEvents, canShowItems, filters.query, filters.salonId, filters.source, filters.status, mode, showToast, visibleRange.end, visibleRange.start]);
 
   const loadOptions = useCallback(async () => {
     const [usersResponse, leadsResponse, customersResponse, eventsResponse, quotesResponse, contractsResponse, paymentsResponse, suppliersResponse] = await Promise.all([
@@ -502,22 +546,27 @@ export default function CalendarPage() {
     const eventEntries: CalendarEntry[] = canShowEvents ? events.filter((event) => {
       const date = eventDate(event);
       return date && date >= visibleRange.start && date <= visibleRange.end;
-    }).map((event) => ({
-      id: event._id,
-      source: 'event' as const,
-      type: 'event' as const,
-      title: event.eventName || event.eventType || 'Evento',
-      description: event.notes,
-      startAt: eventDate(event)!,
-      endAt: undefined,
-      allDay: false,
-      status: event.status,
-      priority: event.status === 'deposit_pending' ? 'high' as const : 'normal' as const,
-      visibility: 'shared' as const,
-      salonName: entityName(event.salonId),
-      href: `/admin/events/${event._id}`,
-      event
-    })) : [];
+    }).map((event) => {
+      const startAt = eventDateTime(event, event.startTime)!;
+      const endAt = event.endTime ? eventDateTime(event, event.endTime) : undefined;
+      if (endAt && endAt <= startAt) endAt.setDate(endAt.getDate() + 1);
+      return {
+        id: event._id,
+        source: 'event' as const,
+        type: 'event' as const,
+        title: event.eventName || event.eventType || 'Evento',
+        description: event.notes,
+        startAt,
+        endAt,
+        allDay: !event.startTime,
+        status: event.status,
+        priority: event.status === 'deposit_pending' ? 'high' as const : 'normal' as const,
+        visibility: 'shared' as const,
+        salonName: entityName(event.salonId),
+        href: `/admin/events/${event._id}`,
+        event
+      };
+    }) : [];
     const itemEntries: CalendarEntry[] = canShowItems ? calendarItems.map((item) => ({
       id: item._id,
       source: 'calendar-item' as const,
@@ -535,11 +584,11 @@ export default function CalendarPage() {
       item
     })) : [];
     return [...eventEntries, ...itemEntries]
-      .filter((entry) => !filters.status || entry.status === filters.status)
-      .filter((entry) => !filters.priority || entry.priority === filters.priority)
-      .filter((entry) => filters.notifications === 'all' || (filters.notifications === 'with' ? entry.notification?.enabled : !entry.notification?.enabled))
+      .filter((entry) => mode === 'availability' || !filters.status || entry.status === filters.status)
+      .filter((entry) => mode === 'availability' || !filters.priority || entry.priority === filters.priority)
+      .filter((entry) => mode === 'availability' || filters.notifications === 'all' || (filters.notifications === 'with' ? entry.notification?.enabled : !entry.notification?.enabled))
       .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
-  }, [calendarItems, canShowEvents, canShowItems, events, filters.notifications, filters.priority, filters.status, visibleRange.end, visibleRange.start]);
+  }, [calendarItems, canShowEvents, canShowItems, events, filters.notifications, filters.priority, filters.status, mode, visibleRange.end, visibleRange.start]);
 
   const selectedDayEntries = useMemo(() => entriesForDay(entries, focusDate), [entries, focusDate]);
   const upcomingEntries = useMemo(() => entries.filter((entry) => entry.startAt >= startOfDay(new Date())).slice(0, 8), [entries]);
@@ -549,6 +598,30 @@ export default function CalendarPage() {
   const dayStackEntries = useMemo(() => dayStackDate ? entriesForDay(entries, dayStackDate) : [], [dayStackDate, entries]);
 
   const updateFilters = (changes: Partial<CalendarFilters>) => setFilters((current) => ({ ...current, ...changes }));
+  const selectMode = (nextMode: CalendarMode) => {
+    setMode(nextMode);
+    setSelectedAvailabilitySlot(null);
+  };
+  const selectAvailabilityView = (nextView: AvailabilityView) => {
+    setAvailabilityView(nextView);
+    setSelectedAvailabilitySlot(null);
+  };
+  const jumpToAvailabilityDay = (value: string) => {
+    const date = parseCivilDateKey(value);
+    if (!date) return;
+    setFocusDate(date);
+    selectAvailabilityView('day');
+  };
+  const jumpToAvailabilityMonth = (value: string) => {
+    const match = value.match(/^(\d{4})-(\d{2})$/);
+    if (!match) return;
+    setFocusDate(new Date(Number(match[1]), Number(match[2]) - 1, 1));
+    selectAvailabilityView('month');
+  };
+  const openAvailabilityDay = (date: Date) => {
+    setFocusDate(date);
+    selectAvailabilityView('day');
+  };
   const openCreate = (date: Date, hour?: number) => {
     const nextDate = hour === undefined ? date : new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, 0);
     setFocusDate(date);
@@ -624,30 +697,51 @@ export default function CalendarPage() {
       showToast({ message: error instanceof Error ? error.message : 'No se pudo eliminar el item.', variant: 'error' });
     }
   };
+  const openEventCreateFromAvailability = (slot: AvailabilitySlot) => {
+    setEventCreateDefaults({ salonId: slot.salonId, eventDate: slot.date, startTime: slot.startTime, endTime: slot.endTime });
+    setSelectedAvailabilitySlot(null);
+    setEventCreateOpen(true);
+  };
+  const handleEventCreated = async (_eventId: string, message?: string) => {
+    setEventCreateOpen(false);
+    await load();
+    showToast({ message: message ?? 'Evento creado correctamente.', variant: 'success' });
+  };
 
   return <section className="space-y-6">
-    <PageHeader title="Calendario" description="Agenda premium para eventos, alertas, notas, tareas, recordatorios y pagos." action={<div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => setFocusDate(new Date())}>Hoy</Button><Button onClick={() => openCreate(focusDate)}><Plus className="mr-2 h-4 w-4" />Crear item</Button><Link href="/admin/events"><Button variant="secondary"><CalendarDays className="mr-2 h-4 w-4" />Eventos</Button></Link></div>} />
+    <PageHeader title="Calendario" description={mode === 'agenda' ? 'Agenda central de eventos, alertas, notas, tareas, recordatorios y pagos.' : 'Vista rápida para comparar horarios y disponibilidad entre salones.'} action={<div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => setFocusDate(new Date())}>Hoy</Button>{mode === 'agenda' ? <Button onClick={() => openCreate(focusDate)}><Plus className="mr-2 h-4 w-4" />Crear item</Button> : null}<Link href="/admin/events" className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-950 shadow-sm transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-500/20"><CalendarDays className="mr-2 h-4 w-4" />Eventos</Link></div>} />
 
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div role="tablist" aria-label="Tipo de calendario" className="grid max-w-xl grid-cols-2 rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-sm">
+      <button role="tab" aria-selected={mode === 'agenda'} type="button" onClick={() => selectMode('agenda')} className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-zinc-500/20 ${mode === 'agenda' ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'}`}><CalendarClock className="h-4 w-4" />Agenda completa</button>
+      <button role="tab" aria-selected={mode === 'availability'} type="button" onClick={() => selectMode('availability')} className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-zinc-500/20 ${mode === 'availability' ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'}`}><CalendarRange className="h-4 w-4" />Disponibilidad</button>
+    </div>
+
+    {mode === 'agenda' ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Agenda visible" value={entries.length} icon={CalendarClock} tone="bg-zinc-950 text-white" />
       <Metric label="Con aviso" value={notificationCount} icon={Bell} tone="bg-sky-50 text-sky-700" />
       <Metric label="Críticos" value={criticalCount} icon={AlertTriangle} tone="bg-rose-50 text-rose-700" />
       <Metric label="Resueltos / confirmados" value={doneCount} icon={BadgeCheck} tone="bg-emerald-50 text-emerald-700" />
-    </div>
+    </div> : null}
 
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" className="h-10 w-10 px-0" onClick={() => setFocusDate((current) => moveDate(view, current, -1))} aria-label="Periodo anterior"><ChevronLeft className="h-4 w-4" /></Button>
-          <Button variant="secondary" className="h-10 w-10 px-0" onClick={() => setFocusDate((current) => moveDate(view, current, 1))} aria-label="Periodo siguiente"><ChevronRight className="h-4 w-4" /></Button>
-          <h2 className="min-w-0 px-2 text-xl font-semibold capitalize text-zinc-950">{titleFor(view, focusDate)}</h2>
+          <Button variant="secondary" className="h-10 w-10 px-0" onClick={() => setFocusDate((current) => moveDate(navigationView, current, -1))} aria-label="Periodo anterior"><ChevronLeft className="h-4 w-4" /></Button>
+          <Button variant="secondary" className="h-10 w-10 px-0" onClick={() => setFocusDate((current) => moveDate(navigationView, current, 1))} aria-label="Periodo siguiente"><ChevronRight className="h-4 w-4" /></Button>
+          <h2 className="min-w-0 px-2 text-xl font-semibold capitalize text-zinc-950">{titleFor(navigationView, focusDate)}</h2>
         </div>
-        <div className="grid grid-cols-4 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
+        {mode === 'agenda' ? <div className="grid grid-cols-4 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
           {(Object.keys(viewLabels) as CalendarView[]).map((item) => <button key={item} type="button" onClick={() => setView(item)} className={`rounded-lg px-3 py-2 text-sm font-medium transition ${view === item ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-white'}`}>{viewLabels[item]}</button>)}
-        </div>
+        </div> : <div role="group" className="grid grid-cols-3 rounded-xl border border-zinc-200 bg-zinc-50 p-1" aria-label="Vista de disponibilidad">
+          {(['day', 'week', 'month'] as AvailabilityView[]).map((item) => <button key={item} type="button" onClick={() => selectAvailabilityView(item)} className={`rounded-lg px-4 py-2 text-sm font-medium transition ${availabilityView === item ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-white hover:text-zinc-950'}`}>{item === 'day' ? 'Día' : item === 'week' ? 'Semana' : 'Mes'}</button>)}
+        </div>}
       </div>
 
-      <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(220px,1fr)_repeat(5,minmax(130px,170px))]">
+      {mode === 'availability' ? <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 md:grid-cols-[minmax(180px,240px)_minmax(180px,240px)_minmax(0,1fr)] md:items-end">
+        <label className="text-sm font-medium text-zinc-700">Ir a un día<Input aria-label="Buscar disponibilidad por día" type="date" value={toDateInputValue(focusDate)} onChange={(event) => jumpToAvailabilityDay(event.target.value)} className="mt-1.5 h-11" /></label>
+        <label className="text-sm font-medium text-zinc-700">Ir a un mes<Input aria-label="Buscar disponibilidad por mes" type="month" value={toMonthInputValue(focusDate)} onChange={(event) => jumpToAvailabilityMonth(event.target.value)} className="mt-1.5 h-11" /></label>
+        <p className="pb-2 text-sm leading-6 text-zinc-500">Los eventos abren su ficha. Para crear, elegí primero un día y después una franja realmente vacía.</p>
+      </div> : <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(220px,1fr)_repeat(5,minmax(130px,170px))]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-11 pl-10" placeholder="Buscar por evento, alerta, nota, tarea o reunión" />
@@ -667,10 +761,10 @@ export default function CalendarPage() {
         <Select aria-label="Filtrar avisos" value={filters.notifications} onChange={(event) => updateFilters({ notifications: event.target.value as CalendarFilters['notifications'] })} className="h-11">
           <option value="all">Avisos</option><option value="with">Con aviso</option><option value="without">Sin aviso</option>
         </Select>
-      </div>
+      </div>}
     </div>
 
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+    {mode === 'availability' ? <EventAvailabilityBoard date={focusDate} view={availabilityView} events={events} salons={salons} loading={loading} canCreateEvents={canCreateEvents} canCreateQuotes={canCreateQuotes} selectedSlot={selectedAvailabilitySlot} onSelectSlot={setSelectedAvailabilitySlot} onSelectDate={openAvailabilityDay} onCreateEvent={openEventCreateFromAvailability} /> : <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
         <CalendarSurface view={view} focusDate={focusDate} entries={entries} loading={loading} onSelectDate={setFocusDate} onCreate={openCreate} onOpenEntry={setSelectedEntry} onOpenDayStack={setDayStackDate} />
       </div>
@@ -689,9 +783,10 @@ export default function CalendarPage() {
           </div>
         </section>
       </aside>
-    </div>
+    </div>}
 
     <CalendarItemFormModal open={formOpen} mode={formMode} form={form} salons={salons} users={users} leads={leads} customers={customers} events={linkEvents} quotes={quotes} contracts={contracts} payments={payments} suppliers={suppliers} saving={saving} onClose={() => setFormOpen(false)} onSubmit={saveCalendarItem} onChange={setForm} />
+    {eventCreateOpen ? <EventCreateModal open={eventCreateOpen} salons={salons} initialValues={eventCreateDefaults} onClose={() => setEventCreateOpen(false)} onCreated={(eventId, message) => void handleEventCreated(eventId, message)} onError={(message) => showToast({ message, variant: 'error' })} /> : null}
     <EntryDetailModal entry={selectedEntry} currentUserId={currentUserId} onClose={() => setSelectedEntry(null)} onEdit={openEdit} onDelete={deleteCalendarItem} onPatch={updateCalendarItem} />
     <DayStackModal date={dayStackDate} entries={dayStackEntries} onClose={() => setDayStackDate(null)} onOpen={(entry) => { setDayStackDate(null); setSelectedEntry(entry); }} onCreate={(date) => { setDayStackDate(null); openCreate(date); }} />
   </section>;

@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { PackageCheck, PencilLine, Plus, Trash2 } from 'lucide-react';
+import { PackageCheck, PencilLine } from 'lucide-react';
 import { cleanMenuSections, cleanStringList, MenuSectionsEditor, StringListEditor, type MenuSectionValue } from '@/components/admin/structured-list-editors';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
 import { createDefaultResourcePlan } from '@/features/events/event-operations';
-import type { Customer, Event, EventResourcePlan, EventTimelineItem, PackageTemplate, Quote, Salon } from '@/features/quotes/types';
+import type { Customer, Event, PackageTemplate, Quote, Salon } from '@/features/quotes/types';
 
 type CreateResponse = { event?: Event; contractCreated?: boolean; contractError?: string };
-type Props = { open: boolean; salons: Salon[]; onClose: () => void; onCreated: (eventId: string, message?: string) => void; onError: (message: string) => void };
+export type EventCreateDefaults = { salonId?: string; eventDate?: string; startTime?: string; endTime?: string };
+type Props = { open: boolean; salons: Salon[]; initialValues?: EventCreateDefaults; onClose: () => void; onCreated: (eventId: string, message?: string) => void; onError: (message: string) => void };
 
 const emptyForm = {
   sourceMode: 'direct',
@@ -25,10 +26,6 @@ const emptyForm = {
   endTime: '',
   guestCount: '',
   honoreeName: '',
-  vegetarianCount: '',
-  veganCount: '',
-  celiacCount: '',
-  lactoseIntolerantCount: '',
   tableLinenColor: '',
   customerFullName: '',
   customerPhone: '',
@@ -48,6 +45,23 @@ const emptyForm = {
 };
 
 type ApplicablePackage = PackageTemplate & { packageTemplateId?: string; packageName?: string; active?: boolean; notes?: string };
+type TimeErrors = { startTime?: string; endTime?: string };
+
+const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+function validateTimes(startTime: string, endTime: string): TimeErrors {
+  const errors: TimeErrors = {};
+  if (!startTime) errors.startTime = 'Ingresá el horario de inicio.';
+  else if (!timePattern.test(startTime)) errors.startTime = 'Usá un horario válido en formato HH:mm.';
+  if (!endTime) errors.endTime = 'Ingresá el horario de fin.';
+  else if (!timePattern.test(endTime)) errors.endTime = 'Usá un horario válido en formato HH:mm.';
+  if (!errors.startTime && !errors.endTime && startTime === endTime) errors.endTime = 'El horario de fin debe ser distinto del inicio.';
+  return errors;
+}
+
+function crossesMidnight(startTime: string, endTime: string) {
+  return timePattern.test(startTime) && timePattern.test(endTime) && endTime < startTime;
+}
 
 function numberOrUndefined(value: string): number | undefined {
   if (value === '') return undefined;
@@ -61,16 +75,8 @@ function entityName(value: unknown) {
   return item.fullName || item.name || item.quoteNumber || '';
 }
 
-function cleanTimeline(items?: EventTimelineItem[]): EventTimelineItem[] {
-  return (items ?? []).filter((item) => item.title.trim() || item.notes?.trim()).map((item) => ({ ...item, title: item.title.trim(), status: item.status || 'pending' }));
-}
-
-function defaultPlan(): EventResourcePlan {
-  return createDefaultResourcePlan();
-}
-
-export function EventCreateModal({ open, salons, onClose, onCreated, onError }: Props) {
-  const [form, setForm] = useState(emptyForm);
+export function EventCreateModal({ open, salons, initialValues, onClose, onCreated, onError }: Props) {
+  const [form, setForm] = useState(() => ({ ...emptyForm, ...initialValues }));
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [packages, setPackages] = useState<ApplicablePackage[]>([]);
@@ -80,12 +86,14 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
   const [packagesError, setPackagesError] = useState('');
   const [menuSections, setMenuSections] = useState<MenuSectionValue[]>([{ title: 'Menú', items: [] }]);
   const [services, setServices] = useState<string[]>([]);
-  const [resourcePlan, setResourcePlan] = useState<EventResourcePlan>(() => defaultPlan());
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [touchedTimes, setTouchedTimes] = useState({ startTime: false, endTime: false });
   const selectedQuote = useMemo(() => quotes.find((quote) => quote._id === form.quoteId), [form.quoteId, quotes]);
   const availablePackages = useMemo(() => packagesSalonId === form.salonId ? packages : [], [form.salonId, packages, packagesSalonId]);
   const selectedPackage = useMemo(() => availablePackages.find((item) => item._id === form.packageTemplateId), [availablePackages, form.packageTemplateId]);
+  const timeErrors = useMemo(() => validateTimes(form.startTime, form.endTime), [form.endTime, form.startTime]);
+  const validTimes = !timeErrors.startTime && !timeErrors.endTime;
 
   useEffect(() => {
     if (!open) return;
@@ -143,8 +151,8 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
       packageTemplateId: selected._id,
       packageName: selected.name,
       pricingMode,
-      startTime: selected.startTime ?? current.startTime,
-      endTime: selected.endTime ?? current.endTime,
+      startTime: initialValues?.startTime ?? selected.startTime ?? current.startTime,
+      endTime: initialValues?.endTime ?? selected.endTime ?? current.endTime,
       pricePerPerson: pricePerPerson === undefined ? '' : String(pricePerPerson),
       finalAmount: fixedPrice === undefined ? '' : String(fixedPrice),
       depositAmount: selected.depositAmount === undefined ? '' : String(selected.depositAmount),
@@ -153,17 +161,12 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
     setMenuSections((selected.menuSections ?? []).map((section) => ({ title: section.title ?? section.name ?? 'Menú', items: section.items ?? [] })));
     setServices(selected.includedServices ?? []);
   };
-  const updateTimeline = (index: number, changes: Partial<EventTimelineItem>) => setResourcePlan((current) => {
-    const items = current.timelineItems ?? [];
-    return { ...current, timelineItems: items.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item) };
-  });
-  const addTimelineItem = () => setResourcePlan((current) => ({ ...current, timelineItems: [...(current.timelineItems ?? []), { id: `${Date.now()}`, time: '', title: '', area: '', owner: '', status: 'pending', notes: '' }] }));
-  const removeTimelineItem = (index: number) => setResourcePlan((current) => ({ ...current, timelineItems: (current.timelineItems ?? []).filter((_, itemIndex) => itemIndex !== index) }));
-
   const submit = async () => {
+    setTouchedTimes({ startTime: true, endTime: true });
+    if (form.sourceMode === 'direct' && !validTimes) return;
     setSaving(true);
     try {
-      const plan = { ...resourcePlan, timelineItems: cleanTimeline(resourcePlan.timelineItems) };
+      const plan = createDefaultResourcePlan();
       const guestCount = numberOrUndefined(form.guestCount);
       const pricePerPerson = numberOrUndefined(form.pricePerPerson);
       const fixedAmount = numberOrUndefined(form.finalAmount || form.fixedPrice);
@@ -193,10 +196,6 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
         endTime: form.endTime || undefined,
         guestCount,
         honoreeName: form.honoreeName || undefined,
-        vegetarianCount: numberOrUndefined(form.vegetarianCount),
-        veganCount: numberOrUndefined(form.veganCount),
-        celiacCount: numberOrUndefined(form.celiacCount),
-        lactoseIntolerantCount: numberOrUndefined(form.lactoseIntolerantCount),
         tableLinenColor: form.tableLinenColor || undefined,
         packageName: form.packageName || undefined,
         pricingMode: form.pricingMode,
@@ -226,23 +225,24 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
     }
   };
 
-  const canSubmit = form.sourceMode === 'quote' ? Boolean(form.quoteId) : Boolean(form.salonId && (form.customerMode === 'existing' ? form.customerId : form.customerFullName) && (form.eventName || form.eventType));
+  const canSubmit = form.sourceMode === 'quote' ? Boolean(form.quoteId) : Boolean(form.salonId && (form.customerMode === 'existing' ? form.customerId : form.customerFullName) && (form.eventName || form.eventType) && validTimes);
 
   return <Modal open={open} title="Nuevo evento" description="Creá un evento directo o desde un presupuesto existente." onClose={onClose}>
     <div className="space-y-6 p-6">
+      <p className="text-sm text-zinc-600">Los campos marcados con <span className="font-semibold text-red-600" aria-hidden="true">*</span> son necesarios para generar el contrato.</p>
       <div className="grid gap-2 rounded-xl bg-zinc-100 p-1 sm:grid-cols-2">
         <button type="button" onClick={() => set('sourceMode', 'direct')} className={`rounded-lg px-4 py-2 text-sm font-medium ${form.sourceMode === 'direct' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500'}`}>Evento directo</button>
         <button type="button" onClick={() => set('sourceMode', 'quote')} className={`rounded-lg px-4 py-2 text-sm font-medium ${form.sourceMode === 'quote' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500'}`}>Desde presupuesto</button>
       </div>
 
       {form.sourceMode === 'quote' ? <section className="space-y-4">
-        <Field label="Presupuesto existente"><Select value={form.quoteId} disabled={loadingOptions} onChange={(event) => set('quoteId', event.target.value)}><option value="">Seleccionar presupuesto</option>{quotes.map((quote) => <option key={quote._id} value={quote._id}>{quote.quoteNumber} · {quote.contactName || entityName(quote.customerId) || 'Sin cliente'} · {entityName(quote.salonId)}</option>)}</Select></Field>
+        <Field label="Presupuesto existente" required><Select value={form.quoteId} disabled={loadingOptions} onChange={(event) => set('quoteId', event.target.value)}><option value="">Seleccionar presupuesto</option>{quotes.map((quote) => <option key={quote._id} value={quote._id}>{quote.quoteNumber} · {quote.contactName || entityName(quote.customerId) || 'Sin cliente'} · {entityName(quote.salonId)}</option>)}</Select></Field>
         {selectedQuote ? <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-3"><Info label="Cliente" value={selectedQuote.contactName || entityName(selectedQuote.customerId) || 'Sin cliente'} /><Info label="Evento" value={selectedQuote.eventType || 'Sin tipo'} /><Info label="Total" value={new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(selectedQuote.totalAmount ?? 0)} /></div> : null}
         <Field label="Nombre de evento opcional"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} placeholder="Si querés sobrescribir el nombre generado" /></Field>
       </section> : <section className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Salón"><Select value={form.salonId} onChange={(event) => selectSalon(event.target.value)}><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field>
-          <Field label="Cliente"><Select value={form.customerMode} onChange={(event) => set('customerMode', event.target.value)}><option value="new">Crear cliente nuevo</option><option value="existing">Usar cliente existente</option></Select></Field>
+          <Field label="Salón" required><Select value={form.salonId} onChange={(event) => selectSalon(event.target.value)}><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field>
+          <Field label="Cliente" required><Select value={form.customerMode} onChange={(event) => set('customerMode', event.target.value)}><option value="new">Crear cliente nuevo</option><option value="existing">Usar cliente existente</option></Select></Field>
         </div>
         {form.salonId ? <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
           <div><h3 className="text-sm font-semibold text-zinc-950">¿Cómo querés iniciar la carga?</h3><p className="mt-1 text-sm text-foreground/75">Elegí un paquete disponible para este salón y revisá sus datos, o completá el evento de forma manual.</p></div>
@@ -252,8 +252,8 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
           </div>
           {packageMode === 'package' ? <div className="space-y-2"><Field label="Paquete disponible"><Select value={form.packageTemplateId} disabled={loadingPackages || !availablePackages.length} onChange={(event) => applyPackage(event.target.value)}><option value="">{loadingPackages ? 'Cargando paquetes...' : availablePackages.length ? 'Seleccionar paquete' : 'No hay paquetes disponibles'}</option>{availablePackages.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</Select></Field>{packagesError ? <p className="text-sm text-red-700">No se pudieron cargar los paquetes: {packagesError}. Podés continuar con la carga manual.</p> : null}{!loadingPackages && !packagesError && !availablePackages.length ? <p className="text-sm text-foreground/75">Este salón no tiene paquetes activos. Podés continuar con la carga manual.</p> : null}{selectedPackage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><span className="font-medium">{selectedPackage.name}</span> aplicado. Podés ajustar los campos antes de crear el evento.</p> : null}</div> : null}
         </section> : null}
-        {form.customerMode === 'existing' ? <Field label="Cliente existente"><Select value={form.customerId} disabled={loadingOptions} onChange={(event) => set('customerId', event.target.value)}><option value="">Seleccionar cliente</option>{customers.map((customer) => <option key={customer._id} value={customer._id}>{customer.fullName || customer.phone || customer.email}</option>)}</Select></Field> : <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Nombre completo"><Input value={form.customerFullName} onChange={(event) => set('customerFullName', event.target.value)} /></Field>
+        {form.customerMode === 'existing' ? <Field label="Cliente existente" required><Select value={form.customerId} disabled={loadingOptions} onChange={(event) => set('customerId', event.target.value)}><option value="">Seleccionar cliente</option>{customers.map((customer) => <option key={customer._id} value={customer._id}>{customer.fullName || customer.phone || customer.email}</option>)}</Select></Field> : <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Nombre completo" required><Input value={form.customerFullName} onChange={(event) => set('customerFullName', event.target.value)} /></Field>
           <Field label="Teléfono"><Input value={form.customerPhone} onChange={(event) => set('customerPhone', event.target.value)} /></Field>
           <Field label="Email"><Input value={form.customerEmail} onChange={(event) => set('customerEmail', event.target.value)} /></Field>
           <Field label="DNI / documento"><Input value={form.customerDocumentNumber} onChange={(event) => set('customerDocumentNumber', event.target.value)} /></Field>
@@ -262,40 +262,24 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
         </div>}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Field label="Nombre del evento" className="md:col-span-2"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} /></Field>
-          <Field label="Tipo"><Input value={form.eventType} onChange={(event) => set('eventType', event.target.value)} /></Field>
+          <Field label="Tipo" required><Input value={form.eventType} onChange={(event) => set('eventType', event.target.value)} /></Field>
           <Field label="Homenajeado"><Input value={form.honoreeName} onChange={(event) => set('honoreeName', event.target.value)} /></Field>
-          <Field label="Fecha"><Input type="date" value={form.eventDate} onChange={(event) => set('eventDate', event.target.value)} /></Field>
-          <Field label="Inicio"><Input value={form.startTime} onChange={(event) => set('startTime', event.target.value)} placeholder="21:00" /></Field>
-          <Field label="Fin"><Input value={form.endTime} onChange={(event) => set('endTime', event.target.value)} placeholder="05:00" /></Field>
-          <Field label="Invitados"><Input type="number" min={1} value={form.guestCount} onChange={(event) => set('guestCount', event.target.value)} /></Field>
-          <Field label="Vegetarianos"><Input type="number" min={0} value={form.vegetarianCount} onChange={(event) => set('vegetarianCount', event.target.value)} /></Field>
-          <Field label="Veganos"><Input type="number" min={0} value={form.veganCount} onChange={(event) => set('veganCount', event.target.value)} /></Field>
-          <Field label="Celíacos"><Input type="number" min={0} value={form.celiacCount} onChange={(event) => set('celiacCount', event.target.value)} /></Field>
-          <Field label="Sin lactosa"><Input type="number" min={0} value={form.lactoseIntolerantCount} onChange={(event) => set('lactoseIntolerantCount', event.target.value)} /></Field>
+          <Field label="Fecha" required><Input type="date" value={form.eventDate} onChange={(event) => set('eventDate', event.target.value)} /></Field>
+          <Field label="Inicio" required error={touchedTimes.startTime ? timeErrors.startTime : undefined}><Input id="event-start-time" type="time" step={60} required value={form.startTime} onBlur={() => setTouchedTimes((current) => ({ ...current, startTime: true }))} onChange={(event) => set('startTime', event.target.value)} aria-invalid={Boolean(touchedTimes.startTime && timeErrors.startTime)} aria-describedby={touchedTimes.startTime && timeErrors.startTime ? 'event-start-time-error' : undefined} className={touchedTimes.startTime && timeErrors.startTime ? 'border-red-500 focus:border-red-600 focus:ring-red-600/10' : ''} /></Field>
+          <Field label="Fin" required error={touchedTimes.endTime ? timeErrors.endTime : undefined} hint={!timeErrors.endTime && crossesMidnight(form.startTime, form.endTime) ? 'Finaliza al día siguiente.' : undefined}><Input id="event-end-time" type="time" step={60} required value={form.endTime} onBlur={() => setTouchedTimes((current) => ({ ...current, endTime: true }))} onChange={(event) => set('endTime', event.target.value)} aria-invalid={Boolean(touchedTimes.endTime && timeErrors.endTime)} aria-describedby={touchedTimes.endTime && timeErrors.endTime ? 'event-end-time-error' : crossesMidnight(form.startTime, form.endTime) ? 'event-end-time-hint' : undefined} className={touchedTimes.endTime && timeErrors.endTime ? 'border-red-500 focus:border-red-600 focus:ring-red-600/10' : ''} /></Field>
+          <Field label="Invitados" required><Input type="number" min={1} value={form.guestCount} onChange={(event) => set('guestCount', event.target.value)} /></Field>
           <Field label="Mantelería" className="md:col-span-2"><Input value={form.tableLinenColor} onChange={(event) => set('tableLinenColor', event.target.value)} /></Field>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Paquete / propuesta"><Input value={form.packageName} onChange={(event) => set('packageName', event.target.value)} placeholder="Ej: Personalizado infantil" /></Field>
+          <Field label="Paquete / propuesta" required><Input value={form.packageName} onChange={(event) => set('packageName', event.target.value)} placeholder="Ej: Personalizado infantil" /></Field>
           <Field label="Modalidad"><Select value={form.pricingMode} onChange={(event) => set('pricingMode', event.target.value)}><option value="fixed">Precio total</option><option value="per_person">Precio por persona</option></Select></Field>
-          <Field label={form.pricingMode === 'fixed' ? 'Precio total' : 'Precio por persona'}><Input type="number" min={0} value={form.pricingMode === 'fixed' ? form.finalAmount : form.pricePerPerson} onChange={(event) => form.pricingMode === 'fixed' ? set('finalAmount', event.target.value) : set('pricePerPerson', event.target.value)} /></Field>
+          <Field label={form.pricingMode === 'fixed' ? 'Precio total' : 'Precio por persona'} required><Input type="number" min={0} value={form.pricingMode === 'fixed' ? form.finalAmount : form.pricePerPerson} onChange={(event) => form.pricingMode === 'fixed' ? set('finalAmount', event.target.value) : set('pricePerPerson', event.target.value)} /></Field>
           <Field label="Seña"><Input type="number" min={0} value={form.depositAmount} onChange={(event) => set('depositAmount', event.target.value)} /></Field>
           <Field label="Condiciones de pago" className="md:col-span-2"><Textarea value={form.paymentTerms} onChange={(event) => set('paymentTerms', event.target.value)} /></Field>
         </div>
         <MenuSectionsEditor value={menuSections} onChange={setMenuSections} />
         <StringListEditor label="Servicios incluidos" values={services} onChange={setServices} />
       </section>}
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-zinc-950">Cronograma inicial</h3><Button type="button" variant="secondary" onClick={addTimelineItem}><Plus className="mr-2 h-4 w-4" />Agregar ítem</Button></div>
-        <div className="space-y-3">{(resourcePlan.timelineItems ?? []).map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 md:grid-cols-[90px_minmax(0,1fr)_120px_120px_40px]">
-          <Input aria-label="Horario" placeholder="21:00" value={item.time ?? ''} onChange={(event) => updateTimeline(index, { time: event.target.value })} />
-          <Input aria-label="Actividad" value={item.title} onChange={(event) => updateTimeline(index, { title: event.target.value })} />
-          <Input aria-label="Área" placeholder="Área" value={item.area ?? ''} onChange={(event) => updateTimeline(index, { area: event.target.value })} />
-          <Input aria-label="Responsable" placeholder="Responsable" value={item.owner ?? ''} onChange={(event) => updateTimeline(index, { owner: event.target.value })} />
-          <button type="button" aria-label="Quitar ítem" onClick={() => removeTimelineItem(index)} className="grid h-10 w-10 place-items-center rounded-lg text-foreground/65 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-4 w-4" /></button>
-          <Textarea aria-label="Notas" className="md:col-span-5" placeholder="Notas del cronograma" value={item.notes ?? ''} onChange={(event) => updateTimeline(index, { notes: event.target.value })} />
-        </div>)}</div>
-      </section>
 
       <Field label="Notas internas"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
       <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700"><input type="checkbox" className="mt-1" checked={form.createContract} onChange={(event) => set('createContract', event.target.checked)} /><span>Crear contrato al guardar si el evento tiene los datos mínimos. Si falta información, el evento se guarda y el contrato queda pendiente.</span></label>
@@ -304,8 +288,9 @@ export function EventCreateModal({ open, salons, onClose, onCreated, onError }: 
   </Modal>;
 }
 
-function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
-  return <label className={`block space-y-1.5 ${className}`}><span className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</span>{children}</label>;
+function Field({ label, children, className = '', required = false, error, hint }: { label: string; children: React.ReactNode; className?: string; required?: boolean; error?: string; hint?: string }) {
+  const fieldId = label === 'Inicio' ? 'event-start-time' : label === 'Fin' ? 'event-end-time' : undefined;
+  return <label htmlFor={fieldId} className={`block space-y-1.5 ${className}`}><span className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}{required ? <span className="ml-1 text-red-600" aria-label="obligatorio">*</span> : null}</span>{children}{error ? <span id={`${fieldId}-error`} className="block text-xs font-medium text-red-700" role="alert">{error}</span> : hint ? <span id={`${fieldId}-hint`} className="block text-xs text-zinc-500">{hint}</span> : null}</label>;
 }
 
 function Info({ label, value }: { label: string; value: string }) {

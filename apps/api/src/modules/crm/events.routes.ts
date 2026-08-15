@@ -50,6 +50,7 @@ const assignmentIdSchema = z.object({ body: z.unknown().optional(), params: z.ob
 const activityNoteSchema = z.object({ body: z.object({ description: z.string().trim().min(1) }), params: z.object({ id: objectId }), query: z.object({}) });
 const menuSectionsSchema = z.array(z.object({ title: z.string().trim().min(1), items: z.array(z.string().trim().min(1)) }));
 const civilDateSchema = z.preprocess(civilDateInput, z.coerce.date());
+const eventTimeSchema = z.string().trim().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'El horario debe tener formato HH:mm y contener una hora válida.');
 const newCustomerSchema = z.object({
   fullName: z.string().trim().optional(),
   firstName: z.string().trim().optional(),
@@ -72,8 +73,8 @@ const createEventSchema = z.object({
     eventType: z.string().trim().optional(),
     eventName: z.string().trim().optional(),
     eventDate: civilDateSchema.optional(),
-    startTime: z.string().trim().optional(),
-    endTime: z.string().trim().optional(),
+    startTime: eventTimeSchema.optional(),
+    endTime: eventTimeSchema.optional(),
     guestCount: z.coerce.number().int().positive().optional(),
     honoreeName: z.string().trim().optional(),
     vegetarianCount: z.coerce.number().int().min(0).optional(),
@@ -102,6 +103,8 @@ const createEventSchema = z.object({
     if (!body.salonId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['salonId'], message: 'Debe seleccionar un salón.' });
     if (!body.customerId && !body.customer?.fullName && !body.customer?.firstName) context.addIssue({ code: z.ZodIssueCode.custom, path: ['customer'], message: 'Debe seleccionar o crear un cliente.' });
     if (!body.eventName && !body.eventType) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventName'], message: 'Debe indicar nombre o tipo de evento.' });
+    if (Boolean(body.startTime) !== Boolean(body.endTime)) context.addIssue({ code: z.ZodIssueCode.custom, path: [body.startTime ? 'endTime' : 'startTime'], message: 'Debe indicar el horario de inicio y de fin.' });
+    if (body.startTime && body.endTime && body.startTime === body.endTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['endTime'], message: 'El horario de fin debe ser distinto del inicio.' });
   }),
   params: z.object({}),
   query: z.object({})
@@ -124,8 +127,8 @@ const updateSchema = z.object({
     eventType: z.string().trim().optional(),
     eventName: z.string().trim().optional(),
     eventDate: civilDateSchema.optional(),
-    startTime: z.string().trim().optional(),
-    endTime: z.string().trim().optional(),
+    startTime: eventTimeSchema.optional(),
+    endTime: eventTimeSchema.optional(),
     guestCount: z.coerce.number().int().positive().optional(),
     honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional(),
     status: z.enum(eventStatuses).optional(),
