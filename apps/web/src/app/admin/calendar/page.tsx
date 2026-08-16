@@ -592,7 +592,7 @@ export default function CalendarPage() {
 
   const selectedDayEntries = useMemo(() => entriesForDay(entries, focusDate), [entries, focusDate]);
   const upcomingEntries = useMemo(() => entries.filter((entry) => entry.startAt >= startOfDay(new Date())).slice(0, 8), [entries]);
-  const criticalCount = entries.filter((entry) => entry.priority === 'critical' || entry.status === 'deposit_pending').length;
+  const criticalCount = entries.filter((entry) => entry.priority === 'critical').length;
   const notificationCount = entries.filter((entry) => entry.notification?.enabled).length;
   const doneCount = entries.filter((entry) => entry.status === 'confirmed' || entry.status === 'done').length;
   const dayStackEntries = useMemo(() => dayStackDate ? entriesForDay(entries, dayStackDate) : [], [dayStackDate, entries]);
