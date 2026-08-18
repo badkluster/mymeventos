@@ -21,6 +21,7 @@ describe('security utilities', () => {
 
   it('enforces assigned salon scope while ADMIN remains global', () => {
     expect(canAccessSalon({ id: '1', roles: [Role.STAFF], permissionOverrides: [], salonIds: ['salon-a'], active: true }, 'salon-a')).toBe(true);
+    expect(canAccessSalon({ id: '1', roles: [Role.SALON_MANAGER], permissionOverrides: [], salonIds: [], managedSalonIds: ['salon-b'], active: true }, 'salon-b')).toBe(true);
     expect(canAccessSalon({ id: '1', roles: [Role.STAFF], permissionOverrides: [], salonIds: ['salon-a'], active: true }, 'salon-b')).toBe(false);
     expect(canAccessSalon({ id: '1', roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }, 'salon-b')).toBe(true);
   });

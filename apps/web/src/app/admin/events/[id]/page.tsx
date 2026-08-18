@@ -63,6 +63,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [activities, setActivities] = useState<Activity[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [supplementaryLoadError, setSupplementaryLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('resumen');
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
@@ -71,27 +73,43 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   const load = async (eventId: string) => {
     setLoading(true);
+    setLoadError('');
+    setSupplementaryLoadError('');
     try {
-      const [response, paymentsResponse, expensesResponse, staffResponse, staffOptionsResponse, activityResponse] = await Promise.all([
-        api.get<{ event: Event; contract?: Contract; contracts?: Contract[] }>(`/events/${eventId}`),
+      // La ficha principal tiene que poder abrirse aunque falle algún panel secundario
+      // (por ejemplo, pagos, proveedores o el directorio de staff). Antes un único 403
+      // dejaba `event` vacío y el usuario quedaba atrapado en "Cargando evento...".
+      const response = await api.get<{ event: Event; contract?: Contract; contracts?: Contract[] }>(`/events/${eventId}`);
+      setEvent(response.event);
+      setContract(response.contract);
+      setContracts(response.contracts ?? (response.contract ? [response.contract] : []));
+      setLoading(false);
+
+      const [paymentsResult, expensesResult, staffResult, staffOptionsResult, activityResult] = await Promise.allSettled([
         api.get<{ items: Payment[]; summary: PaymentSummary }>(`/events/${eventId}/payments`),
         api.get<{ items: EventExpense[]; summary: EventExpenseSummary }>(`/events/${eventId}/expenses`),
         api.get<{ items: StaffAssignment[] }>(`/events/${eventId}/staff`),
         api.get<{ items: StaffOption[] }>('/users?active=true&limit=100'),
         api.get<{ activities: Activity[] }>(`/events/${eventId}/activity`)
       ]);
-      setEvent(response.event);
-      setContract(response.contract);
-      setContracts(response.contracts ?? (response.contract ? [response.contract] : []));
-      setPayments(paymentsResponse.items ?? []);
-      setExpenses(expensesResponse.items ?? []);
-      setExpenseSummary(expensesResponse.summary ?? { totalPaid: 0, totalCancelled: 0, activeExpenseCount: 0, cancelledExpenseCount: 0 });
-      setStaffAssignments(staffResponse.items ?? []);
-      setStaffOptions(staffOptionsResponse.items ?? []);
-      setPaymentSummary(paymentsResponse.summary ?? { paidAmount: 0, refundedAmount: 0, pendingAmount: 0, securityDepositAmount: 0, overdueAmount: 0 });
-      setActivities(activityResponse.activities ?? []);
+
+      if (paymentsResult.status === 'fulfilled') {
+        setPayments(paymentsResult.value.items ?? []);
+        setPaymentSummary(paymentsResult.value.summary ?? { paidAmount: 0, refundedAmount: 0, pendingAmount: 0, securityDepositAmount: 0, overdueAmount: 0 });
+      }
+      if (expensesResult.status === 'fulfilled') {
+        setExpenses(expensesResult.value.items ?? []);
+        setExpenseSummary(expensesResult.value.summary ?? { totalPaid: 0, totalCancelled: 0, activeExpenseCount: 0, cancelledExpenseCount: 0 });
+      }
+      if (staffResult.status === 'fulfilled') setStaffAssignments(staffResult.value.items ?? []);
+      if (staffOptionsResult.status === 'fulfilled') setStaffOptions(staffOptionsResult.value.items ?? []);
+      if (activityResult.status === 'fulfilled') setActivities(activityResult.value.activities ?? []);
+
+      if ([paymentsResult, expensesResult, staffResult, staffOptionsResult, activityResult].some((result) => result.status === 'rejected')) {
+        setSupplementaryLoadError('La ficha se cargó, pero algunos datos complementarios no están disponibles todavía. Podés reintentar sin perder los cambios realizados.');
+      }
     } catch (error) {
-      notice(error instanceof Error ? error.message : 'No se pudo cargar el evento.', 'error');
+      setLoadError(error instanceof Error ? error.message : 'No se pudo cargar el evento.');
     } finally {
       setLoading(false);
     }
@@ -244,7 +262,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     finally { setSaving(false); }
   };
 
-  if (loading || !event) return <div className="grid min-h-56 place-items-center rounded-2xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">Cargando evento...</div>;
+  if (loading) return <div className="grid min-h-56 place-items-center rounded-2xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">Cargando evento...</div>;
+  if (loadError || !event) return <section className="space-y-4"><Link href="/admin/events" className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 transition hover:text-zinc-950"><ChevronLeft className="h-4 w-4" />Volver a Eventos</Link><div className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm"><h1 className="text-lg font-semibold text-red-950">No se pudo abrir el evento</h1><p className="mt-2 text-sm text-red-800">{loadError || 'El evento no está disponible en este momento.'}</p><Button className="mt-4" variant="secondary" disabled={!id} onClick={() => void load(id)}>Reintentar</Button></div></section>;
 
   const quote = typeof event.sourceQuoteId === 'string' ? (typeof event.quoteId === 'string' ? undefined : event.quoteId as Quote | undefined) : event.sourceQuoteId as Quote | undefined;
   const lead = typeof event.sourceLeadId === 'string' ? undefined : event.sourceLeadId;
@@ -281,6 +300,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   return <section className="space-y-6 pb-8">
     <Link href="/admin/events" className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 transition hover:text-zinc-950"><ChevronLeft className="h-4 w-4" />Volver a Eventos</Link>
+    {supplementaryLoadError ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><span>{supplementaryLoadError}</span><Button variant="secondary" className="shrink-0" disabled={!id} onClick={() => void load(id)}>Reintentar carga</Button></div> : null}
     <header className="rounded-3xl border border-zinc-200 bg-white px-6 py-6 shadow-sm md:px-8">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold tracking-tight text-zinc-950">{event.eventName || displayLabel(eventTypeLabels, event.eventType || '')}</h1><span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">{displayLabel(eventStatusLabels, event.status)}</span></div><p className="mt-2 text-sm text-zinc-500">{entityName(event.customerId)} · {entityName(event.salonId)}</p></div>

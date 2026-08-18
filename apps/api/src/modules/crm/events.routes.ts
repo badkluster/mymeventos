@@ -315,7 +315,28 @@ async function tablewareAvailability(salonId: string, day: string, eventId?: str
 
 async function ensureEventAccess(request: Request, event: any): Promise<void> {
   if (!event || event.deletedAt) throw new ApiError(404, 'EVENT_NOT_FOUND');
-  if (event.salonId && !canAccessSalon(request.user!, event.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  if (event.salonId && !canAccessSalon(request.user!, event.salonId.toString())) {
+    // `managerUserId` is the authoritative relationship configured on the salon.
+    // This fallback keeps an assigned manager operating if the denormalized user
+    // arrays have not yet been synchronized, without granting global salon access.
+    const canUseManagerRelationship = request.user!.roles.some((role) => [Role.MANAGER, Role.SALON_MANAGER].includes(role));
+    const isAssignedManager = canUseManagerRelationship && await Salon.exists({ _id: event.salonId, managerUserId: request.user!.id, deletedAt: null });
+    if (isAssignedManager) return;
+
+    // IDs and aggregate counts are enough to correlate a permission report without
+    // putting names, emails, tokens or customer data into production logs.
+    console.warn(JSON.stringify({
+      event: 'event_salon_scope_denied',
+      requestMethod: request.method,
+      requestPath: request.originalUrl,
+      userId: request.user?.id,
+      eventId: event._id?.toString?.(),
+      salonId: event.salonId.toString(),
+      roles: request.user?.roles ?? [],
+      accessibleSalonCount: accessibleSalonIds(request.user!).length,
+    }));
+    throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  }
 }
 
 async function transitionStaffAssignment(request: Request, event: any, assignmentId: string, nextStatus: StaffAssignmentStatus) {

@@ -6,6 +6,7 @@ import { generateAccessToken } from '../src/utils/tokens';
 const mocks = vi.hoisted(() => ({
   userFindOne: vi.fn(),
   salonFindOne: vi.fn(),
+  salonExists: vi.fn(),
   packageFindOne: vi.fn(),
   ruleFindOne: vi.fn(),
   customerFindOne: vi.fn(),
@@ -26,7 +27,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne, find: vi.fn() } }));
-vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: vi.fn(), exists: vi.fn(), find: vi.fn(), findOne: mocks.salonFindOne } }));
+vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: vi.fn(), exists: mocks.salonExists, find: vi.fn(), findOne: mocks.salonFindOne } }));
 vi.mock('../src/modules/salons/salonStockItem.model', () => ({ SalonStockItem: { find: mocks.salonStockFind }, salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'] }));
 vi.mock('../src/modules/crm/eventTablewareAllocation.model', () => ({ EventTablewareAllocation: { find: mocks.tablewareFind, deleteMany: mocks.tablewareDeleteMany, insertMany: mocks.tablewareInsertMany } }));
 vi.mock('../src/modules/crm/crm.models', () => ({
@@ -121,6 +122,18 @@ describe('event cancellation permissions and reason', () => {
 
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('EVENT_CANCELLATION_REASON_REQUIRED');
+  });
+
+  it('allows the salon manager when the salon assignment exists but the user scope is stale', async () => {
+    const event: any = { _id: eventId, salonId, status: 'quoted', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: managerId, roles: [Role.SALON_MANAGER], permissionOverrides: [], salonIds: [], managedSalonIds: [], active: true }));
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.salonExists.mockResolvedValue({ _id: salonId });
+
+    const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', managerCookie).send({ status: 'deposit_pending' });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(mocks.salonExists).toHaveBeenCalledWith({ _id: salonId, managerUserId: managerId, deletedAt: null });
   });
 
   it('cancels an event with a reason, storing it and releasing tableware allocations', async () => {
