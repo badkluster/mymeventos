@@ -18,7 +18,9 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   ContractAddendum: { countDocuments: mocks.addendumCount, find: mocks.addendumFind, findOne: mocks.addendumFindOne, create: mocks.addendumCreate },
   Event: { findOne: mocks.eventFindOne, findOneAndUpdate: mocks.eventFindOneAndUpdate }
 }));
-vi.mock('mongoose', () => ({ default: { startSession: mocks.startSession } }));
+// `errorHandler` imports the shared DB connection, which configures Mongoose through
+// `set()` before this service is loaded. Keep the mock compatible with that bootstrap.
+vi.mock('mongoose', () => ({ default: { set: vi.fn(), startSession: mocks.startSession } }));
 
 import { ApiError } from '../src/middlewares/errorHandler';
 import { approveAddendum, approveContract, cancelContract, createAddendum, createContractFromEvent } from '../src/modules/crm/event-to-contract.service';

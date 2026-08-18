@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   expenses: [] as any[],
 }));
 
-vi.mock('mongoose', () => ({ default: { startSession: mocks.startSession } }));
+// The shared DB connection configures Mongoose with `set()` during module loading.
+vi.mock('mongoose', () => ({ default: { set: vi.fn(), startSession: mocks.startSession } }));
 vi.mock('../src/modules/crm/crm.models', () => ({ Event: { findOne: mocks.eventFindOne } }));
 vi.mock('../src/modules/operations/operations.models', () => ({
   Supplier: { find: mocks.supplierFind },
