@@ -32,15 +32,15 @@ router.get('/', validateRequest(listSchema), asyncHandler(async (request, respon
     .populate('eventId', 'eventName eventType eventDate startTime endTime status')
     .populate('salonId', 'name city')
     .lean();
-  return sendSuccess(response, { assignments });
+  return sendSuccess(response, { assignments: assignments.filter((assignment: any) => assignment.eventId && !['cancelled', 'lost'].includes(assignment.eventId.status)) });
 }));
 
 router.get('/:id', validateRequest(idParams), asyncHandler(async (request, response) => {
-  const assignment = await EventStaffAssignment.findOne({ _id: request.params.id, staffUserId: request.user!.id, deletedAt: null })
+  const assignment: any = await EventStaffAssignment.findOne({ _id: request.params.id, staffUserId: request.user!.id, deletedAt: null })
     .populate('eventId', 'eventName eventType eventDate startTime endTime status guestCount')
     .populate('salonId', 'name city address')
     .lean();
-  if (!assignment) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
+  if (!assignment || !assignment.eventId || ['cancelled', 'lost'].includes((assignment.eventId as any).status)) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
   return sendSuccess(response, { assignment });
 }));
 

@@ -227,9 +227,9 @@ function SectionCard({ title, icon, children, action }: { title: string; icon?: 
   </article>;
 }
 
-function Field({ label, children, className = '', action }: { label: string; children: ReactNode; className?: string; action?: ReactNode }) {
+function Field({ label, children, className = '', action, required = false }: { label: string; children: ReactNode; className?: string; action?: ReactNode; required?: boolean }) {
   return <div className={`block space-y-1.5 ${className}`}>
-    <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</span>{action}</div>
+    <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}{required ? <span className="ml-1 text-red-600" aria-label="obligatorio">*</span> : null}</span>{action}</div>
     {children}
   </div>;
 }
@@ -244,9 +244,9 @@ function IconButton({ label, onClick, disabled }: { label: string; onClick: () =
   </button>;
 }
 
-function SaveBar({ saving, onSave, text = 'Guardar plan operativo' }: { saving: boolean; onSave: () => void; text?: string }) {
+function SaveBar({ saving, onSave, text = 'Guardar plan operativo', disabled = false }: { saving: boolean; onSave: () => void; text?: string; disabled?: boolean }) {
   return <div className="flex justify-end border-t border-zinc-100 pt-4">
-    <Button disabled={saving} onClick={onSave}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : text}</Button>
+    <Button disabled={saving || disabled} onClick={onSave}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : text}</Button>
   </div>;
 }
 
@@ -339,6 +339,7 @@ function EventOperationalDocumentActions({ event, type, disabled, onNotice }: { 
 }
 
 export function EventBasicsEditor({ event, saving, onSave }: { event: Event; saving: boolean; onSave: SaveEvent }) {
+  const { showToast } = useToast();
   const [form, setForm] = useState({
     eventName: event.eventName ?? '',
     eventType: event.eventType ?? '',
@@ -355,7 +356,13 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
     notes: event.notes ?? ''
   });
   const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const save = () => onSave({
+  const complete = Boolean(form.eventType.trim() && form.eventDate && form.startTime && form.endTime && numeric(form.guestCount));
+  const save = () => {
+    if (!complete) {
+      showToast({ message: 'Completá tipo, fecha, horario de inicio y fin, y cantidad de invitados.', variant: 'error' });
+      return;
+    }
+    onSave({
     eventName: form.eventName,
     eventType: form.eventType,
     eventDate: form.eventDate || undefined,
@@ -369,16 +376,17 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
     lactoseIntolerantCount: numeric(form.lactoseIntolerantCount),
     tableLinenColor: form.tableLinenColor,
     notes: form.notes
-  });
+    });
+  };
   return <SectionCard title="Ficha del evento">
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <Field label="Nombre del evento" className="md:col-span-2"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} /></Field>
-      <Field label="Tipo"><Input value={form.eventType} onChange={(event) => set('eventType', event.target.value)} placeholder="15 años, casamiento, infantil..." /></Field>
+      <Field label="Tipo" required><Input required value={form.eventType} onChange={(event) => set('eventType', event.target.value)} placeholder="15 años, casamiento, infantil..." /></Field>
       <Field label="Homenajeado"><Input value={form.honoreeName} onChange={(event) => set('honoreeName', event.target.value)} /></Field>
-      <Field label="Fecha"><Input type="date" value={form.eventDate} onChange={(event) => set('eventDate', event.target.value)} /></Field>
-      <Field label="Inicio"><Input value={form.startTime} onChange={(event) => set('startTime', event.target.value)} placeholder="21:00" /></Field>
-      <Field label="Fin"><Input value={form.endTime} onChange={(event) => set('endTime', event.target.value)} placeholder="05:00" /></Field>
-      <Field label="Invitados"><Input type="number" min={1} value={form.guestCount} onChange={(event) => set('guestCount', event.target.value)} /></Field>
+      <Field label="Fecha" required><Input required type="date" value={form.eventDate} onChange={(event) => set('eventDate', event.target.value)} /></Field>
+      <Field label="Inicio" required><Input required type="time" value={form.startTime} onChange={(event) => set('startTime', event.target.value)} /></Field>
+      <Field label="Fin" required><Input required type="time" value={form.endTime} onChange={(event) => set('endTime', event.target.value)} /></Field>
+      <Field label="Invitados" required><Input required type="number" min={1} value={form.guestCount} onChange={(event) => set('guestCount', event.target.value)} /></Field>
       <Field label="Vegetarianos"><Input type="number" min={0} value={form.vegetarianCount} onChange={(event) => set('vegetarianCount', event.target.value)} /></Field>
       <Field label="Veganos"><Input type="number" min={0} value={form.veganCount} onChange={(event) => set('veganCount', event.target.value)} /></Field>
       <Field label="Celíacos"><Input type="number" min={0} value={form.celiacCount} onChange={(event) => set('celiacCount', event.target.value)} /></Field>
@@ -386,7 +394,7 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
       <Field label="Mantelería" className="md:col-span-2"><Input value={form.tableLinenColor} onChange={(event) => set('tableLinenColor', event.target.value)} placeholder="Color, textura, servilletas..." /></Field>
       <Field label="Notas internas" className="md:col-span-2 xl:col-span-4"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
     </div>
-    <SaveBar saving={saving} onSave={save} text="Guardar ficha" />
+    <SaveBar saving={saving} disabled={!complete} onSave={save} text="Guardar ficha" />
   </SectionCard>;
 }
 

@@ -43,6 +43,15 @@ function checklist(quote: any, customer: any): Record<string, boolean> {
 export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ quote: any; lead: any; customer: any; event: any; createdEvent: boolean }> {
   const quote: any = await Quote.findOne({ _id: input.quoteId, deletedAt: null });
   if (!quote) throw new ApiError(404, 'QUOTE_NOT_FOUND');
+  const missingEventFields = [
+    !quote.eventType && 'tipo de evento',
+    !quote.eventDate && 'fecha',
+    !quote.startTime && 'horario de inicio',
+    !quote.endTime && 'horario de fin',
+    !quote.guestCount && 'cantidad de invitados',
+    !quote.salonId && 'salón'
+  ].filter(Boolean);
+  if (missingEventFields.length) throw new ApiError(422, 'EVENT_REQUIRED_FIELDS', `Completá ${missingEventFields.join(', ')} en el presupuesto antes de convertirlo en evento.`);
 
   const lead: any = quote.leadId ? await Lead.findOne({ _id: quote.leadId, deletedAt: null }) : null;
   const { customer } = await findOrCreateCustomer({

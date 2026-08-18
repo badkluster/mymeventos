@@ -262,7 +262,7 @@ export async function dashboardAlerts(request: Request) {
   const salon = scope.match();
   const [events, overduePayments] = await Promise.all([
     Event.find({ ...activeEventQuery(), ...salon, eventDate: { $gte: now, $lt: until } }).populate('salonId', 'name').populate('customerId', 'fullName').sort({ eventDate: 1 }).limit(120).lean(),
-    Payment.find({ deletedAt: null, ...salon, status: 'pending', affectsContractBalance: true, dueDate: { $lt: now } }).populate('customerId', 'fullName').populate('eventId', 'eventName').sort({ dueDate: 1 }).limit(100).lean(),
+    Payment.find({ deletedAt: null, ...salon, status: 'pending', affectsContractBalance: true, dueDate: { $lt: now } }).populate('customerId', 'fullName').populate('eventId', 'eventName status').sort({ dueDate: 1 }).limit(100).lean(),
   ]);
   const eventIds = events.map((event: any) => event._id);
   const [contracts, staffCounts, productionPlans] = await Promise.all([
@@ -273,7 +273,7 @@ export async function dashboardAlerts(request: Request) {
   const contractByEvent = new Map(contracts.map((contract: any) => [contract.eventId.toString(), contract]));
   const staffByEvent = new Map(staffCounts.map((item: any) => [item._id.toString(), item.value]));
   const productionByEvent = new Map(productionPlans.map((item: any) => [item.eventId.toString(), item.status]));
-  const alerts: any[] = overduePayments.map((payment: any) => ({
+  const alerts: any[] = overduePayments.filter((payment: any) => !payment.eventId || !['cancelled', 'lost'].includes(payment.eventId.status)).map((payment: any) => ({
     id: `payment-overdue-${payment._id}`, severity: 'critical', entityType: 'Payment', entityId: payment._id.toString(),
     title: 'Cuota vencida', description: `${payment.customerId?.fullName || 'Cliente'} tiene un pago vencido por $ ${Number(payment.amount || 0).toLocaleString('es-AR')}.`,
     dueAt: payment.dueDate, recommendedAction: 'Registrar el cobro o contactar al cliente.', href: `/admin/payments/${payment._id}`,

@@ -212,6 +212,16 @@ export async function approveContract(contractId: string, userId: string): Promi
         contract.approvedByUserId = userId;
         contract.updatedBy = userId;
         await contract.save({ session });
+
+        if (contract.supersedesContractId) {
+          const previous: any = await Contract.findOne({ _id: contract.supersedesContractId, deletedAt: null }).session(session);
+          if (!previous) throw new ApiError(422, 'CONTRACT_EVENT_INCONSISTENT', 'No se encontró la versión contractual anterior.');
+          if (previous.eventId?.toString() !== contract.eventId?.toString()) throw new ApiError(422, 'CONTRACT_EVENT_INCONSISTENT', 'Las versiones contractuales pertenecen a eventos distintos.');
+          previous.status = 'superseded';
+          previous.supersededByContractId = contract._id;
+          previous.updatedBy = userId;
+          await previous.save({ session });
+        }
       }
 
       if (event.status === 'contract_draft') {

@@ -119,6 +119,7 @@ async function contactForPayment(paymentId: string, now: Date): Promise<PaymentC
     .lean();
   if (!payment) throw new ApiError(404, 'PAYMENT_NOT_FOUND');
   if (payment.source === 'ticket_order') throw new ApiError(422, 'PAYMENT_TICKET_ORDER_READONLY');
+  if (payment.eventId && TERMINAL_EVENT_STATUSES.has(String(payment.eventId.status))) throw new ApiError(422, 'PAYMENT_COLLECTION_EVENT_TERMINAL', 'El evento está cancelado o perdido; no corresponde enviar recordatorios de cobro.');
   const dueDate = dueDateKey(payment.dueDate);
   assertOverdue(payment.status, dueDate, now);
   return contactFromObligation({

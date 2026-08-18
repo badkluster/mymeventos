@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Permission, Role } from '@mym/shared';
+import mongoose from 'mongoose';
 import { generateAccessToken } from '../src/utils/tokens';
 
 const mocks = vi.hoisted(() => ({
@@ -13,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   eventFindOne: vi.fn(),
   eventFind: vi.fn(),
   eventCreate: vi.fn(),
+  leadActivityCreate: vi.fn(),
+  contractFind: vi.fn(),
+  paymentFind: vi.fn(),
   tablewareDeleteMany: vi.fn(),
   writeAuditLog: vi.fn(),
   syncEventSupplierExpenses: vi.fn(),
@@ -23,7 +27,8 @@ const mocks = vi.hoisted(() => ({
   staffAssignmentFindOne: vi.fn(),
   salonStockFind: vi.fn(),
   tablewareFind: vi.fn(),
-  tablewareInsertMany: vi.fn()
+  tablewareInsertMany: vi.fn(),
+  cancelEvent: vi.fn()
 }));
 
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne, find: vi.fn() } }));
@@ -31,7 +36,7 @@ vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: v
 vi.mock('../src/modules/salons/salonStockItem.model', () => ({ SalonStockItem: { find: mocks.salonStockFind }, salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'] }));
 vi.mock('../src/modules/crm/eventTablewareAllocation.model', () => ({ EventTablewareAllocation: { find: mocks.tablewareFind, deleteMany: mocks.tablewareDeleteMany, insertMany: mocks.tablewareInsertMany } }));
 vi.mock('../src/modules/crm/crm.models', () => ({
-  Lead: {}, LeadActivity: { create: vi.fn() }, Customer: { findOne: mocks.customerFindOne }, ContactPerson: {},
+  Lead: {}, LeadActivity: { create: mocks.leadActivityCreate }, Customer: { findOne: mocks.customerFindOne }, ContactPerson: {},
   PackageTemplate: { find: vi.fn(), findOne: mocks.packageFindOne, exists: vi.fn() },
   VenuePackageRule: { find: vi.fn(), findOne: mocks.ruleFindOne, findOneAndUpdate: vi.fn() },
   Quote: { findOne: vi.fn() }, QuoteRevision: {},
@@ -39,14 +44,25 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   EventStaffAssignment: { find: vi.fn(), findOne: mocks.staffAssignmentFindOne, exists: mocks.staffAssignmentExists, create: mocks.staffAssignmentCreate },
   CalendarItem: { findOneAndUpdate: vi.fn(), updateMany: vi.fn().mockResolvedValue({}) },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
-  Contract: { findOne: vi.fn() }, ContractAddendum: {}, Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn() }
+  Contract: { find: mocks.contractFind, findOne: vi.fn() }, ContractAddendum: {}, Payment: { countDocuments: vi.fn(), find: mocks.paymentFind, findOne: vi.fn() }
 }));
 vi.mock('../src/modules/production/production.models', () => ({ ProductionPlan: { findOne: mocks.productionPlanFindOne } }));
 vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: mocks.writeAuditLog }));
 vi.mock('../src/modules/crm/quote-pdf.service', () => ({ generateAndUploadQuotePdf: vi.fn() }));
 vi.mock('../src/modules/crm/event-supplier-expenses.service', () => ({ syncEventSupplierExpenses: mocks.syncEventSupplierExpenses, eventExpenses: mocks.eventExpenses }));
+vi.mock('../src/modules/crm/event-lifecycle.service', () => ({
+  activeEventStatuses: ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed'],
+  terminalEventStatuses: ['cancelled', 'lost'],
+  cancelEvent: mocks.cancelEvent,
+  cancellationPreview: vi.fn(),
+  deletionPreview: vi.fn(),
+  deleteDraftEvent: vi.fn(),
+  reactivateEvent: vi.fn(),
+}));
 
 import app from '../src/app';
+
+const startSessionSpy = vi.spyOn(mongoose, 'startSession');
 
 const adminId = '507f1f77bcf86cd799439011';
 const managerId = '507f1f77bcf86cd799439012';
@@ -64,10 +80,14 @@ function queryChain(value: unknown) {
 function populatedQuery(value: unknown) {
   return { populate: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
 }
+function sortedQuery(value: unknown) {
+  return { sort: vi.fn().mockResolvedValue(value) };
+}
 
 describe('manual event creation from a package', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    startSessionSpy.mockResolvedValue({ withTransaction: vi.fn(async (work: () => Promise<void>) => work()), endSession: vi.fn().mockResolvedValue(undefined) } as any);
     mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
   });
 
@@ -106,12 +126,94 @@ describe('manual event creation from a package', () => {
   });
 });
 
+describe('event package correction and application', () => {
+  const templateId = '507f1f77bcf86cd799439015';
+  const packageTemplate = { _id: templateId, name: 'Black Service', isGlobal: true, pricingMode: 'per_person', finalPricePerPerson: 25000, depositAmount: 100000, startTime: '21:00', endTime: '05:00', menuSections: [{ title: 'Menú Black', items: ['Recepción', 'Principal'] }], includedServices: ['DJ', 'Barra'] };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    startSessionSpy.mockResolvedValue({ withTransaction: vi.fn(async (work: () => Promise<void>) => work()), endSession: vi.fn().mockResolvedValue(undefined) } as any);
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+    mocks.packageFindOne.mockReturnValue(chainLean(packageTemplate));
+    mocks.ruleFindOne.mockReturnValue(chainLean(null));
+    mocks.contractFind.mockReturnValue(sortedQuery([]));
+    mocks.paymentFind.mockResolvedValue([]);
+    mocks.leadActivityCreate.mockResolvedValue({});
+  });
+
+  it('previews every affected category without mutating the event', async () => {
+    const event: any = { _id: eventId, salonId, status: 'draft', guestCount: 80, startTime: '20:00', endTime: '04:00', finalAmount: 1200000, commercialSnapshot: { packageName: 'Personalizado', totalAmount: 1200000 }, menuSnapshot: [], servicesSnapshot: [], save: vi.fn() };
+    mocks.eventFindOne.mockResolvedValue(event);
+
+    const response = await request(app).post(`/api/events/${eventId}/package-change/preview`).set('Cookie', adminCookie).send({ packageTemplateId: templateId });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.data.preview.package.name).toBe('Black Service');
+    expect(response.body.data.preview.proposal.totalAmount).toBe(2000000);
+    expect(response.body.data.preview.changes).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'commercial', changed: true }), expect.objectContaining({ key: 'menu', changed: true }), expect.objectContaining({ key: 'services', changed: true })]));
+    expect(event.save).not.toHaveBeenCalled();
+  });
+
+  it('associates a missing package without overwriting the agreed snapshots', async () => {
+    const event: any = { _id: eventId, salonId, customerId: 'customer-1', status: 'draft', quoteMode: 'CUSTOM', guestCount: 80, updatedAt: new Date('2026-08-18T12:00:00.000Z'), finalAmount: 1200000, commercialSnapshot: { packageName: 'Acuerdo existente', totalAmount: 1200000 }, menuSnapshot: [{ title: 'Menú acordado', items: ['Pizza'] }], servicesSnapshot: ['DJ existente'], save: vi.fn().mockResolvedValue(undefined) };
+    mocks.eventFindOne.mockResolvedValue(event);
+
+    const response = await request(app).post(`/api/events/${eventId}/package-change`).set('Cookie', adminCookie).send({ packageTemplateId: templateId, mode: 'associate_only', expectedUpdatedAt: event.updatedAt.toISOString() });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(event.packageTemplateId).toBe(templateId);
+    expect(event.commercialSnapshot.packageName).toBe('Acuerdo existente');
+    expect(event.menuSnapshot[0].title).toBe('Menú acordado');
+    expect(event.servicesSnapshot).toEqual(['DJ existente']);
+    expect(event.quoteMode).toBe('HYBRID');
+    expect(mocks.leadActivityCreate).toHaveBeenCalledWith(expect.objectContaining({ type: 'system', title: 'Paquete asociado' }));
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), 'EVENT_PACKAGE_ASSOCIATE', 'Event', eventId, expect.objectContaining({ packageTemplateId: templateId }));
+  });
+
+  it('returns success when the secondary activity history cannot be written', async () => {
+    const event: any = { _id: eventId, salonId, customerId: 'customer-1', status: 'draft', quoteMode: 'CUSTOM', guestCount: 80, updatedAt: new Date('2026-08-18T12:00:00.000Z'), finalAmount: 1200000, commercialSnapshot: { packageName: 'Acuerdo existente', totalAmount: 1200000 }, menuSnapshot: [], servicesSnapshot: [], save: vi.fn().mockResolvedValue(undefined) };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.leadActivityCreate.mockRejectedValueOnce(new Error('Activity history unavailable'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      const response = await request(app).post(`/api/events/${eventId}/package-change`).set('Cookie', adminCookie).send({ packageTemplateId: templateId, mode: 'associate_only', expectedUpdatedAt: event.updatedAt.toISOString() });
+
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), 'EVENT_PACKAGE_ASSOCIATE', 'Event', eventId, expect.objectContaining({ packageTemplateId: templateId }));
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('event_package_activity_write_failed'));
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('blocks a lower package total when it would be below the amount already paid', async () => {
+    const event: any = { _id: eventId, salonId, status: 'confirmed', guestCount: 10, updatedAt: new Date('2026-08-18T12:00:00.000Z'), finalAmount: 500000, commercialSnapshot: { totalAmount: 500000 }, menuSnapshot: [], servicesSnapshot: [], save: vi.fn() };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.paymentFind.mockResolvedValue([{ status: 'paid', amount: 300000, type: 'deposit', affectsContractBalance: true }]);
+
+    const response = await request(app).post(`/api/events/${eventId}/package-change`).set('Cookie', adminCookie).send({ packageTemplateId: templateId, mode: 'apply', sections: ['commercial'], reason: 'Cambio solicitado por el cliente.', expectedUpdatedAt: event.updatedAt.toISOString() });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('EVENT_PACKAGE_CHANGE_BLOCKED');
+    expect(event.save).not.toHaveBeenCalled();
+  });
+});
+
 describe('event cancellation permissions and reason', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.tablewareDeleteMany.mockResolvedValue({});
     mocks.eventFind.mockReturnValue(queryChain([]));
     mocks.productionPlanFindOne.mockResolvedValue(null);
+    mocks.cancelEvent.mockImplementation(async (input: any) => {
+      const event = await mocks.eventFindOne();
+      event.status = input.status;
+      event.cancellationReason = input.reason;
+      event.cancelledBy = input.userId;
+      await event.save();
+      return { event, preview: { canProceed: true, blockers: [], impacts: {} } };
+    });
   });
 
   it('rejects cancellation without a reason', async () => {
@@ -136,7 +238,7 @@ describe('event cancellation permissions and reason', () => {
     expect(mocks.salonExists).toHaveBeenCalledWith({ _id: salonId, managerUserId: managerId, deletedAt: null });
   });
 
-  it('cancels an event with a reason, storing it and releasing tableware allocations', async () => {
+  it('delegates cancellation with its reason to the transactional lifecycle service', async () => {
     const event: any = { _id: eventId, salonId, status: 'confirmed', save: vi.fn().mockResolvedValue(undefined) };
     mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
     mocks.eventFindOne.mockResolvedValue(event);
@@ -146,10 +248,10 @@ describe('event cancellation permissions and reason', () => {
     expect(response.status).toBe(200);
     expect(event.cancellationReason).toBe('El cliente canceló el evento.');
     expect(event.cancelledBy).toBe(adminId);
-    expect(mocks.tablewareDeleteMany).toHaveBeenCalledWith({ eventId: event._id });
+    expect(mocks.cancelEvent).toHaveBeenCalledWith({ eventId, userId: adminId, status: 'cancelled', reason: 'El cliente canceló el evento.' });
   });
 
-  it('cancels the current production plan when the event is cancelled', async () => {
+  it('returns the event produced by the lifecycle cancellation', async () => {
     const event: any = { _id: eventId, salonId, status: 'confirmed', save: vi.fn().mockResolvedValue(undefined) };
     const plan: any = { status: 'checked', save: vi.fn().mockResolvedValue(undefined) };
     mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
@@ -159,11 +261,11 @@ describe('event cancellation permissions and reason', () => {
     const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'cancelled', reason: 'El cliente canceló el evento.' });
 
     expect(response.status).toBe(200);
-    expect(plan.status).toBe('cancelled');
-    expect(plan.save).toHaveBeenCalled();
+    expect(response.body.data.event.status).toBe('cancelled');
+    expect(mocks.cancelEvent).toHaveBeenCalledOnce();
   });
 
-  it('leaves an already closed production plan untouched when the event is cancelled', async () => {
+  it('does not run the legacy production cancellation path from the route', async () => {
     const event: any = { _id: eventId, salonId, status: 'confirmed', save: vi.fn().mockResolvedValue(undefined) };
     mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
     mocks.eventFindOne.mockResolvedValue(event);
@@ -174,7 +276,8 @@ describe('event cancellation permissions and reason', () => {
     const response = await request(app).patch(`/api/events/${eventId}/status`).set('Cookie', adminCookie).send({ status: 'cancelled', reason: 'El cliente canceló el evento.' });
 
     expect(response.status).toBe(200);
-    expect(mocks.productionPlanFindOne).toHaveBeenCalledWith(expect.objectContaining({ eventId: event._id, status: { $nin: ['closed', 'cancelled'] } }));
+    expect(mocks.productionPlanFindOne).not.toHaveBeenCalled();
+    expect(mocks.cancelEvent).toHaveBeenCalledOnce();
   });
 
   it('rejects cancellation for a user whose EVENTS_CANCEL permission was explicitly revoked', async () => {
@@ -474,7 +577,7 @@ describe('event supplier financial synchronization', () => {
 
   it('preserves financial supplier assignments when the generic event editor sends a full resource plan', async () => {
     const originalAssignments = [{ id: 'original', supplierId: '507f1f77bcf86cd799439015', agreedAmount: 85000, status: 'confirmed' }];
-    const event: any = { _id: eventId, salonId, status: 'confirmed', resourcePlanSnapshot: { supplierAssignments: originalAssignments, timelineItems: [] }, save: vi.fn().mockResolvedValue(undefined) };
+    const event: any = { _id: eventId, salonId, status: 'confirmed', eventType: 'Cumpleaños', eventDate: new Date('2026-12-05T00:00:00.000Z'), startTime: '21:00', endTime: '05:00', guestCount: 80, resourcePlanSnapshot: { supplierAssignments: originalAssignments, timelineItems: [] }, save: vi.fn().mockResolvedValue(undefined) };
     mocks.eventFindOne.mockResolvedValue(event);
 
     const response = await request(app).patch(`/api/events/${eventId}`).set('Cookie', adminCookie).send({ resourcePlanSnapshot: {
@@ -498,5 +601,14 @@ describe('event supplier financial synchronization', () => {
     expect(response.status).toBe(422);
     expect(event.resourcePlanSnapshot.supplierAssignments).toEqual(originalAssignments);
     expect(event.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects status changes sent through the generic event editor', async () => {
+    const response = await request(app).patch(`/api/events/${eventId}`).set('Cookie', adminCookie).send({ status: 'cancelled' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mocks.eventFindOne).not.toHaveBeenCalled();
+    expect(mocks.cancelEvent).not.toHaveBeenCalled();
   });
 });

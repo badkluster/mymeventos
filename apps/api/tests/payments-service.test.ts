@@ -46,6 +46,7 @@ describe('payments service', () => {
 
     expect(contract.paidAmount).toBe(25000);
     expect(contract.balanceAmount).toBe(75000);
+    expect(mocks.paymentFind).toHaveBeenCalledWith({ eventId: 'event-1', deletedAt: null });
   });
 
   it('keeps security deposits outside contract balance', async () => {

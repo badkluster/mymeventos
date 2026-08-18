@@ -77,6 +77,7 @@ describe('event payment registration and the installment plan', () => {
     const response = await request(app).post(`/api/events/${eventId}/payments`).set('Cookie', adminCookie).send({ amount: 400000, method: 'cash', type: 'deposit', reference: 'Seña' });
 
     expect(response.status).toBe(201);
+    expect(mocks.contractFindOne).toHaveBeenNthCalledWith(1, { eventId: event._id, deletedAt: null, status: 'approved' });
     expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({ type: 'deposit' }), adminId);
     expect(event.paymentPlanSnapshot).toEqual(plan);
     expect(event.save).not.toHaveBeenCalled();

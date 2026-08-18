@@ -174,6 +174,7 @@ const eventSchema = new Schema({
   lineItemsSnapshot: { type: [Schema.Types.Mixed], default: [] },
   resourcePlanSnapshot: Schema.Types.Mixed,
   guestListAccessToken: { type: String, unique: true, sparse: true, index: true }, guestListAccessTokenCreatedAt: Date,
+  guestListAccessTokenRevokedAt: Date, guestListAccessTokenRevokedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   customCalculationSnapshot: Schema.Types.Mixed,
   estimatedAmount: Number, finalAmount: Number, notes: String,
   commercialSnapshot: Schema.Types.Mixed,
@@ -184,6 +185,7 @@ const eventSchema = new Schema({
   paymentPlanSnapshot: Schema.Types.Mixed,
   contractReadyChecklist: Schema.Types.Mixed,
   cancellationReason: String, cancelledAt: Date, cancelledBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  lifecycleHistory: { type: [Schema.Types.Mixed], default: [] },
   ...base
 }, { timestamps: true });
 // Support index for the venue/date time-slot availability check (assertVenueAvailable in

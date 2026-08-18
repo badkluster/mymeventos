@@ -42,14 +42,20 @@ const quoteFields = z.object({
   pricingMode: z.enum(pricingModes).optional(), pricePerPerson: z.coerce.number().min(0).optional(), fixedPrice: z.coerce.number().min(0).optional(), discountPercentage: z.coerce.number().min(0).max(100).optional(), finalPricePerPerson: z.coerce.number().min(0).optional(), finalFixedPrice: z.coerce.number().min(0).optional(), depositAmount: z.coerce.number().min(0).optional(),
   paymentTerms: z.string().trim().optional(), promotionText: z.string().trim().optional(), giftText: z.string().trim().optional(), menuSections: menuSectionsSchema.optional(), includedServices: z.array(z.string().trim().min(1)).optional(), notes: z.string().trim().optional(), validUntil: z.coerce.date().optional()
 });
-const createQuoteSchema = z.object({ body: quoteFields.refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.').superRefine((body, context) => {
-  if (!body.leadId && !body.customerId) {
-    for (const field of ['phone', 'eventType', 'guestCount'] as const) if (body[field] === undefined) context.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Campo obligatorio para una persona nueva.' });
-    if (!body.contactName && !(body.firstName && body.lastName)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['contactName'], message: 'Debe indicar el nombre de la persona.' });
-  }
+function addRequiredQuoteIssues(body: z.infer<typeof quoteFields>, context: z.RefinementCtx): void {
+  if (!body.contactName && !(body.firstName && body.lastName)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['contactName'], message: 'Debe indicar el nombre de la persona.' });
+  if (!body.phone) context.addIssue({ code: z.ZodIssueCode.custom, path: ['phone'], message: 'Debe indicar un teléfono de contacto.' });
+  if (!body.eventType) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventType'], message: 'Debe indicar el tipo de evento.' });
+  if (!body.eventDate) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDate'], message: 'Debe indicar la fecha del evento.' });
+  if (!body.packageTemplateId && !body.startTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['startTime'], message: 'Debe indicar el horario de inicio.' });
+  if (!body.packageTemplateId && !body.endTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['endTime'], message: 'Debe indicar el horario de fin.' });
+  if (!body.guestCount) context.addIssue({ code: z.ZodIssueCode.custom, path: ['guestCount'], message: 'Debe indicar una cantidad de personas válida.' });
   if (!body.packageTemplateId && !body.manualMode) context.addIssue({ code: z.ZodIssueCode.custom, path: ['packageTemplateId'], message: 'Seleccione una plantilla o use Presupuesto manual.' });
-  if (body.manualMode && body.pricingMode === 'fixed' && !body.fixedPrice) context.addIssue({ code: z.ZodIssueCode.custom, path: ['fixedPrice'], message: 'En modalidad precio total debe indicar un importe mayor a cero.' });
-  if (body.manualMode && body.pricingMode !== 'fixed' && !body.pricePerPerson) context.addIssue({ code: z.ZodIssueCode.custom, path: ['pricePerPerson'], message: 'En modalidad por persona debe indicar un importe mayor a cero.' });
+  const price = body.pricingMode === 'fixed' ? body.finalFixedPrice ?? body.fixedPrice : body.finalPricePerPerson ?? body.pricePerPerson;
+  if (!body.packageTemplateId && (!price || price <= 0)) context.addIssue({ code: z.ZodIssueCode.custom, path: [body.pricingMode === 'fixed' ? 'fixedPrice' : 'pricePerPerson'], message: 'Debe indicar un precio mayor a cero.' });
+}
+const createQuoteSchema = z.object({ body: quoteFields.refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.').superRefine((body, context) => {
+  addRequiredQuoteIssues(body, context);
 }), params: z.object({}), query: z.object({}) });
 const updateQuoteSchema = z.object({ body: quoteFields.omit({ leadId: true, customerId: true, salonIds: true }).partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo para actualizar.'), params: z.object({ id: objectId }), query: z.object({}) });
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
@@ -396,6 +402,15 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
     const contactName = request.body.contactName ?? lead?.fullName ?? customer?.fullName;
     const raw = { ...quoteTemplateValues(template), ...nonCommercialBody, ...(applyCommercialOverrides ? pickDefined(body, commercialFields) : {}), salonId, leadId: lead?._id, customerId: customer?._id, source: customer ? 'customer' : lead ? (request.body.leadId ? 'lead' : 'new_person') : 'manual', contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email, eventType: request.body.eventType ?? lead?.eventType, eventDate: request.body.eventDate ?? lead?.eventDate, guestCount: request.body.guestCount ?? lead?.guestCount, packageName: manualMode ? request.body.packageName : template.name, packageTemplateId: request.body.packageTemplateId, validUntil: await quoteValidUntil(salonId, request.body.validUntil), quoteNumber: quoteNumber(), createdBy: request.user!.id, updatedBy: request.user!.id, templateSnapshot: request.body.packageTemplateId ? template : undefined, packageSnapshot: request.body.packageTemplateId ? template : undefined, contactSnapshot: { leadId: lead?._id, customerId: customer?._id, contactName, phone: request.body.phone ?? lead?.phone ?? customer?.phone, email: request.body.email ?? lead?.email ?? customer?.email } };
     const calculated = calculateQuote(raw);
+    const missingRequired = [
+      !calculated.contactName && 'nombre de contacto',
+      !calculated.phone && 'teléfono',
+      !calculated.eventType && 'tipo de evento',
+      !calculated.eventDate && 'fecha',
+      !calculated.startTime && 'horario de inicio',
+      !calculated.endTime && 'horario de fin'
+    ].filter(Boolean);
+    if (missingRequired.length) throw new ApiError(422, 'QUOTE_REQUIRED_FIELDS', `Completá ${missingRequired.join(', ')} antes de crear el presupuesto.`);
     if (!calculated.guestCount || !calculated.totalAmount || (calculated.pricingMode === 'fixed' ? !calculated.finalFixedPrice : !calculated.finalPricePerPerson)) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
     const quote: any = await Quote.create(calculated);
     await refreshQuotePdf(quote);
@@ -451,7 +466,21 @@ router.post('/:id/recalculate', requirePermission(Permission.QUOTES_UPDATE), val
 router.patch('/:id', requirePermission(Permission.QUOTES_UPDATE), validateRequest(updateQuoteSchema), asyncHandler(async (request, response) => {
   const quote: any = await Quote.findOne({ _id: request.params.id, deletedAt: null }); await ensureQuoteAccess(request, quote);
   if (request.body.salonId) await ensureAccessibleSalons(request, [request.body.salonId]);
-  const updated = calculateQuote({ ...quote.toObject(), ...request.body, updatedBy: request.user!.id }); Object.assign(quote, updated); await quote.save(); await refreshQuotePdf(quote); await createRevision(quote, request, 'Presupuesto actualizado');
+  const mergedQuote = { ...quote.toObject(), ...request.body };
+  const price = mergedQuote.pricingMode === 'fixed' ? mergedQuote.finalFixedPrice ?? mergedQuote.fixedPrice : mergedQuote.finalPricePerPerson ?? mergedQuote.pricePerPerson;
+  const missingRequired = [
+    !(mergedQuote.contactName || (mergedQuote.firstName && mergedQuote.lastName)) && 'Debe indicar el nombre de la persona.',
+    !mergedQuote.phone && 'Debe indicar un teléfono de contacto.',
+    !mergedQuote.eventType && 'Debe indicar el tipo de evento.',
+    !mergedQuote.eventDate && 'Debe indicar la fecha del evento.',
+    !mergedQuote.startTime && 'Debe indicar el horario de inicio.',
+    !mergedQuote.endTime && 'Debe indicar el horario de fin.',
+    !mergedQuote.guestCount && 'Debe indicar una cantidad de personas válida.',
+    !mergedQuote.packageTemplateId && !mergedQuote.manualMode && 'Seleccione una plantilla o use Presupuesto manual.',
+    (!price || price <= 0) && 'Debe indicar un precio mayor a cero.'
+  ].filter(Boolean) as string[];
+  if (missingRequired.length) throw new ApiError(422, 'QUOTE_REQUIRED_FIELDS', missingRequired.join(' '));
+  const updated = calculateQuote({ ...mergedQuote, updatedBy: request.user!.id }); Object.assign(quote, updated); await quote.save(); await refreshQuotePdf(quote); await createRevision(quote, request, 'Presupuesto actualizado');
   await LeadActivity.create({ leadId: quote.leadId, customerId: quote.customerId, type: 'system', title: 'Presupuesto actualizado', description: `Se actualizó el presupuesto ${quote.quoteNumber}.`, metadata: { quoteId: quote._id }, createdBy: request.user!.id });
   await writeAuditLog(request, 'QUOTE_UPDATE', 'Quote', quote._id.toString()); return sendSuccess(response, { quote }, 200, getApiMessage('QUOTE_UPDATED'));
 }));

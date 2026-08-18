@@ -46,6 +46,8 @@ const digitalInvitationSchema = new Schema({
   publicTokenCreatedAt: { type: Date, default: Date.now },
   publishedAt: Date,
   unpublishedAt: Date,
+  statusBeforeEventCancellation: { type: String, enum: invitationStatuses },
+  eventCancelledAt: Date,
   ...baseFields
 }, { timestamps: true });
 digitalInvitationSchema.index({ ownerId: 1, status: 1, deletedAt: 1 });

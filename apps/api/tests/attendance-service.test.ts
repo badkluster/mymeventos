@@ -43,7 +43,7 @@ describe('attendance.service', () => {
     vi.resetAllMocks();
     mocks.systemSettingFindOne.mockReturnValue(chainLean(null));
     mocks.userFindOne.mockReturnValue(chainLean({ _id: userId, active: true, staffProfile: {}, attendanceConfig: {} }));
-    mocks.assignmentFindOne.mockReturnValue({ sort: vi.fn().mockReturnValue(chainLean(null)) });
+    mocks.assignmentFindOne.mockReturnValue({ sort: vi.fn().mockReturnValue({ populate: vi.fn().mockReturnValue(chainLean(null)) }) });
     mocks.salonFindOne.mockReturnValue(chainSelectLean(null));
   });
 

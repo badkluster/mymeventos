@@ -199,7 +199,7 @@ async function resolveCustomerContacts(filters: CustomerAudienceFilters, scope: 
 
   const candidateIds = candidates.map((doc: any) => doc._id);
   const now = new Date();
-  const eventMatch: Record<string, unknown> = { customerId: { $in: candidateIds }, deletedAt: null };
+  const eventMatch: Record<string, unknown> = { customerId: { $in: candidateIds }, status: { $nin: ['cancelled', 'lost'] }, deletedAt: null };
   if (filters.eventType) eventMatch.eventType = { $regex: filters.eventType, $options: 'i' };
 
   const aggregates = await Event.aggregate([

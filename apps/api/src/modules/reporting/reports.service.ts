@@ -374,7 +374,7 @@ async function paymentControlReport(request: Request, definition: ReportDefiniti
   }
 
   const contracts = await Contract.find(contractMatch)
-    .populate('customerId', 'fullName').populate('eventId', 'eventName eventType eventDate paymentPlanSnapshot').populate('salonId', 'name')
+    .populate('customerId', 'fullName').populate('eventId', 'eventName eventType eventDate paymentPlanSnapshot status').populate('salonId', 'name')
     .select('contractNumber customerId eventId salonId totalAmount paidAmount balanceAmount paymentPlanSnapshot observations').lean();
   if (!contracts.length) return emptyResult;
 
@@ -382,6 +382,7 @@ async function paymentControlReport(request: Request, definition: ReportDefiniti
   const sortOrder = request.query.sortOrder === 'desc' ? -1 : 1;
 
   const rows = contracts.map((contract: any) => {
+    if (!contract.eventId || ['cancelled', 'lost'].includes(contract.eventId.status)) return undefined;
     const openInstallments = planFor(contract.eventId, contract).filter(isOpenInstallment);
     if (!openInstallments.length) return undefined;
     const dueInPeriod = openInstallments

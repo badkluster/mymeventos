@@ -145,6 +145,9 @@ export type Event = {
   lactoseIntolerantCount?: number;
   tableLinenColor?: string;
   status: string;
+  quoteMode?: 'PACKAGE' | 'CUSTOM' | 'HYBRID';
+  packageTemplateId?: string | { _id: string; name?: string };
+  packageSnapshot?: Record<string, unknown>;
   estimatedAmount?: number;
   finalAmount?: number;
   startTime?: string;

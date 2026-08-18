@@ -121,6 +121,27 @@ describe('event to contract service', () => {
     expect(mocks.eventFindOne).toHaveBeenCalledWith({ _id: 'event-1', deletedAt: null });
   });
 
+  it('supersedes the previous approved version only when its revision is approved', async () => {
+    const revision = { _id: 'contract-2', eventId: 'event-1', supersedesContractId: 'contract-1', status: 'pending_approval', customerSnapshot: { fullName: 'Ana Perez' }, eventSnapshot: { eventDate: new Date(), guestCount: 100 }, baseAmount: 120000, totalAmount: 120000, paidAmount: 20000, discountsAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
+    const previous = { _id: 'contract-1', eventId: 'event-1', status: 'approved', save: vi.fn().mockResolvedValue(undefined) };
+    const event = { _id: 'event-1', status: 'deposit_pending', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.contractFindOne
+      .mockResolvedValueOnce(revision)
+      .mockReturnValueOnce(sessionQuery(revision))
+      .mockReturnValueOnce(sessionQuery(previous));
+    mocks.eventFindOne.mockReturnValue(sessionQuery(event));
+    const session = transactionSession();
+    mocks.startSession.mockResolvedValue(session);
+    mocks.addendumFind.mockResolvedValue([]);
+
+    await approveContract('contract-2', 'user-1');
+
+    expect(revision.status).toBe('approved');
+    expect(previous.status).toBe('superseded');
+    expect(previous.supersededByContractId).toBe('contract-2');
+    expect(previous.save).toHaveBeenCalledWith({ session });
+  });
+
   it('is idempotent when an approved contract is approved again and repairs only a stale event', async () => {
     const contract = { _id: 'contract-1', eventId: 'event-1', status: 'approved', approvedAt: new Date(), customerSnapshot: { fullName: 'Ana Perez' }, eventSnapshot: { eventDate: new Date(), guestCount: 100 }, baseAmount: 100000, totalAmount: 100000, paidAmount: 0, discountsAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
     const event = { _id: 'event-1', status: 'contract_draft', save: vi.fn().mockResolvedValue(undefined) };

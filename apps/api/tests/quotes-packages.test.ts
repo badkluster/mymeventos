@@ -83,14 +83,14 @@ describe('quote package templates', () => {
     const customerId = '507f1f77bcf86cd799439016';
     const quote = { _id: '507f1f77bcf86cd799439017', salonId, quoteNumber: 'P-2026-00001', save: vi.fn().mockResolvedValue(undefined) };
     mocks.customerFindOne.mockResolvedValue({ _id: customerId, fullName: 'Ana Pérez', salonIds: [] });
-    mocks.packageFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: packageId, name: 'Alquiler de salón', active: true, isGlobal: true, pricingMode: 'per_person', pricePerPerson: 100000, finalPricePerPerson: 100000, depositAmount: 100000 }) });
+    mocks.packageFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: packageId, name: 'Alquiler de salón', active: true, isGlobal: true, pricingMode: 'per_person', pricePerPerson: 100000, finalPricePerPerson: 100000, depositAmount: 100000, startTime: '21:00', endTime: '05:00' }) });
     mocks.ruleFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
     mocks.quoteCreate.mockResolvedValue(quote);
 
     const response = await request(app)
       .post('/api/quotes')
       .set('Cookie', adminCookie)
-      .send({ customerId, salonId, packageTemplateId: packageId, eventType: 'Cumpleaños', guestCount: 40 });
+      .send({ customerId, salonId, packageTemplateId: packageId, contactName: 'Ana Pérez', phone: '1112345678', eventType: 'Cumpleaños', eventDate: '2026-12-05', startTime: '21:00', endTime: '05:00', guestCount: 40 });
 
     expect(response.status).toBe(201);
     expect(mocks.quoteCreate).toHaveBeenCalledWith(expect.objectContaining({ packageName: 'Alquiler de salón', packageTemplateId: packageId, totalAmount: 4000000 }));

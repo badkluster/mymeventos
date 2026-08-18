@@ -16,12 +16,15 @@ const eventTablewareAllocationSchema = new Schema({
   quantity: { type: Number, required: true, min: 1, validate: Number.isInteger },
   eventDay: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/, index: true },
   notes: { type: String, trim: true },
+  releasedAt: { type: Date, default: null, index: true },
+  releasedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  releaseReason: { type: String, trim: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
 eventTablewareAllocationSchema.index({ eventId: 1, salonStockItemId: 1 }, { unique: true, partialFilterExpression: { salonStockItemId: { $exists: true } } });
-eventTablewareAllocationSchema.index({ salonStockItemId: 1, eventDay: 1 });
-eventTablewareAllocationSchema.index({ salonId: 1, eventDay: 1 });
+eventTablewareAllocationSchema.index({ salonStockItemId: 1, eventDay: 1, releasedAt: 1 });
+eventTablewareAllocationSchema.index({ salonId: 1, eventDay: 1, releasedAt: 1 });
 
 export const EventTablewareAllocation = models.EventTablewareAllocation || model('EventTablewareAllocation', eventTablewareAllocationSchema);

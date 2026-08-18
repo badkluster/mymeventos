@@ -30,7 +30,12 @@ function signedAmount(payment: any): number {
 export async function recalculateContractPayments(contractId: string): Promise<any> {
   const contract: any = await Contract.findOne({ _id: contractId, deletedAt: null });
   if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
-  const payments = await Payment.find({ contractId, deletedAt: null });
+  // Contract revisions belong to the same commercial agreement. Keep each receipt linked to
+  // the contract version that issued it, but calculate the current balance from the event-wide
+  // ledger so approving a revision never "loses" payments made against the previous version.
+  const payments = await Payment.find(contract.eventId
+    ? { eventId: contract.eventId, deletedAt: null }
+    : { contractId, deletedAt: null });
   const paidAmount = payments.reduce((sum: number, payment: any) => sum + signedAmount(payment), 0);
   contract.paidAmount = Math.max(0, paidAmount);
   contract.balanceAmount = amount(contract.totalAmount) - amount(contract.paidAmount);

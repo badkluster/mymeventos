@@ -197,7 +197,10 @@ export async function generateProductionPlan(request: Request, eventId: string, 
     throw new ApiError(409, 'PRODUCTION_EVENT_CANCELLED', 'El evento está cancelado o perdido; no se puede generar ni regenerar su producción.');
   }
   const existing: any = await ProductionPlan.findOne({ eventId, isCurrent: true, deletedAt: null }).lean();
-  const sourceChanged = Boolean(existing && existing.sourceFingerprint !== source.sourceFingerprint);
+  // A cancelled current plan is intentionally never reused after an event is
+  // reactivated, even if the source fingerprint is identical. Its reservations
+  // and operational commitments were released as part of cancellation.
+  const sourceChanged = Boolean(existing && (existing.status === 'cancelled' || existing.sourceFingerprint !== source.sourceFingerprint));
   if (existing && !sourceChanged) return { plan: await productionPlanDetail(request, existing._id.toString()), created: false, requiresRegeneration: false, sourceChanged: false };
   if (existing && !options.regenerate) return { plan: await productionPlanDetail(request, existing._id.toString()), created: false, requiresRegeneration: true, sourceChanged: true, nextSourceFingerprint: source.sourceFingerprint };
   if (existing && !(options.reason && options.reason.trim())) throw new ApiError(422, 'PRODUCTION_REGENERATION_REASON_REQUIRED', 'Indicá el motivo de la regeneración.');

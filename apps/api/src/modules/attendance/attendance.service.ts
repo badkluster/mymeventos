@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { StaffEmploymentStatus, TimePunchType, TimePunchSource, WorkSessionStatus, LocationValidationStatus, AttendanceClassification, AttendanceIncidentStatus, AttendanceAdjustmentStatus } from '@mym/shared';
 import { User } from '../users/user.model';
 import { Salon } from '../salons/salon.model';
-import { EventStaffAssignment } from '../crm/crm.models';
+import { Event, EventStaffAssignment } from '../crm/crm.models';
 import { ApiError } from '../../middlewares/errorHandler';
 import { haversineDistanceMeters } from '../../utils/geo';
 import { getAttendanceSettings, type AttendanceSettings } from './attendance-settings.service';
@@ -73,13 +73,14 @@ async function validateLocation(salonId: string | undefined, location: PunchLoca
 async function findTodayAssignment(userId: string, salonId: string): Promise<any> {
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(); endOfDay.setHours(23, 59, 59, 999);
-  return EventStaffAssignment.findOne({
+  const assignment: any = await EventStaffAssignment.findOne({
     staffUserId: userId,
     salonId,
     deletedAt: null,
     status: { $in: ['assigned', 'confirmed', 'checked_in'] },
     $or: [{ shiftStart: { $gte: startOfDay, $lte: endOfDay } }, { shiftStart: null }]
-  }).sort({ shiftStart: 1 }).lean();
+  }).sort({ shiftStart: 1 }).populate('eventId', 'status').lean();
+  return assignment?.eventId && !['cancelled', 'lost'].includes(assignment.eventId.status) ? assignment : null;
 }
 
 async function classifySession(session: any, settings: AttendanceSettings): Promise<string> {
@@ -106,6 +107,10 @@ export async function checkIn(userId: string, input: CheckInInput) {
       if (session) return { session, punch: existing, idempotentReplay: true };
     }
     if (existing.rejected) throw new ApiError(409, existing.rejectionReason === 'ALREADY_ACTIVE' ? 'ATTENDANCE_ALREADY_ACTIVE' : 'ATTENDANCE_DUPLICATE_REQUEST');
+  }
+  if (input.eventId) {
+    const event = await Event.findOne({ _id: input.eventId, deletedAt: null, status: { $nin: ['cancelled', 'lost'] } }).select('_id').lean();
+    if (!event) throw new ApiError(422, 'ATTENDANCE_EVENT_NOT_AVAILABLE', 'No se puede registrar asistencia en un evento cancelado, perdido o inexistente.');
   }
 
   if (input.networkStatus !== 'online') throw new ApiError(422, 'ATTENDANCE_ONLINE_REQUIRED');

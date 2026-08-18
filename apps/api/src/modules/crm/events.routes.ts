@@ -1,5 +1,6 @@
 import { Router, type Request } from 'express';
 import { randomBytes } from 'crypto';
+import mongoose, { type ClientSession } from 'mongoose';
 import { z } from 'zod';
 import { Permission, Role, StaffSubrole } from '@mym/shared';
 import { Contract, Customer, Event, EventStaffAssignment, LeadActivity, PackageTemplate, Payment, Quote, VenuePackageRule } from './crm.models';
@@ -26,9 +27,9 @@ import { uploadBuffer } from '../uploads/cloudinary.service';
 import { generateOperationalPdf, generateOperationalWord, type OperationalDocumentType } from './event-operational-document.service';
 import { eventExpenses, syncEventSupplierExpenses } from './event-supplier-expenses.service';
 import { syncEventAlertCalendarItems } from './event-alert-calendar-sync.service';
-import { cancelCurrentProductionPlan } from '../production/production.service';
 import { addDaysToDateKey, argentinaDateKey, civilDateInput, daysBetweenDateKeys, dueDateKey } from '../../utils/argentina-date';
 import { installmentDueDateKey, isOpenInstallment, planFor } from './financial-reminders.service';
+import { activeEventStatuses, cancelEvent, cancellationPreview, deleteDraftEvent, deletionPreview, reactivateEvent, terminalEventStatuses } from './event-lifecycle.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const optionalObjectId = objectId.optional().or(z.literal(''));
@@ -45,6 +46,7 @@ const staffStatusTransitions: Record<StaffAssignmentStatus, readonly StaffAssign
   no_show: [],
 };
 const pricingModes = ['per_person', 'fixed'] as const;
+const packageChangeSections = ['commercial', 'schedule', 'menu', 'services'] as const;
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const assignmentIdSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
 const activityNoteSchema = z.object({ body: z.object({ description: z.string().trim().min(1) }), params: z.object({ id: objectId }), query: z.object({}) });
@@ -99,10 +101,18 @@ const createEventSchema = z.object({
     resourcePlanSnapshot: z.unknown().optional(),
     notes: z.string().trim().optional()
   }).superRefine((body, context) => {
+    if (!body.quoteId && !body.eventDate) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDate'], message: 'Debe indicar la fecha del evento.' });
     if (body.quoteId) return;
     if (!body.salonId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['salonId'], message: 'Debe seleccionar un salón.' });
     if (!body.customerId && !body.customer?.fullName && !body.customer?.firstName) context.addIssue({ code: z.ZodIssueCode.custom, path: ['customer'], message: 'Debe seleccionar o crear un cliente.' });
     if (!body.eventName && !body.eventType) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventName'], message: 'Debe indicar nombre o tipo de evento.' });
+    if (!body.eventType) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventType'], message: 'Debe indicar el tipo de evento.' });
+    if (!body.packageTemplateId && !body.startTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['startTime'], message: 'Debe indicar el horario de inicio.' });
+    if (!body.packageTemplateId && !body.endTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['endTime'], message: 'Debe indicar el horario de fin.' });
+    if (!body.guestCount) context.addIssue({ code: z.ZodIssueCode.custom, path: ['guestCount'], message: 'Debe indicar una cantidad de invitados válida.' });
+    if (!body.packageName && !body.packageTemplateId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['packageName'], message: 'Debe indicar el paquete o propuesta.' });
+    const amount = body.pricingMode === 'per_person' ? body.finalPricePerPerson ?? body.pricePerPerson : body.finalAmount ?? body.finalFixedPrice ?? body.fixedPrice;
+    if (!body.packageTemplateId && (!amount || amount <= 0)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['finalAmount'], message: 'Debe indicar un precio mayor a cero.' });
     if (Boolean(body.startTime) !== Boolean(body.endTime)) context.addIssue({ code: z.ZodIssueCode.custom, path: [body.startTime ? 'endTime' : 'startTime'], message: 'Debe indicar el horario de inicio y de fin.' });
     if (body.startTime && body.endTime && body.startTime === body.endTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['endTime'], message: 'El horario de fin debe ser distinto del inicio.' });
   }),
@@ -122,6 +132,7 @@ const createAssignmentSchema = z.object({ body: assignmentBody, params: z.object
 const updateAssignmentSchema = z.object({ body: assignmentBaseBody.partial().extend({ status: z.enum(staffAssignmentStatuses).optional() }).refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.').refine((body) => !body.shiftStart || !body.shiftEnd || body.shiftEnd > body.shiftStart, 'El fin del turno debe ser posterior al inicio.').refine((body) => !body.status || Object.keys(body).length === 1, 'El estado debe actualizarse sin otros campos.'), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
 const assignmentStatusSchema = z.object({ body: z.object({ status: z.enum(staffAssignmentStatuses) }), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
 const statusSchema = z.object({ body: z.object({ status: z.enum(eventStatuses), reason: z.string().trim().optional() }), params: z.object({ id: objectId }), query: z.object({}) });
+const reactivateSchema = z.object({ body: z.object({ status: z.enum(activeEventStatuses), reason: z.string().trim().min(3).max(500) }), params: z.object({ id: objectId }), query: z.object({}) });
 const updateSchema = z.object({
   body: z.object({
     eventType: z.string().trim().optional(),
@@ -131,7 +142,6 @@ const updateSchema = z.object({
     endTime: eventTimeSchema.optional(),
     guestCount: z.coerce.number().int().positive().optional(),
     honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional(),
-    status: z.enum(eventStatuses).optional(),
     estimatedAmount: z.coerce.number().min(0).optional(),
     finalAmount: z.coerce.number().min(0).optional(),
     notes: z.string().trim().optional(),
@@ -143,6 +153,22 @@ const updateSchema = z.object({
     resourcePlanSnapshot: z.unknown().optional(),
     contractReadyChecklist: z.unknown().optional()
   }).refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'),
+  params: z.object({ id: objectId }),
+  query: z.object({})
+});
+const packagePreviewSchema = z.object({
+  body: z.object({ packageTemplateId: objectId }),
+  params: z.object({ id: objectId }),
+  query: z.object({})
+});
+const packageApplySchema = z.object({
+  body: z.object({
+    packageTemplateId: objectId,
+    mode: z.enum(['associate_only', 'apply']).default('apply'),
+    sections: z.array(z.enum(packageChangeSections)).min(1).optional(),
+    reason: z.string().trim().max(500).optional(),
+    expectedUpdatedAt: z.string().datetime().optional()
+  }),
   params: z.object({ id: objectId }),
   query: z.object({})
 });
@@ -295,7 +321,7 @@ function resourcePlanWithTableware(plan: any, allocations: any[]): Record<string
 async function tablewareAvailability(salonId: string, day: string, eventId?: string) {
   const [items, allocations] = await Promise.all([
     SalonStockItem.find({ salonId, deletedAt: null, active: true }).sort({ category: 1, displayOrder: 1, name: 1 }).lean(),
-    EventTablewareAllocation.find({ salonId, eventDay: day, source: 'salon_stock' }).lean()
+    EventTablewareAllocation.find({ salonId, eventDay: day, source: 'salon_stock', releasedAt: null }).lean()
   ]);
   const reservedByItem = new Map<string, number>();
   const reservedByOtherEvents = new Map<string, number>();
@@ -339,6 +365,12 @@ async function ensureEventAccess(request: Request, event: any): Promise<void> {
   }
 }
 
+function ensureEventOperationallyEditable(event: any): void {
+  if (terminalEventStatuses.includes(event.status)) {
+    throw new ApiError(409, 'EVENT_TERMINAL_LOCKED', 'El evento está cancelado o perdido. Reactivalo antes de modificar información operativa o financiera.');
+  }
+}
+
 async function transitionStaffAssignment(request: Request, event: any, assignmentId: string, nextStatus: StaffAssignmentStatus) {
   const assignment: any = await EventStaffAssignment.findOne({ _id: assignmentId, eventId: event._id, deletedAt: null });
   if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
@@ -360,7 +392,7 @@ async function getEventForOperationalDocument(request: Request, eventId: string,
   const event: any = await Event.findOne({ _id: eventId, deletedAt: null }).populate('customerId', 'fullName phone email').populate('salonId', 'name address locality city');
   await ensureEventAccess(request, event);
   if (type === 'tableware' || type === 'full') {
-    event.tablewareAllocations = await EventTablewareAllocation.find({ eventId: event._id }).sort({ source: 1, itemName: 1 }).lean();
+    event.tablewareAllocations = await EventTablewareAllocation.find({ eventId: event._id, releasedAt: null }).sort({ source: 1, itemName: 1 }).lean();
   }
   if (type === 'full') {
     event.staffAssignments = await EventStaffAssignment.find({ eventId: event._id, deletedAt: null }).populate('staffUserId', 'firstName lastName fullName').sort({ shiftStart: 1, createdAt: 1 }).lean();
@@ -518,6 +550,155 @@ function eventPatchFromCreateBody(body: any): Record<string, unknown> {
   ]);
 }
 
+function packageProposalForEvent(event: any, packageSnapshot: Record<string, any>) {
+  const pricingMode = packageSnapshot.pricingMode ?? 'per_person';
+  const discountFactor = 1 - Number(packageSnapshot.discountPercentage ?? 0) / 100;
+  const finalPricePerPerson = packageSnapshot.finalPricePerPerson ?? (packageSnapshot.pricePerPerson === undefined ? undefined : Math.round(Number(packageSnapshot.pricePerPerson) * discountFactor));
+  const finalFixedPrice = packageSnapshot.finalFixedPrice ?? (packageSnapshot.fixedPrice === undefined ? undefined : Math.round(Number(packageSnapshot.fixedPrice) * discountFactor));
+  const totalAmount = pricingMode === 'fixed'
+    ? Number(finalFixedPrice ?? 0)
+    : Number(finalPricePerPerson ?? 0) * Number(event.guestCount ?? 0);
+  const depositAmount = Number(packageSnapshot.depositAmount ?? 0);
+  return {
+    commercial: {
+      ...(event.commercialSnapshot ?? {}),
+      packageTemplateId: packageSnapshot.packageTemplateId,
+      packageName: packageSnapshot.packageName,
+      durationHours: packageSnapshot.durationHours,
+      pricingMode,
+      pricePerPerson: packageSnapshot.pricePerPerson,
+      discountPercentage: packageSnapshot.discountPercentage ?? 0,
+      finalPricePerPerson,
+      fixedPrice: packageSnapshot.fixedPrice,
+      finalFixedPrice,
+      totalAmount,
+      depositAmount,
+      balanceAmount: Math.max(0, totalAmount - depositAmount),
+      paymentTerms: packageSnapshot.paymentTerms,
+      promotionText: packageSnapshot.promotionText,
+      giftText: packageSnapshot.giftText
+    },
+    schedule: { startTime: packageSnapshot.startTime, endTime: packageSnapshot.endTime, durationHours: packageSnapshot.durationHours },
+    menu: packageSnapshot.menuSections ?? [],
+    services: packageSnapshot.includedServices ?? [],
+    totalAmount
+  };
+}
+
+function packageChangeRows(event: any, proposal: ReturnType<typeof packageProposalForEvent>) {
+  const currentCommercial = {
+    packageName: event.commercialSnapshot?.packageName,
+    pricingMode: event.commercialSnapshot?.pricingMode,
+    pricePerPerson: event.commercialSnapshot?.pricePerPerson,
+    finalPricePerPerson: event.commercialSnapshot?.finalPricePerPerson,
+    fixedPrice: event.commercialSnapshot?.fixedPrice,
+    finalFixedPrice: event.commercialSnapshot?.finalFixedPrice,
+    totalAmount: event.finalAmount ?? event.estimatedAmount ?? event.commercialSnapshot?.totalAmount,
+    depositAmount: event.commercialSnapshot?.depositAmount,
+    paymentTerms: event.commercialSnapshot?.paymentTerms
+  };
+  const proposedCommercial = {
+    packageName: proposal.commercial.packageName,
+    pricingMode: proposal.commercial.pricingMode,
+    pricePerPerson: proposal.commercial.pricePerPerson,
+    finalPricePerPerson: proposal.commercial.finalPricePerPerson,
+    fixedPrice: proposal.commercial.fixedPrice,
+    finalFixedPrice: proposal.commercial.finalFixedPrice,
+    totalAmount: proposal.totalAmount,
+    depositAmount: proposal.commercial.depositAmount,
+    paymentTerms: proposal.commercial.paymentTerms
+  };
+  const rows = [
+    { key: 'commercial', label: 'Precio y condiciones', current: currentCommercial, proposed: proposedCommercial },
+    { key: 'schedule', label: 'Horario y duración', current: { startTime: event.startTime, endTime: event.endTime, durationHours: event.commercialSnapshot?.durationHours }, proposed: proposal.schedule },
+    { key: 'menu', label: 'Menú', current: event.menuSnapshot ?? [], proposed: proposal.menu },
+    { key: 'services', label: 'Servicios incluidos', current: event.servicesSnapshot ?? [], proposed: proposal.services }
+  ];
+  return rows.map((row) => ({ ...row, changed: JSON.stringify(row.current) !== JSON.stringify(row.proposed) }));
+}
+
+function syncContractSnapshot(contract: any, event: any, userId: string) {
+  contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
+  const baseAmount = Number(event.finalAmount ?? event.estimatedAmount ?? contract.baseAmount ?? 0);
+  contract.commercialSnapshot = { ...(contract.commercialSnapshot ?? {}), ...(event.commercialSnapshot ?? {}), totalAmount: baseAmount };
+  contract.menuSnapshot = event.menuSnapshot ?? contract.menuSnapshot;
+  contract.servicesSnapshot = event.servicesSnapshot ?? contract.servicesSnapshot;
+  contract.paymentPlanSnapshot = event.paymentPlanSnapshot ?? event.paymentSnapshot?.paymentPlan ?? contract.paymentPlanSnapshot;
+  contract.paymentAgreementSnapshot = { ...(contract.paymentAgreementSnapshot ?? {}), paymentTerms: event.commercialSnapshot?.paymentTerms, depositAmount: event.commercialSnapshot?.depositAmount, balanceAmount: Math.max(0, baseAmount - Number(contract.paidAmount ?? 0)) };
+  contract.baseAmount = baseAmount;
+  contract.totalAmount = baseAmount + Number(contract.approvedAddendumsAmount ?? 0) - Number(contract.discountsAmount ?? 0);
+  contract.balanceAmount = contract.totalAmount - Number(contract.paidAmount ?? 0);
+  contract.updatedBy = userId;
+}
+
+async function syncContractsAfterEventChange(event: any, userId: string, session?: ClientSession): Promise<'none' | 'draft_updated' | 'revision_created'> {
+  const query: any = Contract.find({ eventId: event._id, deletedAt: null }).sort({ versionNumber: -1, createdAt: -1 });
+  if (session) query.session(session);
+  const contracts: any[] = await query;
+  const draft = contracts.find((item) => ['draft', 'pending_approval', 'requires_changes'].includes(item.status));
+  const approved = contracts.find((item) => item.status === 'approved');
+  if (draft) {
+    syncContractSnapshot(draft, event, userId);
+    await draft.save(session ? { session } : undefined);
+    return 'draft_updated';
+  }
+  if (!approved) return 'none';
+  const nextVersion = Math.max(...contracts.map((item) => Number(item.versionNumber ?? 1))) + 1;
+  const revision = new Contract({
+    ...approved.toObject(),
+    _id: undefined,
+    contractNumber: `${approved.contractNumber}-V${nextVersion}`,
+    contractFamilyId: approved.contractFamilyId ?? approved._id,
+    versionNumber: nextVersion,
+    supersedesContractId: approved._id,
+    supersededByContractId: undefined,
+    status: 'draft',
+    approvedAt: undefined,
+    approvedByUserId: undefined,
+    pdfUrl: undefined,
+    pdfSecureUrl: undefined,
+    pdfPublicId: undefined,
+    pdfGeneratedAt: undefined,
+    createdAt: undefined,
+    updatedAt: undefined,
+    createdBy: userId,
+    updatedBy: userId
+  });
+  syncContractSnapshot(revision, event, userId);
+  await revision.save(session ? { session } : undefined);
+  return 'revision_created';
+}
+
+async function packageChangePreview(event: any, packageSnapshot: Record<string, any>) {
+  const proposal = packageProposalForEvent(event, packageSnapshot);
+  const changes = packageChangeRows(event, proposal);
+  const contracts: any[] = await Contract.find({ eventId: event._id, deletedAt: null }).sort({ versionNumber: -1, createdAt: -1 });
+  const approved = contracts.find((item) => item.status === 'approved');
+  const draft = contracts.find((item) => ['draft', 'pending_approval', 'requires_changes'].includes(item.status));
+  const financial = await paymentSummary({ eventId: event._id });
+  const paidAmount = Number(financial.paidAmount ?? 0);
+  const commercialChange = changes.find((item) => item.key === 'commercial')?.changed ?? false;
+  const productionNeedsReview = ['reserved', 'confirmed'].includes(event.status)
+    || Boolean(event.resourcePlanSnapshot?.productItems?.length || event.resourcePlanSnapshot?.supplierAssignments?.length);
+  return {
+    package: { id: packageSnapshot.packageTemplateId, name: packageSnapshot.packageName, snapshot: packageSnapshot },
+    currentPackage: { id: event.packageTemplateId?.toString?.() ?? event.commercialSnapshot?.packageTemplateId, name: event.commercialSnapshot?.packageName },
+    proposal,
+    changes,
+    impact: {
+      contract: approved ? 'revision_required' : draft ? 'draft_updated' : 'none',
+      approvedContractNumber: approved?.contractNumber,
+      draftContractNumber: draft?.contractNumber,
+      paidAmount,
+      paymentPlanNeedsReview: commercialChange && Boolean(event.paymentPlanSnapshot?.length),
+      productionNeedsReview,
+      reasonRequired: Boolean(approved || paidAmount > 0 || ['reserved', 'confirmed'].includes(event.status)),
+      applyingBlocked: commercialChange && proposal.totalAmount < paidAmount,
+      blockedReason: commercialChange && proposal.totalAmount < paidAmount ? 'El nuevo total es menor que el importe ya cobrado. Primero debe resolverse el crédito o la devolución.' : undefined
+    }
+  };
+}
+
 function buildQuery(request: Request): Record<string, unknown> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }];
   if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: accessibleSalonIds(request.user!) } });
@@ -604,6 +785,16 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
   const selectedPackage = cleanId(request.body.packageTemplateId);
   const packageSnapshot = selectedPackage ? await getApplicablePackageForEvent(selectedPackage, salonId) : undefined;
   const eventBody = packageSnapshot ? applyPackageToEventBody(request.body, packageSnapshot) : request.body;
+  const resultingAmount = eventBody.pricingMode === 'per_person' ? eventBody.finalPricePerPerson ?? eventBody.pricePerPerson : eventBody.finalAmount ?? eventBody.finalFixedPrice ?? eventBody.fixedPrice;
+  const missingEventFields = [
+    !eventBody.eventType && 'tipo de evento',
+    !eventBody.eventDate && 'fecha',
+    !eventBody.startTime && 'horario de inicio',
+    !eventBody.endTime && 'horario de fin',
+    !eventBody.guestCount && 'cantidad de invitados',
+    !resultingAmount && 'precio'
+  ].filter(Boolean);
+  if (missingEventFields.length) throw new ApiError(422, 'EVENT_REQUIRED_FIELDS', `Completá ${missingEventFields.join(', ')} antes de crear el evento.`);
   const customer = await resolveCustomerForEvent(request, eventBody, salonId);
   const commercialSnapshot = commercialSnapshotFromBody(eventBody);
   const totalAmount = Number(commercialSnapshot.totalAmount ?? 0);
@@ -699,6 +890,7 @@ router.get('/:id/expenses', requirePermission(Permission.EVENTS_READ), requirePe
 router.put('/:id/suppliers', requirePermission(Permission.EVENTS_UPDATE), requirePermission(Permission.SUPPLIERS_READ), validateRequest(eventSuppliersSchema), asyncHandler(async (request, response) => {
   const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
   const result = await syncEventSupplierExpenses({ eventId: request.params.id, assignments: request.body.items, userId: request.user!.id });
   await writeAuditLog(request, 'EVENT_SUPPLIERS_SYNC', 'Event', request.params.id, {
     assignmentCount: result.assignments.length,
@@ -718,7 +910,12 @@ router.put('/:id/suppliers', requirePermission(Permission.EVENTS_UPDATE), requir
 router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(eventPaymentSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
-  let contract: any = await Contract.findOne({ eventId: event._id, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).sort({ versionNumber: -1, createdAt: -1 });
+  ensureEventOperationallyEditable(event);
+  // A proposed revision is not payable yet. Continue collecting against the approved agreement
+  // until the revision is approved; only fall back to a draft when the event has never had an
+  // approved contract.
+  let contract: any = await Contract.findOne({ eventId: event._id, deletedAt: null, status: 'approved' }).sort({ versionNumber: -1, createdAt: -1 });
+  if (!contract) contract = await Contract.findOne({ eventId: event._id, deletedAt: null, status: { $in: ['pending_approval', 'draft', 'requires_changes'] } }).sort({ versionNumber: -1, createdAt: -1 });
   if (!contract) throw new ApiError(422, 'Primero debe generar un contrato para registrar cobros del evento.');
 
   const canOverride = userHasPermission(request.user!, Permission.PAYMENTS_APPROVE);
@@ -804,7 +1001,7 @@ router.get('/:id/staff', requirePermission(Permission.EVENTS_READ), validateRequ
 router.post('/:id/staff', requirePermission(Permission.EVENTS_UPDATE), validateRequest(createAssignmentSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
-  if (['cancelled', 'lost'].includes(event.status)) throw new ApiError(422, 'EVENT_NOT_ASSIGNABLE');
+  ensureEventOperationallyEditable(event);
   const staff: any = await User.findOne({ _id: request.body.staffUserId, active: true, deletedAt: null }).lean();
   if (!staff) throw new ApiError(422, 'STAFF_NOT_FOUND');
   const staffSalonIds = (staff.salonIds ?? []).map((id: { toString(): string }) => id.toString());
@@ -828,6 +1025,7 @@ router.post('/:id/staff', requirePermission(Permission.EVENTS_UPDATE), validateR
 router.patch('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UPDATE), validateRequest(updateAssignmentSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
   if (request.body.status) {
     const assignment = await transitionStaffAssignment(request, event, request.params.assignmentId, request.body.status);
     return sendSuccess(response, { assignment });
@@ -844,6 +1042,7 @@ router.patch('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UPD
 router.delete('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UPDATE), validateRequest(assignmentIdSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
   const assignment: any = await EventStaffAssignment.findOne({ _id: request.params.assignmentId, eventId: event._id, deletedAt: null });
   if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
   if (String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
@@ -859,6 +1058,7 @@ router.delete('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UP
 router.post('/:id/staff/:assignmentId/status', requirePermission(Permission.EVENTS_UPDATE), validateRequest(assignmentStatusSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
   const assignment = await transitionStaffAssignment(request, event, request.params.assignmentId, request.body.status);
   return sendSuccess(response, { assignment });
 }));
@@ -867,6 +1067,7 @@ for (const [path, status] of [['assign', 'assigned'], ['confirm', 'confirmed'], 
   router.post(`/:id/staff/:assignmentId/${path}`, requirePermission(Permission.EVENTS_UPDATE), validateRequest(assignmentIdSchema), asyncHandler(async (request, response) => {
     const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
     await ensureEventAccess(request, event);
+    ensureEventOperationallyEditable(event);
     const assignment = await transitionStaffAssignment(request, event, request.params.assignmentId, status);
     return sendSuccess(response, { assignment });
   }));
@@ -915,6 +1116,7 @@ router.post('/:id/operational-documents/:documentType/export', requirePermission
 router.post('/:id/operational-documents/:documentType/email', requirePermission(Permission.EVENTS_UPDATE), validateRequest(operationalDocumentEmailSchema), asyncHandler(async (request, response) => {
   const type = request.params.documentType as OperationalDocumentType;
   const event = await getEventForOperationalDocument(request, request.params.id, type);
+  ensureEventOperationallyEditable(event);
   const email = request.body.email ?? event.customerId?.email;
   if (!email) throw new ApiError(422, 'El cliente no tiene un email registrado.');
   const document = await createOperationalDocument(event, type, request.body.format);
@@ -933,6 +1135,7 @@ router.post('/:id/operational-documents/:documentType/email', requirePermission(
 router.post('/:id/guest-list-link', requirePermission(Permission.EVENTS_UPDATE), validateRequest(guestListLinkSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
   const created = !event.guestListAccessToken;
   if (created) {
     event.guestListAccessToken = randomBytes(32).toString('base64url');
@@ -952,7 +1155,7 @@ router.get('/:id/tableware', requirePermission(Permission.EVENTS_READ), validate
   if (!day) throw new ApiError(422, 'El evento debe tener una fecha asignada para reservar vajilla.');
   const [items, allocations] = await Promise.all([
     tablewareAvailability(event.salonId.toString(), day, event._id.toString()),
-    EventTablewareAllocation.find({ eventId: event._id }).sort({ source: 1, itemName: 1 }).lean()
+    EventTablewareAllocation.find({ eventId: event._id, releasedAt: null }).sort({ source: 1, itemName: 1 }).lean()
   ]);
   return sendSuccess(response, { eventDay: day, items, allocations });
 }));
@@ -960,6 +1163,7 @@ router.get('/:id/tableware', requirePermission(Permission.EVENTS_READ), validate
 router.put('/:id/tableware', requirePermission(Permission.EVENTS_UPDATE), validateRequest(tablewareSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
   if (!event.salonId) throw new ApiError(422, 'El evento debe tener un salón asignado para reservar vajilla.');
   const day = eventDay(event.eventDate);
   if (!day) throw new ApiError(422, 'El evento debe tener una fecha asignada para reservar vajilla.');
@@ -987,15 +1191,137 @@ router.put('/:id/tableware', requirePermission(Permission.EVENTS_UPDATE), valida
   });
   const externalAllocations = request.body.externalItems.map((item: any) => ({ eventId: event._id, salonId: event.salonId, source: 'external', itemName: item.name, category: item.category || 'Vajilla adicional', unit: item.unit || 'unidad', quantity: item.quantity, eventDay: day, notes: item.notes, createdBy: request.user!.id, updatedBy: request.user!.id }));
 
-  await EventTablewareAllocation.deleteMany({ eventId: event._id });
+  await EventTablewareAllocation.deleteMany({ eventId: event._id, releasedAt: null });
   if (internalAllocations.length || externalAllocations.length) await EventTablewareAllocation.insertMany([...internalAllocations, ...externalAllocations]);
-  const allocations = await EventTablewareAllocation.find({ eventId: event._id }).sort({ source: 1, itemName: 1 });
+  const allocations = await EventTablewareAllocation.find({ eventId: event._id, releasedAt: null }).sort({ source: 1, itemName: 1 });
   event.resourcePlanSnapshot = resourcePlanWithTableware(event.resourcePlanSnapshot, allocations);
   event.updatedBy = request.user!.id;
   await event.save();
   await writeAuditLog(request, 'EVENT_TABLEWARE_ALLOCATE', 'Event', event._id.toString(), { eventDay: day, salonItemCount: internalAllocations.length, externalItemCount: externalAllocations.length });
   const items = await tablewareAvailability(event.salonId.toString(), day, event._id.toString());
   return sendSuccess(response, { eventDay: day, items, allocations });
+}));
+
+router.post('/:id/package-change/preview', requirePermission(Permission.EVENTS_UPDATE), validateRequest(packagePreviewSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureEventAccess(request, event);
+  if (!event.salonId) throw new ApiError(422, 'PACKAGE_TEMPLATE_NOT_AVAILABLE', 'El evento necesita un salón antes de asociar un paquete.');
+  const packageSnapshot = await getApplicablePackageForEvent(request.body.packageTemplateId, event.salonId.toString());
+  return sendSuccess(response, { preview: await packageChangePreview(event, packageSnapshot) });
+}));
+
+router.post('/:id/package-change', requirePermission(Permission.EVENTS_UPDATE), validateRequest(packageApplySchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureEventAccess(request, event);
+  if (request.body.mode === 'apply') ensureEventOperationallyEditable(event);
+  if (!event.salonId) throw new ApiError(422, 'PACKAGE_TEMPLATE_NOT_AVAILABLE', 'El evento necesita un salón antes de asociar un paquete.');
+  if (request.body.expectedUpdatedAt && new Date(request.body.expectedUpdatedAt).getTime() !== new Date(event.updatedAt).getTime()) {
+    throw new ApiError(409, 'EVENT_CHANGED', 'El evento cambió mientras revisabas el paquete. Volvé a comparar antes de guardar.');
+  }
+  if (request.body.mode === 'apply' && ['cancelled', 'lost'].includes(event.status)) {
+    throw new ApiError(422, 'EVENT_PACKAGE_CHANGE_LOCKED', 'Un evento cancelado o perdido solo admite corregir la asociación del paquete.');
+  }
+
+  const packageSnapshot = await getApplicablePackageForEvent(request.body.packageTemplateId, event.salonId.toString());
+  const preview = await packageChangePreview(event, packageSnapshot);
+  if (preview.impact.reasonRequired && !request.body.reason?.trim()) {
+    throw new ApiError(422, 'EVENT_PACKAGE_CHANGE_REASON_REQUIRED', 'Indicá el motivo porque el evento ya tiene avances comerciales u operativos.');
+  }
+  if (request.body.mode === 'apply' && preview.impact.applyingBlocked) {
+    throw new ApiError(422, 'EVENT_PACKAGE_CHANGE_BLOCKED', preview.impact.blockedReason);
+  }
+
+  const selectedSections = new Set(request.body.sections ?? packageChangeSections);
+  const appliedAt = new Date();
+  event.packageTemplateId = packageSnapshot.packageTemplateId;
+  event.packageSnapshot = {
+    ...packageSnapshot,
+    application: { mode: request.body.mode, sections: [...selectedSections], reason: request.body.reason, appliedAt, appliedBy: request.user!.id }
+  };
+  event.commercialSnapshot = { ...(event.commercialSnapshot ?? {}), packageTemplateId: packageSnapshot.packageTemplateId };
+
+  if (request.body.mode === 'apply') {
+    if (selectedSections.has('commercial')) {
+      event.commercialSnapshot = preview.proposal.commercial;
+      event.estimatedAmount = preview.proposal.totalAmount;
+      event.finalAmount = preview.proposal.totalAmount;
+      event.paymentSnapshot = {
+        ...(event.paymentSnapshot ?? {}),
+        depositAmount: preview.proposal.commercial.depositAmount,
+        balanceAmount: preview.proposal.commercial.balanceAmount,
+        paymentTerms: preview.proposal.commercial.paymentTerms
+      };
+    }
+    if (selectedSections.has('schedule')) {
+      event.startTime = preview.proposal.schedule.startTime ?? event.startTime;
+      event.endTime = preview.proposal.schedule.endTime ?? event.endTime;
+      event.commercialSnapshot = { ...(event.commercialSnapshot ?? {}), durationHours: preview.proposal.schedule.durationHours };
+    }
+    if (selectedSections.has('menu')) event.menuSnapshot = preview.proposal.menu;
+    if (selectedSections.has('services')) event.servicesSnapshot = preview.proposal.services;
+    event.quoteMode = selectedSections.size === packageChangeSections.length ? 'PACKAGE' : 'HYBRID';
+  } else if (event.quoteMode === 'CUSTOM') {
+    event.quoteMode = 'HYBRID';
+  }
+
+  event.contractReadyChecklist = {
+    ...(event.contractReadyChecklist ?? {}),
+    timeDefined: Boolean(event.startTime && event.endTime),
+    totalPrice: Boolean(event.finalAmount ?? event.estimatedAmount),
+    deposit: Boolean(event.commercialSnapshot?.depositAmount),
+    paymentTerms: Boolean(event.commercialSnapshot?.paymentTerms),
+    menu: Boolean(event.menuSnapshot?.length),
+    includedServices: Boolean(event.servicesSnapshot?.length)
+  };
+  event.updatedBy = request.user!.id;
+  const changedSelectedSections = preview.changes.filter((item) => item.changed && selectedSections.has(item.key as typeof packageChangeSections[number]));
+  let contractImpact: 'none' | 'draft_updated' | 'revision_created';
+  const session = await mongoose.startSession();
+  try {
+    contractImpact = await session.withTransaction(async () => {
+      await event.save({ session });
+      if (request.body.mode === 'apply' && changedSelectedSections.length) {
+        return syncContractsAfterEventChange(event, request.user!.id, session);
+      }
+      return 'none' as const;
+    });
+  } finally {
+    await session.endSession();
+  }
+  const warnings = [
+    preview.impact.paymentPlanNeedsReview && selectedSections.has('commercial') ? 'Revisá el plan de cuotas: se conservaron las cuotas y los pagos registrados.' : undefined,
+    preview.impact.productionNeedsReview && changedSelectedSections.some((item) => ['menu', 'services', 'commercial'].includes(item.key)) ? 'La producción existente puede haber quedado desactualizada. Regenerá sus sugerencias antes de continuar.' : undefined,
+    contractImpact === 'revision_created' ? 'Se creó una nueva versión contractual en borrador. El contrato aprobado sigue vigente hasta que se apruebe la revisión.' : undefined
+  ].filter(Boolean);
+
+  try {
+    await LeadActivity.create({
+      eventId: event._id,
+      customerId: event.customerId,
+      type: 'system',
+      title: request.body.mode === 'associate_only' ? 'Paquete asociado' : 'Paquete actualizado',
+      description: request.body.mode === 'associate_only'
+        ? `Se asoció ${packageSnapshot.packageName} como referencia sin reemplazar los datos acordados.`
+        : `Se aplicó ${packageSnapshot.packageName} en: ${changedSelectedSections.map((item) => item.label).join(', ') || 'sin diferencias'}.`,
+      metadata: { packageTemplateId: packageSnapshot.packageTemplateId, mode: request.body.mode, sections: [...selectedSections], reason: request.body.reason, contractImpact },
+      createdBy: request.user!.id
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'event_package_activity_write_failed',
+      eventId: event._id.toString(),
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }));
+  }
+  await writeAuditLog(request, request.body.mode === 'associate_only' ? 'EVENT_PACKAGE_ASSOCIATE' : 'EVENT_PACKAGE_APPLY', 'Event', event._id.toString(), {
+    packageTemplateId: packageSnapshot.packageTemplateId,
+    packageName: packageSnapshot.packageName,
+    sections: [...selectedSections],
+    changedSections: changedSelectedSections.map((item) => item.key),
+    reason: request.body.reason,
+    contractImpact
+  });
+  return sendSuccess(response, { event, contractImpact, warnings: warnings.length ? warnings : undefined }, 200, 'Paquete del evento actualizado correctamente.');
 }));
 
 router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
@@ -1009,10 +1335,18 @@ router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(id
     .lean();
   await ensureEventAccess(request, event);
   const contracts = await Contract.find({ eventId: request.params.id, deletedAt: null }).select('contractNumber status eventId customerId salonId versionNumber supersedesContractId supersededByContractId totalAmount pdfSecureUrl createdAt sentAt signedAt approvedAt').sort({ versionNumber: -1, createdAt: -1 }).lean();
-  return sendSuccess(response, { event, contract: contracts[0], contracts });
+  const contract = contracts.find((item: any) => item.status === 'approved')
+    ?? contracts.find((item: any) => ['pending_approval', 'draft', 'requires_changes'].includes(item.status));
+  const proposedContract = contract?.status === 'approved'
+    ? contracts.find((item: any) => ['pending_approval', 'draft', 'requires_changes'].includes(item.status))
+    : undefined;
+  return sendSuccess(response, { event, contract, proposedContract, contracts });
 }));
 
 router.post('/:id/create-contract', requirePermission(Permission.CONTRACTS_CREATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
   const result = await createContractFromEvent({ eventId: request.params.id, userId: request.user!.id });
   await writeAuditLog(request, result.created ? 'EVENT_CREATE_CONTRACT' : 'EVENT_GET_EXISTING_CONTRACT', 'Contract', result.contract._id.toString(), { eventId: request.params.id });
   return sendSuccess(response, { contract: result.contract, created: result.created }, result.created ? 201 : 200, result.created ? getApiMessage('CONTRACT_CREATED') : getApiMessage('CONTRACT_ALREADY_EXISTS'));
@@ -1021,10 +1355,20 @@ router.post('/:id/create-contract', requirePermission(Permission.CONTRACTS_CREAT
 router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
   // Las asignaciones financieras sólo pueden mutarse mediante PUT /:id/suppliers,
   // que sincroniza el gasto de forma transaccional. Los demás editores siguen
   // enviando el plan completo por compatibilidad, por eso preservamos esta rama.
   const updateBody: Record<string, any> = { ...request.body };
+  const resultingEvent = { ...(typeof event.toObject === 'function' ? event.toObject() : event), ...updateBody };
+  const missingRequired = [
+    !resultingEvent.eventType && 'Debe indicar el tipo de evento.',
+    !resultingEvent.eventDate && 'Debe indicar la fecha del evento.',
+    !resultingEvent.startTime && 'Debe indicar el horario de inicio.',
+    !resultingEvent.endTime && 'Debe indicar el horario de fin.',
+    !resultingEvent.guestCount && 'Debe indicar una cantidad de invitados válida.'
+  ].filter(Boolean) as string[];
+  if (missingRequired.length) throw new ApiError(422, 'EVENT_REQUIRED_FIELDS', missingRequired.join(' '));
   if (Object.prototype.hasOwnProperty.call(updateBody, 'resourcePlanSnapshot')) {
     if (!updateBody.resourcePlanSnapshot || typeof updateBody.resourcePlanSnapshot !== 'object' || Array.isArray(updateBody.resourcePlanSnapshot)) throw new ApiError(422, 'EVENT_RESOURCE_PLAN_INVALID');
     updateBody.resourcePlanSnapshot = {
@@ -1036,7 +1380,7 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   const nextReservationDay = updateBody.eventDate ? eventDay(updateBody.eventDate) : undefined;
   const eventDateChanged = Boolean(currentReservationDay && nextReservationDay && nextReservationDay !== currentReservationDay);
   if (eventDateChanged && event.salonId) {
-    const allocations = await EventTablewareAllocation.find({ eventId: event._id, source: 'salon_stock' }).lean();
+    const allocations = await EventTablewareAllocation.find({ eventId: event._id, source: 'salon_stock', releasedAt: null }).lean();
     const availableItems = await tablewareAvailability(event.salonId.toString(), nextReservationDay!, event._id.toString());
     const availabilityById = new Map(availableItems.map((item: any) => [item._id.toString(), item]));
     for (const allocation of allocations) {
@@ -1066,9 +1410,8 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
       updateBody.resourcePlanSnapshot = { ...(event.resourcePlanSnapshot ?? {}), ...(updateBody.resourcePlanSnapshot ?? {}), alerts: shiftedAlerts };
     }
   }
-  const resultingStatus = updateBody.status ?? event.status;
   const scheduleChanged = ['eventDate', 'startTime', 'endTime'].some((field) => Object.prototype.hasOwnProperty.call(updateBody, field));
-  if (lockedEventStatuses.has(resultingStatus) && scheduleChanged && event.salonId) {
+  if (lockedEventStatuses.has(event.status) && scheduleChanged && event.salonId) {
     const resultingDay = nextReservationDay ?? currentReservationDay;
     if (resultingDay) {
       await assertVenueAvailable({
@@ -1087,7 +1430,7 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   if (Object.prototype.hasOwnProperty.call(updateBody, 'resourcePlanSnapshot')) {
     await syncEventAlertCalendarItems(event, event.resourcePlanSnapshot?.alerts, request.user!.id);
   }
-  if (nextReservationDay && nextReservationDay !== currentReservationDay) await EventTablewareAllocation.updateMany({ eventId: event._id }, { $set: { eventDay: nextReservationDay, updatedBy: request.user!.id } });
+  if (nextReservationDay && nextReservationDay !== currentReservationDay) await EventTablewareAllocation.updateMany({ eventId: event._id, releasedAt: null }, { $set: { eventDay: nextReservationDay, updatedBy: request.user!.id } });
   if (!hasSensitiveChanges) {
     await writeAuditLog(request, 'EVENT_UPDATE', 'Event', event._id.toString(), { contractAffected: false });
     return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
@@ -1110,51 +1453,66 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
     const stalePayments = pendingPayments.filter((payment) => { const key = dueDateKey(payment.dueDate); return key && key > nextReservationDay!; });
     if (stalePayments.length) warnings.push(`Hay ${stalePayments.length} pago(s) pendiente(s) cargado(s) con vencimiento posterior a la nueva fecha del evento. Revisá la pestaña Pagos.`);
   }
-  const sync = (contract: any) => {
-    contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
-    contract.commercialSnapshot = { ...(contract.commercialSnapshot ?? {}), ...(event.commercialSnapshot ?? {}), totalAmount: event.finalAmount ?? event.estimatedAmount ?? contract.commercialSnapshot?.totalAmount };
-    contract.menuSnapshot = event.menuSnapshot ?? contract.menuSnapshot;
-    contract.servicesSnapshot = event.servicesSnapshot ?? contract.servicesSnapshot;
-    contract.paymentPlanSnapshot = event.paymentPlanSnapshot ?? event.paymentSnapshot?.paymentPlan ?? contract.paymentPlanSnapshot;
-    contract.baseAmount = event.finalAmount ?? event.estimatedAmount ?? contract.baseAmount;
-    contract.updatedBy = request.user!.id;
-  };
-  if (draft) { sync(draft); await draft.save(); }
-  else {
-    if (approved) {
-      const nextVersion = Math.max(...contracts.map((item) => Number(item.versionNumber ?? 1))) + 1;
-      const revision = new Contract({ ...approved.toObject(), _id: undefined, contractNumber: `${approved.contractNumber}-V${nextVersion}`, contractFamilyId: approved.contractFamilyId ?? approved._id, versionNumber: nextVersion, supersedesContractId: approved._id, supersededByContractId: undefined, status: 'draft', approvedAt: undefined, approvedByUserId: undefined, pdfUrl: undefined, pdfSecureUrl: undefined, pdfPublicId: undefined, pdfGeneratedAt: undefined, createdAt: undefined, updatedAt: undefined, createdBy: request.user!.id, updatedBy: request.user!.id });
-      sync(revision); await revision.save(); approved.supersededByContractId = revision._id; await approved.save();
-    }
-  }
+  await syncContractsAfterEventChange(event, request.user!.id);
   await writeAuditLog(request, 'EVENT_UPDATE', 'Event', event._id.toString(), { contractAffected: true });
   return sendSuccess(response, { event, warnings: warnings.length ? warnings : undefined }, 200, getApiMessage('EVENT_UPDATED'));
 }));
 
-router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validateRequest(statusSchema), asyncHandler(async (request, response) => {
-  const isCancellation = ['cancelled', 'lost'].includes(request.body.status);
-  if (isCancellation) {
-    if (!userHasPermission(request.user!, Permission.EVENTS_CANCEL)) throw new ApiError(403, 'FORBIDDEN');
-    if (!request.body.reason || !request.body.reason.trim()) throw new ApiError(422, 'EVENT_CANCELLATION_REASON_REQUIRED');
-  }
+router.get('/:id/cancellation-preview', requirePermission(Permission.EVENTS_CANCEL), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  return sendSuccess(response, { preview: await cancellationPreview(event) });
+}));
+
+router.get('/:id/deletion-preview', requirePermission(Permission.EVENTS_DELETE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  return sendSuccess(response, { preview: await deletionPreview(event) });
+}));
+
+router.delete('/:id', requirePermission(Permission.EVENTS_DELETE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureEventAccess(request, event);
+  const result = await deleteDraftEvent({ eventId: request.params.id, userId: request.user!.id });
+  await writeAuditLog(request, 'EVENT_DELETE', 'Event', request.params.id, { mode: 'soft_delete', automaticCalendarItemsRemoved: result.preview.impacts.automaticCalendarItemsRemoved });
+  return sendSuccess(response, { deleted: true, eventId: result.eventId }, 200, 'El borrador se eliminó correctamente.');
+}));
+
+router.post('/:id/reactivate', requirePermission(Permission.EVENTS_CANCEL), validateRequest(reactivateSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
   if (lockedEventStatuses.has(request.body.status) && event.salonId) {
     const day = eventDay(event.eventDate);
     if (day) await assertVenueAvailable({ salonId: event.salonId.toString(), day, startTime: event.startTime, endTime: event.endTime, excludeEventId: event._id.toString() });
   }
-  event.status = request.body.status;
+  const result = await reactivateEvent({ eventId: request.params.id, userId: request.user!.id, status: request.body.status, reason: request.body.reason });
+  await writeAuditLog(request, 'EVENT_REACTIVATE', 'Event', request.params.id, { status: request.body.status, reason: request.body.reason, warnings: result.warnings });
+  return sendSuccess(response, result, 200, 'El evento se reactivó. Revisá sus recursos operativos antes de confirmarlo.');
+}));
+
+router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validateRequest(statusSchema), asyncHandler(async (request, response) => {
+  const isCancellation = terminalEventStatuses.includes(request.body.status as typeof terminalEventStatuses[number]);
   if (isCancellation) {
-    event.cancellationReason = request.body.reason;
-    event.cancelledAt = event.cancelledAt ?? new Date();
-    event.cancelledBy = request.user!.id;
+    if (!userHasPermission(request.user!, Permission.EVENTS_CANCEL)) throw new ApiError(403, 'FORBIDDEN');
+    if (!request.body.reason || !request.body.reason.trim()) throw new ApiError(422, 'EVENT_CANCELLATION_REASON_REQUIRED');
   }
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureEventAccess(request, event);
+  if (terminalEventStatuses.includes(event.status) && !isCancellation) {
+    throw new ApiError(409, 'EVENT_REACTIVATION_REQUIRED', 'Usá la acción Reactivar para volver a abrir un evento cancelado o perdido.');
+  }
+  if (isCancellation) {
+    const result = await cancelEvent({ eventId: request.params.id, userId: request.user!.id, status: request.body.status, reason: request.body.reason!.trim() });
+    await writeAuditLog(request, 'EVENT_STATUS_UPDATE', 'Event', request.params.id, { status: request.body.status, reason: request.body.reason, impacts: result.preview.impacts });
+    return sendSuccess(response, result, 200, getApiMessage('EVENT_UPDATED'));
+  }
+  if (lockedEventStatuses.has(request.body.status) && event.salonId) {
+    const day = eventDay(event.eventDate);
+    if (day) await assertVenueAvailable({ salonId: event.salonId.toString(), day, startTime: event.startTime, endTime: event.endTime, excludeEventId: event._id.toString() });
+  }
+  event.status = request.body.status;
   event.updatedBy = request.user!.id;
   await event.save();
-  if (['cancelled', 'lost'].includes(event.status)) {
-    await EventTablewareAllocation.deleteMany({ eventId: event._id });
-    await cancelCurrentProductionPlan(event._id.toString(), request.user!.id);
-  }
   await writeAuditLog(request, 'EVENT_STATUS_UPDATE', 'Event', event._id.toString(), { status: event.status, reason: request.body.reason });
   return sendSuccess(response, { event }, 200, getApiMessage('EVENT_UPDATED'));
 }));

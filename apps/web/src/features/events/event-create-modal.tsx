@@ -225,7 +225,28 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
     }
   };
 
-  const canSubmit = form.sourceMode === 'quote' ? Boolean(form.quoteId) : Boolean(form.salonId && (form.customerMode === 'existing' ? form.customerId : form.customerFullName) && (form.eventName || form.eventType) && validTimes);
+  const directPrice = form.pricingMode === 'per_person' ? numberOrUndefined(form.pricePerPerson) : numberOrUndefined(form.finalAmount || form.fixedPrice);
+  const quoteMissing = selectedQuote ? [
+    !selectedQuote.eventType && 'tipo de evento',
+    !selectedQuote.eventDate && 'fecha',
+    !selectedQuote.startTime && 'horario de inicio',
+    !selectedQuote.endTime && 'horario de fin',
+    !selectedQuote.guestCount && 'cantidad de invitados'
+  ].filter(Boolean) as string[] : [];
+  const canSubmit = form.sourceMode === 'quote'
+    ? Boolean(form.quoteId && selectedQuote && !quoteMissing.length)
+    : Boolean(
+      form.salonId
+      && (form.customerMode === 'existing' ? form.customerId : form.customerFullName.trim())
+      && form.eventType.trim()
+      && form.eventDate
+      && form.startTime
+      && form.endTime
+      && numberOrUndefined(form.guestCount)
+      && (form.packageTemplateId || form.packageName.trim())
+      && directPrice
+      && validTimes
+    );
 
   return <Modal open={open} title="Nuevo evento" description="Creá un evento directo o desde un presupuesto existente." onClose={onClose}>
     <div className="space-y-6 p-6">
@@ -237,7 +258,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
 
       {form.sourceMode === 'quote' ? <section className="space-y-4">
         <Field label="Presupuesto existente" required><Select value={form.quoteId} disabled={loadingOptions} onChange={(event) => set('quoteId', event.target.value)}><option value="">Seleccionar presupuesto</option>{quotes.map((quote) => <option key={quote._id} value={quote._id}>{quote.quoteNumber} · {quote.contactName || entityName(quote.customerId) || 'Sin cliente'} · {entityName(quote.salonId)}</option>)}</Select></Field>
-        {selectedQuote ? <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-3"><Info label="Cliente" value={selectedQuote.contactName || entityName(selectedQuote.customerId) || 'Sin cliente'} /><Info label="Evento" value={selectedQuote.eventType || 'Sin tipo'} /><Info label="Total" value={new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(selectedQuote.totalAmount ?? 0)} /></div> : null}
+        {selectedQuote ? <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-3"><Info label="Cliente" value={selectedQuote.contactName || entityName(selectedQuote.customerId) || 'Sin cliente'} /><Info label="Evento" value={selectedQuote.eventType || 'Sin tipo'} /><Info label="Total" value={new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(selectedQuote.totalAmount ?? 0)} />{quoteMissing.length ? <p className="text-red-700 sm:col-span-3" role="alert">Completá {quoteMissing.join(', ')} en el presupuesto antes de crear el evento.</p> : null}</div> : null}
         <Field label="Nombre de evento opcional"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} placeholder="Si querés sobrescribir el nombre generado" /></Field>
       </section> : <section className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
@@ -262,7 +283,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         </div>}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Field label="Nombre del evento" className="md:col-span-2"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} /></Field>
-          <Field label="Tipo" required><Input value={form.eventType} onChange={(event) => set('eventType', event.target.value)} /></Field>
+          <Field label="Tipo de evento" required><Input value={form.eventType} onChange={(event) => set('eventType', event.target.value)} placeholder="Ej.: Casamiento, cumpleaños de 15" /></Field>
           <Field label="Homenajeado"><Input value={form.honoreeName} onChange={(event) => set('honoreeName', event.target.value)} /></Field>
           <Field label="Fecha" required><Input type="date" value={form.eventDate} onChange={(event) => set('eventDate', event.target.value)} /></Field>
           <Field label="Inicio" required error={touchedTimes.startTime ? timeErrors.startTime : undefined}><Input id="event-start-time" type="time" step={60} required value={form.startTime} onBlur={() => setTouchedTimes((current) => ({ ...current, startTime: true }))} onChange={(event) => set('startTime', event.target.value)} aria-invalid={Boolean(touchedTimes.startTime && timeErrors.startTime)} aria-describedby={touchedTimes.startTime && timeErrors.startTime ? 'event-start-time-error' : undefined} className={touchedTimes.startTime && timeErrors.startTime ? 'border-red-500 focus:border-red-600 focus:ring-red-600/10' : ''} /></Field>
