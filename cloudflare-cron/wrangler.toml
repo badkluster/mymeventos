@@ -5,12 +5,32 @@ compatibility_date = "2026-08-21"
 [triggers]
 crons = ["*/5 * * * *"]
 
-[secrets]
-required = [
-  "TICKET_AUTOMATION_APP_BASE_URL",
-  "TICKET_AUTOMATION_CRON_SECRET",
-  "FINANCIAL_REMINDERS_APP_BASE_URL",
-  "CRON_SECRET",
-  "MARKETING_APP_BASE_URL",
-  "MARKETING_CRON_SECRET"
-]
+[[secrets_store_secrets]]
+binding = "TICKET_AUTOMATION_APP_BASE_URL"
+store_id = "f5863a8b3e4f4ee0a5aeee5558c4c3b5"
+secret_name = "TICKET_AUTOMATION_APP_BASE_URL"
+
+[[secrets_store_secrets]]
+binding = "TICKET_AUTOMATION_CRON_SECRET"
+store_id = "f5863a8b3e4f4ee0a5aeee5558c4c3b5"
+secret_name = "TICKET_AUTOMATION_CRON_SECRET"
+
+[[secrets_store_secrets]]
+binding = "FINANCIAL_REMINDERS_APP_BASE_URL"
+store_id = "f5863a8b3e4f4ee0a5aeee5558c4c3b5"
+secret_name = "FINANCIAL_REMINDERS_APP_BASE_URL"
+
+[[secrets_store_secrets]]
+binding = "CRON_SECRET"
+store_id = "f5863a8b3e4f4ee0a5aeee5558c4c3b5"
+secret_name = "CRON_SECRET"
+
+[[secrets_store_secrets]]
+binding = "MARKETING_APP_BASE_URL"
+store_id = "f5863a8b3e4f4ee0a5aeee5558c4c3b5"
+secret_name = "MARKETING_APP_BASE_URL"
+
+[[secrets_store_secrets]]
+binding = "MARKETING_CRON_SECRET"
+store_id = "f5863a8b3e4f4ee0a5aeee5558c4c3b5"
+secret_name = "MARKETING_CRON_SECRET"
