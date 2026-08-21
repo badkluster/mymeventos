@@ -1,6 +1,7 @@
 name: Ticket automation
 
-# GitHub Actions is the sole scheduler for this idempotent endpoint.
+# Scheduled through GitHub Actions, but executed on a self-hosted runner so it
+# does not consume GitHub-hosted Actions minutes.
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -14,7 +15,7 @@ concurrency:
 
 jobs:
   process-ticket-automation:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 2
     steps:
       - name: Process expired reservations and pending ticket automation
