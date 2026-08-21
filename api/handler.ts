@@ -11,7 +11,12 @@ function pathnameOf(request: any): string {
 }
 
 function normalizeRequestQuery(request: any): void {
-  if (Object.prototype.hasOwnProperty.call(request, 'query')) {
+  const ownQueryDescriptor = Object.getOwnPropertyDescriptor(request, 'query');
+
+  // A normal data property is already safe for Express to read. Vercel's Node
+  // runtime, however, installs `query` as an accessor that delegates to the
+  // deprecated node:url `url.parse()` API. Do not read that accessor; replace it.
+  if (ownQueryDescriptor && 'value' in ownQueryDescriptor) {
     return;
   }
 
@@ -19,11 +24,16 @@ function normalizeRequestQuery(request: any): void {
   const queryIndex = rawUrl.indexOf('?');
   const query = queryIndex >= 0 ? parseQueryString(rawUrl.slice(queryIndex + 1)) : Object.create(null);
 
-  // Vercel's Node 24 request shim exposes an inherited `query` getter that still
-  // delegates to the deprecated node:url `url.parse()` API. Express 4 reads
-  // req.query in its built-in query middleware, which triggers DEP0169. Define
-  // the same simple-query-parser result as an own property first so Express
-  // never invokes that legacy getter.
+  if (ownQueryDescriptor?.configurable === false) {
+    // Defensive fallback for an unexpected runtime change. At present Vercel's
+    // request accessor is configurable, but failing loudly here would turn an
+    // otherwise valid API request into a 500 response.
+    return;
+  }
+
+  // Express 4 uses Node's simple query parser by default, so querystring.parse
+  // preserves its existing parsing semantics while avoiding Vercel's legacy
+  // `url.parse()` getter and Node 24's DEP0169 warning.
   Object.defineProperty(request, 'query', {
     configurable: true,
     enumerable: true,
