@@ -1,6 +1,7 @@
 name: Financial reminders
 
-# GitHub Actions provides the cadence without requiring a paid Vercel Cron plan.
+# Scheduled through GitHub Actions, but executed on a self-hosted runner so it
+# does not consume GitHub-hosted Actions minutes.
 # The endpoint owns idempotency and may safely be called again after a timeout.
 on:
   schedule:
@@ -15,7 +16,7 @@ concurrency:
 
 jobs:
   process-financial-reminders:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 2
     steps:
       - name: Process financial reminders
