@@ -4,3 +4,13 @@ compatibility_date = "2026-08-21"
 
 [triggers]
 crons = ["*/5 * * * *"]
+
+[secrets]
+required = [
+  "TICKET_AUTOMATION_APP_BASE_URL",
+  "TICKET_AUTOMATION_CRON_SECRET",
+  "FINANCIAL_REMINDERS_APP_BASE_URL",
+  "CRON_SECRET",
+  "MARKETING_APP_BASE_URL",
+  "MARKETING_CRON_SECRET"
+]
