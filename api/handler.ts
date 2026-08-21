@@ -1,17 +1,6 @@
+import { parse as parseQueryString } from 'node:querystring';
 import app from '../apps/api/src/app';
 import { connectDatabase, isDatabaseUnavailableError, pingDatabase } from '../apps/api/src/db/connection';
-
-const dep0169TraceKey = Symbol.for('mymeventos.dep0169TraceInstalled');
-const processWithTraceFlag = process as typeof process & { [dep0169TraceKey]?: boolean };
-if (!processWithTraceFlag[dep0169TraceKey]) {
-  processWithTraceFlag[dep0169TraceKey] = true;
-  process.on('warning', (warning) => {
-    const warningWithCode = warning as Error & { code?: string };
-    if (warningWithCode.code === 'DEP0169') {
-      console.error('[DEP0169_TRACE]', warningWithCode.stack ?? warningWithCode.message);
-    }
-  });
-}
 
 function pathnameOf(request: any): string {
   try {
@@ -19,6 +8,28 @@ function pathnameOf(request: any): string {
   } catch {
     return request.url ?? '/';
   }
+}
+
+function normalizeRequestQuery(request: any): void {
+  if (Object.prototype.hasOwnProperty.call(request, 'query')) {
+    return;
+  }
+
+  const rawUrl = typeof request.url === 'string' ? request.url : '/';
+  const queryIndex = rawUrl.indexOf('?');
+  const query = queryIndex >= 0 ? parseQueryString(rawUrl.slice(queryIndex + 1)) : Object.create(null);
+
+  // Vercel's Node 24 request shim exposes an inherited `query` getter that still
+  // delegates to the deprecated node:url `url.parse()` API. Express 4 reads
+  // req.query in its built-in query middleware, which triggers DEP0169. Define
+  // the same simple-query-parser result as an own property first so Express
+  // never invokes that legacy getter.
+  Object.defineProperty(request, 'query', {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: query,
+  });
 }
 
 function runtimeMeta() {
@@ -81,6 +92,7 @@ export default async function handler(request: any, response: any) {
       }));
     }
 
+    normalizeRequestQuery(request);
     return app(request, response);
   } catch (error) {
     const elapsedMs = Date.now() - startedAt;
