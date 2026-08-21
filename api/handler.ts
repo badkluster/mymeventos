@@ -1,6 +1,18 @@
 import app from '../apps/api/src/app';
 import { connectDatabase, isDatabaseUnavailableError, pingDatabase } from '../apps/api/src/db/connection';
 
+const dep0169TraceKey = Symbol.for('mymeventos.dep0169TraceInstalled');
+const processWithTraceFlag = process as typeof process & { [dep0169TraceKey]?: boolean };
+if (!processWithTraceFlag[dep0169TraceKey]) {
+  processWithTraceFlag[dep0169TraceKey] = true;
+  process.on('warning', (warning) => {
+    const warningWithCode = warning as Error & { code?: string };
+    if (warningWithCode.code === 'DEP0169') {
+      console.error('[DEP0169_TRACE]', warningWithCode.stack ?? warningWithCode.message);
+    }
+  });
+}
+
 function pathnameOf(request: any): string {
   try {
     return new URL(request.url ?? '/', 'http://localhost').pathname;
