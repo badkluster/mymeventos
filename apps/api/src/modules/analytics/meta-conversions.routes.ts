@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { Request, Router } from 'express';
+import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { env } from '../../config/env';
 import { validateRequest } from '../../middlewares/validateRequest';
