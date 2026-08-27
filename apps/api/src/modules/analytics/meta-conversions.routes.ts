@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { Router } from 'express';
+import { Request, Router } from 'express';
 import { z } from 'zod';
 import { env } from '../../config/env';
 import { validateRequest } from '../../middlewares/validateRequest';
@@ -28,7 +28,7 @@ const requestSchema = z.object({
   query: z.object({}),
 });
 
-function clientIp(request: Parameters<Parameters<typeof router.post>[1]>[0]) {
+function clientIp(request: Request) {
   const forwarded = request.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0]?.trim() || request.ip || '';
   return request.ip || '';
