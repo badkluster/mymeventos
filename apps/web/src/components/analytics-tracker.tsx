@@ -10,8 +10,23 @@ type AnalyticsName =
   | 'promotion_view' | 'promotion_click' | 'salon_view' | 'package_view';
 type QueueEvent = Record<string, unknown> & { eventName: AnalyticsName };
 type TrackerSettings = { enabled: boolean; consentRequired: boolean; collectClicks: boolean; collectSectionEngagement: boolean };
+type MetaFbq = ((...args: unknown[]) => void) & {
+  callMethod?: (...args: unknown[]) => void;
+  queue: unknown[][];
+  push: (...args: unknown[]) => void;
+  loaded: boolean;
+  version: string;
+};
+
+declare global {
+  interface Window {
+    fbq?: MetaFbq;
+    _fbq?: MetaFbq;
+  }
+}
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3001/api');
+const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? '2426577017753592';
 const visitorKey = 'mym.analytics.visitor';
 const attributionKey = 'mym.analytics.attribution';
 const consentKey = 'mym.analytics.consent';
@@ -44,6 +59,45 @@ function analyticsElementId(target: HTMLElement) {
   const description = target.getAttribute('aria-label') || target.textContent || target.getAttribute('title') || '';
   const slug = description.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-AR').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90);
   return slug ? `element-${slug}` : 'unidentified';
+}
+function ensureMetaPixel() {
+  if (window.fbq) return window.fbq;
+  const fbq = function (...args: unknown[]) {
+    if (fbq.callMethod) fbq.callMethod(...args);
+    else fbq.queue.push(args);
+  } as MetaFbq;
+  fbq.queue = [];
+  fbq.push = (...args: unknown[]) => fbq(...args);
+  fbq.loaded = true;
+  fbq.version = '2.0';
+  window.fbq = fbq;
+  window._fbq = fbq;
+  const script = document.createElement('script');
+  script.async = true;
+  script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+  script.dataset.mymMetaPixel = metaPixelId;
+  document.head.appendChild(script);
+  fbq('init', metaPixelId);
+  return fbq;
+}
+function trackMetaEvent(eventName: AnalyticsName, eventId: string, detail: Record<string, unknown>) {
+  const mapping: Partial<Record<AnalyticsName, 'PageView' | 'ViewContent' | 'Contact' | 'Lead'>> = {
+    page_view: 'PageView',
+    salon_view: 'ViewContent',
+    promotion_view: 'ViewContent',
+    package_view: 'ViewContent',
+    whatsapp_click: 'Contact',
+    phone_click: 'Contact',
+    form_success: 'Lead',
+  };
+  const standardEvent = mapping[eventName];
+  if (!standardEvent) return;
+  const fbq = ensureMetaPixel();
+  const params: Record<string, unknown> = {};
+  if (detail.entityId) params.content_ids = [String(detail.entityId)];
+  if (detail.elementId) params.content_name = String(detail.elementId);
+  params.content_category = eventName;
+  fbq('track', standardEvent, params, { eventID: eventId });
 }
 export function analyticsAttributionId() {
   if (typeof window === 'undefined') return '';
@@ -92,13 +146,16 @@ export function AnalyticsTracker() {
       else void fetch(`${apiBase}/public/analytics/collect`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => undefined);
     };
     const enqueue = (eventName: AnalyticsName, detail: Record<string, unknown> = {}) => {
-      queue.current.push({
-        eventId: crypto.randomUUID(), anonymousVisitorId: visitorId.current, sessionId: sessionId.current, attributionId: attributionId.current,
+      const eventId = crypto.randomUUID();
+      const queuedEvent: QueueEvent = {
+        eventId, anonymousVisitorId: visitorId.current, sessionId: sessionId.current, attributionId: attributionId.current,
         eventName, pagePath: location.pathname, pageTitle: document.title.slice(0, 240), referrer: document.referrer.slice(0, 500),
         ...utm.current, deviceType: deviceType(), browserFamily: browserFamily(), operatingSystem: operatingSystem(),
         viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         occurredAt: new Date().toISOString(), pageVersion, ...detail,
-      });
+      };
+      queue.current.push(queuedEvent);
+      trackMetaEvent(eventName, eventId, detail);
       if (queue.current.length >= 10) flush();
     };
     enqueue('session_start'); enqueue('page_view');
@@ -156,7 +213,7 @@ export function AnalyticsTracker() {
 
   if (!publicPage || !settings?.enabled || consent || !settings.consentRequired) return null;
   return <aside className="fixed inset-x-3 bottom-3 z-[120] mx-auto max-w-2xl rounded-2xl border border-white/15 bg-zinc-950/95 p-4 text-white shadow-2xl backdrop-blur">
-    <p className="text-sm font-semibold">Privacidad y analítica</p><p className="mt-1 text-xs leading-5 text-zinc-300">Usamos analítica propia para entender qué secciones resultan útiles. No capturamos valores de formularios ni datos sensibles.</p>
+    <p className="text-sm font-semibold">Privacidad y analítica</p><p className="mt-1 text-xs leading-5 text-zinc-300">Usamos analítica propia y, si aceptás, Meta Pixel para medir visitas y acciones de marketing. No enviamos a Meta valores de formularios ni datos sensibles desde el navegador.</p>
     <div className="mt-3 flex justify-end gap-2"><button className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold" onClick={() => { localStorage.setItem(consentKey, 'declined'); setConsent('declined'); }}>No permitir</button><button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black" onClick={() => { localStorage.setItem(consentKey, 'accepted'); setConsent('accepted'); }}>Permitir analítica</button></div>
   </aside>;
 }
