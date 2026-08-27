@@ -10,6 +10,7 @@ type AnalyticsName =
   | 'promotion_view' | 'promotion_click' | 'salon_view' | 'package_view';
 type QueueEvent = Record<string, unknown> & { eventName: AnalyticsName };
 type TrackerSettings = { enabled: boolean; consentRequired: boolean; collectClicks: boolean; collectSectionEngagement: boolean };
+type MetaStandardEvent = 'PageView' | 'ViewContent' | 'Contact' | 'Lead';
 type MetaFbq = ((...args: unknown[]) => void) & {
   callMethod?: (...args: unknown[]) => void;
   queue: unknown[][];
@@ -31,6 +32,15 @@ const visitorKey = 'mym.analytics.visitor';
 const attributionKey = 'mym.analytics.attribution';
 const consentKey = 'mym.analytics.consent';
 const pageVersion = 'landing-2026-07';
+const metaEventMapping: Partial<Record<AnalyticsName, MetaStandardEvent>> = {
+  page_view: 'PageView',
+  salon_view: 'ViewContent',
+  promotion_view: 'ViewContent',
+  package_view: 'ViewContent',
+  whatsapp_click: 'Contact',
+  phone_click: 'Contact',
+  form_success: 'Lead',
+};
 
 function identifier(storage: Storage, key: string) {
   const existing = storage.getItem(key);
@@ -60,6 +70,11 @@ function analyticsElementId(target: HTMLElement) {
   const slug = description.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-AR').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90);
   return slug ? `element-${slug}` : 'unidentified';
 }
+function cookieValue(name: string) {
+  const prefix = `${name}=`;
+  const item = document.cookie.split(';').map((value) => value.trim()).find((value) => value.startsWith(prefix));
+  return item ? decodeURIComponent(item.slice(prefix.length)) : '';
+}
 function ensureMetaPixel() {
   if (window.fbq) return window.fbq;
   const fbq = function (...args: unknown[]) {
@@ -80,24 +95,39 @@ function ensureMetaPixel() {
   fbq('init', metaPixelId);
   return fbq;
 }
-function trackMetaEvent(eventName: AnalyticsName, eventId: string, detail: Record<string, unknown>) {
-  const mapping: Partial<Record<AnalyticsName, 'PageView' | 'ViewContent' | 'Contact' | 'Lead'>> = {
-    page_view: 'PageView',
-    salon_view: 'ViewContent',
-    promotion_view: 'ViewContent',
-    package_view: 'ViewContent',
-    whatsapp_click: 'Contact',
-    phone_click: 'Contact',
-    form_success: 'Lead',
-  };
-  const standardEvent = mapping[eventName];
-  if (!standardEvent) return;
+function trackMetaBrowserEvent(eventName: AnalyticsName, eventId: string, detail: Record<string, unknown>) {
+  const standardEvent = metaEventMapping[eventName];
+  if (!standardEvent) return null;
   const fbq = ensureMetaPixel();
   const params: Record<string, unknown> = {};
   if (detail.entityId) params.content_ids = [String(detail.entityId)];
   if (detail.elementId) params.content_name = String(detail.elementId);
   params.content_category = eventName;
   fbq('track', standardEvent, params, { eventID: eventId });
+  return standardEvent;
+}
+function trackMetaServerEvent(standardEvent: MetaStandardEvent, analyticsName: AnalyticsName, eventId: string, occurredAt: string, externalId: string, detail: Record<string, unknown>) {
+  const query = new URLSearchParams(location.search);
+  const body = {
+    eventId,
+    eventName: standardEvent,
+    eventTime: occurredAt,
+    eventSourceUrl: location.href,
+    externalId,
+    fbp: cookieValue('_fbp'),
+    fbc: cookieValue('_fbc'),
+    contentName: detail.elementId ? String(detail.elementId) : '',
+    contentCategory: analyticsName,
+    contentIds: detail.entityId ? [String(detail.entityId)] : undefined,
+    testEventCode: query.get('test_event_code') || '',
+  };
+  void fetch(`${apiBase}/public/meta/events`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    keepalive: true,
+  }).catch(() => undefined);
 }
 export function analyticsAttributionId() {
   if (typeof window === 'undefined') return '';
@@ -147,15 +177,17 @@ export function AnalyticsTracker() {
     };
     const enqueue = (eventName: AnalyticsName, detail: Record<string, unknown> = {}) => {
       const eventId = crypto.randomUUID();
+      const occurredAt = new Date().toISOString();
       const queuedEvent: QueueEvent = {
         eventId, anonymousVisitorId: visitorId.current, sessionId: sessionId.current, attributionId: attributionId.current,
         eventName, pagePath: location.pathname, pageTitle: document.title.slice(0, 240), referrer: document.referrer.slice(0, 500),
         ...utm.current, deviceType: deviceType(), browserFamily: browserFamily(), operatingSystem: operatingSystem(),
         viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        occurredAt: new Date().toISOString(), pageVersion, ...detail,
+        occurredAt, pageVersion, ...detail,
       };
       queue.current.push(queuedEvent);
-      trackMetaEvent(eventName, eventId, detail);
+      const standardEvent = trackMetaBrowserEvent(eventName, eventId, detail);
+      if (standardEvent) trackMetaServerEvent(standardEvent, eventName, eventId, occurredAt, attributionId.current, detail);
       if (queue.current.length >= 10) flush();
     };
     enqueue('session_start'); enqueue('page_view');
@@ -213,7 +245,7 @@ export function AnalyticsTracker() {
 
   if (!publicPage || !settings?.enabled || consent || !settings.consentRequired) return null;
   return <aside className="fixed inset-x-3 bottom-3 z-[120] mx-auto max-w-2xl rounded-2xl border border-white/15 bg-zinc-950/95 p-4 text-white shadow-2xl backdrop-blur">
-    <p className="text-sm font-semibold">Privacidad y analítica</p><p className="mt-1 text-xs leading-5 text-zinc-300">Usamos analítica propia y, si aceptás, Meta Pixel para medir visitas y acciones de marketing. No enviamos a Meta valores de formularios ni datos sensibles desde el navegador.</p>
+    <p className="text-sm font-semibold">Privacidad y analítica</p><p className="mt-1 text-xs leading-5 text-zinc-300">Usamos analítica propia y, si aceptás, Meta Pixel y medición server-side de Meta para medir visitas y acciones de marketing. No enviamos a Meta valores de formularios ni datos sensibles.</p>
     <div className="mt-3 flex justify-end gap-2"><button className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold" onClick={() => { localStorage.setItem(consentKey, 'declined'); setConsent('declined'); }}>No permitir</button><button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black" onClick={() => { localStorage.setItem(consentKey, 'accepted'); setConsent('accepted'); }}>Permitir analítica</button></div>
   </aside>;
 }
