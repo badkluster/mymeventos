@@ -55,6 +55,16 @@ function normalizePhone(value: string) {
   return digits;
 }
 
+function fbcFromSourceUrl(eventSourceUrl: string, eventTime: Date) {
+  try {
+    const fbclid = new URL(eventSourceUrl).searchParams.get('fbclid')?.trim();
+    if (!fbclid || fbclid.length > 500) return '';
+    return `fb.1.${eventTime.getTime()}.${fbclid}`;
+  } catch {
+    return '';
+  }
+}
+
 router.post('/events', validateRequest(requestSchema), asyncHandler(async (request, response) => {
   if (!env.META_CONVERSIONS_API_TOKEN || !env.META_DATASET_ID) {
     return sendSuccess(response, { sent: false, reason: 'disabled' });
@@ -67,7 +77,8 @@ router.post('/events', validateRequest(requestSchema), asyncHandler(async (reque
     external_id: [hashMetaValue(normalizeText(body.externalId))],
   };
   if (body.fbp) userData.fbp = body.fbp;
-  if (body.fbc) userData.fbc = body.fbc;
+  const fbc = body.fbc || fbcFromSourceUrl(body.eventSourceUrl, body.eventTime);
+  if (fbc) userData.fbc = fbc;
   if (body.email) userData.em = [hashMetaValue(body.email.trim().toLowerCase())];
   if (body.phone) {
     const phone = normalizePhone(body.phone);
