@@ -67,12 +67,18 @@ const contractPaymentSchema = z.object({
 const router = Router();
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
+function referenceId(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'object' && (value as { _id?: unknown })._id) return String((value as { _id: unknown })._id);
+  return String(value);
+}
 function scopedQuery(request: Request): Record<string, unknown>[] {
   return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonId: { $in: accessibleSalonIds(request.user!) } }];
 }
 async function ensureContractAccess(request: Request, contract: any): Promise<void> {
   if (!contract || contract.deletedAt) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
-  if (contract.salonId && !canAccessSalon(request.user!, contract.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  const salonId = referenceId(contract.salonId);
+  if (salonId && !canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
 }
 function buildQuery(request: Request): Record<string, unknown> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }, ...scopedQuery(request)];

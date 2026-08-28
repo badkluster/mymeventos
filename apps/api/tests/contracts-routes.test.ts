@@ -38,9 +38,11 @@ vi.mock('../src/modules/crm/quote-pdf.service', () => ({ generateAndUploadQuoteP
 import app from '../src/app';
 
 const adminId = '507f1f77bcf86cd799439011';
+const salonManagerId = '507f1f77bcf86cd799439099';
 const contractId = '507f1f77bcf86cd799439012';
 const salonId = '507f1f77bcf86cd799439013';
 const adminCookie = `accessToken=${generateAccessToken({ sub: adminId, username: 'admin' })}`;
+const salonManagerCookie = `accessToken=${generateAccessToken({ sub: salonManagerId, username: 'salon-manager' })}`;
 
 function chainLean(value: unknown) {
   return { lean: vi.fn().mockResolvedValue(value) };
@@ -74,6 +76,17 @@ describe('contracts routes', () => {
     mocks.contractFindOne.mockReturnValue(detailChain(contract));
 
     const response = await request(app).get(`/api/contracts/${contractId}`).set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.contract).toEqual(contract);
+  });
+
+  it('lets the assigned salon manager open a contract whose salon is populated', async () => {
+    const contract = { _id: contractId, contractNumber: 'C-2026-00001', salonId: { _id: salonId, name: 'Villa Elisa' } };
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: salonManagerId, roles: [Role.SALON_MANAGER], permissionOverrides: [], permissionDeniedOverrides: [], salonIds: [salonId], active: true }));
+    mocks.contractFindOne.mockReturnValue(detailChain(contract));
+
+    const response = await request(app).get(`/api/contracts/${contractId}`).set('Cookie', salonManagerCookie);
 
     expect(response.status).toBe(200);
     expect(response.body.data.contract).toEqual(contract);
