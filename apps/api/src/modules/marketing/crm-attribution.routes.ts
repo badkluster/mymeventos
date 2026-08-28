@@ -26,6 +26,8 @@ type AggregateBucket = {
   medium: string | null;
   campaign?: string | null;
   requestIds: Set<string>;
+  quotedRequestIds: Set<string>;
+  closedRequestIds: Set<string>;
   leadIds: Set<string>;
   quoteIds: Set<string>;
   acceptedQuoteIds: Set<string>;
@@ -149,6 +151,8 @@ function makeBucket(identity: AttributionIdentity, campaign: string | null = nul
     medium: identity.medium,
     campaign,
     requestIds: new Set(),
+    quotedRequestIds: new Set(),
+    closedRequestIds: new Set(),
     leadIds: new Set(),
     quoteIds: new Set(),
     acceptedQuoteIds: new Set(),
@@ -168,6 +172,8 @@ function addToBucket(bucket: AggregateBucket, row: {
   collectedRevenue: number;
 }) {
   bucket.requestIds.add(row.requestId);
+  if (row.quoteIds.length) bucket.quotedRequestIds.add(row.requestId);
+  if (row.eventIds.length) bucket.closedRequestIds.add(row.requestId);
   if (row.leadId) bucket.leadIds.add(row.leadId);
   row.quoteIds.forEach((id) => bucket.quoteIds.add(id));
   row.acceptedQuoteIds.forEach((id) => bucket.acceptedQuoteIds.add(id));
@@ -191,8 +197,8 @@ function serializeBucket(bucket: AggregateBucket) {
     confirmedEvents,
     bookedRevenue: Math.round(bucket.bookedRevenue * 100) / 100,
     collectedRevenue: Math.round(bucket.collectedRevenue * 100) / 100,
-    quoteRate: percent(bucket.quoteIds.size ? requests : 0, requests),
-    closeRate: percent(confirmedEvents, requests),
+    quoteRate: percent(bucket.quotedRequestIds.size, requests),
+    closeRate: percent(bucket.closedRequestIds.size, requests),
     averageTicket: confirmedEvents ? Math.round((bucket.bookedRevenue / confirmedEvents) * 100) / 100 : 0,
   };
 }
@@ -240,8 +246,8 @@ router.get('/attribution', asyncHandler(async (request, response) => {
   }
 
   const attributionIds = [...new Set(quoteRequests
-    .map((item) => text(item.originalPayload?.attributionId))
-    .filter((value): value is string => Boolean(value)))];
+    .map((item: any) => text(item.originalPayload?.attributionId))
+    .filter((value: string | null): value is string => Boolean(value)))];
   const sessions: any[] = attributionIds.length
     ? await AnalyticsSession.find({ attributionId: { $in: attributionIds } })
       .select('attributionId startedAt lastActivityAt source medium campaign')
@@ -256,13 +262,16 @@ router.get('/attribution', asyncHandler(async (request, response) => {
     sessionsByAttribution.set(key, list);
   }
 
-  const quoteIds = [...new Set(quoteRequests.flatMap((item) => (item.convertedQuoteIds ?? []).map(idOf).filter(Boolean) as string[]))];
+  const quoteIds = [...new Set(quoteRequests.flatMap((item: any) => {
+    const convertedQuoteIds: unknown[] = Array.isArray(item.convertedQuoteIds) ? item.convertedQuoteIds : [];
+    return convertedQuoteIds.map((value: unknown) => idOf(value)).filter((value: string | null): value is string => Boolean(value));
+  }))];
   const quotes: any[] = quoteIds.length
     ? await Quote.find({ _id: { $in: quoteIds }, deletedAt: null })
       .select('_id leadId salonId status totalAmount acceptedAt convertedEventId createdAt')
       .lean()
     : [];
-  const quotesById = new Map(quotes.map((quote) => [String(quote._id), quote]));
+  const quotesById = new Map<string, any>(quotes.map((quote: any) => [String(quote._id), quote]));
 
   const events: any[] = quoteIds.length
     ? await Event.find({
@@ -274,8 +283,8 @@ router.get('/attribution', asyncHandler(async (request, response) => {
       ],
     }).select('_id salonId status quoteId sourceQuoteId createdFromQuoteId finalAmount estimatedAmount createdAt').lean()
     : [];
-  const closedEvents = events.filter((event) => ['reserved', 'confirmed'].includes(String(event.status ?? '').toLowerCase()));
-  const eventIds = closedEvents.map((event) => String(event._id));
+  const closedEvents = events.filter((event: any) => ['reserved', 'confirmed'].includes(String(event.status ?? '').toLowerCase()));
+  const eventIds = closedEvents.map((event: any) => String(event._id));
 
   const contracts: any[] = eventIds.length
     ? await Contract.find({ eventId: { $in: eventIds }, status: 'approved', deletedAt: null })
@@ -283,7 +292,7 @@ router.get('/attribution', asyncHandler(async (request, response) => {
       .lean()
     : [];
   const approvedContractByEvent = currentApprovedContracts(contracts);
-  const contractIds = [...approvedContractByEvent.values()].map((contract) => String(contract._id));
+  const contractIds = [...approvedContractByEvent.values()].map((contract: any) => String(contract._id));
 
   const payments: any[] = eventIds.length
     ? await Payment.find({
@@ -293,7 +302,7 @@ router.get('/attribution', asyncHandler(async (request, response) => {
       $or: [{ eventId: { $in: eventIds } }, ...(contractIds.length ? [{ contractId: { $in: contractIds } }] : [])],
     }).select('_id eventId contractId amount refundedAmount affectsContractBalance').lean()
     : [];
-  const contractEventMap = new Map(contracts.map((contract) => [String(contract._id), String(contract.eventId)]));
+  const contractEventMap = new Map<string, string>(contracts.map((contract: any) => [String(contract._id), String(contract.eventId)]));
   const collectedByEvent = new Map<string, number>();
   for (const payment of payments) {
     if (payment.affectsContractBalance === false) continue;
@@ -305,10 +314,11 @@ router.get('/attribution', asyncHandler(async (request, response) => {
 
   const eventsByQuote = new Map<string, any[]>();
   for (const event of closedEvents) {
-    const linkedQuoteIds = [idOf(event.quoteId), idOf(event.sourceQuoteId), idOf(event.createdFromQuoteId)].filter((value): value is string => Boolean(value));
+    const linkedQuoteIds = [idOf(event.quoteId), idOf(event.sourceQuoteId), idOf(event.createdFromQuoteId)]
+      .filter((value: string | null): value is string => Boolean(value));
     for (const quoteId of linkedQuoteIds) {
       const list = eventsByQuote.get(quoteId) ?? [];
-      if (!list.some((item) => String(item._id) === String(event._id))) list.push(event);
+      if (!list.some((item: any) => String(item._id) === String(event._id))) list.push(event);
       eventsByQuote.set(quoteId, list);
     }
   }
@@ -357,30 +367,34 @@ router.get('/attribution', asyncHandler(async (request, response) => {
     if (identity.attributed) attributedRequestIds.add(requestId);
     if (leadId) allLeadIds.add(leadId);
 
-    const rowQuotes = (item.convertedQuoteIds ?? [])
-      .map(idOf)
-      .filter((value): value is string => Boolean(value))
-      .map((id) => quotesById.get(id))
-      .filter(Boolean);
-    const rowQuoteIds = rowQuotes.map((quote) => String(quote._id));
-    const acceptedQuoteIds = rowQuotes
-      .filter((quote) => ['accepted', 'converted'].includes(String(quote.status ?? '').toLowerCase()) || Boolean(quote.acceptedAt))
-      .map((quote) => String(quote._id));
-    rowQuoteIds.forEach((id) => allQuoteIds.add(id));
-    acceptedQuoteIds.forEach((id) => allAcceptedQuoteIds.add(id));
+    const convertedQuoteIds: unknown[] = Array.isArray(item.convertedQuoteIds) ? item.convertedQuoteIds : [];
+    const rowQuotes: any[] = convertedQuoteIds
+      .map((value: unknown) => idOf(value))
+      .filter((value: string | null): value is string => Boolean(value))
+      .map((id: string) => quotesById.get(id))
+      .filter((quote: any) => Boolean(quote));
+    const rowQuoteIds: string[] = rowQuotes.map((quote: any) => String(quote._id));
+    const acceptedQuoteIds: string[] = rowQuotes
+      .filter((quote: any) => ['accepted', 'converted'].includes(String(quote.status ?? '').toLowerCase()) || Boolean(quote.acceptedAt))
+      .map((quote: any) => String(quote._id));
+    rowQuoteIds.forEach((id: string) => allQuoteIds.add(id));
+    acceptedQuoteIds.forEach((id: string) => allAcceptedQuoteIds.add(id));
 
     const rowEventsMap = new Map<string, any>();
     for (const quoteId of rowQuoteIds) {
       for (const event of eventsByQuote.get(quoteId) ?? []) rowEventsMap.set(String(event._id), event);
     }
-    const rowEvents = [...rowEventsMap.values()];
-    const rowEventIds = rowEvents.map((event) => String(event._id));
-    rowEventIds.forEach((id) => allEventIds.add(id));
-    const rowBookedRevenue = rowEvents.reduce((total, event) => total + revenueForEvent(event), 0);
-    const rowCollectedRevenue = rowEvents.reduce((total, event) => total + (collectedByEvent.get(String(event._id)) ?? 0), 0);
+    const rowEvents: any[] = [...rowEventsMap.values()];
+    const rowEventIds: string[] = rowEvents.map((event: any) => String(event._id));
+    rowEventIds.forEach((id: string) => allEventIds.add(id));
+    const rowBookedRevenue = rowEvents.reduce((total: number, event: any) => total + revenueForEvent(event), 0);
+    const rowCollectedRevenue = rowEvents.reduce((total: number, event: any) => total + (collectedByEvent.get(String(event._id)) ?? 0), 0);
     bookedRevenue += rowBookedRevenue;
     collectedRevenue += rowCollectedRevenue;
 
+    const interestedSalonIds: string[] = (Array.isArray(item.interestedSalonIds) ? item.interestedSalonIds : [])
+      .map((value: unknown) => idOf(value))
+      .filter((value: string | null): value is string => Boolean(value));
     const row = {
       requestId,
       leadId,
@@ -392,7 +406,7 @@ router.get('/attribution', asyncHandler(async (request, response) => {
       quotes: rowQuotes,
       bookedRevenue: rowBookedRevenue,
       collectedRevenue: rowCollectedRevenue,
-      interestedSalonIds: (item.interestedSalonIds ?? []).map(idOf).filter((value): value is string => Boolean(value)),
+      interestedSalonIds,
     };
     requestRows.push(row);
 
@@ -410,11 +424,11 @@ router.get('/attribution', asyncHandler(async (request, response) => {
 
   const salonIds = [...new Set(requestRows.flatMap((row) => [
     ...row.interestedSalonIds,
-    ...row.quotes.map((quote) => idOf(quote.salonId)).filter(Boolean) as string[],
-    ...row.events.map((event) => idOf(event.salonId)).filter(Boolean) as string[],
+    ...row.quotes.map((quote: any) => idOf(quote.salonId)).filter((value: string | null): value is string => Boolean(value)),
+    ...row.events.map((event: any) => idOf(event.salonId)).filter((value: string | null): value is string => Boolean(value)),
   ]))];
   const salons: any[] = salonIds.length ? await Salon.find({ _id: { $in: salonIds } }).select('_id name').lean() : [];
-  const salonNameMap = new Map(salons.map((salon) => [String(salon._id), String(salon.name)]));
+  const salonNameMap = new Map<string, string>(salons.map((salon: any) => [String(salon._id), String(salon.name)]));
   const salonBuckets = new Map<string, SalonBucket>();
   const salonBucket = (salonId: string): SalonBucket => {
     const existing = salonBuckets.get(salonId);
