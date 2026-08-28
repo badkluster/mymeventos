@@ -220,6 +220,20 @@ function currentApprovedContracts(contracts: any[]): Map<string, any> {
 router.get('/attribution', asyncHandler(async (request, response) => {
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
+  const allowedSalonIds = scope.selectedSalonId
+    ? new Set([scope.selectedSalonId])
+    : scope.unrestricted
+      ? null
+      : new Set(scope.salonIds ?? []);
+  const salonAllowed = (value: unknown): boolean => {
+    const salonId = idOf(value);
+    return Boolean(salonId && (!allowedSalonIds || allowedSalonIds.has(salonId)));
+  };
+  const entitySalonMatch: Record<string, unknown> = scope.selectedSalonId
+    ? { salonId: scope.selectedSalonId }
+    : !scope.unrestricted
+      ? { salonId: { $in: scope.salonIds ?? [] } }
+      : {};
   const requestConditions: Record<string, unknown>[] = [
     { deletedAt: null },
     { createdAt: { $gte: period.from, $lt: period.toExclusive } },
@@ -267,7 +281,7 @@ router.get('/attribution', asyncHandler(async (request, response) => {
     return convertedQuoteIds.map((value: unknown) => idOf(value)).filter((value: string | null): value is string => Boolean(value));
   }))];
   const quotes: any[] = quoteIds.length
-    ? await Quote.find({ _id: { $in: quoteIds }, deletedAt: null })
+    ? await Quote.find({ _id: { $in: quoteIds }, deletedAt: null, ...entitySalonMatch })
       .select('_id leadId salonId status totalAmount acceptedAt convertedEventId createdAt')
       .lean()
     : [];
@@ -276,6 +290,7 @@ router.get('/attribution', asyncHandler(async (request, response) => {
   const events: any[] = quoteIds.length
     ? await Event.find({
       deletedAt: null,
+      ...entitySalonMatch,
       $or: [
         { quoteId: { $in: quoteIds } },
         { sourceQuoteId: { $in: quoteIds } },
@@ -394,7 +409,7 @@ router.get('/attribution', asyncHandler(async (request, response) => {
 
     const interestedSalonIds: string[] = (Array.isArray(item.interestedSalonIds) ? item.interestedSalonIds : [])
       .map((value: unknown) => idOf(value))
-      .filter((value: string | null): value is string => Boolean(value));
+      .filter((value: string | null): value is string => Boolean(value) && salonAllowed(value));
     const row = {
       requestId,
       leadId,
