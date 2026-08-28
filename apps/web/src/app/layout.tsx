@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   openGraph: { title: 'M&M Eventos | Salones de eventos en La Plata con catering', description: 'Salones para fiestas, 15 años, casamientos, cumpleaños, egresados y eventos empresariales en La Plata.', type: 'website', images: [{ url: brandAssets.openGraphImage, width: 1200, height: 1200, alt: 'M&M Eventos' }] },
   twitter: { card: 'summary_large_image', title: 'M&M Eventos | Salones de eventos en La Plata', description: 'Salones, catering y organización integral para eventos inolvidables.', images: [brandAssets.openGraphImage] },
   robots: { index: true, follow: true },
+  verification: {
+    other: {
+      'facebook-domain-verification': 'am7groy654rg20qnzq0s1ns11qq501',
+    },
+  },
 };
 
 export default function RootLayout({
