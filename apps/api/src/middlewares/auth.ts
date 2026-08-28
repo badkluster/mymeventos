@@ -62,4 +62,12 @@ export const requireRole = (...roles: Role[]): RequestHandler => (request, _resp
 export function accessibleSalonIds(user: NonNullable<Express.Request['user']>): string[] { return [...new Set([...(user.salonIds ?? []), ...(user.managedSalonIds ?? [])].map(String))]; }
 export function userHasPermission(user: NonNullable<Express.Request['user']>, permission: Permission): boolean { return user.roles.some((role) => hasPermission(role, permission, user.permissionOverrides, user.permissionDeniedOverrides)); }
 export function canAccessSalon(user: NonNullable<Express.Request['user']>, salonId: string): boolean { return user.roles.includes(Role.ADMIN) || accessibleSalonIds(user).includes(String(salonId)); }
+// A relation can be either its stored ObjectId or a populated document returned by
+// Mongoose. Scope checks must always compare the underlying ID, never the document's
+// default string representation ("[object Object]").
+export function referenceId(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'object' && (value as { _id?: unknown })._id) return String((value as { _id: unknown })._id);
+  return String(value);
+}
 export const requireSalonScope = (source: 'params' | 'body' | 'query' = 'params', key = 'salonId'): RequestHandler => (request, _response, next) => { const salonId = String(request[source][key] ?? ''); if (!request.user || !salonId || !canAccessSalon(request.user, salonId)) return next(new ApiError(403, 'SALON_SCOPE_FORBIDDEN')); next(); };

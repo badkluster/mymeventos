@@ -42,9 +42,11 @@ vi.mock('../src/modules/crm/quote-pdf.service', () => ({ generateAndUploadQuoteP
 import app from '../src/app';
 
 const adminId = '507f1f77bcf86cd799439011';
+const salonManagerId = '507f1f77bcf86cd799439099';
 const paymentId = '507f1f77bcf86cd799439012';
 const salonId = '507f1f77bcf86cd799439013';
 const adminCookie = `accessToken=${generateAccessToken({ sub: adminId, username: 'admin' })}`;
+const salonManagerCookie = `accessToken=${generateAccessToken({ sub: salonManagerId, username: 'salon-manager' })}`;
 
 function chainLean(value: unknown) {
   return { lean: vi.fn().mockResolvedValue(value) };
@@ -71,6 +73,17 @@ describe('payments routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.items).toEqual(payments);
+  });
+
+  it('lets the assigned salon manager open a payment whose salon is populated', async () => {
+    const payment = { _id: paymentId, paymentNumber: 'PAY-2026-00001', salonId: { _id: salonId, name: 'Villa Elisa' }, status: 'paid', amount: 20000 };
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: salonManagerId, roles: [Role.SALON_MANAGER], permissionOverrides: [], permissionDeniedOverrides: [], salonIds: [salonId], active: true }));
+    mocks.paymentFindOne.mockReturnValue(detailChain(payment));
+
+    const response = await request(app).get(`/api/payments/${paymentId}`).set('Cookie', salonManagerCookie);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.payment).toEqual(payment);
   });
 
   it('marks a payment as paid', async () => {

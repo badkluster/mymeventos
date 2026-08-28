@@ -8,7 +8,7 @@ import { User } from '../users/user.model';
 import { Salon } from '../salons/salon.model';
 import { SalonStockItem } from '../salons/salonStockItem.model';
 import { EventTablewareAllocation } from './eventTablewareAllocation.model';
-import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, referenceId, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -341,12 +341,13 @@ async function tablewareAvailability(salonId: string, day: string, eventId?: str
 
 async function ensureEventAccess(request: Request, event: any): Promise<void> {
   if (!event || event.deletedAt) throw new ApiError(404, 'EVENT_NOT_FOUND');
-  if (event.salonId && !canAccessSalon(request.user!, event.salonId.toString())) {
+  const salonId = referenceId(event.salonId);
+  if (salonId && !canAccessSalon(request.user!, salonId)) {
     // `managerUserId` is the authoritative relationship configured on the salon.
     // This fallback keeps an assigned manager operating if the denormalized user
     // arrays have not yet been synchronized, without granting global salon access.
     const canUseManagerRelationship = request.user!.roles.some((role) => [Role.MANAGER, Role.SALON_MANAGER].includes(role));
-    const isAssignedManager = canUseManagerRelationship && await Salon.exists({ _id: event.salonId, managerUserId: request.user!.id, deletedAt: null });
+    const isAssignedManager = canUseManagerRelationship && await Salon.exists({ _id: salonId, managerUserId: request.user!.id, deletedAt: null });
     if (isAssignedManager) return;
 
     // IDs and aggregate counts are enough to correlate a permission report without
@@ -357,7 +358,7 @@ async function ensureEventAccess(request: Request, event: any): Promise<void> {
       requestPath: request.originalUrl,
       userId: request.user?.id,
       eventId: event._id?.toString?.(),
-      salonId: event.salonId.toString(),
+      salonId,
       roles: request.user?.roles ?? [],
       accessibleSalonCount: accessibleSalonIds(request.user!).length,
     }));

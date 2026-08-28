@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Permission, QuoteLineItemSourceType, QuoteMode, Role, hasPermission } from '@mym/shared';
 import { Customer, Lead, LeadActivity, PackageTemplate, Quote, QuoteRequest, QuoteRevision, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
-import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, referenceId, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -137,7 +137,8 @@ async function ensureAccessibleSalons(request: Request, salonIds: string[]): Pro
 }
 async function ensureQuoteAccess(request: Request, quote: any): Promise<void> {
   if (!quote || quote.deletedAt) throw new ApiError(404, 'QUOTE_NOT_FOUND');
-  if (!canAccessSalon(request.user!, quote.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  const salonId = referenceId(quote.salonId);
+  if (!salonId || !canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
 }
 function pickDefined(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   return Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
 import { Contract, ContractAddendum, Customer, Event, Payment } from './crm.models';
 import { Salon } from '../salons/salon.model';
-import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, referenceId, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -67,11 +67,6 @@ const contractPaymentSchema = z.object({
 const router = Router();
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
-function referenceId(value: unknown): string | undefined {
-  if (!value) return undefined;
-  if (typeof value === 'object' && (value as { _id?: unknown })._id) return String((value as { _id: unknown })._id);
-  return String(value);
-}
 function scopedQuery(request: Request): Record<string, unknown>[] {
   return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonId: { $in: accessibleSalonIds(request.user!) } }];
 }

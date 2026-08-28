@@ -2,7 +2,7 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
 import { Contract, Payment } from './crm.models';
-import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, referenceId, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -79,12 +79,14 @@ function buildQuery(request: Request): Record<string, unknown> {
 }
 async function ensurePaymentAccess(request: Request, payment: any): Promise<void> {
   if (!payment || payment.deletedAt) throw new ApiError(404, 'PAYMENT_NOT_FOUND');
-  if (payment.salonId && !canAccessSalon(request.user!, payment.salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  const salonId = referenceId(payment.salonId);
+  if (salonId && !canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
 }
 async function ensureContractAccess(request: Request, contractId: string): Promise<void> {
   const contract = await Contract.findOne({ _id: contractId, deletedAt: null }).lean();
   if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
-  if ((contract as any).salonId && !canAccessSalon(request.user!, (contract as any).salonId.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  const salonId = referenceId((contract as any).salonId);
+  if (salonId && !canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
 }
 
 router.use(requireAuth);

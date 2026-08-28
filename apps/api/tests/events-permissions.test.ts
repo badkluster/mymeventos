@@ -126,6 +126,24 @@ describe('manual event creation from a package', () => {
   });
 });
 
+describe('event detail salon scope', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: managerId, roles: [Role.SALON_MANAGER], permissionOverrides: [], permissionDeniedOverrides: [], salonIds: [salonId], active: true }));
+    mocks.contractFind.mockReturnValue({ select: vi.fn().mockReturnThis(), sort: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue([]) });
+  });
+
+  it('lets the assigned salon manager open an event whose salon is populated', async () => {
+    const event = { _id: eventId, eventName: 'Cumple Villa Elisa', salonId: { _id: salonId, name: 'Villa Elisa' } };
+    mocks.eventFindOne.mockReturnValue(populatedQuery(event));
+
+    const response = await request(app).get(`/api/events/${eventId}`).set('Cookie', managerCookie);
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.data.event).toEqual(event);
+  });
+});
+
 describe('event package correction and application', () => {
   const templateId = '507f1f77bcf86cd799439015';
   const packageTemplate = { _id: templateId, name: 'Black Service', isGlobal: true, pricingMode: 'per_person', finalPricePerPerson: 25000, depositAmount: 100000, startTime: '21:00', endTime: '05:00', menuSections: [{ title: 'Menú Black', items: ['Recepción', 'Principal'] }], includedServices: ['DJ', 'Barra'] };
