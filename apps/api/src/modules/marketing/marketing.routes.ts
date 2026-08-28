@@ -6,7 +6,7 @@ import marketingSettingsRoutes from './marketing-settings.routes';
 import campaignsRoutes from './campaigns.routes';
 import dashboardRoutes from './dashboard.routes';
 import internalRoutes from './internal.routes';
-import performanceRoutes from './performance.routes';
+import performanceRoutes from './performance-optimized.routes';
 
 const router = Router();
 router.use('/promotions', promotionsRoutes);
