@@ -10,7 +10,7 @@ import { ProductionNav } from './production-nav';
 
 type EventQty = { planId: string; eventId?: string; eventName?: string; eventType?: string; customerName?: string; eventDate: string; plannedQuantity: number; completedQuantity: number };
 type Row = {
-  productId?: string; productName: string; unit: string; plannedQuantity: number; completedQuantity: number; eventCount: number;
+  productId?: string; productName: string; supplierName?: string; unit: string; plannedQuantity: number; completedQuantity: number; eventCount: number;
   pendingItems: number; availableQuantity: number; missingQuantity: number; toBuyQuantity: number; toProduceQuantity: number;
   byEvent: EventQty[];
 };
@@ -66,7 +66,7 @@ export function ProductionConsolidated() {
   };
 
   return <section className="space-y-5">
-    <PageHeader title="Producción consolidada" description="Cantidades normalizadas de todos los eventos del período, comparadas con stock y avance real." action={<div className="print:hidden flex flex-wrap gap-2"><Button variant="secondary" disabled={exporting} onClick={() => void download('excel')}><Download className="mr-2 h-4 w-4" />Excel total</Button><Button variant="secondary" disabled={exporting} onClick={() => void download('pdf')}><Download className="mr-2 h-4 w-4" />PDF total</Button><Button variant="secondary" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />Imprimir</Button><Button variant="secondary" disabled={loading} onClick={() => void load()}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</Button></div>} />
+    <PageHeader title="Producción consolidada" description="Cantidades normalizadas de todos los eventos del período, con proveedor asignado, stock y avance real." action={<div className="print:hidden flex flex-wrap gap-2"><Button variant="secondary" disabled={exporting} onClick={() => void download('excel')}><Download className="mr-2 h-4 w-4" />Excel total</Button><Button variant="secondary" disabled={exporting} onClick={() => void download('pdf')}><Download className="mr-2 h-4 w-4" />PDF total</Button><Button variant="secondary" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />Imprimir</Button><Button variant="secondary" disabled={loading} onClick={() => void load()}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</Button></div>} />
     <ProductionNav />
     <div className="print:hidden flex flex-wrap gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><label className="text-xs font-medium text-zinc-600">Desde<Input className="mt-1.5 w-44" type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label><label className="text-xs font-medium text-zinc-600">Hasta<Input className="mt-1.5 w-44" type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} /></label></div>
     {result ? <div className="grid gap-3 sm:grid-cols-3"><article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><p className="text-xs text-zinc-500">Productos distintos</p><p className="mt-2 text-2xl font-semibold">{result.totals.products}</p></article><article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><p className="text-xs text-zinc-500">Cantidad planificada</p><p className="mt-2 text-2xl font-semibold">{number.format(result.totals.plannedQuantity)}</p></article><article className={`rounded-2xl border p-4 shadow-sm ${result.totals.missingQuantity ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}><p className="text-xs text-zinc-600">Faltante contra stock</p><p className="mt-2 text-2xl font-semibold">{number.format(result.totals.missingQuantity)}</p></article></div> : null}
@@ -76,12 +76,14 @@ export function ProductionConsolidated() {
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50/80 px-4 py-3"><h2 className="text-sm font-semibold text-zinc-900">{section.name}</h2><Button variant="secondary" className="print:hidden px-3 py-2" disabled={exporting} onClick={() => void download('excel', section.type)}><Download className="mr-2 h-4 w-4" />Excel de {section.name}</Button></header>
       <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="border-b border-zinc-200"><tr>
         <th className="sticky left-0 z-10 min-w-[220px] bg-white px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Producto</th>
+        <th className="min-w-[170px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Proveedor</th>
         {section.events.map((event) => <th key={event.planId} className="min-w-[92px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">{eventLabel(event)}</th>)}
         {['Total', 'Completado', 'Disponible', 'Faltante', 'A comprar', 'A producir', 'Pendientes'].map((label) => <th key={label} className="min-w-[92px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</th>)}
       </tr></thead><tbody className="divide-y divide-zinc-100">{section.items.map((item) => {
         const byPlanId = new Map(item.byEvent.map((entry) => [entry.planId, entry]));
         return <tr key={`${item.productId || item.productName}-${item.unit}`} className={item.missingQuantity ? 'bg-amber-50/35' : ''}>
           <td className="sticky left-0 z-10 bg-white px-4 py-3 font-semibold text-zinc-900">{item.productName} <span className="font-normal text-zinc-400">({item.unit})</span></td>
+          <td className={`px-3 py-3 ${item.supplierName ? 'text-zinc-700' : 'text-amber-700'}`}>{item.supplierName || 'Sin proveedor asignado'}</td>
           {section.events.map((event) => <td key={event.planId} className="px-3 py-3 tabular-nums text-zinc-700">{byPlanId.has(event.planId) ? number.format(byPlanId.get(event.planId)!.plannedQuantity) : '—'}</td>)}
           <td className="px-3 py-3 font-semibold tabular-nums">{number.format(item.plannedQuantity)}</td>
           <td className="px-3 py-3 tabular-nums">{number.format(item.completedQuantity)}</td>

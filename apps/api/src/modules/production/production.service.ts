@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import type { Request } from 'express';
 import { Contract, Event, Quote } from '../crm/crm.models';
-import { InventoryItem } from '../operations/operations.models';
+import { CatalogItem, InventoryItem } from '../operations/operations.models';
 import { ProductionItem, ProductionPlan, ProductionRule, ProductionSection } from './production.models';
 import { ApiError } from '../../middlewares/errorHandler';
 import { canAccessSalon } from '../../middlewares/auth';
@@ -308,7 +308,7 @@ export async function refreshPlanStatus(planId: string) {
 export async function consolidatedProduction(_request: Request, from: Date, to: Date, salonMatch: Record<string, unknown>) {
   const plans: any[] = await ProductionPlan.find({ deletedAt: null, isCurrent: true, ...salonMatch, eventDate: { $gte: from, $lt: to }, status: { $nin: ['cancelled'] } })
     .select('_id eventId eventDate customerId')
-    .populate('eventId', 'eventName eventType')
+    .populate('eventId', 'eventName eventType resourcePlanSnapshot')
     .populate('customerId', 'fullName')
     .sort({ eventDate: 1 })
     .lean();
@@ -322,9 +322,29 @@ export async function consolidatedProduction(_request: Request, from: Date, to: 
     .select('productId normalizedProductName productNameSnapshot unit plannedQuantity completedQuantity status productionPlanId sectionId')
     .lean();
 
+  // El proveedor de compra es una decisión del evento: un mismo producto puede
+  // encargarse a proveedores distintos según la fecha o el cliente. Se toma de
+  // los insumos cargados en el evento y se usa el proveedor del catálogo sólo
+  // como respaldo para reglas que no tengan una asignación específica.
+  const supplierAssignedInEvent = (plan: any, item: any): string | undefined => {
+    const products = plan?.eventId?.resourcePlanSnapshot?.productItems;
+    if (!Array.isArray(products)) return undefined;
+    const itemProductId = item.productId?.toString();
+    const itemName = normalizeProductName(item.productNameSnapshot || item.normalizedProductName || '');
+    const itemUnit = normalizeProductName(item.unit || '');
+    const match = products.find((product: any) => {
+      const productId = product?.catalogItemId?.toString?.();
+      if (itemProductId && productId) return itemProductId === productId;
+      return normalizeProductName(product?.name || product?.productName || '') === itemName
+        && normalizeProductName(product?.unit || product?.unitOfMeasure || '') === itemUnit;
+    });
+    const supplier = match?.supplierName;
+    return typeof supplier === 'string' && supplier.trim() ? supplier.trim() : undefined;
+  };
+
   type EventBreakdown = { planId: string; eventId?: string; eventName?: string; eventType?: string; customerName?: string; eventDate: Date; plannedQuantity: number; completedQuantity: number };
   type Bucket = {
-    sectionType: string; productId?: string; productName: string; unit: string;
+    sectionType: string; productId?: string; productName: string; supplierName?: string; unit: string;
     plannedQuantity: number; completedQuantity: number; pendingItems: number;
     planIds: Set<string>; byEvent: Map<string, EventBreakdown>;
   };
@@ -332,18 +352,20 @@ export async function consolidatedProduction(_request: Request, from: Date, to: 
 
   for (const item of items) {
     const sectionType = sectionTypeById.get(item.sectionId?.toString()) || 'miscellaneous';
-    const key = `${sectionType}|${item.productId ? item.productId.toString() : normalizeProductName(item.normalizedProductName)}|${item.unit}`;
+    const planId = item.productionPlanId.toString();
+    const plan = planById.get(planId);
+    const supplierName = supplierAssignedInEvent(plan, item);
+    const supplierKey = supplierName ? normalizeProductName(supplierName) : 'catalog-default';
+    const key = `${sectionType}|${item.productId ? item.productId.toString() : normalizeProductName(item.normalizedProductName)}|${item.unit}|${supplierKey}`;
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { sectionType, productId: item.productId?.toString(), productName: item.productNameSnapshot, unit: item.unit, plannedQuantity: 0, completedQuantity: 0, pendingItems: 0, planIds: new Set(), byEvent: new Map() };
+      bucket = { sectionType, productId: item.productId?.toString(), productName: item.productNameSnapshot, supplierName, unit: item.unit, plannedQuantity: 0, completedQuantity: 0, pendingItems: 0, planIds: new Set(), byEvent: new Map() };
       buckets.set(key, bucket);
     }
     bucket.plannedQuantity += item.plannedQuantity;
     bucket.completedQuantity += item.completedQuantity;
     if (['pending', 'in_progress', 'blocked'].includes(item.status)) bucket.pendingItems += 1;
-    const planId = item.productionPlanId.toString();
     bucket.planIds.add(planId);
-    const plan = planById.get(planId);
     const eventBreakdown = bucket.byEvent.get(planId) ?? {
       planId, eventId: plan?.eventId?._id?.toString(), eventName: plan?.eventId?.eventName, eventType: plan?.eventId?.eventType,
       customerName: plan?.customerId?.fullName, eventDate: plan?.eventDate, plannedQuantity: 0, completedQuantity: 0,
@@ -354,16 +376,24 @@ export async function consolidatedProduction(_request: Request, from: Date, to: 
   }
 
   const productIds = [...buckets.values()].map((bucket) => bucket.productId).filter(Boolean);
-  const inventory: any[] = await InventoryItem.aggregate([
-    { $match: { deletedAt: null, active: true, catalogItemId: { $in: productIds }, ...salonMatch } },
-    { $group: { _id: '$catalogItemId', available: { $sum: { $max: [0, { $subtract: ['$currentQuantity', '$reservedQuantity'] }] } } } },
+  const [inventory, catalogItems]: [any[], any[]] = await Promise.all([
+    InventoryItem.aggregate([
+      { $match: { deletedAt: null, active: true, catalogItemId: { $in: productIds }, ...salonMatch } },
+      { $group: { _id: '$catalogItemId', available: { $sum: { $max: [0, { $subtract: ['$currentQuantity', '$reservedQuantity'] }] } } } },
+    ]),
+    CatalogItem.find({ _id: { $in: productIds }, deletedAt: null })
+      .select('supplierId')
+      .populate('supplierId', 'name')
+      .lean(),
   ]);
   const inventoryMap = new Map(inventory.map((item) => [item._id.toString(), item.available]));
+  const supplierByProductId = new Map(catalogItems.map((item) => [item._id.toString(), item.supplierId?.name]));
 
   const rows = [...buckets.values()].map((bucket) => {
     const available = bucket.productId ? Number(inventoryMap.get(bucket.productId) ?? 0) : 0;
     return {
-      sectionType: bucket.sectionType, productId: bucket.productId, productName: bucket.productName, unit: bucket.unit,
+      sectionType: bucket.sectionType, productId: bucket.productId, productName: bucket.productName,
+      supplierName: bucket.supplierName || (bucket.productId ? supplierByProductId.get(bucket.productId) : undefined) || 'Sin proveedor asignado', unit: bucket.unit,
       plannedQuantity: bucket.plannedQuantity, completedQuantity: bucket.completedQuantity, eventCount: bucket.planIds.size, pendingItems: bucket.pendingItems,
       availableQuantity: available, missingQuantity: Math.max(0, bucket.plannedQuantity - available), toBuyQuantity: Math.max(0, bucket.plannedQuantity - available),
       toProduceQuantity: Math.max(0, bucket.plannedQuantity - bucket.completedQuantity),

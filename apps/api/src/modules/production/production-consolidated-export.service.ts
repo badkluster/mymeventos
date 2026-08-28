@@ -5,7 +5,7 @@ type EventBreakdown = {
   plannedQuantity: number; completedQuantity: number;
 };
 type ConsolidatedItem = {
-  productName: string; unit: string; plannedQuantity: number; completedQuantity: number; eventCount: number;
+  productName: string; supplierName?: string; unit: string; plannedQuantity: number; completedQuantity: number; eventCount: number;
   availableQuantity: number; missingQuantity: number; toBuyQuantity: number; toProduceQuantity: number; pendingItems: number;
   byEvent?: EventBreakdown[];
 };
@@ -91,7 +91,7 @@ function worksheet(name: string, items: ConsolidatedItem[], events: EventBreakdo
   }), { planned: 0, completed: 0, available: 0, missing: 0, toBuy: 0, toProduce: 0, pending: 0 });
   const progress = totals.planned > 0 ? totals.completed / totals.planned : 0;
   const productsWithActions = items.filter((item) => item.missingQuantity > 0 || item.toBuyQuantity > 0 || item.toProduceQuantity > 0 || item.pendingItems > 0).length;
-  const headers = ['Producto', 'Unidad', 'Eventos', ...events.map(eventLabel), ...summaryHeaders];
+  const headers = ['Producto', 'Proveedor', 'Unidad', 'Eventos', ...events.map(eventLabel), ...summaryHeaders];
   const columnCount = headers.length;
   const eventTotals = new Map(events.map((event) => [event.planId, 0]));
   items.forEach((item) => (item.byEvent ?? []).forEach((event) => eventTotals.set(event.planId, (eventTotals.get(event.planId) ?? 0) + event.plannedQuantity)));
@@ -122,6 +122,7 @@ function worksheet(name: string, items: ConsolidatedItem[], events: EventBreakdo
       const byPlanId = new Map((item.byEvent ?? []).map((event) => [event.planId, event]));
       return row([
         textCell(item.productName),
+        textCell(item.supplierName || 'Sin proveedor asignado'),
         textCell(item.unit),
         numericCell(item.eventCount, 'sInteger'),
         ...events.map((event) => {
@@ -138,14 +139,14 @@ function worksheet(name: string, items: ConsolidatedItem[], events: EventBreakdo
       ], 20);
     }),
     row([
-      textCell('Total', 'sTotalLabel'), textCell('', 'sTotalLabel'), numericCell(items.reduce((sum, item) => sum + item.eventCount, 0), 'sTotalInteger'),
+      textCell('Total', 'sTotalLabel'), textCell('', 'sTotalLabel'), textCell('', 'sTotalLabel'), numericCell(items.reduce((sum, item) => sum + item.eventCount, 0), 'sTotalInteger'),
       ...events.map((event) => numericCell(eventTotals.get(event.planId) ?? 0, 'sTotalNumber')),
       numericCell(totals.planned, 'sTotalNumber'), numericCell(totals.completed, 'sTotalNumber'), numericCell(totals.available, 'sTotalNumber'),
       numericCell(totals.missing, 'sTotalNumber'), numericCell(totals.toBuy, 'sTotalNumber'), numericCell(totals.toProduce, 'sTotalNumber'), numericCell(totals.pending, 'sTotalInteger'),
     ], 22),
   ];
   const filter = items.length ? `<AutoFilter x:Range="R8C1:R${lastDataRow}C${columnCount}"/>` : '';
-  const columns = ['<Column ss:Width="205"/>', '<Column ss:Width="72"/>', '<Column ss:Width="62"/>', ...events.map(() => '<Column ss:Width="102"/>'), ...summaryHeaders.map((_, index) => `<Column ss:Width="${index === 0 ? 88 : index === 6 ? 76 : 84}"/>`)];
+  const columns = ['<Column ss:Width="205"/>', '<Column ss:Width="150"/>', '<Column ss:Width="72"/>', '<Column ss:Width="62"/>', ...events.map(() => '<Column ss:Width="102"/>'), ...summaryHeaders.map((_, index) => `<Column ss:Width="${index === 0 ? 88 : index === 6 ? 76 : 84}"/>`)];
   return `<Worksheet ss:Name="${escapeXml(name)}"><Table ss:ExpandedColumnCount="${columnCount}" ss:ExpandedRowCount="${totalRow}">${columns.join('')}${data.join('')}</Table>${filter}<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>7</SplitHorizontal><TopRowBottomPane>7</TopRowBottomPane><ActivePane>2</ActivePane><PageSetup><Layout x:Orientation="Landscape"/><PageMargins x:Bottom="0.4" x:Left="0.25" x:Right="0.25" x:Top="0.45"/></PageSetup><FitToPage/><Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight><ValidPrinterInfo/></Print><ProtectObjects>False</ProtectObjects><ProtectScenarios>False</ProtectScenarios></WorksheetOptions></Worksheet>`;
 }
 
@@ -170,16 +171,17 @@ function collect(document: PDFKit.PDFDocument): Promise<Buffer> {
 type ProductionTotals = { planned: number; completed: number; available: number; missing: number; toBuy: number; toProduce: number; pending: number };
 
 const productionColumns = [
-  { label: 'PRODUCTO', x: 42, width: 175, align: 'left' as const },
-  { label: 'UNIDAD', x: 217, width: 62, align: 'left' as const },
-  { label: 'EVENTOS', x: 279, width: 54, align: 'right' as const },
-  { label: 'PLANIF.', x: 333, width: 67, align: 'right' as const },
-  { label: 'HECHO', x: 400, width: 67, align: 'right' as const },
-  { label: 'DISP.', x: 467, width: 67, align: 'right' as const },
-  { label: 'FALTANTE', x: 534, width: 70, align: 'right' as const },
-  { label: 'COMPRAR', x: 604, width: 66, align: 'right' as const },
-  { label: 'PRODUCIR', x: 670, width: 68, align: 'right' as const },
-  { label: 'PEND.', x: 738, width: 62, align: 'right' as const },
+  { label: 'PRODUCTO', x: 42, width: 145, align: 'left' as const },
+  { label: 'PROVEEDOR', x: 187, width: 105, align: 'left' as const },
+  { label: 'UNIDAD', x: 292, width: 48, align: 'left' as const },
+  { label: 'EVENTOS', x: 340, width: 46, align: 'right' as const },
+  { label: 'PLANIF.', x: 386, width: 58, align: 'right' as const },
+  { label: 'HECHO', x: 444, width: 58, align: 'right' as const },
+  { label: 'DISP.', x: 502, width: 58, align: 'right' as const },
+  { label: 'FALTANTE', x: 560, width: 64, align: 'right' as const },
+  { label: 'COMPRAR', x: 624, width: 62, align: 'right' as const },
+  { label: 'PRODUCIR', x: 686, width: 62, align: 'right' as const },
+  { label: 'PEND.', x: 748, width: 52, align: 'right' as const },
 ];
 
 function productionTotals(items: ConsolidatedItem[]): ProductionTotals {
@@ -304,13 +306,13 @@ function drawProductionRow(document: PDFKit.PDFDocument, item: ConsolidatedItem,
   const y = document.y;
   if (index % 2 === 0) document.rect(42, y - 3, document.page.width - 84, 21).fill('#F8FAFC');
   const actionColumns = [
-    { index: 6, value: item.missingQuantity, background: '#FEE2E2', color: '#991B1B' },
-    { index: 7, value: item.toBuyQuantity, background: '#FEF3C7', color: '#92400E' },
-    { index: 8, value: item.toProduceQuantity, background: '#FEF3C7', color: '#92400E' },
-    { index: 9, value: item.pendingItems, background: '#F3E8FF', color: '#6B21A8' },
+    { index: 7, value: item.missingQuantity, background: '#FEE2E2', color: '#991B1B' },
+    { index: 8, value: item.toBuyQuantity, background: '#FEF3C7', color: '#92400E' },
+    { index: 9, value: item.toProduceQuantity, background: '#FEF3C7', color: '#92400E' },
+    { index: 10, value: item.pendingItems, background: '#F3E8FF', color: '#6B21A8' },
   ];
   actionColumns.filter((column) => column.value > 0).forEach((column) => document.roundedRect(productionColumns[column.index].x + 2, y - 2, productionColumns[column.index].width - 4, 17, 3).fill(column.background));
-  const values = [item.productName, item.unit, item.eventCount, item.plannedQuantity, item.completedQuantity, item.availableQuantity, item.missingQuantity, item.toBuyQuantity, item.toProduceQuantity, item.pendingItems];
+  const values = [item.productName, item.supplierName || 'Sin proveedor asignado', item.unit, item.eventCount, item.plannedQuantity, item.completedQuantity, item.availableQuantity, item.missingQuantity, item.toBuyQuantity, item.toProduceQuantity, item.pendingItems];
   values.forEach((value, columnIndex) => {
     const action = actionColumns.find((column) => column.index === columnIndex && column.value > 0);
     document.font(columnIndex === 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(7.4).fillColor(action?.color ?? '#334155').text(typeof value === 'number' ? number.format(value) : value, productionColumns[columnIndex].x + 5, y + 3, { width: productionColumns[columnIndex].width - 10, align: productionColumns[columnIndex].align, ellipsis: true });

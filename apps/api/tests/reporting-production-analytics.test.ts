@@ -68,7 +68,7 @@ describe('production normalization', () => {
 
 describe('production consolidated exports', () => {
   const sections = [{
-    type: 'savory', name: 'Producción salada', events: [{ planId: 'plan-empanadas-1', customerName: 'Martina López', eventDate: '2026-07-04', plannedQuantity: 120, completedQuantity: 90 }], items: [{ productName: 'Empanadas', unit: 'unidad', eventCount: 2, plannedQuantity: 120, completedQuantity: 90, availableQuantity: 80, missingQuantity: 40, toBuyQuantity: 40, toProduceQuantity: 30, pendingItems: 1, byEvent: [{ planId: 'plan-empanadas-1', customerName: 'Martina López', eventDate: '2026-07-04', plannedQuantity: 120, completedQuantity: 90 }] }],
+    type: 'savory', name: 'Producción salada', events: [{ planId: 'plan-empanadas-1', customerName: 'Martina López', eventDate: '2026-07-04', plannedQuantity: 120, completedQuantity: 90 }], items: [{ productName: 'Empanadas', supplierName: 'La Empanadería', unit: 'unidad', eventCount: 2, plannedQuantity: 120, completedQuantity: 90, availableQuantity: 80, missingQuantity: 40, toBuyQuantity: 40, toProduceQuantity: 30, pendingItems: 1, byEvent: [{ planId: 'plan-empanadas-1', customerName: 'Martina López', eventDate: '2026-07-04', plannedQuantity: 120, completedQuantity: 90 }] }],
   }, {
     type: 'beverages', name: 'Bebidas', events: [{ planId: 'plan-agua-1', customerName: 'Gonzalo Castro', eventDate: '2026-07-08', plannedQuantity: 30, completedQuantity: 30 }], items: [{ productName: 'Agua', unit: 'litro', eventCount: 1, plannedQuantity: 30, completedQuantity: 30, availableQuantity: 50, missingQuantity: 0, toBuyQuantity: 0, toProduceQuantity: 0, pendingItems: 0, byEvent: [{ planId: 'plan-agua-1', customerName: 'Gonzalo Castro', eventDate: '2026-07-08', plannedQuantity: 30, completedQuantity: 30 }] }],
   }];
@@ -80,13 +80,15 @@ describe('production consolidated exports', () => {
     expect(excel).toContain('ss:Name="Producción salada"');
     expect(excel).toContain('ss:Name="Bebidas"');
     expect(excel).toContain('Empanadas');
+    expect(excel).toContain('Proveedor');
+    expect(excel).toContain('La Empanadería');
     expect(excel).toContain('Agua');
     expect(excel).toContain('Martina López');
     expect(excel).toContain('Gonzalo Castro');
     expect(excel).toContain('<Styles>');
     expect(excel).toContain('ss:StyleID="sHeader"');
-    expect(excel).toContain('<AutoFilter x:Range="R8C1:R9C11"/>');
-    expect(excel).toContain('ss:MergeAcross="10"');
+    expect(excel).toContain('<AutoFilter x:Range="R8C1:R10C13"/>');
+    expect(excel).toContain('ss:MergeAcross="12"');
   });
 
   it('builds a PDF containing every requested production type', async () => {
