@@ -245,6 +245,7 @@ router.get('/meta', asyncHandler(async (request, response) => {
     }).sort((left: any, right: any) => right.spend - left.spend);
 
     await markIntegrationSuccess('meta_ads', { accountId, campaignCount: campaigns.length, adCount: ads.length });
+    const severityRank: Record<Alert['severity'], number> = { critical: 0, warning: 1, info: 2 };
     return sendSuccess(response, {
       configured: true,
       connection: { status: 'connected', lastSyncAt: new Date().toISOString() },
@@ -262,7 +263,7 @@ router.get('/meta', asyncHandler(async (request, response) => {
       summary,
       campaigns,
       ads,
-      alerts: alerts.sort((left, right) => ({ critical: 0, warning: 1, info: 2 }[left.severity] - { critical: 0, warning: 1, info: 2 }[right.severity]),
+      alerts: alerts.sort((left, right) => severityRank[left.severity] - severityRank[right.severity]),
       integrationHealth: health,
       period: { from: period.fromDate, to: period.toDate },
     });
