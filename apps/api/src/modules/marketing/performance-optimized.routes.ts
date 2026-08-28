@@ -141,6 +141,15 @@ function activeProblemStatus(status?: string) {
   return ['DISAPPROVED', 'WITH_ISSUES', 'ERROR', 'IN_PROCESS', 'PENDING_REVIEW'].includes(String(status ?? '').toUpperCase());
 }
 
+function wasRecentlyConfigured(campaign: { startTime?: unknown; updatedTime?: unknown }, now = Date.now()) {
+  const relevantTimestamp = [campaign.updatedTime, campaign.startTime]
+    .map((value) => Date.parse(String(value ?? '')))
+    .filter(Number.isFinite)
+    .sort((left, right) => right - left)[0];
+  if (!relevantTimestamp) return false;
+  return relevantTimestamp >= now - 30 * 24 * 60 * 60 * 1000;
+}
+
 function graphErrorMessage(error: GraphError | undefined, fallback: string) {
   return String(error?.message || fallback).replace(/access_token=[^&\s]+/gi, 'access_token=[redacted]').slice(0, 500);
 }
@@ -368,12 +377,12 @@ async function buildPayload(period: ReturnType<typeof parseReportPeriod>, accoun
   });
 
   const noDelivery = activeCampaigns
-    .filter((item: any) => insightMetrics(monitor7Map.get(item.id), item.objective).impressions === 0)
+    .filter((item: any) => wasRecentlyConfigured(item) && insightMetrics(monitor7Map.get(item.id), item.objective).impressions === 0)
     .map((item: any) => ({ id: item.id, name: item.name }));
   groupedAlert(alerts, {
     id: 'meta-active-no-delivery', severity: 'warning', source: 'meta_ads',
     title: 'Campañas activas sin entrega reciente',
-    message: `${noDelivery.length} campaña(s) figuran activas en Meta pero no tuvieron impresiones en los últimos 7 días.`,
+    message: `${noDelivery.length} campaña(s) creadas o actualizadas en los últimos 30 días figuran activas en Meta pero no tuvieron impresiones en los últimos 7 días.`,
     code: 'ACTIVE_NO_DELIVERY', detectedAt, entities: noDelivery,
   });
 
@@ -394,13 +403,13 @@ async function buildPayload(period: ReturnType<typeof parseReportPeriod>, accoun
     .filter((item: any) => {
       const metric = insightMetrics(monitor7Map.get(item.id), item.objective);
       const ctr = metric.linkCtr || metric.ctr;
-      return metric.impressions >= 1000 && ctr > 0 && ctr < 0.8;
+      return metric.impressions >= 1000 && ctr > 0 && ctr < 0.8 && metric.results === 0;
     })
     .map((item: any) => ({ id: item.id, name: item.name }));
   groupedAlert(alerts, {
     id: 'meta-low-ctr', severity: 'warning', source: 'meta_ads',
     title: 'CTR bajo con volumen suficiente',
-    message: `${lowCtr.length} campaña(s) tienen CTR menor a 0,8% en los últimos 7 días.`,
+    message: `${lowCtr.length} campaña(s) tienen CTR menor a 0,8% y no registraron resultados en los últimos 7 días.`,
     code: 'LOW_CTR', detectedAt, entities: lowCtr,
   });
 
