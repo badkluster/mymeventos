@@ -5,6 +5,7 @@ import { env } from '../../config/env';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
+import { markIntegrationFailure, markIntegrationSuccess } from '../marketing/integration-health.service';
 
 const router = Router();
 
@@ -107,16 +108,27 @@ router.post('/events', validateRequest(requestSchema), asyncHandler(async (reque
       signal: controller.signal,
     });
     if (!metaResponse.ok) {
+      const metaPayload = await metaResponse.json().catch(() => ({})) as { error?: { message?: string; code?: number; error_subcode?: number } };
+      const message = String(metaPayload.error?.message || `Meta rechazó el evento con HTTP ${metaResponse.status}.`).slice(0, 500);
+      await markIntegrationFailure('meta_capi', {
+        code: metaPayload.error?.code ? String(metaPayload.error.code) : 'META_CAPI_REJECTED',
+        message,
+        statusCode: metaResponse.status,
+        context: { eventName: body.eventName, errorSubcode: metaPayload.error?.error_subcode ?? null },
+      });
       console.warn(JSON.stringify({ event: 'meta_capi_rejected', statusCode: metaResponse.status, eventName: body.eventName }));
       return sendSuccess(response, { sent: false, reason: 'rejected' });
     }
+    await markIntegrationSuccess('meta_capi', { eventName: body.eventName });
     return sendSuccess(response, { sent: true });
   } catch (error) {
-    console.warn(JSON.stringify({
-      event: 'meta_capi_failed',
-      errorName: error instanceof Error ? error.name : 'UnknownError',
-      eventName: body.eventName,
-    }));
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+    await markIntegrationFailure('meta_capi', {
+      code: errorName === 'AbortError' ? 'META_CAPI_TIMEOUT' : 'META_CAPI_UNAVAILABLE',
+      message: error instanceof Error ? error.message : 'No se pudo conectar con Meta Conversions API.',
+      context: { eventName: body.eventName },
+    });
+    console.warn(JSON.stringify({ event: 'meta_capi_failed', errorName, eventName: body.eventName }));
     return sendSuccess(response, { sent: false, reason: 'unavailable' });
   } finally {
     clearTimeout(timeout);

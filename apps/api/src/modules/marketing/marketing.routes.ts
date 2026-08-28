@@ -6,6 +6,7 @@ import marketingSettingsRoutes from './marketing-settings.routes';
 import campaignsRoutes from './campaigns.routes';
 import dashboardRoutes from './dashboard.routes';
 import internalRoutes from './internal.routes';
+import performanceRoutes from './performance.routes';
 
 const router = Router();
 router.use('/promotions', promotionsRoutes);
@@ -13,6 +14,7 @@ router.use('/templates', templatesRoutes);
 router.use('/audiences', audiencesRoutes);
 router.use('/settings', marketingSettingsRoutes);
 router.use('/campaigns', campaignsRoutes);
+router.use('/performance', performanceRoutes);
 // dashboardRoutes/internalRoutes define their own full sub-paths (/dashboard,
 // /process, /webhooks/:provider) — mounted at the router root, not auth-gated
 // as a block, since /process and /webhooks are secret/signature-protected instead.
