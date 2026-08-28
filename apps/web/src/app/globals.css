@@ -155,3 +155,50 @@ select:disabled,
 textarea:disabled {
   cursor: not-allowed;
 }
+
+@keyframes mym-performance-loader-spin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Keep long Performance 360 requests visibly in a loading state, centered in the viewport. */
+[data-admin-shell]:has(a[href="#resumen"]):has(button:disabled .animate-spin)::before {
+  content: "Cargando Performance 360…";
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 6rem;
+  background: rgba(250, 250, 250, 0.76);
+  color: #18181b;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(2px);
+}
+
+[data-admin-shell]:has(a[href="#resumen"]):has(button:disabled .animate-spin)::after {
+  content: "";
+  position: fixed;
+  left: 50%;
+  top: calc(50% - 1.5rem);
+  z-index: 91;
+  width: 3rem;
+  height: 3rem;
+  border: 4px solid rgba(39, 39, 42, 0.18);
+  border-top-color: #18181b;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  animation: mym-performance-loader-spin 0.75s linear infinite;
+}
+
+.dark [data-admin-shell]:has(a[href="#resumen"]):has(button:disabled .animate-spin)::before {
+  background: rgba(11, 11, 12, 0.78);
+  color: #f4f4f5;
+}
+
+.dark [data-admin-shell]:has(a[href="#resumen"]):has(button:disabled .animate-spin)::after {
+  border-color: rgba(244, 244, 245, 0.18);
+  border-top-color: #f4f4f5;
+}
