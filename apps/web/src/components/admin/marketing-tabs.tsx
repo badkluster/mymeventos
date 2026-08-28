@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, LayoutDashboard, Megaphone, FileStack, Users2, History, Settings, GitBranch } from 'lucide-react';
+import { BarChart3, LayoutDashboard, Megaphone, FileStack, Users2, History, Settings, GitBranch, Search } from 'lucide-react';
 
 const tabs = [
   { href: '/admin/marketing', label: 'Resumen', icon: LayoutDashboard },
   { href: '/admin/marketing/performance', label: 'Performance 360', icon: BarChart3 },
+  { href: '/admin/marketing/search-console', label: 'Search Console', icon: Search },
   { href: '/admin/marketing/attribution', label: 'Atribución CRM', icon: GitBranch },
   { href: '/admin/marketing/campaigns', label: 'Campañas', icon: Megaphone },
   { href: '/admin/marketing/templates', label: 'Plantillas', icon: FileStack },
