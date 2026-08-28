@@ -631,6 +631,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   const [hasActiveTickets, setHasActiveTickets] = useState(false);
   const [packagesRevealed, setPackagesRevealed] = useState(false);
   const [heroVideoFailed, setHeroVideoFailed] = useState(false);
+  const [minimumEventDate, setMinimumEventDate] = useState('');
   const mobileMenuRef = useRef<HTMLElement | null>(null);
   const socialPanelRef = useRef<HTMLElement | null>(null);
   const heroRef = useRef<HTMLElement | null>(null);
@@ -691,6 +692,10 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
     const timer = window.setTimeout(() => scrollTo(id), 80);
     return () => window.clearTimeout(timer);
   }, [landingLoading]);
+
+  useEffect(() => {
+    setMinimumEventDate(todayIsoDate());
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -1005,7 +1010,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Teléfono<input required name="phone" type="tel" minLength={6} maxLength={24} pattern="[+()0-9\s-]{6,24}" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Tu teléfono" /></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Email<input name="email" type="email" maxLength={120} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="tu@email.com" /></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Tipo de evento<input required name="eventType" className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="15 años, casamiento..." /></motion.label>
-          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Fecha tentativa<input name="eventDate" type="date" min={todayIsoDate()} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" /></motion.label>
+          <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Fecha tentativa<input name="eventDate" type="date" min={minimumEventDate || undefined} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" /></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Cantidad de personas<input required name="guestCount" type="number" min={contactGuestMin} max={contactGuestMax} step={1} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]" placeholder="Nº de personas" /></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Salón de interés<select required name="salonId" value={selectedSalonId} onChange={(event) => { setSelectedSalonId(event.target.value); setSelectedContactPackageId(''); }} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3]"><option value="">Seleccioná un salón</option>{displaySalons.map((salon) => <option key={salon._id} value={salon._id}>{titleForSalon(salon)}</option>)}</select></motion.label>
           <motion.label variants={cardVariants} className="text-xs uppercase tracking-[0.14em] text-zinc-400">Propuesta de interés<select name="packageTemplateId" value={selectedContactPackageId} onChange={(event) => setSelectedContactPackageId(event.target.value)} disabled={!selectedSalonId} className="mt-2 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-3 text-sm text-white outline-none focus:border-[#c8cdd3] disabled:opacity-50"><option value="">Propuesta personalizada</option>{contactPackages.map((item) => <option key={item._id} value={item._id}>{item.name} · {money(packagePrice(item))} {packagePriceUnit(item)}</option>)}</select></motion.label>

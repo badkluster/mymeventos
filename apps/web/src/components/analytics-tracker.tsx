@@ -34,6 +34,7 @@ const visitorKey = 'mym.analytics.visitor';
 const attributionKey = 'mym.analytics.attribution';
 const consentKey = 'mym.analytics.consent';
 const pageVersion = 'landing-2026-07';
+const metaAttributionMaxAgeSeconds = 90 * 24 * 60 * 60;
 const metaEventMapping: Partial<Record<AnalyticsName, MetaStandardEvent>> = {
   page_view: 'PageView',
   salon_view: 'ViewContent',
@@ -77,6 +78,15 @@ function cookieValue(name: string) {
   const item = document.cookie.split(';').map((value) => value.trim()).find((value) => value.startsWith(prefix));
   return item ? decodeURIComponent(item.slice(prefix.length)) : '';
 }
+function ensureMetaFbc() {
+  const existing = cookieValue('_fbc');
+  if (existing) return existing;
+  const fbclid = new URLSearchParams(location.search).get('fbclid')?.trim();
+  if (!fbclid || fbclid.length > 500) return '';
+  const fbc = `fb.1.${Date.now()}.${fbclid}`;
+  document.cookie = `_fbc=${encodeURIComponent(fbc)}; Max-Age=${metaAttributionMaxAgeSeconds}; Path=/; SameSite=Lax; Secure`;
+  return fbc;
+}
 function ensureMetaPixel() {
   if (window.fbq) return window.fbq;
   const fbq = function (...args: unknown[]) {
@@ -117,7 +127,7 @@ function trackMetaServerEvent(standardEvent: MetaStandardEvent, analyticsName: A
     eventSourceUrl: location.href,
     externalId,
     fbp: cookieValue('_fbp'),
-    fbc: cookieValue('_fbc'),
+    fbc: ensureMetaFbc(),
     contentName: detail.elementId ? String(detail.elementId) : '',
     contentCategory: analyticsName,
     contentIds: detail.entityId ? [String(detail.entityId)] : undefined,
