@@ -11,6 +11,8 @@ type AnalyticsName =
 type QueueEvent = Record<string, unknown> & { eventName: AnalyticsName };
 type TrackerSettings = { enabled: boolean; consentRequired: boolean; collectClicks: boolean; collectSectionEngagement: boolean };
 type MetaStandardEvent = 'PageView' | 'ViewContent' | 'Contact' | 'Lead';
+type MetaCustomerData = { email?: string; phone?: string; firstName?: string; lastName?: string };
+type AnalyticsDetail = { sectionId?: string; elementId?: string; entityId?: string; metaCustomerData?: MetaCustomerData };
 type MetaFbq = ((...args: unknown[]) => void) & {
   callMethod?: (...args: unknown[]) => void;
   queue: unknown[][];
@@ -106,7 +108,7 @@ function trackMetaBrowserEvent(eventName: AnalyticsName, eventId: string, detail
   fbq('track', standardEvent, params, { eventID: eventId });
   return standardEvent;
 }
-function trackMetaServerEvent(standardEvent: MetaStandardEvent, analyticsName: AnalyticsName, eventId: string, occurredAt: string, externalId: string, detail: Record<string, unknown>) {
+function trackMetaServerEvent(standardEvent: MetaStandardEvent, analyticsName: AnalyticsName, eventId: string, occurredAt: string, externalId: string, detail: Record<string, unknown>, customerData?: MetaCustomerData) {
   const query = new URLSearchParams(location.search);
   const body = {
     eventId,
@@ -119,6 +121,10 @@ function trackMetaServerEvent(standardEvent: MetaStandardEvent, analyticsName: A
     contentName: detail.elementId ? String(detail.elementId) : '',
     contentCategory: analyticsName,
     contentIds: detail.entityId ? [String(detail.entityId)] : undefined,
+    email: customerData?.email || '',
+    phone: customerData?.phone || '',
+    firstName: customerData?.firstName || '',
+    lastName: customerData?.lastName || '',
     testEventCode: query.get('test_event_code') || '',
   };
   void fetch(`${apiBase}/public/meta/events`, {
@@ -133,7 +139,7 @@ export function analyticsAttributionId() {
   if (typeof window === 'undefined') return '';
   return identifier(window.localStorage, attributionKey);
 }
-export function emitAnalyticsEvent(eventName: AnalyticsName, detail: { sectionId?: string; elementId?: string; entityId?: string } = {}) {
+export function emitAnalyticsEvent(eventName: AnalyticsName, detail: AnalyticsDetail = {}) {
   window.dispatchEvent(new CustomEvent('mym:analytics', { detail: { eventName, ...detail } }));
 }
 
@@ -154,6 +160,7 @@ export function AnalyticsTracker() {
   const sectionStartedAt = useRef(new Map<string, number>());
   const scrollMilestones = useRef(new Set<number>());
   const formStarted = useRef(new Set<string>());
+  const formCustomerData = useRef(new Map<string, MetaCustomerData>());
   const publicPage = !pathname.startsWith('/admin') && !pathname.startsWith('/invitacion') && !pathname.startsWith('/invitados') && !pathname.startsWith('/entrada');
 
   useEffect(() => {
@@ -175,19 +182,20 @@ export function AnalyticsTracker() {
       if (document.visibilityState === 'hidden' && navigator.sendBeacon) navigator.sendBeacon(`${apiBase}/public/analytics/collect`, new Blob([body], { type: 'application/json' }));
       else void fetch(`${apiBase}/public/analytics/collect`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => undefined);
     };
-    const enqueue = (eventName: AnalyticsName, detail: Record<string, unknown> = {}) => {
+    const enqueue = (eventName: AnalyticsName, detail: AnalyticsDetail & Record<string, unknown> = {}) => {
       const eventId = crypto.randomUUID();
       const occurredAt = new Date().toISOString();
+      const { metaCustomerData, ...analyticsDetail } = detail;
       const queuedEvent: QueueEvent = {
         eventId, anonymousVisitorId: visitorId.current, sessionId: sessionId.current, attributionId: attributionId.current,
         eventName, pagePath: location.pathname, pageTitle: document.title.slice(0, 240), referrer: document.referrer.slice(0, 500),
         ...utm.current, deviceType: deviceType(), browserFamily: browserFamily(), operatingSystem: operatingSystem(),
         viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, language: navigator.language, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        occurredAt, pageVersion, ...detail,
+        occurredAt, pageVersion, ...analyticsDetail,
       };
       queue.current.push(queuedEvent);
-      const standardEvent = trackMetaBrowserEvent(eventName, eventId, detail);
-      if (standardEvent) trackMetaServerEvent(standardEvent, eventName, eventId, occurredAt, attributionId.current, detail);
+      const standardEvent = trackMetaBrowserEvent(eventName, eventId, analyticsDetail);
+      if (standardEvent) trackMetaServerEvent(standardEvent, eventName, eventId, occurredAt, attributionId.current, analyticsDetail, metaCustomerData);
       if (queue.current.length >= 10) flush();
     };
     enqueue('session_start'); enqueue('page_view');
@@ -236,8 +244,30 @@ export function AnalyticsTracker() {
       if (!formStarted.current.has(formId)) { formStarted.current.add(formId); enqueue('form_start', { elementId: formId, sectionId: form.closest<HTMLElement>('[data-analytics-section]')?.dataset.analyticsSection }); }
       enqueue('form_field_interaction', { elementId: input?.getAttribute('name') || 'field', sectionId: form.closest<HTMLElement>('[data-analytics-section]')?.dataset.analyticsSection });
     };
-    const submit = (event: SubmitEvent) => { const form = event.target instanceof HTMLFormElement ? event.target : null; if (form?.dataset.analyticsForm) enqueue('form_submit', { elementId: form.dataset.analyticsForm, sectionId: form.closest<HTMLElement>('[data-analytics-section]')?.dataset.analyticsSection }); };
-    const custom = (event: Event) => { const detail = (event as CustomEvent).detail as { eventName: AnalyticsName; sectionId?: string; elementId?: string; entityId?: string }; if (detail?.eventName) enqueue(detail.eventName, detail); };
+    const submit = (event: SubmitEvent) => {
+      const form = event.target instanceof HTMLFormElement ? event.target : null;
+      if (!form?.dataset.analyticsForm) return;
+      const formId = form.dataset.analyticsForm;
+      const data = new FormData(form);
+      const fullName = String(data.get('name') || '').trim().split(/\s+/).filter(Boolean);
+      formCustomerData.current.set(formId, {
+        email: String(data.get('email') || ''),
+        phone: String(data.get('phone') || ''),
+        firstName: fullName[0] || '',
+        lastName: fullName.slice(1).join(' '),
+      });
+      enqueue('form_submit', { elementId: formId, sectionId: form.closest<HTMLElement>('[data-analytics-section]')?.dataset.analyticsSection });
+    };
+    const custom = (event: Event) => {
+      const detail = (event as CustomEvent).detail as AnalyticsDetail & { eventName: AnalyticsName };
+      if (!detail?.eventName) return;
+      const formId = detail.elementId || 'contact-form';
+      const eventDetail = detail.eventName === 'form_success' && !detail.metaCustomerData
+        ? { ...detail, metaCustomerData: formCustomerData.current.get(formId) }
+        : detail;
+      enqueue(detail.eventName, eventDetail);
+      if (detail.eventName === 'form_success' || detail.eventName === 'form_error') formCustomerData.current.delete(formId);
+    };
     const visibility = () => { if (document.visibilityState === 'hidden') { for (const [sectionId, startedAt] of sectionStartedAt.current) enqueue('section_engagement', { sectionId, durationMs: Math.round(performance.now() - startedAt) }); sectionStartedAt.current.clear(); flush(); } };
     document.addEventListener('click', click, true); window.addEventListener('scroll', scroll, { passive: true }); document.addEventListener('focusin', focus); document.addEventListener('submit', submit); window.addEventListener('mym:analytics', custom); document.addEventListener('visibilitychange', visibility);
     return () => { window.clearInterval(timer); sectionObserver.disconnect(); document.removeEventListener('click', click, true); window.removeEventListener('scroll', scroll); document.removeEventListener('focusin', focus); document.removeEventListener('submit', submit); window.removeEventListener('mym:analytics', custom); document.removeEventListener('visibilitychange', visibility); flush(); };
@@ -245,7 +275,7 @@ export function AnalyticsTracker() {
 
   if (!publicPage || !settings?.enabled || consent || !settings.consentRequired) return null;
   return <aside className="fixed inset-x-3 bottom-3 z-[120] mx-auto max-w-2xl rounded-2xl border border-white/15 bg-zinc-950/95 p-4 text-white shadow-2xl backdrop-blur">
-    <p className="text-sm font-semibold">Privacidad y analítica</p><p className="mt-1 text-xs leading-5 text-zinc-300">Usamos analítica propia y, si aceptás, Meta Pixel y medición server-side de Meta para medir visitas y acciones de marketing. No enviamos a Meta valores de formularios ni datos sensibles.</p>
+    <p className="text-sm font-semibold">Privacidad y analítica</p><p className="mt-1 text-xs leading-5 text-zinc-300">Usamos analítica propia y, si aceptás, Meta Pixel y medición server-side para medir visitas y solicitudes. Al enviar el formulario, los datos de contacto necesarios se comparten cifrados con Meta para medir la conversión y no se guardan en nuestra analítica de navegación.</p>
     <div className="mt-3 flex justify-end gap-2"><button className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold" onClick={() => { localStorage.setItem(consentKey, 'declined'); setConsent('declined'); }}>No permitir</button><button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black" onClick={() => { localStorage.setItem(consentKey, 'accepted'); setConsent('accepted'); }}>Permitir analítica</button></div>
   </aside>;
 }
