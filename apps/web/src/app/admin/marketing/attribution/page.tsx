@@ -84,7 +84,7 @@ type CrmAttribution = {
 
 type MetaPerformance = {
   account: { currency: string | null } | null;
-  campaigns: Array<{ id: string; name: string; spend: number; results: number; costPerResult: number | null }>;
+  campaigns: Array<{ id: string; name: string; spend: number }>;
   connection: { status: string; lastSyncAt: string | null };
 };
 
@@ -199,10 +199,12 @@ export default function MarketingAttributionPage() {
 
   const load = useCallback(async (rangeFrom: string, rangeTo: string) => {
     setLoading(true);
+    setData(null);
+    setMeta(null);
     try {
       const [crmResult, metaResult] = await Promise.allSettled([
         api.get<CrmAttribution>(`/marketing/performance/attribution?from=${rangeFrom}&to=${rangeTo}`),
-        api.get<MetaPerformance>(`/marketing/performance/meta?from=${rangeFrom}&to=${rangeTo}`),
+        api.get<MetaPerformance>(`/marketing/performance/meta-attribution?from=${rangeFrom}&to=${rangeTo}`),
       ]);
       if (crmResult.status === 'rejected') throw crmResult.reason;
       setData(crmResult.value);
@@ -278,9 +280,15 @@ export default function MarketingAttributionPage() {
         <strong>Lectura confiable:</strong> el histórico sin UTM o sesión identificable queda como Directo / sin identificar. Performance 360 no asigna una campaña por aproximación.
       </div>
 
-      {loading && !data ? <div className="rounded-2xl border border-zinc-200 bg-white p-12 text-center text-sm text-zinc-500">Calculando atribución CRM…</div> : null}
-
-      {summary ? (
+      {loading ? (
+        <div role="status" aria-live="polite" className="grid min-h-72 place-items-center rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+          <div>
+            <RefreshCw className="mx-auto h-8 w-8 animate-spin text-zinc-700" />
+            <div className="mt-4 text-sm font-semibold text-zinc-900">Cargando Performance 360…</div>
+            <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-zinc-500">Estamos cruzando consultas, presupuestos, cierres, facturación y el gasto de Meta Ads. El panel aparecerá cuando la lectura esté completa.</p>
+          </div>
+        </div>
+      ) : summary ? (
         <>
           <section>
             <div className="mb-3 flex items-end justify-between gap-4">
