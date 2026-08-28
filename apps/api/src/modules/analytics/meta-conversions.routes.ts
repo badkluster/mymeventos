@@ -22,6 +22,10 @@ const requestSchema = z.object({
     contentName: optionalText,
     contentCategory: optionalText,
     contentIds: z.array(safeId).max(20).optional(),
+    email: z.string().trim().email().max(320).optional().or(z.literal('')),
+    phone: z.string().trim().max(40).optional().or(z.literal('')),
+    firstName: z.string().trim().max(100).optional().or(z.literal('')),
+    lastName: z.string().trim().max(100).optional().or(z.literal('')),
     testEventCode: z.string().trim().max(80).optional().or(z.literal('')),
   }).strict(),
   params: z.object({}),
@@ -34,8 +38,20 @@ function clientIp(request: Request) {
   return request.ip || '';
 }
 
-function hashExternalId(value: string) {
-  return createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
+function hashMetaValue(value: string) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizePhone(value: string) {
+  let digits = value.replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  if (digits.length === 10 && !digits.startsWith('54')) digits = `54${digits}`;
+  return digits;
 }
 
 router.post('/events', validateRequest(requestSchema), asyncHandler(async (request, response) => {
@@ -47,10 +63,18 @@ router.post('/events', validateRequest(requestSchema), asyncHandler(async (reque
   const userData: Record<string, unknown> = {
     client_ip_address: clientIp(request),
     client_user_agent: request.get('user-agent') || '',
-    external_id: [hashExternalId(body.externalId)],
+    external_id: [hashMetaValue(normalizeText(body.externalId))],
   };
   if (body.fbp) userData.fbp = body.fbp;
   if (body.fbc) userData.fbc = body.fbc;
+  if (body.email) userData.em = [hashMetaValue(body.email.trim().toLowerCase())];
+  if (body.phone) {
+    const phone = normalizePhone(body.phone);
+    if (phone) userData.ph = [hashMetaValue(phone)];
+  }
+  if (body.firstName) userData.fn = [hashMetaValue(normalizeText(body.firstName))];
+  if (body.lastName) userData.ln = [hashMetaValue(normalizeText(body.lastName))];
+  userData.country = [hashMetaValue('ar')];
 
   const customData: Record<string, unknown> = {};
   if (body.contentName) customData.content_name = body.contentName;
