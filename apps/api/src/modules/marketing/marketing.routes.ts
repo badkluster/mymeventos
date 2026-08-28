@@ -9,6 +9,7 @@ import internalRoutes from './internal.routes';
 import performanceRoutes from './performance-optimized.routes';
 import crmAttributionRoutes from './crm-attribution.routes';
 import metaAttributionSummaryRoutes from './meta-attribution-summary.routes';
+import searchConsoleRoutes from './search-console.routes';
 
 const router = Router();
 router.use('/promotions', promotionsRoutes);
@@ -19,6 +20,7 @@ router.use('/campaigns', campaignsRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/performance', crmAttributionRoutes);
 router.use('/performance', metaAttributionSummaryRoutes);
+router.use('/performance', searchConsoleRoutes);
 // dashboardRoutes/internalRoutes define their own full sub-paths (/dashboard,
 // /process, /webhooks/:provider) — mounted at the router root, not auth-gated
 // as a block, since /process and /webhooks are secret/signature-protected instead.
