@@ -133,13 +133,27 @@ router.get('/meta', asyncHandler(async (request, response) => {
   const accountPath = `act_${accountId}`;
   const timeRange = JSON.stringify({ since: period.fromDate, until: period.toDate });
   try {
-    const [accountPayload, campaignsPayload, accountInsightsPayload, campaignInsightsPayload, adsPayload, adInsightsPayload] = await Promise.all([
-      graphGet<any>(accountPath, { fields: 'id,name,business_name,amount_spent,balance,currency,timezone_name,instagram_accounts{id,username},spend_cap' }),
-      graphGet<GraphEnvelope<any>>(`${accountPath}/campaigns`, { fields: 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time,updated_time,issues_info', limit: '200' }),
-      graphGet<GraphEnvelope<any>>(`${accountPath}/insights`, { fields: 'impressions,reach,clicks,ctr,cpc,cpm,frequency,spend,actions,action_values', time_range: timeRange, limit: '20' }),
-      graphGet<GraphEnvelope<any>>(`${accountPath}/insights`, { level: 'campaign', fields: 'campaign_id,campaign_name,impressions,reach,clicks,ctr,cpc,cpm,frequency,spend,actions,action_values', time_range: timeRange, limit: '200' }),
+    // Resolve the account from /me/adaccounts first. System-user tokens can list
+    // assigned accounts even when a direct root lookup with extra fields is rejected.
+    const accessibleAccounts = await graphGet<GraphEnvelope<any>>('me/adaccounts', {
+      fields: 'id,account_id,name,business_name,amount_spent,balance,currency,timezone_name,spend_cap',
+      limit: '100',
+    });
+    const accountPayload = (accessibleAccounts.data ?? []).find((account: any) => (
+      String(account.account_id ?? '').replace(/^act_/, '') === accountId || String(account.id ?? '') === accountPath
+    ));
+    if (!accountPayload) {
+      const error = new Error(`La cuenta publicitaria ${accountPath} no aparece entre las cuentas accesibles por el System User.`);
+      Object.assign(error, { graphCode: 'META_AD_ACCOUNT_NOT_ACCESSIBLE' });
+      throw error;
+    }
+
+    const [campaignsPayload, accountInsightsPayload, campaignInsightsPayload, adsPayload, adInsightsPayload] = await Promise.all([
+      graphGet<GraphEnvelope<any>>(`${accountPath}/campaigns`, { fields: 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time,updated_time', limit: '200' }),
+      graphGet<GraphEnvelope<any>>(`${accountPath}/insights`, { fields: 'impressions,reach,clicks,ctr,cpc,cpm,frequency,spend,actions', time_range: timeRange, limit: '20' }),
+      graphGet<GraphEnvelope<any>>(`${accountPath}/insights`, { level: 'campaign', fields: 'campaign_id,campaign_name,impressions,reach,clicks,ctr,cpc,cpm,frequency,spend,actions', time_range: timeRange, limit: '200' }),
       graphGet<GraphEnvelope<any>>(`${accountPath}/ads`, { fields: 'id,name,status,effective_status,adset_id,campaign_id', limit: '200' }),
-      graphGet<GraphEnvelope<any>>(`${accountPath}/insights`, { level: 'ad', fields: 'ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,impressions,reach,clicks,ctr,cpc,cpm,frequency,spend,actions,action_values', time_range: timeRange, limit: '200' }),
+      graphGet<GraphEnvelope<any>>(`${accountPath}/insights`, { level: 'ad', fields: 'ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,impressions,reach,clicks,ctr,cpc,cpm,frequency,spend,actions', time_range: timeRange, limit: '200' }),
     ]);
 
     const accountInsight = accountInsightsPayload.data?.[0] ?? {};
@@ -175,7 +189,7 @@ router.get('/meta', asyncHandler(async (request, response) => {
         startTime: campaign.start_time ?? null,
         stopTime: campaign.stop_time ?? null,
         updatedTime: campaign.updated_time ?? null,
-        issues: Array.isArray(campaign.issues_info) ? campaign.issues_info : [],
+        issues: [],
         spend,
         impressions: numeric(insight.impressions),
         reach: numeric(insight.reach),
@@ -189,7 +203,7 @@ router.get('/meta', asyncHandler(async (request, response) => {
         cpl: leads ? spend / leads : null,
       };
 
-      if (row.issues.length || activeProblemStatus(row.effectiveStatus)) alerts.push({
+      if (activeProblemStatus(row.effectiveStatus)) alerts.push({
         id: `campaign-status-${row.id}`,
         severity: ['DISAPPROVED', 'ERROR', 'WITH_ISSUES'].includes(String(row.effectiveStatus).toUpperCase()) ? 'critical' : 'warning',
         source: 'meta_ads',
@@ -245,12 +259,14 @@ router.get('/meta', asyncHandler(async (request, response) => {
     }).sort((left: any, right: any) => right.spend - left.spend);
 
     await markIntegrationSuccess('meta_ads', { accountId, campaignCount: campaigns.length, adCount: ads.length });
+    const freshHealth = await getIntegrationHealth();
+    const successfulAlerts = alerts.filter((alert) => alert.id !== 'integration-meta_ads');
     const severityRank: Record<Alert['severity'], number> = { critical: 0, warning: 1, info: 2 };
     return sendSuccess(response, {
       configured: true,
       connection: { status: 'connected', lastSyncAt: new Date().toISOString() },
       account: {
-        id: accountPayload.id ?? `act_${accountId}`,
+        id: accountPayload.id ?? accountPath,
         name: accountPayload.name ?? null,
         businessName: accountPayload.business_name ?? null,
         currency: accountPayload.currency ?? null,
@@ -258,13 +274,13 @@ router.get('/meta', asyncHandler(async (request, response) => {
         amountSpentLifetime: minorCurrency(accountPayload.amount_spent),
         balance: minorCurrency(accountPayload.balance),
         spendCap: accountPayload.spend_cap ? minorCurrency(accountPayload.spend_cap) : null,
-        instagramAccounts: accountPayload.instagram_accounts?.data ?? [],
+        instagramAccounts: [],
       },
       summary,
       campaigns,
       ads,
-      alerts: alerts.sort((left, right) => severityRank[left.severity] - severityRank[right.severity]),
-      integrationHealth: health,
+      alerts: successfulAlerts.sort((left, right) => severityRank[left.severity] - severityRank[right.severity]),
+      integrationHealth: freshHealth,
       period: { from: period.fromDate, to: period.toDate },
     });
   } catch (error: any) {
