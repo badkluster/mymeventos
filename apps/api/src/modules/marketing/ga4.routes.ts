@@ -228,6 +228,8 @@ async function buildPayload(from: string, to: string): Promise<Ga4Payload> {
   const eventMap = new Map(events.map((row) => [row.key, row]));
   const empty = (key: string): Ga4MetricRow => ({ key, users: 0, sessions: 0, views: 0, events: 0, keyEvents: 0 });
   const businessEvents = Object.fromEntries(businessEventNames.map((name) => [name, eventMap.get(name) ?? empty(name)]));
+  const currentSummary = summaryFrom(summaryRows);
+  const previousSummary = summaryFrom(previousRows);
 
   const payload: Ga4Payload = {
     configured: true,
@@ -235,8 +237,8 @@ async function buildPayload(from: string, to: string): Promise<Ga4Payload> {
     measurementId: env.GOOGLE_ANALYTICS_MEASUREMENT_ID ?? null,
     connection: { status: 'connected', lastSyncAt: new Date().toISOString(), message: null },
     period: { from, to, ...previous },
-    summary: summaryFrom(summaryRows),
-    previousSummary: summaryFrom(previousRows),
+    summary: currentSummary,
+    previousSummary,
     daily: metricRows(dailyRows, dailyMetrics)
       .map((row) => ({ ...row, date: row.key }))
       .sort((left, right) => left.date.localeCompare(right.date)),
@@ -250,9 +252,9 @@ async function buildPayload(from: string, to: string): Promise<Ga4Payload> {
     propertyId: env.GOOGLE_ANALYTICS_PROPERTY_ID,
     from,
     to,
-    users: payload.summary.activeUsers,
-    sessions: payload.summary.sessions,
-    keyEvents: payload.summary.keyEvents,
+    users: currentSummary.activeUsers,
+    sessions: currentSummary.sessions,
+    keyEvents: currentSummary.keyEvents,
   });
   return payload;
 }
