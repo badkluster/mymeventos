@@ -78,6 +78,9 @@ const footerSeoLinks = [
 ];
 const contactPhonePattern = /^[+()\d\s-]{6,24}$/;
 const contactGuestMin = 1;
+function phoneLink(value: string) {
+  return `tel:${value.replace(/[^+\d]/g, '')}`;
+}
 const contactGuestMax = 1000;
 const contactMessageMaxWords = 120;
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
@@ -327,7 +330,7 @@ function PackageFullDetail({ item, accentText = 'text-[#c8cdd3]' }: { item: Pack
   if (!hasMenu && !hasServices && !hasCommercial) return null;
 
   return <>
-    <button type="button" onClick={() => setOpen(true)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/20 px-4 py-2.5 text-sm font-semibold text-zinc-100 transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3] hover:text-black">
+    <button type="button" onClick={() => { emitAnalyticsEvent('package_view', { sectionId: 'packages', elementId: item.name, entityId: item._id }); setOpen(true); }} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/20 px-4 py-2.5 text-sm font-semibold text-zinc-100 transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3] hover:text-black">
       Ver detalle completo <ExternalLink className="h-4 w-4" />
     </button>
     {open ? <PackageDetailModal item={item} accentText={accentText} onClose={() => setOpen(false)} /> : null}
@@ -562,7 +565,7 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
               </div>
               <div className="mt-5 space-y-2 text-sm text-zinc-400">
                 {salon.address ? <p><span className="text-zinc-200">Dirección:</span> {salon.address}</p> : null}
-                {salonWhatsAppNumber(salon) ? <p><span className="text-zinc-200">Teléfono:</span> {salonWhatsAppNumber(salon)}</p> : null}
+                {salonWhatsAppNumber(salon) ? <p><span className="text-zinc-200">Teléfono:</span> <a href={phoneLink(salonWhatsAppNumber(salon)!)} className="hover:text-white">{salonWhatsAppNumber(salon)}</a></p> : null}
                 {salon.email ? <p><span className="text-zinc-200">Email:</span> {salon.email}</p> : null}
                 {salon.defaultDepositAmount ? <p><span className="text-zinc-200">Seña sugerida:</span> {money(salon.defaultDepositAmount)}</p> : null}
               </div>
@@ -638,6 +641,11 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   const [storyStep, setStoryStep] = useState(0);
   const storyRowRefs = useRef<Array<HTMLDivElement | null>>([]);
 
+  const openSalon = (salon: Salon) => {
+    emitAnalyticsEvent('salon_view', { sectionId: 'salons', elementId: titleForSalon(salon), entityId: salon._id });
+    setSelectedSalon(salon);
+  };
+
   const { scrollY } = useScroll();
   useMotionValueEvent(scrollY, 'change', (latest) => setScrolled(latest > 24));
   const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
@@ -694,7 +702,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   }, [landingLoading]);
 
   useEffect(() => {
-    setMinimumEventDate(todayIsoDate());
+    const timer = window.setTimeout(() => setMinimumEventDate(todayIsoDate()), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -865,7 +874,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
           <motion.h1 variants={cardVariants} className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</motion.h1>
           <motion.p variants={cardVariants} className="mt-6 max-w-xl text-sm leading-7 text-zinc-200 sm:text-base md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</motion.p>
           <motion.div variants={cardVariants} className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><motion.button type="button" onClick={() => scrollTo('contacto')} whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.02 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg bg-[#e5e5e7] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_0_rgba(200,205,211,0)] transition hover:bg-[#f4f4f5] hover:shadow-[0_8px_30px_rgba(200,205,211,.25)] sm:px-6 ${ctaFocusRing}`}>{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button><motion.button type="button" onClick={() => scrollTo('salones')} whileHover={shouldReduceMotion ? undefined : { y: -3 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#e5e5e7] hover:text-[#f2f2f4] sm:px-6 ${ctaFocusRing}`}>{settings.heroSecondaryCtaLabel || 'Ver salones'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button></motion.div>
-          <motion.div variants={listVariants} className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => setSelectedSalon(salon)} whileHover={shouldReduceMotion ? undefined : { y: -2, borderColor: 'rgba(200,205,211,.8)' }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#e5e5e7]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#e5e5e7] hover:bg-[#e5e5e7]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f2f2f4]" /><span className="truncate">{heroLocationForSalon(salon)}</span></motion.button>)}</motion.div>
+          <motion.div variants={listVariants} className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => openSalon(salon)} whileHover={shouldReduceMotion ? undefined : { y: -2, borderColor: 'rgba(200,205,211,.8)' }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#e5e5e7]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#e5e5e7] hover:bg-[#e5e5e7]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f2f2f4]" /><span className="truncate">{heroLocationForSalon(salon)}</span></motion.button>)}</motion.div>
         </motion.div>
       </div>
       <motion.button type="button" onClick={() => scrollTo('salones')} aria-label="Ver más contenido" initial={shouldReduceMotion ? false : { opacity: 0 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: [0, 8, 0] }} transition={shouldReduceMotion ? undefined : { opacity: { delay: 0.6, duration: 0.4 }, y: { delay: 1, duration: 1.8, repeat: Infinity, ease: 'easeInOut' } }} className={`absolute bottom-6 left-1/2 hidden -translate-x-1/2 rounded-full border border-white/20 bg-black/30 p-2 text-white backdrop-blur transition hover:border-[#e5e5e7] hover:text-[#e5e5e7] md:grid ${ctaFocusRing}`}>
@@ -882,7 +891,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
           <h3 style={displayFont} className="text-2xl font-medium italic text-white">{titleForSalon(salon)}</h3>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-200"><span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#dcdcdf]" />{heroLocationForSalon(salon)}</span><span className="inline-flex min-w-0 items-center gap-1.5"><Users className="h-3.5 w-3.5 shrink-0 text-[#dcdcdf]" />{capacityForSalon(salon)}</span></div>
           <p className="mt-3 line-clamp-2 text-sm leading-6 text-zinc-300">{descriptionForSalon(salon)}</p>
-          <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-white/25 px-3 py-2.5 text-sm font-semibold text-white transition hover:border-[#e5e5e7]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#e5e5e7] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#f4f4f5]">Pedir presupuesto</button></div>
+          <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => openSalon(salon)} className="rounded-lg border border-white/25 px-3 py-2.5 text-sm font-semibold text-white transition hover:border-[#e5e5e7]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#e5e5e7] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#f4f4f5]">Pedir presupuesto</button></div>
         </div>
       </motion.article>)}</AnimatedGrid>
     </AnimatedSection>
@@ -925,7 +934,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       <AnimatePresence mode="wait">
       {selectedPackageSalon ? <motion.div key={selectedPackageSalon._id} initial={shouldReduceMotion ? false : { opacity: 0.82, y: 6 }} animate={shouldReduceMotion ? undefined : (packagesRevealed ? { opacity: 1, y: 0 } : { opacity: 0.82, y: 6 })} exit={shouldReduceMotion ? undefined : { opacity: 0.82 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#c8cdd3]/20 bg-white/[0.03] p-5 md:flex-row md:items-center md:justify-between">
         <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#c8cdd3]">Salón seleccionado</p><h3 className="mt-2 text-2xl font-semibold">{titleForSalon(selectedPackageSalon)}</h3><p className="mt-1 text-sm text-zinc-400">{heroLocationForSalon(selectedPackageSalon)} · {capacityForSalon(selectedPackageSalon)}</p></div>
-        <button type="button" onClick={() => setSelectedSalon(selectedPackageSalon)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">Ver salón <ArrowRight className="h-4 w-4" /></button>
+        <button type="button" onClick={() => openSalon(selectedPackageSalon)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">Ver salón <ArrowRight className="h-4 w-4" /></button>
       </motion.div> : null}
       </AnimatePresence>
       <AnimatePresence mode="wait">
@@ -947,7 +956,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
         <PackageFullDetail item={item} accentText={accent.text} />
         <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2">
           {selectedPackageSalon ? <button type="button" onClick={() => { setSelectedSalonId(selectedPackageSalon._id); setSelectedContactPackageId(item._id); scrollTo('contacto'); }} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Solicitar propuesta <ArrowRight className="h-4 w-4" /></button> : null}
-          <button type="button" onClick={() => selectedPackageSalon ? setSelectedSalon(selectedPackageSalon) : scrollTo('contacto')} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
+          <button type="button" onClick={() => selectedPackageSalon ? openSalon(selectedPackageSalon) : scrollTo('contacto')} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
         </div>
       </motion.article>;
       })}</motion.div> : <motion.div key={`${selectedPackageSalon?._id || 'todos'}-sin-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : (packagesRevealed ? 'visible' : 'hidden')} exit={shouldReduceMotion ? undefined : 'hidden'} variants={cardVariants} className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</motion.div>}
@@ -973,7 +982,13 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       <SectionTitle eyebrow="Promociones y beneficios" title="Motivos para reservar hoy" />
       <AnimatedGrid className="grid gap-4 md:grid-cols-4">{(landing.promotions.length ? landing.promotions : [{ title: 'Fechas disponibles', description: 'Consultá las mejores fechas para tu evento.', icon: 'CalendarDays' }, { title: 'Promos especiales', description: 'Descuentos activos por tiempo limitado.', icon: 'Star' }, { title: 'Congelá valor con seña', description: 'Asegurá hoy el precio de tu evento.', icon: 'Gift' }, { title: 'Beneficios premium', description: 'Extras seleccionados según paquete.', icon: 'Sparkles' }]).slice(0, 4).map((item, index) => {
         const accent = accentFor(index + 2);
-        return <motion.article key={item._id || item.title} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -7, scale: 1.006 }} transition={softSpring} className={`group overflow-hidden rounded-xl border p-5 transition-colors ${accent.card}`}><motion.span className={`mb-4 block h-1.5 w-12 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.04)} />{item.imageUrl ? <motion.img src={cloudinaryImageUrl(item.imageUrl, 700)} alt={item.title || 'Promoción M&M'} loading="lazy" decoding="async" className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" variants={imageRevealVariants} /> : <motion.span className="inline-block" variants={iconPop(index)}><IconBadge name={item.icon || 'Gift'} tone={accent.icon} /></motion.span>}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}</motion.article>;
+        const promotionId = item._id || `promotion-${index + 1}`;
+        const openPromotion = () => {
+          emitAnalyticsEvent('promotion_click', { sectionId: 'promotions', elementId: item.title || promotionId, entityId: promotionId });
+          if (item.ctaLink) window.open(item.ctaLink, '_blank', 'noopener,noreferrer');
+          else scrollTo('contacto');
+        };
+        return <motion.article key={promotionId} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -7, scale: 1.006 }} transition={softSpring} className={`group flex flex-col overflow-hidden rounded-xl border p-5 transition-colors ${accent.card}`}><motion.span className={`mb-4 block h-1.5 w-12 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.04)} />{item.imageUrl ? <motion.img src={cloudinaryImageUrl(item.imageUrl, 700)} alt={item.title || 'Promoción M&M'} loading="lazy" decoding="async" className="-mx-5 -mt-5 mb-4 h-32 w-[calc(100%+2.5rem)] object-cover" variants={imageRevealVariants} /> : <motion.span className="inline-block" variants={iconPop(index)}><IconBadge name={item.icon || 'Gift'} tone={accent.icon} /></motion.span>}<h3 className={`mt-4 font-semibold ${accent.text}`}>{item.title}</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{item.description || item.subtitle}</p>{item.badgeText ? <span className={`mt-4 inline-block rounded-full border px-3 py-1 text-xs ${accent.badge}`}>{item.badgeText}</span> : null}<button type="button" onClick={openPromotion} className="mt-auto pt-5 text-left text-sm font-semibold text-[#dbe1e8] transition hover:text-white">{item.ctaLabel || 'Consultar beneficio'} <ArrowRight className="ml-1 inline h-4 w-4" /></button></motion.article>;
       })}</AnimatedGrid>
     </AnimatedSection>
 
@@ -1047,7 +1062,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
                 <p className="mt-2 flex gap-2 text-sm leading-6 text-zinc-300"><Users className="mt-0.5 h-4 w-4 shrink-0 text-[#dbe1e8]" />{capacityForSalon(salon)}</p>
                 <div className="mt-5 grid gap-2 sm:grid-cols-2">
                   <a href={mapExternalUrlForSalon(salon)} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Abrir mapa <ExternalLink className="h-4 w-4" /></a>
-                  <button type="button" onClick={() => setSelectedSalon(salon)} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
+                  <button type="button" onClick={() => openSalon(salon)} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
                 </div>
               </div>
             </motion.article>;
@@ -1076,9 +1091,9 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-5">
         <div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-400">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div>
-        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => setSelectedSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div>
+        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => openSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Búsquedas locales</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{footerSeoLinks.map((item) => <Link key={item.href} href={item.href} className="text-left hover:text-white">{item.label}</Link>)}</div></div>
-        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400"><span>{settings.contactPhone || ''}</span><span>{settings.contactEmail || 'mymsalondeeventoslaplata@gmail.com'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div>
+        <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Contacto</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{settings.contactPhone ? <a href={phoneLink(settings.contactPhone)} className="hover:text-white">{settings.contactPhone}</a> : null}<span>{settings.contactEmail || 'mymsalondeeventoslaplata@gmail.com'}</span><button type="button" onClick={() => setSocialNetwork('whatsapp')} className="text-left text-[#c8cdd3] hover:text-[#e5e7eb]">Escribinos por WhatsApp</button></div></div>
       </div>
     </footer>
 

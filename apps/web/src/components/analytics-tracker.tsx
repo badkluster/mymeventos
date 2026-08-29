@@ -25,6 +25,7 @@ declare global {
   interface Window {
     fbq?: MetaFbq;
     _fbq?: MetaFbq;
+    dataLayer?: Array<Record<string, unknown>>;
   }
 }
 
@@ -44,6 +45,41 @@ const metaEventMapping: Partial<Record<AnalyticsName, MetaStandardEvent>> = {
   phone_click: 'Contact',
   form_success: 'Lead',
 };
+const ga4EventMapping: Partial<Record<AnalyticsName, string>> = {
+  phone_click: 'phone_click',
+  form_start: 'form_start',
+  form_submit: 'form_submit',
+  form_success: 'generate_lead',
+  salon_view: 'salon_view',
+  package_view: 'package_view',
+  promotion_click: 'promotion_click',
+};
+
+function trackGa4DataLayerEvent(eventName: AnalyticsName, detail: Record<string, unknown>) {
+  const ga4EventName = ga4EventMapping[eventName];
+  if (!ga4EventName) return;
+  window.dataLayer = window.dataLayer || [];
+  const payload: Record<string, unknown> = {
+    event: ga4EventName,
+    section_id: detail.sectionId,
+    element_id: detail.elementId,
+    entity_id: detail.entityId,
+  };
+  if (ga4EventName === 'generate_lead') payload.lead_id = detail.entityId;
+  if (ga4EventName === 'salon_view') {
+    payload.salon_id = detail.entityId;
+    payload.salon_name = detail.elementId;
+  }
+  if (ga4EventName === 'package_view') {
+    payload.package_id = detail.entityId;
+    payload.package_name = detail.elementId;
+  }
+  if (ga4EventName === 'promotion_click') {
+    payload.promotion_id = detail.entityId;
+    payload.promotion_name = detail.elementId;
+  }
+  window.dataLayer.push(payload);
+}
 
 function identifier(storage: Storage, key: string) {
   const existing = storage.getItem(key);
@@ -204,6 +240,7 @@ export function AnalyticsTracker() {
         occurredAt, pageVersion, ...analyticsDetail,
       };
       queue.current.push(queuedEvent);
+      trackGa4DataLayerEvent(eventName, analyticsDetail);
       const standardEvent = trackMetaBrowserEvent(eventName, eventId, analyticsDetail);
       if (standardEvent) trackMetaServerEvent(standardEvent, eventName, eventId, occurredAt, attributionId.current, analyticsDetail, metaCustomerData);
       if (queue.current.length >= 10) flush();
