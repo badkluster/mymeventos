@@ -429,6 +429,7 @@ export default function CalendarPage() {
   const [view, setView] = useState<CalendarView>('month');
   const [availabilityView, setAvailabilityView] = useState<AvailabilityView>('day');
   const [focusDate, setFocusDate] = useState(() => new Date());
+  const [availabilityDayInput, setAvailabilityDayInput] = useState(() => toDateInputValue(new Date()));
   const [events, setEvents] = useState<Event[]>([]);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
   const [salons, setSalons] = useState<Salon[]>([]);
@@ -537,6 +538,7 @@ export default function CalendarPage() {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadOptions(); }, [loadOptions]);
+  useEffect(() => { setAvailabilityDayInput(toDateInputValue(focusDate)); }, [focusDate]);
   useEffect(() => {
     const timer = window.setTimeout(() => setFilters((current) => ({ ...current, query: searchInput.trim() })), 300);
     return () => window.clearTimeout(timer);
@@ -606,7 +608,7 @@ export default function CalendarPage() {
     setAvailabilityView(nextView);
     setSelectedAvailabilitySlot(null);
   };
-  const jumpToAvailabilityDay = (value: string) => {
+  const jumpToAvailabilityDay = (value = availabilityDayInput) => {
     const date = parseCivilDateKey(value);
     if (!date) return;
     setFocusDate(date);
@@ -737,10 +739,11 @@ export default function CalendarPage() {
         </div>}
       </div>
 
-      {mode === 'availability' ? <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 md:grid-cols-[minmax(180px,240px)_minmax(180px,240px)_minmax(0,1fr)] md:items-end">
-        <label className="text-sm font-medium text-zinc-700">Ir a un día<Input aria-label="Buscar disponibilidad por día" type="date" value={toDateInputValue(focusDate)} onChange={(event) => jumpToAvailabilityDay(event.target.value)} className="mt-1.5 h-11" /></label>
+      {mode === 'availability' ? <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 md:grid-cols-[minmax(180px,240px)_minmax(180px,240px)_auto_minmax(0,1fr)] md:items-end">
+        <label className="text-sm font-medium text-zinc-700">Ir a un día<Input aria-label="Buscar disponibilidad por día" type="date" value={availabilityDayInput} onChange={(event) => setAvailabilityDayInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); jumpToAvailabilityDay(event.currentTarget.value); } }} className="mt-1.5 h-11" /></label>
         <label className="text-sm font-medium text-zinc-700">Ir a un mes<Input aria-label="Buscar disponibilidad por mes" type="month" value={toMonthInputValue(focusDate)} onChange={(event) => jumpToAvailabilityMonth(event.target.value)} className="mt-1.5 h-11" /></label>
-        <p className="pb-2 text-sm leading-6 text-zinc-500">Los eventos abren su ficha. Para crear, elegí primero un día y después una franja realmente vacía.</p>
+        <Button variant="secondary" className="h-11" onClick={() => jumpToAvailabilityDay()}>Ir</Button>
+        <p className="pb-2 text-sm leading-6 text-zinc-500">Escribí o elegí una fecha y confirmala con Ir. Los eventos abren su ficha; para crear, elegí una franja realmente vacía.</p>
       </div> : <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(220px,1fr)_repeat(5,minmax(130px,170px))]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />

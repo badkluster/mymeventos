@@ -20,8 +20,12 @@ export function civilDateKey(value: unknown): string | undefined {
 export function parseCivilDateKey(value: string): Date | undefined {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return undefined;
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return Number.isNaN(date.getTime()) ? undefined : date;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, month, day);
+  if (Number.isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) return undefined;
+  return date;
 }
 
 /**
