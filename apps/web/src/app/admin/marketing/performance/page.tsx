@@ -159,6 +159,33 @@ type MetaPerformance = {
   monitoringPeriod?: { frequencyFrom: string; deliveryFrom: string; to: string };
 };
 
+type SearchConsoleMetricRow = {
+  key: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+};
+
+type SearchConsoleSummary = {
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+};
+
+type SearchConsolePerformance = {
+  configured: boolean;
+  property: string | null;
+  connection: { status: 'connected' | 'pending' | 'error'; lastSyncAt: string | null; message?: string | null };
+  summary: SearchConsoleSummary | null;
+  previousSummary: SearchConsoleSummary | null;
+  queries: SearchConsoleMetricRow[];
+  pages: SearchConsoleMetricRow[];
+  devices: SearchConsoleMetricRow[];
+  opportunities: SearchConsoleMetricRow[];
+};
+
 type MetricCard = {
   label: string;
   value: string;
@@ -168,7 +195,7 @@ type MetricCard = {
   muted?: boolean;
   delta?: number | null;
 };
-type CampaignFilter = 'all' | 'delivering' | 'active' | 'paused' | 'problems';
+type CampaignFilter = 'all' | 'delivering' | 'spend' | 'active' | 'paused' | 'problems';
 
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
@@ -195,10 +222,15 @@ const HELP = {
   spendCap: 'Límite total de gasto configurado en Meta. Si no existe, se muestra “Sin tope”.',
   lifetimeSpend: 'Gasto histórico acumulado que Meta informa para la cuenta publicitaria.',
   activeMeta: 'Campañas cuyo estado administrativo actual en Meta figura ACTIVE. No significa que todas estén entregando anuncios hoy.',
-  delivering: 'Campañas activas que tuvieron impresiones en los últimos 3 días. Es la cifra operativa más útil para saber qué está corriendo.',
+  delivering: 'Campañas activas que tuvieron impresiones en el período seleccionado. Es el filtro inicial para evitar mezclar campañas viejas sin entrega.',
   withSpend: 'Campañas que registraron gasto dentro del período seleccionado.',
   adsets: 'Conjuntos de anuncios que tuvieron insights en el período. Es el nivel entre campaña y anuncio.',
   ads: 'Anuncios que tuvieron insights en el período seleccionado.',
+  searchClicks: 'Clics desde resultados orgánicos de Google hacia páginas de M&M dentro del período seleccionado.',
+  searchImpressions: 'Veces que una URL de M&M apareció en resultados orgánicos de Google.',
+  searchCtr: 'Porcentaje de impresiones orgánicas que terminaron en un clic hacia el sitio.',
+  searchPosition: 'Posición media de las URLs en Google. En esta métrica, un número más bajo es mejor.',
+  searchOpportunity: 'Consultas con impresiones y posición media aproximada entre 4 y 15. Son oportunidades razonables para mejorar SEO.',
 } as const;
 
 const externalProviders = [
@@ -206,7 +238,6 @@ const externalProviders = [
   { name: 'Facebook orgánico', detail: 'Seguidores, alcance, interacciones, publicaciones y video.', icon: Users },
   { name: 'Google Ads', detail: 'Costo, impresiones, clics, conversiones, CPC, CPA y campañas.', icon: Search },
   { name: 'Google Analytics 4', detail: 'Usuarios, sesiones, canales, engagement y atribución.', icon: BarChart3 },
-  { name: 'Search Console', detail: 'Clics, impresiones, CTR, posición, consultas y páginas.', icon: Search },
   { name: 'Google Business Profile', detail: 'Vistas, búsquedas, llamadas, rutas, clics y reseñas.', icon: Target },
   { name: 'TikTok', detail: 'Seguidores, visualizaciones, retención y engagement.', icon: Video },
   { name: 'TikTok Ads', detail: 'Inversión, CPM, CTR, CPC, conversiones y CPA.', icon: Video },
@@ -258,6 +289,11 @@ function resultLabel(type: ResultType) {
   return 'Resultados';
 }
 
+function percentChange(current: number, previous: number) {
+  if (!Number.isFinite(current) || !Number.isFinite(previous) || previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
 export default function MarketingPerformancePage() {
   const { showToast } = useToast();
   const initial = useMemo(() => defaultPeriod(), []);
@@ -265,18 +301,23 @@ export default function MarketingPerformancePage() {
   const [to, setTo] = useState(initial.to);
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [meta, setMeta] = useState<MetaPerformance | null>(null);
+  const [searchConsole, setSearchConsole] = useState<SearchConsolePerformance | null>(null);
   const [loading, setLoading] = useState(true);
-  const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>('all');
+  const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>('delivering');
+  const [campaignSearch, setCampaignSearch] = useState('');
+  const [campaignExpanded, setCampaignExpanded] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [siteSummary, metaPerformance] = await Promise.all([
+      const [siteSummary, metaPerformance, searchConsolePerformance] = await Promise.all([
         api.get<AnalyticsSummary>(`/analytics/summary?from=${from}&to=${to}`),
         api.get<MetaPerformance>(`/marketing/performance/meta?from=${from}&to=${to}`),
+        api.get<SearchConsolePerformance>(`/marketing/performance/search-console?from=${from}&to=${to}`).catch(() => null),
       ]);
       setSummary(siteSummary);
       setMeta(metaPerformance);
+      setSearchConsole(searchConsolePerformance);
     } catch (cause) {
       showToast({ message: cause instanceof Error ? cause.message : 'No se pudo cargar el panel de performance.', variant: 'error' });
     } finally {
@@ -294,13 +335,22 @@ export default function MarketingPerformancePage() {
   const pausedCampaigns = campaigns.filter((item) => String(item.effectiveStatus).toUpperCase().includes('PAUSED'));
   const problemCampaigns = campaigns.filter((item) => item.issues.length > 0 || isProblemStatus(item.effectiveStatus));
   const deliveringCampaigns = campaigns.filter((item) => item.impressions > 0 && String(item.effectiveStatus).toUpperCase() === 'ACTIVE');
-  const filteredCampaigns = campaigns.filter((item) => {
-    if (campaignFilter === 'delivering') return item.impressions > 0 && String(item.effectiveStatus).toUpperCase() === 'ACTIVE';
-    if (campaignFilter === 'active') return String(item.effectiveStatus).toUpperCase() === 'ACTIVE';
-    if (campaignFilter === 'paused') return String(item.effectiveStatus).toUpperCase().includes('PAUSED');
-    if (campaignFilter === 'problems') return item.issues.length > 0 || isProblemStatus(item.effectiveStatus);
-    return true;
-  });
+  const spendCampaigns = campaigns.filter((item) => item.spend > 0);
+  const filteredCampaigns = campaigns
+    .filter((item) => {
+      if (campaignFilter === 'delivering') return item.impressions > 0 && String(item.effectiveStatus).toUpperCase() === 'ACTIVE';
+      if (campaignFilter === 'spend') return item.spend > 0;
+      if (campaignFilter === 'active') return String(item.effectiveStatus).toUpperCase() === 'ACTIVE';
+      if (campaignFilter === 'paused') return String(item.effectiveStatus).toUpperCase().includes('PAUSED');
+      if (campaignFilter === 'problems') return item.issues.length > 0 || isProblemStatus(item.effectiveStatus);
+      return true;
+    })
+    .filter((item) => !campaignSearch.trim() || item.name.toLocaleLowerCase('es').includes(campaignSearch.trim().toLocaleLowerCase('es')))
+    .sort((left, right) => right.spend - left.spend || right.results - left.results);
+  const visibleCampaigns = campaignExpanded ? filteredCampaigns : filteredCampaigns.slice(0, 8);
+
+  const searchSummary = searchConsole?.summary;
+  const previousSearchSummary = searchConsole?.previousSummary;
 
   const executiveCards: MetricCard[] = [
     { label: 'Inversión Meta', value: metaSummary ? currency(metaSummary.spend, metaCurrency) : '—', note: 'Gasto del período seleccionado', help: HELP.spend, icon: CircleDollarSign, muted: !metaSummary, delta: meta?.comparison?.spend },
@@ -316,30 +366,36 @@ export default function MarketingPerformancePage() {
   return (
     <TooltipPrimitive.Provider delayDuration={180}>
       <section className="space-y-6">
-        <PageHeader title="Performance 360" description="Centro de control de marketing, campañas, APIs, web y conversiones." action={<Button variant="secondary" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</Button>} />
+        <PageHeader title="Performance 360" description="Centro de control de marketing, campañas, SEO, APIs, web y conversiones." action={<Button variant="secondary" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</Button>} />
         <MarketingTabs />
 
         <div className="sticky top-0 z-10 flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-sm backdrop-blur">
-          {[['Resumen', '#resumen'], ['Alertas', '#alertas'], ['Cuenta Meta', '#cuenta-meta'], ['Campañas', '#campanas-meta'], ['Conjuntos', '#conjuntos-meta'], ['Anuncios', '#anuncios-meta'], ['Embudo', '#embudo'], ['Conexiones', '#conexiones']].map(([label, href]) => <a key={href} href={href} className="rounded-xl px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">{label}</a>)}
+          {[['Resumen', '#resumen'], ['SEO Google', '#seo-google'], ['Alertas', '#alertas'], ['Cuenta Meta', '#cuenta-meta'], ['Campañas', '#campanas-meta'], ['Conjuntos', '#conjuntos-meta'], ['Anuncios', '#anuncios-meta'], ['Embudo', '#embudo'], ['Conexiones', '#conexiones']].map(([label, href]) => <a key={href} href={href} className="rounded-xl px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950">{label}</a>)}
         </div>
 
         <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
           <label className="text-xs font-semibold text-zinc-600">Desde<Input type="date" className="mt-1.5 w-44" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
           <label className="text-xs font-semibold text-zinc-600">Hasta<Input type="date" className="mt-1.5 w-44" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-          <div className="ml-auto rounded-xl bg-zinc-50 px-4 py-2 text-right text-xs text-zinc-500">
-            <p className="font-semibold text-zinc-800">Meta Ads: {meta?.connection.status === 'connected' ? 'conectado' : meta?.connection.status === 'error' ? 'con error' : 'pendiente'}</p>
-            <p>{meta?.connection.lastSyncAt ? `Última sincronización: ${new Date(meta.connection.lastSyncAt).toLocaleString('es-AR')}` : 'Sin sincronización disponible'}</p>
+          <div className="ml-auto grid gap-2 text-xs text-zinc-500 sm:grid-cols-2">
+            <div className="rounded-xl bg-zinc-50 px-4 py-2 text-right">
+              <p className="font-semibold text-zinc-800">Meta Ads: {meta?.connection.status === 'connected' ? 'conectado' : meta?.connection.status === 'error' ? 'con error' : 'pendiente'}</p>
+              <p>{meta?.connection.lastSyncAt ? `Sync: ${new Date(meta.connection.lastSyncAt).toLocaleString('es-AR')}` : 'Sin sincronización'}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 px-4 py-2 text-right">
+              <p className="font-semibold text-zinc-800">Search Console: {searchConsole?.connection.status === 'connected' ? 'conectado' : searchConsole?.connection.status === 'error' ? 'con error' : 'pendiente'}</p>
+              <p>{searchConsole?.connection.lastSyncAt ? `Sync: ${new Date(searchConsole.connection.lastSyncAt).toLocaleString('es-AR')}` : 'Sin sincronización'}</p>
+            </div>
           </div>
         </div>
 
         <section id="resumen" className="scroll-mt-24 space-y-4">
-          <SectionHeading title="Resumen ejecutivo" subtitle="Primero resultados operativos; debajo, detalle técnico y comercial." help="Las métricas Meta respetan el rango de fechas seleccionado. Las alertas usan ventanas recientes independientes para evitar falsos positivos históricos." />
+          <SectionHeading title="Resumen ejecutivo" subtitle="Primero resultados operativos; debajo, detalle técnico y comercial." help="Las métricas Meta y Search Console respetan el rango seleccionado. Las alertas de Meta usan ventanas recientes independientes para evitar falsos positivos históricos." />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{executiveCards.map((card) => <Metric key={card.label} {...card} loading={loading} />)}</div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <CompactMetric label="Leads web" value={metrics ? integer.format(metrics.formSuccess ?? 0) : '—'} help={HELP.webLeads} icon={Target} />
             <CompactMetric label="WhatsApp web" value={metrics ? integer.format(metrics.whatsappClicks ?? 0) : '—'} help={HELP.webWhatsapp} icon={MessageCircle} />
             <CompactMetric label="Conversión por sesión" value={metrics ? `${number.format(metrics.conversionRate ?? 0)}%` : '—'} help={HELP.webConversion} icon={TrendingUp} />
-            <CompactMetric label="Clics Meta totales" value={metaSummary ? integer.format(metaSummary.clicks) : '—'} help={HELP.clicks} icon={MousePointerClick} />
+            <CompactMetric label="Clics orgánicos Google" value={searchSummary ? integer.format(searchSummary.clicks) : '—'} help={HELP.searchClicks} icon={Search} />
           </div>
         </section>
 
@@ -350,6 +406,33 @@ export default function MarketingPerformancePage() {
           <Panel title="Resultados diarios" subtitle="Leads o conversaciones según el resultado principal disponible.">
             <TrendChart items={meta?.daily ?? []} valueKey="results" label="Resultados diarios" valueFormatter={(value) => integer.format(value)} />
           </Panel>
+        </section>
+
+        <section id="seo-google" className="scroll-mt-24 space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <SectionHeading title="SEO Google · Search Console" subtitle="La visibilidad orgánica ya forma parte del tablero 360; la pantalla separada queda como detalle avanzado." help="Search Console muestra cómo aparece M&M en Google antes de que la persona llegue al sitio: consultas, impresiones, clics, CTR y posición media." />
+            <a href="/admin/marketing/search-console" className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50">Abrir detalle SEO</a>
+          </div>
+          {searchSummary ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <AccountMetric label="Clics orgánicos" value={integer.format(searchSummary.clicks)} note={previousSearchSummary ? `${formatDelta(percentChange(searchSummary.clicks, previousSearchSummary.clicks))} vs. período anterior` : 'Sin base previa'} help={HELP.searchClicks} />
+                <AccountMetric label="Impresiones orgánicas" value={integer.format(searchSummary.impressions)} note={previousSearchSummary ? `${formatDelta(percentChange(searchSummary.impressions, previousSearchSummary.impressions))} vs. período anterior` : 'Sin base previa'} help={HELP.searchImpressions} />
+                <AccountMetric label="CTR orgánico" value={`${number.format(searchSummary.ctr)}%`} note={previousSearchSummary ? `${formatDelta(percentChange(searchSummary.ctr, previousSearchSummary.ctr))} vs. período anterior` : 'Sin base previa'} help={HELP.searchCtr} />
+                <AccountMetric label="Posición media" value={number.format(searchSummary.position)} note="Menor es mejor" help={HELP.searchPosition} />
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Panel title="Búsquedas principales" subtitle="Consultas que ya generan visibilidad o clics desde Google.">
+                  <SearchConsoleRows rows={searchConsole?.queries ?? []} empty="Todavía no hay consultas suficientes para este período." />
+                </Panel>
+                <Panel title="Oportunidades SEO" subtitle="Términos cerca de posiciones donde una optimización puede mover tráfico.">
+                  <SearchConsoleRows rows={searchConsole?.opportunities ?? []} empty="Todavía no hay oportunidades con volumen suficiente." opportunity />
+                </Panel>
+              </div>
+            </>
+          ) : (
+            <ConnectorPlaceholder title={searchConsole?.connection.status === 'error' ? 'Search Console con error' : 'Search Console pendiente'} text={searchConsole?.connection.message || 'La conexión está configurada, pero todavía no hay métricas disponibles para este rango.'} />
+          )}
         </section>
 
         <section id="alertas" className="scroll-mt-24">
@@ -371,17 +454,23 @@ export default function MarketingPerformancePage() {
         </section>
 
         <section id="campanas-meta" className="scroll-mt-24">
-          <Panel title="Campañas Meta Ads" subtitle="Campaña → inversión → clics de enlace → resultado principal.">
+          <Panel title="Campañas Meta Ads" subtitle="Vista compacta por defecto: primero campañas con entrega, ordenadas por gasto.">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {([
-                ['all', `Todas (${campaigns.length})`],
                 ['delivering', `Con entrega (${deliveringCampaigns.length})`],
+                ['spend', `Con gasto (${spendCampaigns.length})`],
                 ['active', `Activas Meta (${activeCampaigns.length})`],
-                ['paused', `Pausadas (${pausedCampaigns.length})`],
                 ['problems', `Problemas (${problemCampaigns.length})`],
-              ] as Array<[CampaignFilter, string]>).map(([key, label]) => <button key={key} type="button" onClick={() => setCampaignFilter(key)} className={`rounded-xl px-3 py-2 text-xs font-semibold ${campaignFilter === key ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>{label}</button>)}
+                ['paused', `Pausadas (${pausedCampaigns.length})`],
+                ['all', `Todas (${campaigns.length})`],
+              ] as Array<[CampaignFilter, string]>).map(([key, label]) => <button key={key} type="button" onClick={() => { setCampaignFilter(key); setCampaignExpanded(false); }} className={`rounded-xl px-3 py-2 text-xs font-semibold ${campaignFilter === key ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>{label}</button>)}
             </div>
-            {meta?.configured && meta.connection.status === 'connected' ? <CampaignTable campaigns={filteredCampaigns} currencyCode={metaCurrency} /> : <ConnectorPlaceholder title="Meta Ads pendiente" text="Todavía no hay datos disponibles de Marketing API." />}
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <Input className="w-full sm:w-80" value={campaignSearch} onChange={(event) => { setCampaignSearch(event.target.value); setCampaignExpanded(false); }} placeholder="Buscar campaña por nombre…" />
+              <p className="text-xs text-zinc-500">Mostrando {integer.format(visibleCampaigns.length)} de {integer.format(filteredCampaigns.length)} campañas del filtro.</p>
+            </div>
+            {meta?.configured && meta.connection.status === 'connected' ? <CampaignTable campaigns={visibleCampaigns} currencyCode={metaCurrency} /> : <ConnectorPlaceholder title="Meta Ads pendiente" text="Todavía no hay datos disponibles de Marketing API." />}
+            {filteredCampaigns.length > 8 ? <div className="mt-4 flex justify-center"><Button variant="secondary" onClick={() => setCampaignExpanded((current) => !current)}>{campaignExpanded ? 'Ver menos campañas' : `Ver las ${filteredCampaigns.length} campañas`}</Button></div> : null}
           </Panel>
         </section>
 
@@ -414,6 +503,7 @@ export default function MarketingPerformancePage() {
               <ConnectionCard name="Meta Pixel" detail="Eventos browser-side del sitio." status="connected" icon={Activity} />
               <ConnectionCard name="Meta Conversions API" detail="Eventos server-side, deduplicación y monitoreo de fallos." status={healthStatus(meta?.integrationHealth, 'meta_capi')} icon={Activity} />
               <ConnectionCard name="Meta Ads" detail="Campañas, conjuntos, anuncios, inversión, clics y resultados." status={meta?.connection.status ?? 'pending'} icon={Target} />
+              <ConnectionCard name="Google Search Console" detail="Clics orgánicos, impresiones, CTR, posición, consultas y páginas." status={searchConsole?.connection.status ?? 'pending'} icon={Search} />
               {externalProviders.map(({ name, detail, icon }) => <ConnectionCard key={name} name={name} detail={detail} status="pending" icon={icon} />)}
             </div>
           </Panel>
@@ -439,6 +529,11 @@ function ChangeBadge({ value }: { value?: number | null }) {
   return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${positive ? 'bg-emerald-50 text-emerald-700' : negative ? 'bg-rose-50 text-rose-700' : 'bg-zinc-100 text-zinc-600'}`}>{positive ? <TrendingUp className="h-3 w-3" /> : negative ? <TrendingDown className="h-3 w-3" /> : null}{positive ? '+' : ''}{number.format(value)}%</span>;
 }
 
+function formatDelta(value: number | null) {
+  if (value === null) return 'sin base';
+  return `${value > 0 ? '+' : ''}${number.format(value)}%`;
+}
+
 function Metric({ label, value, note, help, icon: Icon, muted, loading, delta }: MetricCard & { loading: boolean }) {
   return <article className={`rounded-2xl border p-4 shadow-sm ${muted ? 'border-dashed border-zinc-300 bg-zinc-50' : 'border-zinc-200 bg-white'}`}><div className="flex justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-1"><p className="text-xs font-semibold uppercase text-zinc-500">{label}</p><InfoTip text={help} /></div><p className={`mt-2 text-2xl font-bold ${muted ? 'text-zinc-400' : ''}`}>{loading && !muted ? '…' : value}</p></div><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-950 text-white"><Icon className="h-4 w-4" /></span></div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-zinc-500">{note}</p><ChangeBadge value={delta} /></div></article>;
 }
@@ -453,6 +548,11 @@ function AccountMetric({ label, value, note, help }: { label: string; value: str
 
 function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"><div className="border-b border-zinc-100 px-5 py-4"><h3 className="font-semibold">{title}</h3><p className="mt-1 text-xs text-zinc-500">{subtitle}</p></div><div className="p-5">{children}</div></div>;
+}
+
+function SearchConsoleRows({ rows, empty, opportunity = false }: { rows: SearchConsoleMetricRow[]; empty: string; opportunity?: boolean }) {
+  if (!rows.length) return <Empty text={empty} />;
+  return <div className="space-y-2">{rows.slice(0, 6).map((row, index) => <div key={`${row.key}-${index}`} className="rounded-xl bg-zinc-50 p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold" title={row.key}>{row.key}</p><p className="mt-1 text-[11px] text-zinc-500">{integer.format(row.impressions)} impresiones · CTR {number.format(row.ctr)}%</p></div><div className="shrink-0 text-right"><p className="text-sm font-bold">{integer.format(row.clicks)} clics</p><p className={`mt-1 text-[11px] ${opportunity ? 'font-semibold text-amber-700' : 'text-zinc-500'}`}>Pos. {number.format(row.position)}</p></div></div></div>)}</div>;
 }
 
 function AlertsPanel({ alerts, loading, monitoringPeriod }: { alerts: PerformanceAlert[]; loading: boolean; monitoringPeriod?: MetaPerformance['monitoringPeriod'] }) {
