@@ -33,9 +33,13 @@ describe('Spanish API messages', () => {
     expect(response.body.error).toMatchObject({ code: 'ROUTE_NOT_FOUND', message: 'Ruta no encontrada.' });
   });
 
-  it('returns a Spanish message for invalid request bodies', async () => {
+  it('returns Spanish field details for invalid request bodies', async () => {
     const response = await request(app).post('/api/auth/login').send({ username: '', password: '' });
     expect(response.status).toBe(400);
     expect(response.body.error.message).toBe('Los datos enviados no son válidos.');
+    expect(response.body.error.details.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'body.username', message: 'Usuario: debe tener al menos 3 caracteres.' }),
+      expect.objectContaining({ path: 'body.password', message: 'Contraseña: debe tener al menos 1 caracteres.' }),
+    ]));
   });
 });
