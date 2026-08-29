@@ -186,6 +186,11 @@ type SearchConsolePerformance = {
   opportunities: SearchConsoleMetricRow[];
 };
 
+type Ga4Connection = {
+  configured: boolean;
+  connection: { status: 'connected' | 'pending' | 'error'; lastSyncAt: string | null; message?: string | null };
+};
+
 type MetricCard = {
   label: string;
   value: string;
@@ -237,7 +242,6 @@ const externalProviders = [
   { name: 'Instagram orgánico', detail: 'Seguidores, alcance, engagement, reels, historias, guardados y compartidos.', icon: Video },
   { name: 'Facebook orgánico', detail: 'Seguidores, alcance, interacciones, publicaciones y video.', icon: Users },
   { name: 'Google Ads', detail: 'Costo, impresiones, clics, conversiones, CPC, CPA y campañas.', icon: Search },
-  { name: 'Google Analytics 4', detail: 'Usuarios, sesiones, canales, engagement y atribución.', icon: BarChart3 },
   { name: 'Google Business Profile', detail: 'Vistas, búsquedas, llamadas, rutas, clics y reseñas.', icon: Target },
   { name: 'TikTok', detail: 'Seguidores, visualizaciones, retención y engagement.', icon: Video },
   { name: 'TikTok Ads', detail: 'Inversión, CPM, CTR, CPC, conversiones y CPA.', icon: Video },
@@ -302,6 +306,7 @@ export default function MarketingPerformancePage() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [meta, setMeta] = useState<MetaPerformance | null>(null);
   const [searchConsole, setSearchConsole] = useState<SearchConsolePerformance | null>(null);
+  const [ga4, setGa4] = useState<Ga4Connection | null>(null);
   const [loading, setLoading] = useState(true);
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>('delivering');
   const [campaignSearch, setCampaignSearch] = useState('');
@@ -310,14 +315,16 @@ export default function MarketingPerformancePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [siteSummary, metaPerformance, searchConsolePerformance] = await Promise.all([
+      const [siteSummary, metaPerformance, searchConsolePerformance, ga4Performance] = await Promise.all([
         api.get<AnalyticsSummary>(`/analytics/summary?from=${from}&to=${to}`),
         api.get<MetaPerformance>(`/marketing/performance/meta?from=${from}&to=${to}`),
         api.get<SearchConsolePerformance>(`/marketing/performance/search-console?from=${from}&to=${to}`).catch(() => null),
+        api.get<Ga4Connection>(`/marketing/performance/ga4?from=${from}&to=${to}`).catch(() => null),
       ]);
       setSummary(siteSummary);
       setMeta(metaPerformance);
       setSearchConsole(searchConsolePerformance);
+      setGa4(ga4Performance);
     } catch (cause) {
       showToast({ message: cause instanceof Error ? cause.message : 'No se pudo cargar el panel de performance.', variant: 'error' });
     } finally {
@@ -351,6 +358,7 @@ export default function MarketingPerformancePage() {
 
   const searchSummary = searchConsole?.summary;
   const previousSearchSummary = searchConsole?.previousSummary;
+  const ga4Status = ga4?.connection.status ?? healthStatus(meta?.integrationHealth, 'ga4');
 
   const executiveCards: MetricCard[] = [
     { label: 'Inversión Meta', value: metaSummary ? currency(metaSummary.spend, metaCurrency) : '—', note: 'Gasto del período seleccionado', help: HELP.spend, icon: CircleDollarSign, muted: !metaSummary, delta: meta?.comparison?.spend },
@@ -376,7 +384,7 @@ export default function MarketingPerformancePage() {
         <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
           <label className="text-xs font-semibold text-zinc-600">Desde<Input type="date" className="mt-1.5 w-44" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
           <label className="text-xs font-semibold text-zinc-600">Hasta<Input type="date" className="mt-1.5 w-44" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-          <div className="ml-auto grid gap-2 text-xs text-zinc-500 sm:grid-cols-2">
+          <div className="ml-auto grid gap-2 text-xs text-zinc-500 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl bg-zinc-50 px-4 py-2 text-right">
               <p className="font-semibold text-zinc-800">Meta Ads: {meta?.connection.status === 'connected' ? 'conectado' : meta?.connection.status === 'error' ? 'con error' : 'pendiente'}</p>
               <p>{meta?.connection.lastSyncAt ? `Sync: ${new Date(meta.connection.lastSyncAt).toLocaleString('es-AR')}` : 'Sin sincronización'}</p>
@@ -385,11 +393,15 @@ export default function MarketingPerformancePage() {
               <p className="font-semibold text-zinc-800">Search Console: {searchConsole?.connection.status === 'connected' ? 'conectado' : searchConsole?.connection.status === 'error' ? 'con error' : 'pendiente'}</p>
               <p>{searchConsole?.connection.lastSyncAt ? `Sync: ${new Date(searchConsole.connection.lastSyncAt).toLocaleString('es-AR')}` : 'Sin sincronización'}</p>
             </div>
+            <div className="rounded-xl bg-zinc-50 px-4 py-2 text-right">
+              <p className="font-semibold text-zinc-800">GA4: {ga4Status === 'connected' ? 'conectado' : ga4Status === 'error' ? 'con error' : 'pendiente'}</p>
+              <p>{ga4?.connection.lastSyncAt ? `Sync: ${new Date(ga4.connection.lastSyncAt).toLocaleString('es-AR')}` : ga4?.connection.message || 'Sin sincronización'}</p>
+            </div>
           </div>
         </div>
 
         <section id="resumen" className="scroll-mt-24 space-y-4">
-          <SectionHeading title="Resumen ejecutivo" subtitle="Primero resultados operativos; debajo, detalle técnico y comercial." help="Las métricas Meta y Search Console respetan el rango seleccionado. Las alertas de Meta usan ventanas recientes independientes para evitar falsos positivos históricos." />
+          <SectionHeading title="Resumen ejecutivo" subtitle="Primero resultados operativos; debajo, detalle técnico y comercial." help="Las métricas Meta, Search Console y GA4 respetan el rango seleccionado. Las alertas de Meta usan ventanas recientes independientes para evitar falsos positivos históricos." />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{executiveCards.map((card) => <Metric key={card.label} {...card} loading={loading} />)}</div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <CompactMetric label="Leads web" value={metrics ? integer.format(metrics.formSuccess ?? 0) : '—'} help={HELP.webLeads} icon={Target} />
@@ -504,6 +516,7 @@ export default function MarketingPerformancePage() {
               <ConnectionCard name="Meta Conversions API" detail="Eventos server-side, deduplicación y monitoreo de fallos." status={healthStatus(meta?.integrationHealth, 'meta_capi')} icon={Activity} />
               <ConnectionCard name="Meta Ads" detail="Campañas, conjuntos, anuncios, inversión, clics y resultados." status={meta?.connection.status ?? 'pending'} icon={Target} />
               <ConnectionCard name="Google Search Console" detail="Clics orgánicos, impresiones, CTR, posición, consultas y páginas." status={searchConsole?.connection.status ?? 'pending'} icon={Search} />
+              <ConnectionCard name="Google Analytics 4" detail="Usuarios, sesiones, canales, engagement y atribución." status={ga4Status} icon={BarChart3} />
               {externalProviders.map(({ name, detail, icon }) => <ConnectionCard key={name} name={name} detail={detail} status="pending" icon={icon} />)}
             </div>
           </Panel>
