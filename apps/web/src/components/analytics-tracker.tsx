@@ -25,6 +25,7 @@ declare global {
   interface Window {
     fbq?: MetaFbq;
     _fbq?: MetaFbq;
+    dataLayer?: Array<Record<string, unknown>>;
   }
 }
 
@@ -44,6 +45,41 @@ const metaEventMapping: Partial<Record<AnalyticsName, MetaStandardEvent>> = {
   phone_click: 'Contact',
   form_success: 'Lead',
 };
+const ga4EventMapping: Partial<Record<AnalyticsName, string>> = {
+  phone_click: 'phone_click',
+  form_start: 'form_start',
+  form_submit: 'form_submit',
+  form_success: 'generate_lead',
+  salon_view: 'salon_view',
+  package_view: 'package_view',
+  promotion_click: 'promotion_click',
+};
+
+function trackGa4DataLayerEvent(eventName: AnalyticsName, detail: Record<string, unknown>) {
+  const ga4EventName = ga4EventMapping[eventName];
+  if (!ga4EventName) return;
+  window.dataLayer = window.dataLayer || [];
+  const payload: Record<string, unknown> = {
+    event: ga4EventName,
+    section_id: detail.sectionId,
+    element_id: detail.elementId,
+    entity_id: detail.entityId,
+  };
+  if (ga4EventName === 'generate_lead') payload.lead_id = detail.entityId;
+  if (ga4EventName === 'salon_view') {
+    payload.salon_id = detail.entityId;
+    payload.salon_name = detail.elementId;
+  }
+  if (ga4EventName === 'package_view') {
+    payload.package_id = detail.entityId;
+    payload.package_name = detail.elementId;
+  }
+  if (ga4EventName === 'promotion_click') {
+    payload.promotion_id = detail.entityId;
+    payload.promotion_name = detail.elementId;
+  }
+  window.dataLayer.push(payload);
+}
 
 function identifier(storage: Storage, key: string) {
   const existing = storage.getItem(key);
@@ -156,11 +192,12 @@ export function emitAnalyticsEvent(eventName: AnalyticsName, detail: AnalyticsDe
 export function AnalyticsTracker() {
   const pathname = usePathname() ?? '';
   const [settings, setSettings] = useState<TrackerSettings | null>(null);
-  const [consent, setConsent] = useState<'accepted' | 'declined' | null>(() => (
-    typeof window === 'undefined'
-      ? null
-      : (localStorage.getItem(consentKey) as 'accepted' | 'declined' | null)
-  ));
+  // Keep the server and first client render identical. Reading localStorage in
+  // the state initializer made returning visitors hydrate without the consent
+  // banner that was present in the server HTML, aborting hydration before GTM
+  // and the commercial event listeners could initialize.
+  const [consent, setConsent] = useState<'accepted' | 'declined' | null>(null);
+  const [consentLoaded, setConsentLoaded] = useState(false);
   const queue = useRef<QueueEvent[]>([]);
   const sessionId = useRef('');
   const visitorId = useRef('');
@@ -172,6 +209,11 @@ export function AnalyticsTracker() {
   const formStarted = useRef(new Set<string>());
   const formCustomerData = useRef(new Map<string, MetaCustomerData>());
   const publicPage = !pathname.startsWith('/admin') && !pathname.startsWith('/invitacion') && !pathname.startsWith('/invitados') && !pathname.startsWith('/entrada');
+
+  useEffect(() => {
+    setConsent(localStorage.getItem(consentKey) as 'accepted' | 'declined' | null);
+    setConsentLoaded(true);
+  }, []);
 
   useEffect(() => {
     if (!publicPage) return;
@@ -204,6 +246,7 @@ export function AnalyticsTracker() {
         occurredAt, pageVersion, ...analyticsDetail,
       };
       queue.current.push(queuedEvent);
+      trackGa4DataLayerEvent(eventName, analyticsDetail);
       const standardEvent = trackMetaBrowserEvent(eventName, eventId, analyticsDetail);
       if (standardEvent) trackMetaServerEvent(standardEvent, eventName, eventId, occurredAt, attributionId.current, analyticsDetail, metaCustomerData);
       if (queue.current.length >= 10) flush();
@@ -283,7 +326,7 @@ export function AnalyticsTracker() {
     return () => { window.clearInterval(timer); sectionObserver.disconnect(); document.removeEventListener('click', click, true); window.removeEventListener('scroll', scroll); document.removeEventListener('focusin', focus); document.removeEventListener('submit', submit); window.removeEventListener('mym:analytics', custom); document.removeEventListener('visibilitychange', visibility); flush(); };
   }, [consent, pathname, publicPage, settings]);
 
-  if (!publicPage || !settings?.enabled || consent || !settings.consentRequired) return null;
+  if (!publicPage || !consentLoaded || !settings?.enabled || consent || !settings.consentRequired) return null;
   return <aside className="fixed inset-x-3 bottom-3 z-[120] mx-auto max-w-2xl rounded-2xl border border-white/15 bg-zinc-950/95 p-4 text-white shadow-2xl backdrop-blur">
     <p className="text-sm font-semibold">Privacidad y analítica</p><p className="mt-1 text-xs leading-5 text-zinc-300">Usamos analítica propia y, si aceptás, Meta Pixel y medición server-side para medir visitas y solicitudes. Al enviar el formulario, los datos de contacto necesarios se comparten cifrados con Meta para medir la conversión y no se guardan en nuestra analítica de navegación.</p>
     <div className="mt-3 flex justify-end gap-2"><button className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold" onClick={() => { localStorage.setItem(consentKey, 'declined'); setConsent('declined'); }}>No permitir</button><button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black" onClick={() => { localStorage.setItem(consentKey, 'accepted'); setConsent('accepted'); }}>Permitir analítica</button></div>
