@@ -10,6 +10,7 @@ import { getApiMessage } from '../../utils/messages';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { ApiError } from '../../middlewares/errorHandler';
 import { createQuoteRequest } from './quote-request.service';
+import { publicGuestListAccess, publicGuestListAccessPayload } from './public-guest-list-access';
 
 const router = Router();
 const messageMaxWords = 120;
@@ -150,12 +151,14 @@ router.get('/guest-list/:token', validateRequest(publicGuestListGetSchema), asyn
   const event: any = await Event.findOne({ guestListAccessToken: request.params.token, guestListAccessTokenRevokedAt: null, status: { $nin: ['cancelled', 'lost'] }, deletedAt: null }).select('eventName eventType eventDate guestCount resourcePlanSnapshot').lean();
   if (!event) throw new ApiError(404, 'El enlace de lista de invitados no es válido o ya no está disponible.');
   const guestList = event.resourcePlanSnapshot?.guestList ?? { tables: [], guests: [], notes: '' };
-  return sendSuccess(response, { event: { eventName: event.eventName, eventType: event.eventType, eventDate: event.eventDate, guestCount: event.guestCount }, guestList });
+  return sendSuccess(response, { event: { eventName: event.eventName, eventType: event.eventType, eventDate: event.eventDate, guestCount: event.guestCount }, guestList, access: publicGuestListAccessPayload(publicGuestListAccess(event.eventDate)) });
 }));
 
 router.patch('/guest-list/:token', validateRequest(publicGuestListUpdateSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ guestListAccessToken: request.params.token, guestListAccessTokenRevokedAt: null, status: { $nin: ['cancelled', 'lost'] }, deletedAt: null });
   if (!event) throw new ApiError(404, 'El enlace de lista de invitados no es válido o ya no está disponible.');
+  const access = publicGuestListAccess(event.eventDate);
+  if (!access.editable) throw new ApiError(403, 'GUEST_LIST_EDITING_CLOSED', 'La lista de invitados quedó cerrada para edición 15 días antes del evento. El equipo de M&M Eventos puede seguir gestionándola internamente.');
   event.resourcePlanSnapshot = { ...(event.resourcePlanSnapshot ?? {}), guestList: { ...request.body.guestList, submittedAt: new Date().toISOString() } };
   event.markModified('resourcePlanSnapshot');
   await event.save();
