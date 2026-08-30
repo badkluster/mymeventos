@@ -110,7 +110,7 @@ adminRouter.get('/summary', asyncHandler(async (request, response) => {
     .populate('interestedSalonIds', 'name publicTitle')
     .lean();
   const quoteIds = quoteRequests.flatMap((item) => item.convertedQuoteIds ?? []);
-  const [quotesCreated, quotesAccepted, confirmedEvents, packageViews] = await Promise.all([
+  const [quotesCreated, quotesAccepted, confirmedEvents, packageViews, promotionClicks, sourceConversions] = await Promise.all([
     Quote.countDocuments({ _id: { $in: quoteIds }, deletedAt: null }),
     Quote.countDocuments({ _id: { $in: quoteIds }, deletedAt: null, status: { $in: ['accepted', 'converted'] } }),
     Event.countDocuments({ sourceQuoteId: { $in: quoteIds }, deletedAt: null, status: 'confirmed' }),
@@ -119,6 +119,18 @@ adminRouter.get('/summary', asyncHandler(async (request, response) => {
       { $group: { _id: { $ifNull: ['$elementId', 'Sin identificar'] }, value: { $sum: 1 } } },
       { $sort: { value: -1 } },
       { $limit: 10 },
+    ]),
+    AnalyticsEvent.aggregate([
+      { $match: { occurredAt: { $gte: period.from, $lt: period.toExclusive }, eventName: 'promotion_click' } },
+      { $group: { _id: { $ifNull: ['$elementId', 'Sin identificar'] }, value: { $sum: 1 } } },
+      { $sort: { value: -1 } },
+      { $limit: 10 },
+    ]),
+    AnalyticsSession.aggregate([
+      { $match: match },
+      { $group: { _id: { $ifNull: ['$source', 'direct'] }, sessions: { $sum: 1 }, leads: { $sum: { $cond: ['$converted', 1, 0] } } } },
+      { $project: { _id: 1, sessions: 1, leads: 1, conversionRate: { $cond: [{ $gt: ['$sessions', 0] }, { $multiply: [{ $divide: ['$leads', '$sessions'] }, 100] }, 0] } } },
+      { $sort: { leads: -1, sessions: -1 } },
     ]),
   ]);
   const salonConsultationMap = new Map<string, number>();
@@ -143,10 +155,10 @@ adminRouter.get('/summary', asyncHandler(async (request, response) => {
     },
     funnel: [
       { id: 'landing', label: 'Visitas al sitio', value: totals.sessions },
-      { id: 'sections', label: 'Secciones vistas', value: events.get('section_view') ?? 0 },
-      { id: 'cta', label: 'Botones de acción', value: events.get('cta_click') ?? 0 },
-      { id: 'formStart', label: 'Formulario iniciado', value: events.get('form_start') ?? 0 },
-      { id: 'lead', label: 'Consulta enviada', value: events.get('form_success') ?? 0 },
+      { id: 'salonView', label: 'Salones vistos', value: events.get('salon_view') ?? 0 },
+      { id: 'packageView', label: 'Paquetes vistos', value: events.get('package_view') ?? 0 },
+      { id: 'contact', label: 'Contactos (WhatsApp + formularios)', value: (events.get('whatsapp_click') ?? 0) + (events.get('form_success') ?? 0) },
+      { id: 'lead', label: 'Leads reales (formulario exitoso)', value: events.get('form_success') ?? 0 },
       { id: 'quote', label: 'Presupuesto creado', value: quotesCreated },
       { id: 'accepted', label: 'Presupuesto aceptado', value: quotesAccepted },
       { id: 'event', label: 'Evento confirmado', value: confirmedEvents },
@@ -156,6 +168,8 @@ adminRouter.get('/summary', asyncHandler(async (request, response) => {
       devices,
       salonConsultations,
       packageViews: packageViews.map((item: any) => ({ _id: item._id, value: item.value })),
+      promotionClicks: promotionClicks.map((item: any) => ({ _id: item._id, value: item.value })),
+      sourceConversions: sourceConversions.map((item: any) => ({ _id: item._id, sessions: item.sessions, leads: item.leads, conversionRate: item.conversionRate })),
     },
     period: { from: period.fromDate, to: period.toDate },
   });

@@ -31,10 +31,11 @@ import { api } from '@/lib/api';
 import { analyticsSourceLabel } from '@/features/analytics/analytics-labels';
 
 type Breakdown = { _id: string; value: number };
+type SourceConversion = { _id: string; sessions: number; leads: number; conversionRate: number };
 type AnalyticsSummary = {
   metrics: Record<string, number>;
   funnel: Array<{ id: string; label: string; value: number }>;
-  breakdowns: { sources: Breakdown[]; devices: Breakdown[]; salonConsultations?: Breakdown[]; packageViews?: Breakdown[] };
+  breakdowns: { sources: Breakdown[]; devices: Breakdown[]; salonConsultations?: Breakdown[]; packageViews?: Breakdown[]; promotionClicks?: Breakdown[]; sourceConversions?: SourceConversion[] };
 };
 
 type ResultType = 'lead' | 'conversation' | 'none';
@@ -227,6 +228,8 @@ const HELP = {
   webContactMix: 'Compara clics hacia WhatsApp con formularios terminados correctamente. No suma form_submit para evitar duplicar consultas.',
   topSalon: 'Salón seleccionado con mayor frecuencia en formularios web terminados correctamente dentro del período.',
   topPackage: 'Paquete cuyo detalle completo se abrió más veces en la web dentro del período.',
+  topPromotion: 'Promoción cuyo llamado a la acción recibió más clics dentro del período.',
+  sourceConversion: 'Sesiones y formularios terminados correctamente por fuente. La tasa se calcula como leads reales sobre sesiones de esa fuente.',
   balance: 'Saldo que Meta informa para la cuenta publicitaria. Su interpretación depende del tipo de facturación de la cuenta.',
   spendCap: 'Límite total de gasto configurado en Meta. Si no existe, se muestra “Sin tope”.',
   lifetimeSpend: 'Gasto histórico acumulado que Meta informa para la cuenta publicitaria.',
@@ -341,6 +344,7 @@ export default function MarketingPerformancePage() {
   const metrics = summary?.metrics;
   const topSalon = summary?.breakdowns.salonConsultations?.[0];
   const topPackage = summary?.breakdowns.packageViews?.[0];
+  const topPromotion = summary?.breakdowns.promotionClicks?.[0];
   const metaSummary = meta?.summary;
   const metaCurrency = meta?.account?.currency || 'ARS';
   const campaigns = meta?.campaigns ?? [];
@@ -416,6 +420,7 @@ export default function MarketingPerformancePage() {
             <CompactMetric label="Conversión por sesión" value={metrics ? `${number.format(metrics.conversionRate ?? 0)}%` : '—'} help={HELP.webConversion} icon={TrendingUp} />
             <CompactMetric label="Salón más consultado" value={topSalon?._id || 'Sin datos'} help={HELP.topSalon} icon={Globe2} />
             <CompactMetric label="Paquete más visto" value={topPackage?._id || 'Sin datos'} help={HELP.topPackage} icon={Eye} />
+            <CompactMetric label="Promoción más clickeada" value={topPromotion?._id || 'Sin datos'} help={HELP.topPromotion} icon={MousePointerClick} />
             <CompactMetric label="Clics orgánicos Google" value={searchSummary ? integer.format(searchSummary.clicks) : '—'} help={HELP.searchClicks} icon={Search} />
           </div>
         </section>
@@ -510,11 +515,14 @@ export default function MarketingPerformancePage() {
           </Panel>
         </section>
 
-        <section id="embudo" className="scroll-mt-24 grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+        <section id="embudo" className="scroll-mt-24 space-y-4">
           <Panel title="Embudo Web → Cliente" subtitle="Datos propios de M&M, independientes de la atribución que informe Meta.">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{(summary?.funnel ?? []).map((item, index) => <div key={item.id} className="rounded-xl bg-zinc-50 p-3"><p className="text-xs text-zinc-500">{index + 1}. {item.label}</p><p className="mt-2 text-2xl font-bold">{integer.format(item.value)}</p></div>)}</div>
           </Panel>
-          <Panel title="Origen de visitas" subtitle="Fuente detectada por la analítica propia."><SourceBars items={summary?.breakdowns.sources ?? []} /></Panel>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Panel title="Origen de visitas" subtitle="Fuente detectada por la analítica propia."><SourceBars items={summary?.breakdowns.sources ?? []} /></Panel>
+            <Panel title="Conversión por fuente" subtitle="Leads reales por cada canal de adquisición."><SourceConversionRows items={summary?.breakdowns.sourceConversions ?? []} /></Panel>
+          </div>
         </section>
 
         <section id="conexiones" className="scroll-mt-24">
@@ -650,6 +658,11 @@ function SourceBars({ items }: { items: Breakdown[] }) {
   const max = Math.max(0, ...items.map((item) => item.value));
   if (!items.length) return <p className="py-8 text-center text-sm text-zinc-400">Sin datos.</p>;
   return <div className="space-y-3">{items.slice(0, 8).map((item) => <div key={item._id}><div className="mb-1 flex justify-between text-xs"><span>{analyticsSourceLabel(item._id)}</span><span>{integer.format(item.value)}</span></div><div className="h-2 rounded-full bg-zinc-100"><div className="h-full rounded-full bg-zinc-950" style={{ width: `${max ? item.value / max * 100 : 0}%` }} /></div></div>)}</div>;
+}
+
+function SourceConversionRows({ items }: { items: SourceConversion[] }) {
+  if (!items.length) return <p className="py-8 text-center text-sm text-zinc-400">Sin datos suficientes todavía.</p>;
+  return <div className="space-y-2">{items.slice(0, 8).map((item) => <div key={item._id} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 rounded-xl bg-zinc-50 px-3 py-2 text-xs"><span className="truncate font-semibold text-zinc-700">{analyticsSourceLabel(item._id)}</span><span><span className="text-zinc-400">Ses.</span> {integer.format(item.sessions)}</span><span><span className="text-zinc-400">Leads</span> {integer.format(item.leads)}</span><span className="font-semibold text-zinc-950">{number.format(item.conversionRate)}%</span></div>)}</div>;
 }
 
 function Empty({ text }: { text: string }) {
