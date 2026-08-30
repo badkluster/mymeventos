@@ -8,6 +8,7 @@ import {
   BarChart3,
   CheckCircle2,
   CircleDollarSign,
+  Eye,
   Gauge,
   Globe2,
   Info,
@@ -33,7 +34,7 @@ type Breakdown = { _id: string; value: number };
 type AnalyticsSummary = {
   metrics: Record<string, number>;
   funnel: Array<{ id: string; label: string; value: number }>;
-  breakdowns: { sources: Breakdown[]; devices: Breakdown[] };
+  breakdowns: { sources: Breakdown[]; devices: Breakdown[]; salonConsultations?: Breakdown[]; packageViews?: Breakdown[] };
 };
 
 type ResultType = 'lead' | 'conversation' | 'none';
@@ -223,6 +224,9 @@ const HELP = {
   webLeads: 'Formularios efectivamente enviados en la web y registrados por la analítica propia de M&M.',
   webWhatsapp: 'Clics en botones de WhatsApp registrados directamente en la web.',
   webConversion: 'Porcentaje de sesiones web que terminan en consulta. Se calcula sobre sesiones, no sobre visitantes únicos.',
+  webContactMix: 'Compara clics hacia WhatsApp con formularios terminados correctamente. No suma form_submit para evitar duplicar consultas.',
+  topSalon: 'Salón seleccionado con mayor frecuencia en formularios web terminados correctamente dentro del período.',
+  topPackage: 'Paquete cuyo detalle completo se abrió más veces en la web dentro del período.',
   balance: 'Saldo que Meta informa para la cuenta publicitaria. Su interpretación depende del tipo de facturación de la cuenta.',
   spendCap: 'Límite total de gasto configurado en Meta. Si no existe, se muestra “Sin tope”.',
   lifetimeSpend: 'Gasto histórico acumulado que Meta informa para la cuenta publicitaria.',
@@ -335,6 +339,8 @@ export default function MarketingPerformancePage() {
   useEffect(() => { void load(); }, [load]);
 
   const metrics = summary?.metrics;
+  const topSalon = summary?.breakdowns.salonConsultations?.[0];
+  const topPackage = summary?.breakdowns.packageViews?.[0];
   const metaSummary = meta?.summary;
   const metaCurrency = meta?.account?.currency || 'ARS';
   const campaigns = meta?.campaigns ?? [];
@@ -406,7 +412,10 @@ export default function MarketingPerformancePage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <CompactMetric label="Leads web" value={metrics ? integer.format(metrics.formSuccess ?? 0) : '—'} help={HELP.webLeads} icon={Target} />
             <CompactMetric label="WhatsApp web" value={metrics ? integer.format(metrics.whatsappClicks ?? 0) : '—'} help={HELP.webWhatsapp} icon={MessageCircle} />
+            <CompactMetric label="WhatsApp vs. formularios" value={metrics ? `${integer.format(metrics.whatsappClicks ?? 0)} / ${integer.format(metrics.formSuccess ?? 0)}` : '—'} help={HELP.webContactMix} icon={Layers3} />
             <CompactMetric label="Conversión por sesión" value={metrics ? `${number.format(metrics.conversionRate ?? 0)}%` : '—'} help={HELP.webConversion} icon={TrendingUp} />
+            <CompactMetric label="Salón más consultado" value={topSalon?._id || 'Sin datos'} help={HELP.topSalon} icon={Globe2} />
+            <CompactMetric label="Paquete más visto" value={topPackage?._id || 'Sin datos'} help={HELP.topPackage} icon={Eye} />
             <CompactMetric label="Clics orgánicos Google" value={searchSummary ? integer.format(searchSummary.clicks) : '—'} help={HELP.searchClicks} icon={Search} />
           </div>
         </section>

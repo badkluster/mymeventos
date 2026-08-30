@@ -189,6 +189,11 @@ export function emitAnalyticsEvent(eventName: AnalyticsName, detail: AnalyticsDe
   window.dispatchEvent(new CustomEvent('mym:analytics', { detail: { eventName, ...detail } }));
 }
 
+function updateConsent(choice: 'accepted' | 'declined') {
+  localStorage.setItem(consentKey, choice);
+  window.dispatchEvent(new CustomEvent('mym:consent-change', { detail: { choice } }));
+}
+
 export function AnalyticsTracker() {
   const pathname = usePathname() ?? '';
   const [settings, setSettings] = useState<TrackerSettings | null>(null);
@@ -329,6 +334,6 @@ export function AnalyticsTracker() {
   if (!publicPage || !consentLoaded || !settings?.enabled || consent || !settings.consentRequired) return null;
   return <aside className="fixed inset-x-3 bottom-3 z-[120] mx-auto max-w-2xl rounded-2xl border border-white/15 bg-zinc-950/95 p-4 text-white shadow-2xl backdrop-blur">
     <p className="text-sm font-semibold">Privacidad y analítica</p><p className="mt-1 text-xs leading-5 text-zinc-300">Usamos analítica propia y, si aceptás, Meta Pixel y medición server-side para medir visitas y solicitudes. Al enviar el formulario, los datos de contacto necesarios se comparten cifrados con Meta para medir la conversión y no se guardan en nuestra analítica de navegación.</p>
-    <div className="mt-3 flex justify-end gap-2"><button className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold" onClick={() => { localStorage.setItem(consentKey, 'declined'); setConsent('declined'); }}>No permitir</button><button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black" onClick={() => { localStorage.setItem(consentKey, 'accepted'); setConsent('accepted'); }}>Permitir analítica</button></div>
+    <div className="mt-3 flex justify-end gap-2"><button className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold" onClick={() => { updateConsent('declined'); setConsent('declined'); }}>No permitir</button><button className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black" onClick={() => { updateConsent('accepted'); setConsent('accepted'); }}>Permitir analítica</button></div>
   </aside>;
 }

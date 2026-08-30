@@ -101,13 +101,36 @@ adminRouter.get('/summary', asyncHandler(async (request, response) => {
   const totals = sessionTotals[0] ?? { sessions: 0, pageViews: 0, durationMs: 0, bounces: 0, conversions: 0 };
   const events = new Map(eventCounts.map((item: any) => [item._id, item.value]));
   const attributionIds = await AnalyticsSession.distinct('attributionId', match);
-  const quoteRequests: any[] = await QuoteRequest.find({ 'originalPayload.attributionId': { $in: attributionIds }, deletedAt: null }).select('convertedQuoteIds').lean();
+  const quoteRequests: any[] = await QuoteRequest.find({
+    'originalPayload.attributionId': { $in: attributionIds },
+    createdAt: { $gte: period.from, $lt: period.toExclusive },
+    deletedAt: null,
+  })
+    .select('convertedQuoteIds interestedSalonIds interestedPackageName')
+    .populate('interestedSalonIds', 'name publicTitle')
+    .lean();
   const quoteIds = quoteRequests.flatMap((item) => item.convertedQuoteIds ?? []);
-  const [quotesCreated, quotesAccepted, confirmedEvents] = await Promise.all([
+  const [quotesCreated, quotesAccepted, confirmedEvents, packageViews] = await Promise.all([
     Quote.countDocuments({ _id: { $in: quoteIds }, deletedAt: null }),
     Quote.countDocuments({ _id: { $in: quoteIds }, deletedAt: null, status: { $in: ['accepted', 'converted'] } }),
     Event.countDocuments({ sourceQuoteId: { $in: quoteIds }, deletedAt: null, status: 'confirmed' }),
+    AnalyticsEvent.aggregate([
+      { $match: { occurredAt: { $gte: period.from, $lt: period.toExclusive }, eventName: 'package_view' } },
+      { $group: { _id: { $ifNull: ['$elementId', 'Sin identificar'] }, value: { $sum: 1 } } },
+      { $sort: { value: -1 } },
+      { $limit: 10 },
+    ]),
   ]);
+  const salonConsultationMap = new Map<string, number>();
+  for (const quoteRequest of quoteRequests) {
+    for (const salon of quoteRequest.interestedSalonIds ?? []) {
+      const name = String(salon?.publicTitle || salon?.name || 'Sin identificar');
+      salonConsultationMap.set(name, (salonConsultationMap.get(name) ?? 0) + 1);
+    }
+  }
+  const salonConsultations = [...salonConsultationMap.entries()]
+    .map(([_id, value]) => ({ _id, value }))
+    .sort((left, right) => right.value - left.value);
   return sendSuccess(response, {
     metrics: {
       visitors: visitors.length, sessions: totals.sessions, pageViews: totals.pageViews, pagesPerSession: totals.sessions ? totals.pageViews / totals.sessions : 0,
@@ -128,7 +151,13 @@ adminRouter.get('/summary', asyncHandler(async (request, response) => {
       { id: 'accepted', label: 'Presupuesto aceptado', value: quotesAccepted },
       { id: 'event', label: 'Evento confirmado', value: confirmedEvents },
     ],
-    breakdowns: { sources, devices }, period: { from: period.fromDate, to: period.toDate },
+    breakdowns: {
+      sources,
+      devices,
+      salonConsultations,
+      packageViews: packageViews.map((item: any) => ({ _id: item._id, value: item.value })),
+    },
+    period: { from: period.fromDate, to: period.toDate },
   });
 }));
 adminRouter.get('/sections', asyncHandler(async (request, response) => {
