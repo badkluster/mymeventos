@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 import { hasAnyPermission, hasPermission, Permission, Role } from '@mym/shared';
 import { User } from '../modules/users/user.model';
+import { Salon } from '../modules/salons/salon.model';
 import { ApiError } from './errorHandler';
 import { verifyAccessToken } from '../utils/tokens';
 
@@ -46,10 +47,28 @@ export const requireAuth: RequestHandler = async (request, response, next) => {
       ? userQuery.select('_id username email phone documentType documentNumber avatarUrl firstName lastName fullName roles permissionOverrides permissionDeniedOverrides salonIds managedSalonIds active canAccessBackoffice')
       : userQuery;
     const user: any = await projectedUserQuery.lean();
+    if (!user) {
+      finishTiming();
+      return next(new ApiError(401, 'UNAUTHENTICATED'));
+    }
+
+    const roles: Role[] = user.roles ?? [];
+    let salonIds = (user.salonIds ?? []).map(String);
+    const managedSalonIds = (user.managedSalonIds ?? []).map(String);
+
+    // MANAGER is the global business-management role. Historically its permission
+    // preset already included multi-salon dashboard access, but route scopes still
+    // filtered by persisted salonIds and could therefore return no records or 403.
+    // Resolve the effective scope centrally so every existing scoped module behaves
+    // consistently without requiring duplicated exceptions in each route.
+    if (roles.includes(Role.MANAGER)) {
+      const activeSalons = await Salon.find({ active: true, deletedAt: null }).select('_id').lean();
+      salonIds = activeSalons.map((salon: any) => salon._id.toString());
+    }
+
     finishTiming();
-    if (!user) return next(new ApiError(401, 'UNAUTHENTICATED'));
-    request.authUser = user;
-    request.user = { id: user._id.toString(), roles: user.roles, permissionOverrides: user.permissionOverrides ?? [], permissionDeniedOverrides: user.permissionDeniedOverrides ?? [], salonIds: (user.salonIds ?? []).map(String), managedSalonIds: (user.managedSalonIds ?? []).map(String), active: user.active };
+    request.authUser = { ...user, salonIds };
+    request.user = { id: user._id.toString(), roles, permissionOverrides: user.permissionOverrides ?? [], permissionDeniedOverrides: user.permissionDeniedOverrides ?? [], salonIds, managedSalonIds, active: user.active };
     return next();
   } catch (error) {
     finishTiming();
@@ -62,8 +81,7 @@ export const requireRole = (...roles: Role[]): RequestHandler => (request, _resp
 export function accessibleSalonIds(user: NonNullable<Express.Request['user']>): string[] { return [...new Set([...(user.salonIds ?? []), ...(user.managedSalonIds ?? [])].map(String))]; }
 export function userHasPermission(user: NonNullable<Express.Request['user']>, permission: Permission): boolean { return user.roles.some((role) => hasPermission(role, permission, user.permissionOverrides, user.permissionDeniedOverrides)); }
 // ADMIN and MANAGER are global roles. SALON_MANAGER and every other role remain
-// explicitly scoped by salonIds/managedSalonIds. This prevents a global manager from
-// receiving QUOTES_READ but still failing with SALON_SCOPE_FORBIDDEN.
+// explicitly scoped by salonIds/managedSalonIds.
 export function canAccessSalon(user: NonNullable<Express.Request['user']>, salonId: string): boolean {
   return user.roles.some((role) => role === Role.ADMIN || role === Role.MANAGER) || accessibleSalonIds(user).includes(String(salonId));
 }
