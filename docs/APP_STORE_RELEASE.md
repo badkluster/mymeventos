@@ -34,9 +34,11 @@ Completar las respuestas en App Store Connect tomando como fuente el código y l
 - Información de contacto: nombre, email, teléfono, dirección y contacto de emergencia, cuando el usuario los carga o actualiza en su perfil.
 - Ubicación precisa: coordenadas enviadas únicamente al registrar entrada o salida.
 - Fotos o videos: foto seleccionada voluntariamente como avatar.
+- Contenido de usuario: texto y adjuntos de incidencias o solicitudes de ajuste de jornada.
 - Identificadores: ID de usuario e identificador de instalación/dispositivo usados para autenticación y seguridad.
 - Otros datos de uso: registros de jornada, horarios e incidencias operativas.
-- Datos de diagnóstico: revisar el informe de privacidad del archivo generado; Expo recomienda declarar datos de crash cuando se usa `expo-updates`.
+- Otros datos: tipo y número de documento, y fecha de nacimiento, cuando el usuario los carga o actualiza en su perfil.
+- Datos de diagnóstico: información técnica del dispositivo y de red para seguridad, y datos de crash. Revisar también el informe de privacidad del archivo generado; Expo recomienda declarar datos de crash cuando se usa `expo-updates`.
 
 No declarar tracking ni mostrar un diálogo de App Tracking Transparency salvo que se incorpore un proveedor que vincule datos con información de terceros para publicidad o medición publicitaria.
 

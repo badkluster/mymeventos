@@ -72,7 +72,7 @@ describe('commercial flow services', () => {
 
   it('converts a quote with customerId idempotently without duplicating events', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
-    const quote = { _id: 'quote-1', quoteNumber: 'P-1', customerId: 'customer-1', salonId: 'salon-1', contactName: 'Ana Perez', eventType: 'Cumpleaños', totalAmount: 1000, menuSections: [], includedServices: [], save };
+    const quote = { _id: 'quote-1', quoteNumber: 'P-1', customerId: 'customer-1', salonId: 'salon-1', contactName: 'Ana Perez', eventType: 'Cumpleaños', eventDate: new Date('2026-04-09T00:00:00.000Z'), startTime: '20:00', endTime: '02:00', guestCount: 80, totalAmount: 1000, menuSections: [], includedServices: [], save };
     const customer = { _id: 'customer-1', fullName: 'Ana Perez' };
     const event = { _id: 'event-1', customerId: 'customer-1' };
     mocks.quoteFindOne.mockResolvedValue(quote);
@@ -90,7 +90,7 @@ describe('commercial flow services', () => {
 
   it('creates and syncs the default alerts when converting a quote to an event', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
-    const quote = { _id: 'quote-1', quoteNumber: 'P-1', customerId: 'customer-1', salonId: 'salon-1', contactName: 'Ana Perez', eventType: 'Cumpleaños', eventDate: new Date('2026-04-09T00:00:00.000Z'), totalAmount: 1000, menuSections: [], includedServices: [], save };
+    const quote = { _id: 'quote-1', quoteNumber: 'P-1', customerId: 'customer-1', salonId: 'salon-1', contactName: 'Ana Perez', eventType: 'Cumpleaños', eventDate: new Date('2026-04-09T00:00:00.000Z'), startTime: '20:00', endTime: '02:00', guestCount: 80, totalAmount: 1000, menuSections: [], includedServices: [], save };
     const customer = { _id: 'customer-1', fullName: 'Ana Perez' };
     const event = { _id: 'event-1', salonId: 'salon-1' };
     mocks.quoteFindOne.mockResolvedValue(quote);
