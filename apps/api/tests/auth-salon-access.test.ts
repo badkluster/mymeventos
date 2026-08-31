@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Role } from '@mym/shared';
-import { accessibleSalonIds, canAccessSalon } from '../src/middlewares/auth';
+import { Permission, Role } from '@mym/shared';
+import { accessibleSalonIds, canAccessAllSalons, canAccessSalon } from '../src/middlewares/auth';
 
 function authUser(overrides: Partial<NonNullable<Express.Request['user']>> = {}): NonNullable<Express.Request['user']> {
   return {
@@ -21,8 +21,18 @@ describe('salon access scope', () => {
     expect(canAccessSalon(authUser({ roles: [Role.MANAGER] }), 'salon-a')).toBe(true);
   });
 
-  it('keeps SALON_MANAGER explicitly scoped', () => {
+  it('honors the explicit all-salons permission even on a scoped role', () => {
+    const user = authUser({
+      roles: [Role.SALON_MANAGER],
+      permissionOverrides: [Permission.DASHBOARD_ALL_SALONS_VIEW]
+    });
+    expect(canAccessAllSalons(user)).toBe(true);
+    expect(canAccessSalon(user, 'salon-any')).toBe(true);
+  });
+
+  it('keeps SALON_MANAGER explicitly scoped without the all-salons permission', () => {
     const user = authUser({ roles: [Role.SALON_MANAGER], salonIds: ['salon-a'] });
+    expect(canAccessAllSalons(user)).toBe(false);
     expect(canAccessSalon(user, 'salon-a')).toBe(true);
     expect(canAccessSalon(user, 'salon-b')).toBe(false);
   });
