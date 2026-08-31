@@ -11,6 +11,12 @@
         "buildType": "apk"
       }
     },
+    "ios-simulator": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "environment": "production",
       "distribution": "store",
@@ -21,6 +27,13 @@
       },
       "android": {
         "buildType": "app-bundle"
+      }
+    }
+  },
+   "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6807029673"
       }
     }
   }
