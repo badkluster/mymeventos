@@ -51,6 +51,27 @@ export function SessionProvider({ children, checkSession = true }: { children: R
     return () => { mounted = false; };
   }, [checkSession, sessionChecked]);
 
+  // Permissions and salon scope live in the database and may be changed by another
+  // administrator while this session remains open. Re-sync silently when the user
+  // returns to the tab/app so the menu and route guards do not keep stale access data.
+  useEffect(() => {
+    if (!checkSession || !sessionChecked) return;
+    let mounted = true;
+    const syncSession = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      void getCurrentUser()
+        .then((nextUser) => { if (mounted) setUser(nextUser); })
+        .catch(() => { if (mounted) setUser(null); });
+    };
+    window.addEventListener('focus', syncSession);
+    document.addEventListener('visibilitychange', syncSession);
+    return () => {
+      mounted = false;
+      window.removeEventListener('focus', syncSession);
+      document.removeEventListener('visibilitychange', syncSession);
+    };
+  }, [checkSession, sessionChecked]);
+
   const logout = async () => {
     await logoutRequest();
     setUser(null);
