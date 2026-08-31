@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const description = salon?.publicDescription || salon?.publicShortDescription || page.metaDescription;
   const path = `/${page.slug}`;
   return {
-    title: page.metaTitle,
+    title: { absolute: page.metaTitle },
     description,
     alternates: { canonical: path },
     keywords: [page.primaryKeyword, ...page.secondaryKeywords],
