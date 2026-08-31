@@ -43,7 +43,7 @@ export default function TermsPage() {
       </LegalSection>
 
       <LegalSection title="6. Aplicación M&M Eventos Staff">
-        <p>La app está destinada al personal autorizado y puede incluir funciones de perfil, cronograma, asistencia, fichaje, liquidaciones u otras herramientas operativas. Cuando una función requiere ubicación, biometría, cámara, fotografías o notificaciones, el sistema solicitará los permisos correspondientes del dispositivo.</p>
+        <p>La app está destinada al personal autorizado y puede incluir funciones de perfil, cronograma, asistencia, fichaje, liquidaciones u otras herramientas operativas. Cuando una función requiere ubicación, biometría, fotografías o notificaciones, el sistema solicitará los permisos correspondientes del dispositivo.</p>
         <p>Los registros generados por la app deben utilizarse de acuerdo con los procedimientos internos definidos por M&M Eventos. Un error técnico o de conectividad debe informarse por los canales de soporte para su revisión.</p>
       </LegalSection>
 

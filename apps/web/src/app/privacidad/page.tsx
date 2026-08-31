@@ -31,9 +31,9 @@ export default function PrivacyPage() {
           <li><strong>Datos de usuarios internos y staff:</strong> usuario, email, nombre, rol, datos de perfil, estado de cuenta y datos necesarios para autenticación y seguridad.</li>
           <li><strong>Asistencia y actividad laboral:</strong> horarios, fichajes, asignaciones, cronogramas y registros relacionados con la operación del personal.</li>
           <li><strong>Ubicación:</strong> la app puede solicitar ubicación precisa o aproximada únicamente cuando una función de fichaje necesita registrar o validar el punto de entrada o salida.</li>
-          <li><strong>Imagen de perfil:</strong> si decidís agregar o cambiar un avatar, la app puede solicitar acceso a cámara o fotografías para seleccionar esa imagen.</li>
+          <li><strong>Imagen de perfil:</strong> si decidís agregar o cambiar un avatar, la app puede solicitar acceso a fotografías para seleccionar esa imagen.</li>
           <li><strong>Biometría del dispositivo:</strong> la app puede usar Face ID, huella u otro mecanismo biométrico compatible para desbloquear una sesión. M&M Eventos no recibe ni almacena la plantilla biométrica; la validación la realiza el sistema operativo del dispositivo.</li>
-          <li><strong>Notificaciones:</strong> identificadores técnicos necesarios para entregar avisos cuando hayas autorizado las notificaciones del dispositivo.</li>
+          <li><strong>Notificaciones:</strong> la app puede mostrar avisos locales vinculados con una jornada activa. No solicita ni almacena tokens para notificaciones push remotas.</li>
           <li><strong>Datos técnicos y de seguridad:</strong> información de sesión, registros de acceso, identificadores técnicos, errores y eventos necesarios para proteger, mantener y diagnosticar el servicio.</li>
         </ul>
       </LegalSection>
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
       </LegalSection>
 
       <LegalSection title="4. Permisos de M&M Eventos Staff">
-        <p>La aplicación puede solicitar permisos de ubicación, cámara, fotografías, biometría y notificaciones. Cada permiso se utiliza solamente para la función asociada y puede ser administrado desde la configuración del dispositivo.</p>
+        <p>La aplicación puede solicitar permisos de ubicación, fotografías, biometría y notificaciones. Cada permiso se utiliza solamente para la función asociada y puede ser administrado desde la configuración del dispositivo.</p>
         <p>La ubicación no se solicita como requisito permanente para navegar por la app: se utiliza cuando corresponde a funciones de asistencia o fichaje. La biometría funciona a través de las APIs seguras del sistema operativo y no permite a M&M Eventos acceder a los datos biométricos almacenados por el dispositivo.</p>
       </LegalSection>
 

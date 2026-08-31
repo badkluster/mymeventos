@@ -5,7 +5,7 @@
     "scheme": "mymeventos",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon-app-store.png",
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
       "**/*"
@@ -14,9 +14,28 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.mymeventos.staff",
       "buildNumber": "1",
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1"
+            ]
+          }
+        ]
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Usamos tu ubicación únicamente al registrar tu entrada o salida, para guardar el punto del fichaje.",
-        "NSFaceIDUsageDescription": "Usá Face ID para desbloquear tu sesión de forma rápida y segura en este dispositivo."
+        "NSFaceIDUsageDescription": "Usá Face ID para desbloquear tu sesión de forma rápida y segura en este dispositivo.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -54,7 +73,8 @@
         "expo-image-picker",
         {
           "photosPermission": "Permitinos acceder a tus fotos para elegir un avatar.",
-          "cameraPermission": "Permitinos usar la cámara para tomarte una foto de perfil."
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       "expo-secure-store",
