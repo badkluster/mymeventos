@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const title = salon ? `${titleForPublicSalon(salon)} | M&M Eventos` : page.metaTitle;
   const path = `/salones/${page.slug}`;
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical: path },
     keywords: [page.primaryKeyword, ...page.secondaryKeywords],
