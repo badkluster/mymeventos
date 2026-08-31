@@ -61,7 +61,12 @@ export const requireAnyPermission = (permissions: Permission[]): RequestHandler 
 export const requireRole = (...roles: Role[]): RequestHandler => (request, _response, next) => request.user?.roles.some((role) => roles.includes(role)) ? next() : next(new ApiError(403, 'FORBIDDEN'));
 export function accessibleSalonIds(user: NonNullable<Express.Request['user']>): string[] { return [...new Set([...(user.salonIds ?? []), ...(user.managedSalonIds ?? [])].map(String))]; }
 export function userHasPermission(user: NonNullable<Express.Request['user']>, permission: Permission): boolean { return user.roles.some((role) => hasPermission(role, permission, user.permissionOverrides, user.permissionDeniedOverrides)); }
-export function canAccessSalon(user: NonNullable<Express.Request['user']>, salonId: string): boolean { return user.roles.includes(Role.ADMIN) || accessibleSalonIds(user).includes(String(salonId)); }
+// ADMIN and MANAGER are global roles. SALON_MANAGER and every other role remain
+// explicitly scoped by salonIds/managedSalonIds. This prevents a global manager from
+// receiving QUOTES_READ but still failing with SALON_SCOPE_FORBIDDEN.
+export function canAccessSalon(user: NonNullable<Express.Request['user']>, salonId: string): boolean {
+  return user.roles.some((role) => role === Role.ADMIN || role === Role.MANAGER) || accessibleSalonIds(user).includes(String(salonId));
+}
 // A relation can be either its stored ObjectId or a populated document returned by
 // Mongoose. Scope checks must always compare the underlying ID, never the document's
 // default string representation ("[object Object]").
