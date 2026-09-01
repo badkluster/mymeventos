@@ -1,21 +1,8 @@
 import type { RequestHandler } from 'express';
 import { hasAnyPermission, hasPermission, Permission, Role } from '@mym/shared';
 import { User } from '../modules/users/user.model';
-import { Salon } from '../modules/salons/salon.model';
 import { ApiError } from './errorHandler';
 import { verifyAccessToken } from '../utils/tokens';
-
-const ALL_SALONS_CACHE_TTL_MS = 60_000;
-let allSalonIdsCache: { ids: string[]; expiresAt: number } = { ids: [], expiresAt: 0 };
-
-async function getAllActiveSalonIds(): Promise<string[]> {
-  const now = Date.now();
-  if (allSalonIdsCache.expiresAt > now) return allSalonIdsCache.ids;
-  const salons = await Salon.find({ active: true, deletedAt: null }).select('_id').lean();
-  const ids = salons.map((salon: any) => salon._id.toString());
-  allSalonIdsCache = { ids, expiresAt: now + ALL_SALONS_CACHE_TTL_MS };
-  return ids;
-}
 
 // Web (backoffice) auth reads the httpOnly `accessToken` cookie and keeps the exact
 // pre-existing `canAccessBackoffice !== false` gate. The mobile staff app authenticates
@@ -67,18 +54,12 @@ export const requireAuth: RequestHandler = async (request, response, next) => {
     const roles = (user.roles ?? []) as Role[];
     const permissionOverrides = user.permissionOverrides ?? [];
     const permissionDeniedOverrides = user.permissionDeniedOverrides ?? [];
-    let salonIds = (user.salonIds ?? []).map(String);
+    const salonIds = (user.salonIds ?? []).map(String);
     const managedSalonIds = (user.managedSalonIds ?? []).map(String);
-    const hasAllSalonAccess = roles.some((role) =>
-      role === Role.ADMIN || hasPermission(role, Permission.DASHBOARD_ALL_SALONS_VIEW, permissionOverrides, permissionDeniedOverrides)
-    );
 
-    // Several CRM list queries intentionally scope themselves through `salonIds`.
-    // When an administrator grants "Ver todos los salones" (or the Manager preset
-    // inherits it), hydrate the effective scope with every active salon so list and
-    // detail authorization stay consistent. Cache the tiny salon list briefly to avoid
-    // adding a database query to every authenticated request.
-    if (hasAllSalonAccess && !roles.includes(Role.ADMIN)) salonIds = await getAllActiveSalonIds();
+    // Authentication must only load the authenticated user's assigned visibility.
+    // Global access is resolved by canAccessAllSalons() in scope checks, so a transient
+    // Salon query can never turn a valid request into a 500 or modify stored visibility.
 
     finishTiming();
     request.authUser = { ...user, salonIds };
