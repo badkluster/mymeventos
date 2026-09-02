@@ -11,6 +11,7 @@ function authUser(overrides: Partial<NonNullable<Express.Request['user']>> = {})
     salonIds: [],
     managedSalonIds: [],
     active: true,
+    canAccessBackoffice: true,
     ...overrides
   };
 }
@@ -30,11 +31,11 @@ describe('salon access scope', () => {
     expect(canAccessSalon(user, 'salon-any')).toBe(true);
   });
 
-  it('keeps salon assignments for filtering without blocking operational access', () => {
+  it('enforces salon assignments as the operational visibility boundary', () => {
     const user = authUser({ roles: [Role.SALON_MANAGER], salonIds: ['salon-a'] });
     expect(canAccessAllSalons(user)).toBe(false);
     expect(canAccessSalon(user, 'salon-a')).toBe(true);
-    expect(canAccessSalon(user, 'salon-b')).toBe(true);
+    expect(canAccessSalon(user, 'salon-b')).toBe(false);
   });
 
   it('accepts managed salons as part of the effective scope without duplicates', () => {
