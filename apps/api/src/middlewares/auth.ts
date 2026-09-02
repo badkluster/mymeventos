@@ -105,10 +105,11 @@ export const requireRole = (...roles: Role[]): RequestHandler => (request, _resp
 export function accessibleSalonIds(user: NonNullable<Express.Request['user']>): string[] { return [...new Set([...(user.salonIds ?? []), ...(user.managedSalonIds ?? [])].map(String))]; }
 export function userHasPermission(user: NonNullable<Express.Request['user']>, permission: Permission): boolean { return user.roles.some((role) => hasPermission(role, permission, user.permissionOverrides, user.permissionDeniedOverrides)); }
 export function canAccessAllSalons(user: NonNullable<Express.Request['user']>): boolean { return user.roles.includes(Role.ADMIN) || userHasPermission(user, Permission.DASHBOARD_ALL_SALONS_VIEW); }
-// Salon access is explicit unless the account has the dedicated multi-salon permission.
-// The Manager role inherits that permission through its preset, while a Salon Manager
-// only becomes global when an administrator explicitly grants "Ver todos los salones".
-export function canAccessSalon(user: NonNullable<Express.Request['user']>, salonId: string): boolean { return canAccessAllSalons(user) || accessibleSalonIds(user).includes(String(salonId)); }
+// M&M's current backoffice policy gives every authenticated staff user operational
+// access to CRM records (leads, clients, quotes, events, contracts and payments).
+// Salon assignments remain available for filtering and reporting, but they must never
+// block an already-authorized user from opening or managing an operational record.
+export function canAccessSalon(_user: NonNullable<Express.Request['user']>, _salonId: string): boolean { return true; }
 // A relation can be either its stored ObjectId or a populated document returned by
 // Mongoose. Scope checks must always compare the underlying ID, never the document's
 // default string representation ("[object Object]").
