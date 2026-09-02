@@ -1,13 +1,14 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Check, MapPin, MessageCircle, PackageCheck, Sparkles } from 'lucide-react';
 import { absoluteUrl, localSeoPages, salonSeoPages, siteUrl, type LocalSeoPage } from '@/lib/local-seo';
 import { brandAssets } from '@/lib/brand-assets';
 import { capacityForPublicSalon, imageForPublicSalon, locationForPublicSalon, titleForPublicSalon, type PublicLanding, type PublicPackage, type PublicSalon } from '@/lib/public-landing';
 
-function jsonLdForPage(page: LocalSeoPage, path: string, salon?: PublicSalon, packages: PublicPackage[] = [], landing?: PublicLanding | null) {
+function jsonLdForPage(page: LocalSeoPage, path: string, salonMode: boolean, salon?: PublicSalon, packages: PublicPackage[] = [], landing?: PublicLanding | null) {
   const url = absoluteUrl(path);
   const image = imageForPublicSalon(salon, page.heroImage) || page.heroImage;
-  const phone = salon?.phone || landing?.settings?.contactPhone || '+54 9 221 123-4567';
+  const phone = salon?.phone || landing?.settings?.contactPhone;
   const address = salon?.address || page.address || locationForPublicSalon(salon) || page.location;
   const faqs = landing?.faqs?.filter((faq) => faq.question && faq.answer).slice(0, 4).map((faq) => ({ question: faq.question!, answer: faq.answer! })) ?? page.faqs;
   return [
@@ -26,7 +27,7 @@ function jsonLdForPage(page: LocalSeoPage, path: string, salon?: PublicSalon, pa
         addressCountry: 'AR'
       },
       amenityFeature: page.services.map((service) => ({ '@type': 'LocationFeatureSpecification', name: service, value: true })),
-      telephone: phone,
+      ...(phone ? { telephone: phone } : {}),
       priceRange: '$$'
     },
     {
@@ -46,6 +47,15 @@ function jsonLdForPage(page: LocalSeoPage, path: string, salon?: PublicSalon, pa
         name: faq.question,
         acceptedAnswer: { '@type': 'Answer', text: faq.answer }
       }))
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Inicio', item: absoluteUrl('/') },
+        ...(salonMode ? [{ '@type': 'ListItem', position: 2, name: 'Salones', item: absoluteUrl('/#salones') }] : []),
+        { '@type': 'ListItem', position: salonMode ? 3 : 2, name: page.title, item: url }
+      ]
     }
   ];
 }
@@ -76,9 +86,9 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
   const visibleFaqs = faqs.length ? faqs.map((faq) => ({ question: faq.question!, answer: faq.answer! })) : page.faqs;
 
   return <main className="min-h-screen overflow-x-hidden bg-zinc-950 text-white">
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdForPage(page, path, salon, packages, landing)) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdForPage(page, path, salonMode, salon, packages, landing)) }} />
     <section className="relative isolate min-h-[620px] overflow-hidden">
-      <img src={heroImage} alt={heading} className="absolute inset-0 h-full w-full object-cover" />
+      <Image src={heroImage} alt={heading} fill priority sizes="100vw" className="object-cover" />
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/72 to-black/20" />
       <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-5 md:px-8 md:py-6">
         <Link href="/" aria-label="Ir a M&M Eventos"><img src={brandAssets.logoLightOnDark} alt="M&M Eventos" className="h-11 w-auto max-w-[150px] object-contain md:h-14 md:max-w-none" /></Link>

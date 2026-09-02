@@ -1,6 +1,6 @@
 import { brandAssets } from '@/lib/brand-assets';
 
-export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mymeventos-api-ashy.vercel.app';
+export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.mymsalones.com.ar';
 
 export type LocalSeoPage = {
   slug: string;
@@ -43,7 +43,7 @@ export const localSeoPages: LocalSeoPage[] = [
       { question: '¿Se puede congelar el precio con seña?', answer: 'Sí. Las propuestas vigentes permiten congelar el valor con seña y abonar el saldo en cuotas según las condiciones del paquete.' },
       { question: '¿Qué tipo de eventos se pueden realizar?', answer: 'El salón está pensado para fiestas de 15, casamientos, egresados, cumpleaños, eventos familiares y reuniones sociales.' }
     ],
-    relatedSlugs: ['salon-15-anos-la-plata', 'salon-casamientos-la-plata', 'salon-con-catering-la-plata']
+    relatedSlugs: ['salon-15-anos-la-plata', 'salon-casamientos-la-plata', 'cumpleanos-la-plata', 'eventos-empresariales-la-plata']
   },
   {
     slug: 'salon-15-anos-la-plata',
@@ -100,7 +100,7 @@ export const localSeoPages: LocalSeoPage[] = [
     location: 'San Carlos, La Plata',
     address: 'Calle 144 N°664 e/ 45 y 46, San Carlos',
     primaryKeyword: 'salón de fiestas en San Carlos',
-    secondaryKeywords: ['salón San Carlos La Plata', 'salón para cumpleaños San Carlos', 'eventos infantiles San Carlos'],
+    secondaryKeywords: ['salón de eventos San Carlos', 'salón San Carlos La Plata', 'salón para cumpleaños San Carlos', 'eventos infantiles San Carlos'],
     heroImage: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1600&q=82',
     highlights: ['Ubicación en San Carlos, La Plata', 'Paquetes infantiles y propuestas nocturnas', 'Opciones con salón, catering, DJ y staff'],
     services: ['Salón con mesas y sillas', 'Catering para eventos', 'DJ e iluminación', 'Cocina completa', 'Staff de servicio'],
@@ -177,6 +177,50 @@ export const localSeoPages: LocalSeoPage[] = [
       { question: '¿Puedo pedir presupuesto por WhatsApp?', answer: 'Sí. Desde la página podés iniciar la consulta por WhatsApp indicando fecha, cantidad de personas y tipo de evento.' }
     ],
     relatedSlugs: ['catering-eventos-la-plata', 'salon-eventos-la-plata', 'salon-15-anos-la-plata']
+  },
+  {
+    slug: 'cumpleanos-la-plata',
+    title: 'Salón para cumpleaños en La Plata',
+    metaTitle: 'Salón para cumpleaños en La Plata | M&M Eventos',
+    metaDescription: 'Salón para cumpleaños en La Plata con catering, DJ, ambientación, sector de fotos y organización integral para festejar sin ocuparte de la logística.',
+    h1: 'Salón para cumpleaños en La Plata con catering y ambientación',
+    eyebrow: 'Cumpleaños y celebraciones',
+    intro: 'Para festejar un cumpleaños con salón propio, catering, música y ambientación sin ocuparte de la logística, M&M Eventos arma la propuesta completa en La Plata.',
+    location: 'La Plata, Buenos Aires',
+    primaryKeyword: 'salón para cumpleaños en La Plata',
+    secondaryKeywords: ['cumpleaños La Plata', 'salón de fiestas para cumpleaños La Plata', 'salón para cumpleaños de adultos La Plata'],
+    heroImage: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1600&q=82',
+    highlights: ['Sector de fotos y de torta según el paquete elegido', 'DJ, sonido e iluminación para tu fiesta', 'Catering y bebida según la propuesta contratada'],
+    services: ['Catering completo', 'DJ, sonido e iluminación', 'Sector de fotos y torta', 'Vajilla y mantelería', 'Organización y staff de salón'],
+    packages: ['Salón completo M&M La Plata', 'Gold Service', 'Gala y Gourmet'],
+    faqs: [
+      { question: '¿Organizan cumpleaños de adultos?', answer: 'Sí. El salón recibe cumpleaños de adultos, aniversarios y celebraciones familiares con distintas propuestas de catering y ambientación.' },
+      { question: '¿Incluye sector de fotos y torta?', answer: 'Según el paquete, se puede incluir sector de fotos con shimmer wall y sector de torta ambientado.' },
+      { question: '¿Puedo contratar sólo el salón sin catering?', answer: 'Sí. La opción Salón completo M&M La Plata permite contratar el espacio y servicios base sin catering incluido.' }
+    ],
+    relatedSlugs: ['salon-eventos-la-plata', 'salon-con-catering-la-plata', 'salon-15-anos-la-plata']
+  },
+  {
+    slug: 'eventos-empresariales-la-plata',
+    title: 'Salón para eventos empresariales en La Plata',
+    metaTitle: 'Eventos empresariales en La Plata | M&M Eventos',
+    metaDescription: 'Salón para eventos empresariales en La Plata: cenas de fin de año, lanzamientos y reuniones corporativas con catering, proyector y organización integral.',
+    h1: 'Eventos empresariales en La Plata con salón, catering y proyector',
+    eyebrow: 'Eventos corporativos',
+    intro: 'Para una cena de fin de año, un lanzamiento o una reunión corporativa, M&M Eventos ofrece salón, catering, proyector para presentaciones y organización integral en La Plata.',
+    location: 'La Plata, Buenos Aires',
+    primaryKeyword: 'eventos empresariales en La Plata',
+    secondaryKeywords: ['salón para eventos corporativos La Plata', 'cena de fin de año empresa La Plata', 'salón para empresas La Plata'],
+    heroImage: 'https://images.unsplash.com/photo-1478146896981-b80fe463b330?auto=format&fit=crop&w=1600&q=82',
+    highlights: ['Proyector para presentaciones y videos según el paquete', 'Catering y bebida para grupos corporativos', 'Espacio climatizado y organización del evento'],
+    services: ['Catering para eventos', 'Proyector para videos', 'DJ, sonido e iluminación', 'Vajilla y mantelería', 'Organización y staff de salón'],
+    packages: ['Salón completo M&M La Plata', 'Gold Service', 'Black Service La Plata'],
+    faqs: [
+      { question: '¿Organizan eventos empresariales?', answer: 'Sí. El salón recibe cenas de fin de año, lanzamientos, capacitaciones y reuniones corporativas con propuestas de catering y ambientación.' },
+      { question: '¿Tienen proyector para presentaciones?', answer: 'Sí. Varios paquetes incluyen proyector para videos, útil también para presentaciones institucionales.' },
+      { question: '¿Hay capacidad para grupos grandes?', answer: 'Sí. El salón de La Plata tiene capacidad de 50 a 160 personas según la propuesta elegida.' }
+    ],
+    relatedSlugs: ['salon-eventos-la-plata', 'salon-con-catering-la-plata', 'catering-eventos-la-plata']
   }
 ];
 

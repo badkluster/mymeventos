@@ -9,7 +9,7 @@ import { LegalFooter } from '@/components/legal/legal-footer';
 
 const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-display', style: ['normal', 'italic'] });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mymeventos-api-ashy.vercel.app';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.mymsalones.com.ar';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

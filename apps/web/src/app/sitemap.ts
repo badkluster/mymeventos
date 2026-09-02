@@ -6,6 +6,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: absoluteUrl('/'), lastModified: now, changeFrequency: 'weekly', priority: 1 },
     ...localSeoPages.map((page) => ({ url: absoluteUrl(`/${page.slug}`), lastModified: now, changeFrequency: 'monthly' as const, priority: 0.9 })),
-    ...salonSeoPages.map((page) => ({ url: absoluteUrl(`/salones/${page.slug}`), lastModified: now, changeFrequency: 'monthly' as const, priority: 0.85 }))
+    ...salonSeoPages.map((page) => ({ url: absoluteUrl(`/salones/${page.slug}`), lastModified: now, changeFrequency: 'monthly' as const, priority: 0.85 })),
+    { url: absoluteUrl('/privacidad'), lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
+    { url: absoluteUrl('/terminos'), lastModified: now, changeFrequency: 'yearly', priority: 0.3 }
   ];
 }

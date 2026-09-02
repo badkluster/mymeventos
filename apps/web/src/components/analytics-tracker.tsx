@@ -46,6 +46,7 @@ const metaEventMapping: Partial<Record<AnalyticsName, MetaStandardEvent>> = {
   form_success: 'Lead',
 };
 const ga4EventMapping: Partial<Record<AnalyticsName, string>> = {
+  whatsapp_click: 'whatsapp_click',
   phone_click: 'phone_click',
   form_start: 'form_start',
   form_submit: 'form_submit',
@@ -55,7 +56,7 @@ const ga4EventMapping: Partial<Record<AnalyticsName, string>> = {
   promotion_click: 'promotion_click',
 };
 
-function trackGa4DataLayerEvent(eventName: AnalyticsName, detail: Record<string, unknown>) {
+function trackGa4DataLayerEvent(eventName: AnalyticsName, detail: Record<string, unknown>, utm: Record<string, string> = {}) {
   const ga4EventName = ga4EventMapping[eventName];
   if (!ga4EventName) return;
   window.dataLayer = window.dataLayer || [];
@@ -77,6 +78,16 @@ function trackGa4DataLayerEvent(eventName: AnalyticsName, detail: Record<string,
   if (ga4EventName === 'promotion_click') {
     payload.promotion_id = detail.entityId;
     payload.promotion_name = detail.elementId;
+  }
+  if (ga4EventName === 'whatsapp_click') {
+    // Attribution channel selectors (e.g. /whatsapp) rely on this to resolve which
+    // salon a click belongs to without a second event.
+    payload.salon = detail.entityId;
+    payload.utm_source = utm.utmSource || undefined;
+    payload.utm_medium = utm.utmMedium || undefined;
+    payload.utm_campaign = utm.utmCampaign || undefined;
+    payload.utm_content = utm.utmContent || undefined;
+    payload.utm_term = utm.utmTerm || undefined;
   }
   window.dataLayer.push(payload);
 }
@@ -251,7 +262,7 @@ export function AnalyticsTracker() {
         occurredAt, pageVersion, ...analyticsDetail,
       };
       queue.current.push(queuedEvent);
-      trackGa4DataLayerEvent(eventName, analyticsDetail);
+      trackGa4DataLayerEvent(eventName, analyticsDetail, utm.current);
       const standardEvent = trackMetaBrowserEvent(eventName, eventId, analyticsDetail);
       if (standardEvent) trackMetaServerEvent(standardEvent, eventName, eventId, occurredAt, attributionId.current, analyticsDetail, metaCustomerData);
       if (queue.current.length >= 10) flush();
@@ -281,6 +292,7 @@ export function AnalyticsTracker() {
       if (!target) return;
       const sectionId = target.closest<HTMLElement>('[data-analytics-section]')?.dataset.analyticsSection;
       const elementId = analyticsElementId(target);
+      const entityId = target.dataset.analyticsEntity || undefined;
       const href = target instanceof HTMLAnchorElement ? target.href : '';
       let eventName: AnalyticsName = target.dataset.analyticsId ? 'cta_click' : 'click';
       if (/wa\.me|whatsapp/i.test(href) || /whatsapp/i.test(elementId)) eventName = 'whatsapp_click';
@@ -288,7 +300,7 @@ export function AnalyticsTracker() {
       else if (/maps|mapa/i.test(href) || /map/i.test(elementId)) eventName = 'map_click';
       else if (/instagram|facebook|tiktok/i.test(href)) eventName = 'social_click';
       const scrollWidth = Math.max(document.documentElement.scrollWidth, 1); const scrollHeight = Math.max(document.documentElement.scrollHeight, 1);
-      enqueue(eventName, { sectionId, elementId, normalizedX: Math.min(1, Math.max(0, event.pageX / scrollWidth)), normalizedY: Math.min(1, Math.max(0, event.pageY / scrollHeight)) });
+      enqueue(eventName, { sectionId, elementId, entityId, normalizedX: Math.min(1, Math.max(0, event.pageX / scrollWidth)), normalizedY: Math.min(1, Math.max(0, event.pageY / scrollHeight)) });
     };
     const scroll = () => {
       const maximum = document.documentElement.scrollHeight - innerHeight;

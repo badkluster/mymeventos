@@ -5,24 +5,28 @@ import { getPublicLanding, imageForPublicSalon, titleForPublicSalon, type Public
 
 export const revalidate = 300;
 
-export const metadata: Metadata = {
-  title: 'M&M Eventos | Salones de eventos en La Plata con catering',
-  description: 'Salones para fiestas, 15 años, casamientos, cumpleaños, egresados y eventos empresariales en La Plata. Catering, DJ, ambientación, barra y organización integral.',
-  alternates: { canonical: '/' },
-  openGraph: {
-    title: 'M&M Eventos | Salones de eventos en La Plata con catering',
-    description: 'Salones para fiestas, 15 años, casamientos, cumpleaños, egresados y eventos empresariales en La Plata.',
-    url: absoluteUrl('/'),
-    type: 'website',
-    images: [{ url: defaultOgImage(), width: 1200, height: 1200, alt: 'M&M Eventos' }]
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'M&M Eventos | Salones de eventos en La Plata con catering',
-    description: 'Salones para fiestas, 15 años, casamientos, cumpleaños, egresados y eventos empresariales en La Plata.',
-    images: [defaultOgImage()]
-  }
-};
+const fallbackTitle = 'M&M Eventos | Salones de eventos en La Plata con catering';
+const fallbackDescription = 'Salones para fiestas, 15 años, casamientos, cumpleaños, egresados y eventos empresariales en La Plata. Catering, DJ, ambientación, barra y organización integral.';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const landing = await getPublicLanding();
+  const title = landing?.settings?.seoTitle || fallbackTitle;
+  const description = landing?.settings?.seoDescription || fallbackDescription;
+  const image = landing?.settings?.openGraphImageUrl || defaultOgImage();
+  return {
+    title,
+    description,
+    alternates: { canonical: '/' },
+    openGraph: {
+      title,
+      description,
+      url: absoluteUrl('/'),
+      type: 'website',
+      images: [{ url: image, width: 1200, height: 1200, alt: 'M&M Eventos' }]
+    },
+    twitter: { card: 'summary_large_image', title, description, images: [image] }
+  };
+}
 
 function structuredData(landing: PublicLanding | null) {
   const salons = landing?.salons ?? [];

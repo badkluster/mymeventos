@@ -1,5 +1,5 @@
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3001/api');
-const appBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mymeventos-api-ashy.vercel.app';
+const appBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.mymsalones.com.ar';
 const apiBaseUrl = configuredApiUrl.startsWith('http') ? configuredApiUrl : new URL(configuredApiUrl, appBaseUrl).toString().replace(/\/$/, '');
 
 export type PublicMedia = { url: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
@@ -58,7 +58,7 @@ export type PublicSalon = {
   packages?: PublicPackage[];
 };
 export type PublicLanding = {
-  settings?: { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroVideoUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
+  settings?: { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroVideoUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string; seoTitle?: string; seoDescription?: string; openGraphImageUrl?: string };
   salons: PublicSalon[];
   packages: PublicPackage[];
   promotions: PublicLandingItem[];

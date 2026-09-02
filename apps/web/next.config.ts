@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
+  async redirects() {
+    return [
+      { source: "/contacto", destination: "/whatsapp", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;
