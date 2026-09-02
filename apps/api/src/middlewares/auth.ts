@@ -1,8 +1,29 @@
 import type { RequestHandler } from 'express';
 import { hasAnyPermission, hasPermission, Permission, Role } from '@mym/shared';
 import { User } from '../modules/users/user.model';
+import { Salon } from '../modules/salons/salon.model';
 import { ApiError } from './errorHandler';
 import { verifyAccessToken } from '../utils/tokens';
+
+const ALL_SALONS_CACHE_TTL_MS = 60_000;
+let allSalonIdsCache: { ids: string[]; expiresAt: number } = { ids: [], expiresAt: 0 };
+
+async function getAllActiveSalonIds(): Promise<string[] | null> {
+  try {
+    const now = Date.now();
+    if (allSalonIdsCache.expiresAt > now) return allSalonIdsCache.ids;
+    // Keep test/migration environments from failing authentication when the Salon
+    // model is intentionally not available. Production uses the normal model query.
+    if (typeof Salon?.find !== 'function') return null;
+    const salons = await Salon.find({ active: true, deletedAt: null }).select('_id').lean();
+    const ids = salons.map((salon: any) => salon._id.toString());
+    allSalonIdsCache = { ids, expiresAt: now + ALL_SALONS_CACHE_TTL_MS };
+    return ids;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: 'auth_global_salon_scope_lookup_failed', errorName: error instanceof Error ? error.name : 'UnknownError' }));
+    return null;
+  }
+}
 
 // Web (backoffice) auth reads the httpOnly `accessToken` cookie and keeps the exact
 // pre-existing `canAccessBackoffice !== false` gate. The mobile staff app authenticates
@@ -54,12 +75,20 @@ export const requireAuth: RequestHandler = async (request, response, next) => {
     const roles = (user.roles ?? []) as Role[];
     const permissionOverrides = user.permissionOverrides ?? [];
     const permissionDeniedOverrides = user.permissionDeniedOverrides ?? [];
-    const salonIds = (user.salonIds ?? []).map(String);
+    let salonIds = (user.salonIds ?? []).map(String);
     const managedSalonIds = (user.managedSalonIds ?? []).map(String);
+    const hasAllSalonAccess = roles.some((role) =>
+      role === Role.ADMIN || hasPermission(role, Permission.DASHBOARD_ALL_SALONS_VIEW, permissionOverrides, permissionDeniedOverrides)
+    );
 
-    // Authentication must only load the authenticated user's assigned visibility.
-    // Global access is resolved by canAccessAllSalons() in scope checks, so a transient
-    // Salon query can never turn a valid request into a 500 or modify stored visibility.
+    // CRM list routes filter through salonIds. Hydrate global visibility here so the
+    // existing Manager/all-salons assignments keep accessing all operational modules.
+    // A lookup failure deliberately keeps the stored visibility instead of rejecting
+    // the request or returning a 500.
+    if (hasAllSalonAccess && !roles.includes(Role.ADMIN)) {
+      const allSalonIds = await getAllActiveSalonIds();
+      if (allSalonIds) salonIds = allSalonIds;
+    }
 
     finishTiming();
     request.authUser = { ...user, salonIds };
