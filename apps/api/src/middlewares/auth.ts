@@ -8,6 +8,25 @@ import { verifyAccessToken } from '../utils/tokens';
 const ALL_SALONS_CACHE_TTL_MS = 60_000;
 let allSalonIdsCache: { ids: string[]; expiresAt: number } = { ids: [], expiresAt: 0 };
 
+const backofficeOperationalPermissions = new Set<Permission>([
+  Permission.USERS_READ,
+  Permission.SALONS_READ, Permission.SALONS_CREATE, Permission.SALONS_UPDATE, Permission.SALONS_DELETE,
+  Permission.LEADS_READ, Permission.LEADS_CREATE, Permission.LEADS_UPDATE, Permission.LEADS_ASSIGN, Permission.LEADS_CONVERT,
+  Permission.QUOTES_READ, Permission.QUOTES_CREATE, Permission.QUOTES_UPDATE, Permission.QUOTES_APPROVE, Permission.QUOTES_DELETE,
+  Permission.CUSTOMERS_READ, Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_UPDATE, Permission.CUSTOMERS_DELETE,
+  Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE, Permission.EVENTS_CANCEL,
+  Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE, Permission.CONTRACTS_APPROVE, Permission.CONTRACTS_CANCEL, Permission.CONTRACTS_DELETE,
+  Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_UPDATE, Permission.PAYMENTS_APPROVE, Permission.PAYMENTS_DELETE,
+  Permission.SUPPLIERS_READ, Permission.SUPPLIERS_CREATE, Permission.SUPPLIERS_UPDATE, Permission.SUPPLIERS_DELETE,
+  Permission.EXPENSES_VIEW, Permission.EXPENSES_CREATE, Permission.EXPENSES_UPDATE, Permission.EXPENSES_DELETE
+]);
+
+function hasBackofficeOperationalPermission(user: NonNullable<Express.Request['user']>, permission: Permission): boolean {
+  return user.canAccessBackoffice
+    && backofficeOperationalPermissions.has(permission)
+    && !user.permissionDeniedOverrides.includes(permission);
+}
+
 async function getAllActiveSalonIds(): Promise<string[] | null> {
   try {
     const now = Date.now();
@@ -92,24 +111,25 @@ export const requireAuth: RequestHandler = async (request, response, next) => {
 
     finishTiming();
     request.authUser = { ...user, salonIds };
-    request.user = { id: user._id.toString(), roles, permissionOverrides, permissionDeniedOverrides, salonIds, managedSalonIds, active: user.active };
+    request.user = { id: user._id.toString(), roles, permissionOverrides, permissionDeniedOverrides, salonIds, managedSalonIds, active: user.active, canAccessBackoffice: user.canAccessBackoffice !== false };
     return next();
   } catch (error) {
     finishTiming();
     return next(error);
   }
 };
-export const requirePermission = (permission: Permission): RequestHandler => (request, _response, next) => { const allowed = request.user?.roles.some((role) => hasPermission(role, permission, request.user?.permissionOverrides, request.user?.permissionDeniedOverrides)); if (!allowed) return next(new ApiError(403, 'FORBIDDEN')); next(); };
+export const requirePermission = (permission: Permission): RequestHandler => (request, _response, next) => { const user = request.user; const allowed = Boolean(user && (user.roles.some((role) => hasPermission(role, permission, user.permissionOverrides, user.permissionDeniedOverrides)) || hasBackofficeOperationalPermission(user, permission))); if (!allowed) return next(new ApiError(403, 'FORBIDDEN')); next(); };
 export const requireAnyPermission = (permissions: Permission[]): RequestHandler => (request, _response, next) => { const allowed = request.user?.roles.some((role) => hasAnyPermission(role, permissions, request.user?.permissionOverrides, request.user?.permissionDeniedOverrides)); if (!allowed) return next(new ApiError(403, 'FORBIDDEN')); next(); };
 export const requireRole = (...roles: Role[]): RequestHandler => (request, _response, next) => request.user?.roles.some((role) => roles.includes(role)) ? next() : next(new ApiError(403, 'FORBIDDEN'));
 export function accessibleSalonIds(user: NonNullable<Express.Request['user']>): string[] { return [...new Set([...(user.salonIds ?? []), ...(user.managedSalonIds ?? [])].map(String))]; }
 export function userHasPermission(user: NonNullable<Express.Request['user']>, permission: Permission): boolean { return user.roles.some((role) => hasPermission(role, permission, user.permissionOverrides, user.permissionDeniedOverrides)); }
 export function canAccessAllSalons(user: NonNullable<Express.Request['user']>): boolean { return user.roles.includes(Role.ADMIN) || userHasPermission(user, Permission.DASHBOARD_ALL_SALONS_VIEW); }
-// M&M's current backoffice policy gives every authenticated staff user operational
-// access to CRM records (leads, clients, quotes, events, contracts and payments).
-// Salon assignments remain available for filtering and reporting, but they must never
-// block an already-authorized user from opening or managing an operational record.
-export function canAccessSalon(_user: NonNullable<Express.Request['user']>, _salonId: string): boolean { return true; }
+// Backoffice permissions unlock the operational action; salon visibility remains the
+// data boundary. A user can only manage records from assigned/managed salons unless
+// their role has explicit all-salons visibility.
+export function canAccessSalon(user: NonNullable<Express.Request['user']>, salonId: string): boolean {
+  return canAccessAllSalons(user) || accessibleSalonIds(user).includes(String(salonId));
+}
 // A relation can be either its stored ObjectId or a populated document returned by
 // Mongoose. Scope checks must always compare the underlying ID, never the document's
 // default string representation ("[object Object]").
