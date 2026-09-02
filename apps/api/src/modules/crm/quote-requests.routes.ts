@@ -4,7 +4,7 @@ import { Permission, Role } from '@mym/shared';
 import { Customer, Lead, LeadActivity, PackageTemplate, Quote, QuoteRequest, QuoteRevision, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
-import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, referenceId, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -111,7 +111,11 @@ async function ensureRequestAccess(request: Request, item: any): Promise<void> {
   if (!item || item.deletedAt) throw new ApiError(404, 'QUOTE_REQUEST_NOT_FOUND');
   const assignedToUserId = item.assignedToUserId?.toString?.() ?? item.assignedToUserId;
   if (!request.user!.roles.includes(Role.ADMIN) && assignedToUserId && assignedToUserId !== request.user!.id) throw new ApiError(403, 'QUOTE_REQUEST_ASSIGNED_TO_OTHER_USER');
-  const salonIds = (item.interestedSalonIds ?? []).map((id: { toString(): string }) => id.toString());
+  // The detail query populates `interestedSalonIds`, so entries can be Salon
+  // documents rather than raw ObjectIds. Normalize both shapes before the scope
+  // comparison; calling `.toString()` on a populated document yields an object
+  // representation and falsely rejects users who do have that salon assigned.
+  const salonIds = (item.interestedSalonIds ?? []).map(referenceId).filter((id: string | undefined): id is string => Boolean(id));
   if (salonIds.length && !salonIds.some((salonId: string) => canAccessSalon(request.user!, salonId))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
 }
 async function ensureAccessibleSalons(request: Request, salonIds: string[]): Promise<void> {
@@ -181,8 +185,18 @@ router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(cr
 }));
 
 router.get('/:id', requirePermission(Permission.QUOTES_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
-  const quoteRequest = await QuoteRequest.findOne({ _id: request.params.id, deletedAt: null }).populate('leadId').populate('customerId').populate('interestedSalonIds', 'name').populate('interestedPackageTemplateId', 'name').populate('possibleDuplicateLeadIds', 'fullName phone email').lean();
-  await ensureRequestAccess(request, quoteRequest);
+  // Check the persisted record before populating its relations. This keeps the
+  // authorization decision tied to the stored ObjectIds instead of a populated
+  // representation that can vary between Mongoose/Vercel runtimes.
+  const storedQuoteRequest = await QuoteRequest.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensureRequestAccess(request, storedQuoteRequest);
+  const quoteRequest = await QuoteRequest.populate(storedQuoteRequest, [
+    { path: 'leadId' },
+    { path: 'customerId' },
+    { path: 'interestedSalonIds', select: 'name' },
+    { path: 'interestedPackageTemplateId', select: 'name' },
+    { path: 'possibleDuplicateLeadIds', select: 'fullName phone email' },
+  ]);
   const leadId = (quoteRequest as any).leadId?._id ?? (quoteRequest as any).leadId;
   const customerId = (quoteRequest as any).customerId?._id ?? (quoteRequest as any).customerId;
   const [activities, previousRequests, previousQuotes] = await Promise.all([
