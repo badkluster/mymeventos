@@ -90,6 +90,18 @@ describe('event to contract service', () => {
 
     expect(result).toEqual({ contract: existing, created: false });
     expect(mocks.contractCreate).not.toHaveBeenCalled();
+    expect(mocks.contractFindOne).toHaveBeenCalledWith(expect.objectContaining({ status: { $nin: ['cancelled', 'superseded'] } }));
+  });
+
+  it('creates a fresh contract when the only prior one for the event was cancelled', async () => {
+    mocks.eventFindOne.mockReturnValue(eventQuery(completeEvent()));
+    mocks.contractFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
+    mocks.contractCreate.mockResolvedValue({ _id: 'contract-2', contractNumber: 'C-2026-00002' });
+
+    const result = await createContractFromEvent({ eventId: 'event-1', userId: 'user-1' });
+
+    expect(result.created).toBe(true);
+    expect(mocks.contractCreate).toHaveBeenCalled();
   });
 
   it('does not modify the source quote when taking contract snapshots', async () => {

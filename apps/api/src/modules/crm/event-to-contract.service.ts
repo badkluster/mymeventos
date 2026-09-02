@@ -67,7 +67,7 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
     .populate('sourceLeadId');
   if (!event) throw new ApiError(404, 'EVENT_NOT_FOUND');
 
-  const existing = await Contract.findOne({ eventId: event._id, deletedAt: null }).lean();
+  const existing = await Contract.findOne({ eventId: event._id, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).lean();
   if (existing) return { contract: existing, created: false };
 
   validateEvent(event);
