@@ -16,7 +16,7 @@ const backofficeOperationalPermissions = new Set<Permission>([
   Permission.CUSTOMERS_READ, Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_UPDATE, Permission.CUSTOMERS_DELETE,
   Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE, Permission.EVENTS_CANCEL,
   Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE, Permission.CONTRACTS_APPROVE, Permission.CONTRACTS_CANCEL, Permission.CONTRACTS_DELETE,
-  Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_UPDATE, Permission.PAYMENTS_APPROVE, Permission.PAYMENTS_DELETE,
+  Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_UPDATE, Permission.PAYMENTS_APPROVE,
   Permission.SUPPLIERS_READ, Permission.SUPPLIERS_CREATE, Permission.SUPPLIERS_UPDATE, Permission.SUPPLIERS_DELETE,
   Permission.EXPENSES_VIEW, Permission.EXPENSES_CREATE, Permission.EXPENSES_UPDATE, Permission.EXPENSES_DELETE
 ]);
