@@ -30,11 +30,11 @@ describe('salon access scope', () => {
     expect(canAccessSalon(user, 'salon-any')).toBe(true);
   });
 
-  it('keeps SALON_MANAGER explicitly scoped without the all-salons permission', () => {
+  it('keeps salon assignments for filtering without blocking operational access', () => {
     const user = authUser({ roles: [Role.SALON_MANAGER], salonIds: ['salon-a'] });
     expect(canAccessAllSalons(user)).toBe(false);
     expect(canAccessSalon(user, 'salon-a')).toBe(true);
-    expect(canAccessSalon(user, 'salon-b')).toBe(false);
+    expect(canAccessSalon(user, 'salon-b')).toBe(true);
   });
 
   it('accepts managed salons as part of the effective scope without duplicates', () => {
