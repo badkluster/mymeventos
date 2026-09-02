@@ -103,7 +103,7 @@ export function PayrollWorkspace() {
     try {
       const [salonsResponse, usersResponse] = await Promise.all([
         api.get<{ salons?: Named[] }>('/salons?active=true'),
-        api.get<{ items?: Named[]; users?: Named[] }>('/users?role=STAFF&active=true&limit=100')
+        api.get<{ items?: Named[]; users?: Named[] }>('/users/options?role=STAFF&active=true&limit=100')
       ]);
       const nextSalons = salonsResponse.salons ?? [];
       const nextEmployees = usersResponse.items ?? usersResponse.users ?? [];

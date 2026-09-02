@@ -108,7 +108,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         api.get<{ items: Payment[]; summary: PaymentSummary }>(`/events/${eventId}/payments`),
         api.get<{ items: EventExpense[]; summary: EventExpenseSummary }>(`/events/${eventId}/expenses`),
         api.get<{ items: StaffAssignment[] }>(`/events/${eventId}/staff`),
-        api.get<{ items: StaffOption[] }>('/users?active=true&limit=100'),
+        api.get<{ items: StaffOption[] }>('/users/options?active=true&limit=100'),
         api.get<{ activities: Activity[] }>(`/events/${eventId}/activity`)
       ]);
 

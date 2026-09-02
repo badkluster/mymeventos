@@ -168,13 +168,20 @@ async function getUserOrFail(id: string): Promise<any> {
 router.use(requireAuth);
 
 // Lightweight directory (name/role only, no permissions/attendance/audit data) for
-// pickers that need to link to a user — e.g. "Encargado del salón" and calendar
-// linking — without requiring USERS_READ, which also unlocks the full Usuarios menu.
+// pickers that need to link to a user — e.g. "Encargado del salón", calendar linking,
+// staff assignment on an event, production, and payroll employee selectors — without
+// requiring USERS_READ, which also unlocks the full Usuarios menu. Supports the same
+// `role`/`active` filters as `/` since pickers narrow by those (e.g. STAFF + active).
 router.get('/options', asyncHandler(async (request, response) => {
   const limit = Math.min(200, Math.max(1, Number(queryValue(request.query.limit)) || 100));
   const search = queryValue(request.query.search);
   const terms: Record<string, unknown>[] = [{ deletedAt: null }];
   if (search) terms.push({ $or: ['fullName', 'firstName', 'lastName', 'username', 'email'].map((field) => ({ [field]: { $regex: search, $options: 'i' } })) });
+  const role = queryValue(request.query.role);
+  if (role && Object.values(Role).includes(role as Role)) terms.push({ roles: role });
+  const active = queryValue(request.query.active);
+  if (active === 'true') terms.push({ active: true });
+  if (active === 'false') terms.push({ active: false });
   const query = terms.length === 1 ? terms[0] : { $and: terms };
   const items = await User.find(query)
     .select('firstName lastName fullName email username phone roles active')

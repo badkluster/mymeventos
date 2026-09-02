@@ -558,6 +558,49 @@ liviano gateado por un permiso que el caso de uso realmente necesite, para no
 forzar a exponer el menú/CRUD completo de un módulo no relacionado solo para
 habilitar un picker.
 
+Actualización 2026-09-02 — bug real encontrado en producción y corregido: el
+`GET /users/options` de la entrada anterior (2026-08-05 cuater) no cubría
+todos los pickers de personal. Reportado por el usuario sobre la cuenta real
+`patriciasc` (`SALON_MANAGER` con `users.read` en `permissionDeniedOverrides`
+a propósito, para ocultarle el menú completo de Usuarios): al abrir la ficha
+de un evento de su propio salón aparecía "La ficha se cargó, pero algunos
+datos complementarios no están disponibles todavía" de forma permanente.
+Causa: `apps/web/src/app/admin/events/[id]/page.tsx` (selector de staff para
+asignar a un evento), `apps/web/src/features/production/production-detail.tsx`
+(selector de staff en un ítem de producción) y
+`apps/web/src/features/payroll/payroll-workspace.tsx` (selector de empleado al
+liquidar) seguían llamando al endpoint completo `GET /users` (gateado por
+`Permission.USERS_READ`) en vez de `GET /users/options`, a diferencia de los
+otros pickers ya migrados en esa fecha (Encargado del salón, Calendario,
+proveedor de un evento). `GET /users/options` no soportaba `role`/`active`
+(los tres consumidores nuevos los necesitan: staff activo, o `role=STAFF`
+para Payroll), así que se le sumó ese filtro (mismo criterio que `GET /users`)
+en vez de crear un segundo endpoint liviano. Verificado contra la base real
+de producción: **dos** cuentas `SALON_MANAGER` activas (`patriciasc`,
+`aluualessandrinii`) tienen `users.read` denegado a propósito y estaban
+afectadas por este mismo bug. Sin cambios de datos — solo lectura para
+diagnóstico, siguiendo `AGENTS.md`. Revisado también, sin encontrar más
+casos: los demás puntos que hacen `canAccessSalon`/`ensureXAccess` sobre un
+documento populado (el patrón que rompió `quote-requests.routes.ts` el mismo
+día, ver commit `56f6a1a`, corregido con `referenceId`) — no se encontró otra
+instancia del mismo bug en `crm/{events,quotes,leads,customers}.routes.ts`;
+en todos esos casos el documento se lee sin `populate` antes de la
+verificación de alcance por salón.
+
+**No es un bug, es diseño confirmado**: con `patriciasc`, al abrir un evento
+de su propio salón, las pestañas "Pagos" (`GET /events/:id/payments`, exige
+`Permission.PAYMENTS_READ`) y "Proveedores"/"Gastos" (`GET /events/:id/expenses`,
+exige `Permission.EVENTS_READ` + `Permission.SUPPLIERS_READ`) siguen fallando
+con 403 y cayendo en el mismo banner genérico — a diferencia del bug de
+arriba, esto es intencional: `payments.read`/`suppliers.read` están en su
+`permissionDeniedOverrides` a propósito. El resumen financiero del evento
+("Ya abonado"/"Restante a pagar") no depende de esos endpoints — viene de
+campos ya calculados en el propio `Event`, por eso se ve igual aunque las
+pestañas de detalle sigan bloqueadas. Si se pide que un `SALON_MANAGER` con
+esos permisos denegados pueda ver el detalle de pagos/gastos de eventos de su
+propio salón, es una decisión de negocio nueva a confirmar explícitamente con
+el usuario — no una extensión obvia de este fix.
+
 ## 9. Integraciones — estado real
 
 | Integración | Librería/mecanismo | Estado |
