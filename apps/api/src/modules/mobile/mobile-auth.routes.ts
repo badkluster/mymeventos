@@ -62,7 +62,7 @@ const resetSchema = z.object({ body: z.object({ username: z.string().trim().min(
 const changePasswordSchema = z.object({ body: z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) }), params: z.object({}), query: z.object({}) });
 
 function toPseudoAuthUser(user: any) {
-  return { id: user._id.toString(), roles: user.roles ?? [], permissionOverrides: user.permissionOverrides ?? [], permissionDeniedOverrides: user.permissionDeniedOverrides ?? [], salonIds: [], managedSalonIds: [], active: Boolean(user.active) };
+  return { id: user._id.toString(), roles: user.roles ?? [], permissionOverrides: user.permissionOverrides ?? [], permissionDeniedOverrides: user.permissionDeniedOverrides ?? [], salonIds: [], managedSalonIds: [], active: Boolean(user.active), canAccessBackoffice: false };
 }
 
 function isMobileEligible(user: any): boolean {
