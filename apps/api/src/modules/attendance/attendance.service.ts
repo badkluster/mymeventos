@@ -63,8 +63,10 @@ async function validateLocation(salonId: string | undefined, location: PunchLoca
   const distanceMeters = haversineDistanceMeters(location, rule);
   const radius = rule.allowedRadiusMeters ?? settings.defaultGeofenceRadiusMeters;
   if (distanceMeters <= radius) return { status: LocationValidationStatus.INSIDE_ALLOWED_AREA, distanceMeters, blocked: false, requiresReview: false, requiresReason: false };
-  const policy = rule.outsideAreaPolicy ?? 'flag';
-  if (policy === 'allow') return { status: LocationValidationStatus.OUTSIDE_ALLOWED_AREA, distanceMeters, blocked: false, requiresReview: false, requiresReason: false };
+  const policy = rule.outsideAreaPolicy ?? 'allow';
+  // The geofence is currently informational. Legacy rules saved as "flag"
+  // must keep accepting punches without creating an administrative alert.
+  if (policy === 'allow' || policy === 'flag') return { status: LocationValidationStatus.OUTSIDE_ALLOWED_AREA, distanceMeters, blocked: false, requiresReview: false, requiresReason: false };
   if (policy === 'block') return { status: LocationValidationStatus.OUTSIDE_ALLOWED_AREA, distanceMeters, blocked: true, requiresReview: false, requiresReason: false };
   if (policy === 'require_reason') return { status: LocationValidationStatus.OUTSIDE_ALLOWED_AREA, distanceMeters, blocked: false, requiresReview: false, requiresReason: true };
   return { status: LocationValidationStatus.OUTSIDE_ALLOWED_AREA, distanceMeters, blocked: false, requiresReview: true, requiresReason: false };

@@ -35,10 +35,10 @@ const attendanceLocationRuleSchema = new Schema({
   requireLocation: { type: Boolean, default: false },
   // What happens to a clock-in/out captured outside allowedRadiusMeters:
   //  - 'allow': accepted and treated as valid.
-  //  - 'flag': accepted but the WorkSession is marked requiresReview.
+  //  - 'flag': legacy value; accepted and treated as valid, as with 'allow'.
   //  - 'block': rejected outright (ATTENDANCE_OUTSIDE_GEOFENCE).
   //  - 'require_reason': accepted only if the punch includes a note; otherwise blocked.
-  outsideAreaPolicy: { type: String, enum: ['allow', 'flag', 'block', 'require_reason'], default: 'flag' }
+  outsideAreaPolicy: { type: String, enum: ['allow', 'flag', 'block', 'require_reason'], default: 'allow' }
 }, { _id: false });
 
 const salonSchema = new Schema({

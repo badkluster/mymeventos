@@ -72,7 +72,7 @@ export type AttendanceLocationRule = {
 
 export const attendanceOutsideAreaPolicyLabels: Record<AttendanceOutsideAreaPolicy, string> = {
   allow: 'Permitir igualmente',
-  flag: 'Permitir y marcar para revisión',
+  flag: 'Permitir igualmente (configuración anterior)',
   block: 'Bloquear el fichaje',
   require_reason: 'Permitir solo si el empleado indica un motivo'
 };

@@ -355,7 +355,7 @@ export default function AttendancePage() {
           <div><h3 className="text-sm font-semibold text-zinc-900">Registros de horario</h3><div className="mt-2 space-y-2">{detailPunches.map((punch) => <div key={punch._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">
             <div className="flex items-center justify-between"><span className="font-medium text-zinc-900">{punch.type === 'check_in' ? 'Entrada' : punch.type === 'check_out' ? 'Salida' : punch.type}</span><span className="text-zinc-500">{formatDateTime(punch.effectiveAt)}</span></div>
              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-               <span className="text-xs text-zinc-400">{locationValidationLabels[punch.locationValidationStatus ?? ''] ?? 'Sin ubicación'}{typeof punch.salonDistanceMeters === 'number' ? ` · ${Math.round(punch.salonDistanceMeters)} m del salón` : ''}</span>
+               {punch.locationValidationStatus !== 'outside_allowed_area' ? <span className="text-xs text-zinc-400">{locationValidationLabels[punch.locationValidationStatus ?? ''] ?? 'Sin ubicación'}{typeof punch.salonDistanceMeters === 'number' ? ` · ${Math.round(punch.salonDistanceMeters)} m del salón` : ''}</span> : null}
                {punch.location ? <button type="button" onClick={() => setMapPunch(punch)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50"><MapPin className="h-3.5 w-3.5" />Ver en el mapa</button> : null}
              </div>
              <PunchTechnicalDetails punch={punch} />

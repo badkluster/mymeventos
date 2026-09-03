@@ -145,7 +145,7 @@ export default function SalonDetailPage() {
   const [notice, setNoticeState] = useState('');
   const [landingMedia, setLandingMedia] = useState({ heroImageUrl: '', galleryImageUrlsText: '' });
   const [draggedGalleryIndex, setDraggedGalleryIndex] = useState<number>();
-  const [attendanceLocation, setAttendanceLocation] = useState<AttendanceLocationRule>({ allowedRadiusMeters: 150, requireLocation: false, outsideAreaPolicy: 'flag' });
+  const [attendanceLocation, setAttendanceLocation] = useState<AttendanceLocationRule>({ allowedRadiusMeters: 150, requireLocation: false, outsideAreaPolicy: 'allow' });
   const [savingAttendanceLocation, setSavingAttendanceLocation] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const salonId = params?.id ?? '';
@@ -201,7 +201,7 @@ export default function SalonDetailPage() {
       longitude: salon.attendanceLocationRule?.longitude,
       allowedRadiusMeters: salon.attendanceLocationRule?.allowedRadiusMeters ?? 150,
       requireLocation: salon.attendanceLocationRule?.requireLocation ?? false,
-      outsideAreaPolicy: salon.attendanceLocationRule?.outsideAreaPolicy ?? 'flag'
+      outsideAreaPolicy: salon.attendanceLocationRule?.outsideAreaPolicy === 'flag' ? 'allow' : salon.attendanceLocationRule?.outsideAreaPolicy ?? 'allow'
     });
   }, [salon?._id]);
 
@@ -685,7 +685,7 @@ export default function SalonDetailPage() {
       <Field label="Longitud"><Input type="number" step="any" min={-180} max={180} value={attendanceLocation.longitude ?? ''} onChange={(event) => setAttendanceLocation((current) => ({ ...current, longitude: event.target.value === '' ? undefined : Number(event.target.value) }))} placeholder="-58.3816" /></Field>
       <Field label="Radio permitido (metros)"><Input type="number" min={10} step={10} value={attendanceLocation.allowedRadiusMeters ?? 150} onChange={(event) => setAttendanceLocation((current) => ({ ...current, allowedRadiusMeters: Number(event.target.value) }))} /></Field>
       <label className="flex items-center gap-2 self-end pb-3 text-sm text-zinc-700"><input type="checkbox" checked={Boolean(attendanceLocation.requireLocation)} onChange={(event) => setAttendanceLocation((current) => ({ ...current, requireLocation: event.target.checked }))} />Exigir ubicación para fichar en este salón</label>
-      <Field label="Política fuera de zona" className="lg:col-span-2"><Select value={attendanceLocation.outsideAreaPolicy ?? 'flag'} onChange={(event) => setAttendanceLocation((current) => ({ ...current, outsideAreaPolicy: event.target.value as AttendanceOutsideAreaPolicy }))}>{(Object.entries(attendanceOutsideAreaPolicyLabels) as [AttendanceOutsideAreaPolicy, string][]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+      <Field label="Política fuera de zona" className="lg:col-span-2"><Select value={attendanceLocation.outsideAreaPolicy ?? 'allow'} onChange={(event) => setAttendanceLocation((current) => ({ ...current, outsideAreaPolicy: event.target.value as AttendanceOutsideAreaPolicy }))}>{(Object.entries(attendanceOutsideAreaPolicyLabels) as [AttendanceOutsideAreaPolicy, string][]).filter(([value]) => value !== 'flag').map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
       <footer className="lg:col-span-3 flex justify-end"><Button disabled={savingAttendanceLocation}><Save className="mr-2 h-4 w-4" />{savingAttendanceLocation ? 'Guardando…' : 'Guardar geocerca'}</Button></footer>
     </form>}
     {tab === 'landing' && <form onSubmit={saveLanding} className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-2">

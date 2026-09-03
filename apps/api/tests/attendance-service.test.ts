@@ -105,7 +105,7 @@ describe('attendance.service', () => {
       expect(mocks.timePunchCreate).not.toHaveBeenCalled();
     });
 
-    it('accepts a check-in outside the geofence when the policy only flags it for review', async () => {
+    it('accepts a check-in outside the geofence without flagging it for review when using a legacy "flag" policy', async () => {
       mocks.timePunchFindOne.mockReturnValue(chainLean(null));
       mocks.salonFindOne.mockReturnValue(chainSelectLean({ attendanceLocationRule: { latitude: 0, longitude: 0, allowedRadiusMeters: 100, outsideAreaPolicy: 'flag' } }));
       const punchId = new Types.ObjectId();
@@ -119,7 +119,7 @@ describe('attendance.service', () => {
       });
 
       expect(result.idempotentReplay).toBe(false);
-      expect(mocks.workSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ requiresReview: true }));
+      expect(mocks.workSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ requiresReview: false }));
     });
   });
 
