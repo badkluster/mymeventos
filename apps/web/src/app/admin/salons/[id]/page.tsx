@@ -5,7 +5,7 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Check, Globe2, PackageCheck, Pencil, Plus, Power, Save, Trash2, Utensils } from 'lucide-react';
+import { ArrowLeft, Check, Globe2, PackageCheck, Pencil, Plus, Power, RotateCcw, Save, Trash2, Utensils } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { CloudinaryUpload, type UploadedAsset } from '@/components/cloudinary-upload';
@@ -74,6 +74,7 @@ const tabIds = tabs.map((item) => item.id);
 const emptyExtra: SalonExtra = { name: '', description: '', basePrice: 0, active: true, includedByDefault: false, publicVisible: false };
 const emptyTemplate: TemplateForm = { name: '', durationHours: 8, startTime: '21:00', endTime: '05:00', pricingMode: 'per_person', pricePerPerson: 0, fixedPrice: 0, discountPercentage: 0, depositAmount: 0, paymentTerms: '', promotionText: '', giftText: '', includedServices: [], menuSections: [], notes: '' };
 const emptyStockItem: StockItemForm = { name: '', category: 'MISCELLANEOUS', currentQuantity: 0, unitOfMeasure: 'unidad', active: true, notes: '' };
+const emptyAttendanceLocation: AttendanceLocationRule = { allowedRadiusMeters: 150, requireLocation: false, outsideAreaPolicy: 'allow' };
 const toNumber = (value: FormDataEntryValue | null) => Number(value || 0);
 const toText = (value: FormDataEntryValue | null) => String(value ?? '');
 const assetUrl = (asset: UploadedAsset) => asset.secureUrl || asset.url;
@@ -117,6 +118,24 @@ function ruleToForm(rule: PackageRule): RuleForm {
   };
 }
 
+function attendanceLocationFromSalon(salon?: Salon): AttendanceLocationRule {
+  return {
+    latitude: salon?.attendanceLocationRule?.latitude,
+    longitude: salon?.attendanceLocationRule?.longitude,
+    allowedRadiusMeters: salon?.attendanceLocationRule?.allowedRadiusMeters ?? 150,
+    requireLocation: salon?.attendanceLocationRule?.requireLocation ?? false,
+    outsideAreaPolicy: salon?.attendanceLocationRule?.outsideAreaPolicy === 'flag' ? 'allow' : salon?.attendanceLocationRule?.outsideAreaPolicy ?? 'allow'
+  };
+}
+
+function sameAttendanceLocation(left: AttendanceLocationRule, right: AttendanceLocationRule): boolean {
+  return left.latitude === right.latitude
+    && left.longitude === right.longitude
+    && left.allowedRadiusMeters === right.allowedRadiusMeters
+    && left.requireLocation === right.requireLocation
+    && left.outsideAreaPolicy === right.outsideAreaPolicy;
+}
+
 export default function SalonDetailPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -145,7 +164,7 @@ export default function SalonDetailPage() {
   const [notice, setNoticeState] = useState('');
   const [landingMedia, setLandingMedia] = useState({ heroImageUrl: '', galleryImageUrlsText: '' });
   const [draggedGalleryIndex, setDraggedGalleryIndex] = useState<number>();
-  const [attendanceLocation, setAttendanceLocation] = useState<AttendanceLocationRule>({ allowedRadiusMeters: 150, requireLocation: false, outsideAreaPolicy: 'allow' });
+  const [attendanceLocation, setAttendanceLocation] = useState<AttendanceLocationRule>(emptyAttendanceLocation);
   const [savingAttendanceLocation, setSavingAttendanceLocation] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const salonId = params?.id ?? '';
@@ -196,16 +215,18 @@ export default function SalonDetailPage() {
   }, [salon?._id]);
   useEffect(() => {
     if (!salon) return;
-    setAttendanceLocation({
-      latitude: salon.attendanceLocationRule?.latitude,
-      longitude: salon.attendanceLocationRule?.longitude,
-      allowedRadiusMeters: salon.attendanceLocationRule?.allowedRadiusMeters ?? 150,
-      requireLocation: salon.attendanceLocationRule?.requireLocation ?? false,
-      outsideAreaPolicy: salon.attendanceLocationRule?.outsideAreaPolicy === 'flag' ? 'allow' : salon.attendanceLocationRule?.outsideAreaPolicy ?? 'allow'
-    });
+    setAttendanceLocation(attendanceLocationFromSalon(salon));
   }, [salon?._id]);
 
+  const hasUnsavedAttendanceLocationChanges = Boolean(salon) && !sameAttendanceLocation(attendanceLocation, attendanceLocationFromSalon(salon));
+
+  function discardAttendanceLocationChanges() {
+    setAttendanceLocation(attendanceLocationFromSalon(salon));
+    setNotice('');
+  }
+
   function selectTab(next: Tab) {
+    if (tab === 'attendance' && next !== 'attendance' && hasUnsavedAttendanceLocationChanges) discardAttendanceLocationChanges();
     setTab(next);
     router.replace(`/admin/salons/${salonId}?tab=${next}`);
   }
@@ -686,7 +707,7 @@ export default function SalonDetailPage() {
       <Field label="Radio permitido (metros)"><Input type="number" min={10} step={10} value={attendanceLocation.allowedRadiusMeters ?? 150} onChange={(event) => setAttendanceLocation((current) => ({ ...current, allowedRadiusMeters: Number(event.target.value) }))} /></Field>
       <label className="flex items-center gap-2 self-end pb-3 text-sm text-zinc-700"><input type="checkbox" checked={Boolean(attendanceLocation.requireLocation)} onChange={(event) => setAttendanceLocation((current) => ({ ...current, requireLocation: event.target.checked }))} />Exigir ubicación para fichar en este salón</label>
       <Field label="Política fuera de zona" className="lg:col-span-2"><Select value={attendanceLocation.outsideAreaPolicy ?? 'allow'} onChange={(event) => setAttendanceLocation((current) => ({ ...current, outsideAreaPolicy: event.target.value as AttendanceOutsideAreaPolicy }))}>{(Object.entries(attendanceOutsideAreaPolicyLabels) as [AttendanceOutsideAreaPolicy, string][]).filter(([value]) => value !== 'flag').map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
-      <footer className="lg:col-span-3 flex justify-end"><Button disabled={savingAttendanceLocation}><Save className="mr-2 h-4 w-4" />{savingAttendanceLocation ? 'Guardando…' : 'Guardar geocerca'}</Button></footer>
+      <footer className="lg:col-span-3 flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm text-zinc-500">{hasUnsavedAttendanceLocationChanges ? 'Tenés cambios sin guardar.' : 'Los cambios se aplican solo al guardar.'}</p><div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="secondary" disabled={!hasUnsavedAttendanceLocationChanges || savingAttendanceLocation} onClick={discardAttendanceLocationChanges}><RotateCcw className="mr-2 h-4 w-4" />Descartar cambios</Button><Button disabled={savingAttendanceLocation}><Save className="mr-2 h-4 w-4" />{savingAttendanceLocation ? 'Guardando…' : 'Guardar geocerca'}</Button></div></footer>
     </form>}
     {tab === 'landing' && <form onSubmit={saveLanding} className="grid gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:grid-cols-2">
       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">Imagen principal</h2><p className="mt-1 text-sm text-zinc-500">La portada principal que se muestra en la landing del salón.</p></div><div className="space-y-2"><div className="flex flex-wrap gap-2"><CloudinaryUpload context="salons" salonId={salonId} accept="image/jpeg,image/png,image/webp,image/avif,image/gif,.heic,.heif" label={salon.heroImageUrl ? 'Cambiar imagen principal' : 'Subir imagen principal'} dropzone onUploaded={(asset) => void setHeroFromUpload(asset)} />{salon.heroImageUrl ? <Button type="button" variant="danger" onClick={() => void removeHeroImage()}><Trash2 className="mr-2 h-4 w-4" />Quitar imagen</Button> : null}</div><p className="max-w-md text-xs leading-5 text-zinc-500">Permitidas: JPG, PNG, WEBP, AVIF, GIF, HEIC y HEIF. Máximo 25 MB por archivo.</p></div></div>{salon.heroImageUrl && <div className="mt-4 h-36 rounded-xl border border-zinc-200 bg-cover bg-center sm:h-44" style={{ backgroundImage: `url(${cloudinaryImageUrl(salon.heroImageUrl)})` }} />}</div>
