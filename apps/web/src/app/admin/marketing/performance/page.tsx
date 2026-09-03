@@ -246,14 +246,14 @@ const HELP = {
 } as const;
 
 const externalProviders = [
-  { name: 'Instagram orgánico', detail: 'Seguidores, alcance, engagement, reels, historias, guardados y compartidos.', icon: Video },
-  { name: 'Facebook orgánico', detail: 'Seguidores, alcance, interacciones, publicaciones y video.', icon: Users },
-  { name: 'Google Ads', detail: 'Costo, impresiones, clics, conversiones, CPC, CPA y campañas.', icon: Search },
-  { name: 'Google Business Profile', detail: 'Vistas, búsquedas, llamadas, rutas, clics y reseñas.', icon: Target },
-  { name: 'TikTok', detail: 'Seguidores, visualizaciones, retención y engagement.', icon: Video },
-  { name: 'TikTok Ads', detail: 'Inversión, CPM, CTR, CPC, conversiones y CPA.', icon: Video },
-  { name: 'YouTube', detail: 'Visualizaciones, tiempo de reproducción, suscriptores y tráfico.', icon: Video },
-  { name: 'WhatsApp Business', detail: 'Conversaciones y atribución cuando la API lo permita.', icon: MessageCircle },
+  { provider: 'instagram', name: 'Instagram orgánico', detail: 'Seguidores, alcance, engagement, reels, historias, guardados y compartidos.', icon: Video },
+  { provider: 'facebook', name: 'Facebook orgánico', detail: 'Seguidores, alcance, interacciones, publicaciones y video.', icon: Users },
+  { provider: 'google_ads', name: 'Google Ads', detail: 'Costo, impresiones, clics, conversiones, CPC, CPA y campañas.', icon: Search },
+  { provider: 'google_business', name: 'Google Business Profile', detail: 'Vistas, búsquedas, llamadas, rutas, clics y reseñas.', icon: Target },
+  { provider: 'tiktok', name: 'TikTok', detail: 'Seguidores, visualizaciones, retención y engagement.', icon: Video },
+  { provider: 'tiktok_ads', name: 'TikTok Ads', detail: 'Inversión, CPM, CTR, CPC, conversiones y CPA.', icon: Video },
+  { provider: 'youtube', name: 'YouTube', detail: 'Visualizaciones, tiempo de reproducción, suscriptores y tráfico.', icon: Video },
+  { provider: 'whatsapp', name: 'WhatsApp Business', detail: 'Conversaciones y atribución cuando la API lo permita.', icon: MessageCircle },
 ];
 
 function asInputDate(date: Date) {
@@ -534,7 +534,7 @@ export default function MarketingPerformancePage() {
               <ConnectionCard name="Meta Ads" detail="Campañas, conjuntos, anuncios, inversión, clics y resultados." status={meta?.connection.status ?? 'pending'} icon={Target} />
               <ConnectionCard name="Google Search Console" detail="Clics orgánicos, impresiones, CTR, posición, consultas y páginas." status={searchConsole?.connection.status ?? 'pending'} icon={Search} />
               <ConnectionCard name="Google Analytics 4" detail="Usuarios, sesiones, canales, engagement y atribución." status={ga4Status} icon={BarChart3} />
-              {externalProviders.map(({ name, detail, icon }) => <ConnectionCard key={name} name={name} detail={detail} status="pending" icon={icon} />)}
+              {externalProviders.map(({ provider, name, detail, icon }) => <ConnectionCard key={provider} name={name} detail={detail} status={healthStatus(meta?.integrationHealth, provider)} icon={icon} />)}
             </div>
           </Panel>
         </section>
