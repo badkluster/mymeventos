@@ -99,8 +99,8 @@ export function EventPackageManager({ event, onApplied }: { event: Event; onAppl
     if (!venueId) return setError('El evento necesita un salón antes de asociar un paquete.');
     setLoading(true);
     try {
-      const response = await api.get<{ packageRules?: ApplicablePackage[] }>(`/salons/${venueId}/package-rules?includeInactive=true`);
-      setPackages((response.packageRules ?? []).map((item) => ({ ...item, _id: item.packageTemplateId || item._id, name: item.packageName || item.name })));
+      const response = await api.get<{ packageRules?: ApplicablePackage[] }>(`/salons/${venueId}/package-rules`);
+      setPackages((response.packageRules ?? []).filter((item) => item.active !== false).map((item) => ({ ...item, _id: item.packageTemplateId || item._id, name: item.packageName || item.name })));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudieron cargar los paquetes disponibles.');
     } finally {
@@ -176,13 +176,13 @@ export function EventPackageManager({ event, onApplied }: { event: Event; onAppl
           <label className="block text-sm font-medium text-foreground">Paquete disponible
             <Select className="mt-1.5" value={selectedPackageId} disabled={loading} onChange={(change) => { setSelectedPackageId(change.target.value); setPreview(undefined); }}>
               <option value="">Seleccionar paquete</option>
-              {packages.map((item) => <option key={item._id} value={item._id}>{item.name}{item.active === false ? ' · Desactivado' : ''}</option>)}
+              {packages.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
             </Select>
           </label>
           <Button type="button" variant="secondary" disabled={loading || !selectedPackageId} onClick={() => void compare()}>{loading ? 'Comparando…' : 'Comparar paquete'}</Button>
         </div>
 
-        {!loading && !packages.length && !error ? <p className="rounded-xl bg-muted px-4 py-4 text-sm text-muted-foreground">No hay paquetes configurados para este salón.</p> : null}
+        {!loading && !packages.length && !error ? <p className="rounded-xl bg-muted px-4 py-4 text-sm text-muted-foreground">No hay paquetes activos disponibles para este salón.</p> : null}
         {error ? <p role="alert" className="rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-foreground">{error}</p> : null}
 
         {preview ? <>
