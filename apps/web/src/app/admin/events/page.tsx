@@ -104,7 +104,10 @@ export default function EventsPage() {
     router.push(`/admin/events/${eventId}`);
   };
   const handleCreateError = useCallback((message: string) => showToast({ message, variant: 'error' }), [showToast]);
-  const isInteractiveTarget = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('a, button, input, select, textarea, [role="button"], [role="link"]'));
+  // La propia fila tiene role="link" para que sea accesible con teclado. No se
+  // incluye [role="link"] aquí: `closest` encontraría esa misma fila y anularía
+  // todos los clics antes de navegar.
+  const isInteractiveTarget = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('a, button, input, select, textarea, [role="button"]'));
   const openEvent = (eventId: string) => router.push(`/admin/events/${eventId}`);
 
   return <section className="space-y-6">
