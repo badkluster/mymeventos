@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ClipboardList, History, MapPin, Settings2, ShieldAlert, Square, UserRound } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Clock3, History, MapPin, Settings2, ShieldAlert, Square, UserRound } from 'lucide-react';
 import { Permission } from '@mym/shared';
 import { api } from '@/lib/api';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
@@ -21,6 +21,14 @@ type SalonOption = { _id: string; name: string };
 
 const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin registrar';
 
+function dateTimeInputValue(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const timezoneOffset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+}
+
 function elapsedLabel(startedAt: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 60000));
   return formatMinutes(minutes);
@@ -29,7 +37,7 @@ function elapsedLabel(startedAt: string): string {
 const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
 
 function StatusBadge({ label, tone }: { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
-  const styles = { ok: 'bg-emerald-100 text-emerald-700', warn: 'bg-amber-100 text-amber-700', bad: 'bg-red-100 text-red-700', neutral: 'bg-zinc-100 text-zinc-600' };
+  const styles = { ok: 'bg-emerald-100 text-emerald-700', warn: 'bg-amber-100 text-amber-700', bad: 'bg-red-100 text-red-700', neutral: 'bg-muted text-muted-foreground' };
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${styles[tone]}`}>{label}</span>;
 }
 
@@ -75,6 +83,8 @@ export default function AttendancePage() {
   const [detailAdjustments, setDetailAdjustments] = useState<AttendanceAdjustmentRequest[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [mapPunch, setMapPunch] = useState<TimePunch | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<WorkSession | null>(null);
+  const [adjustmentForm, setAdjustmentForm] = useState({ requestedStartAt: '', requestedEndAt: '', reviewNotes: '' });
 
   const [closeTarget, setCloseTarget] = useState<WorkSession | null>(null);
   const [closeReason, setCloseReason] = useState('');
@@ -213,7 +223,10 @@ export default function AttendancePage() {
       showToast({ message: 'Jornada revisada correctamente.', variant: 'success' });
       setSessionReviewTarget(null);
       setSessionReviewForm({ status: 'completed', reviewNotes: '' });
-      await loadHistory();
+      await Promise.all([
+        loadHistory(),
+        detailSession?._id === sessionReviewTarget._id ? openDetail(sessionReviewTarget._id) : Promise.resolve()
+      ]);
     } catch (error) {
       showToast({ message: errorMessage(error, 'No se pudo revisar la jornada.'), variant: 'error' });
     } finally {
@@ -223,13 +236,17 @@ export default function AttendancePage() {
 
   async function confirmResolve() {
     if (!resolveTarget) return;
+    const currentDetailSessionId = detailSession?._id;
     setActing(true);
     try {
       await api.post(`/attendance/incidents/${resolveTarget._id}/resolve`, resolveForm);
       showToast({ message: 'Incidencia actualizada correctamente.', variant: 'success' });
       setResolveTarget(null);
       setResolveForm({ status: 'resolved', resolution: '' });
-      await loadIncidents();
+      await Promise.all([
+        loadIncidents(),
+        currentDetailSessionId && currentDetailSessionId === resolveTarget.workSessionId ? openDetail(currentDetailSessionId) : Promise.resolve()
+      ]);
     } catch (error) {
       showToast({ message: errorMessage(error, 'No se pudo resolver la incidencia.'), variant: 'error' });
     } finally {
@@ -245,7 +262,11 @@ export default function AttendancePage() {
       showToast({ message: reviewForm.decision === 'approved' ? 'Corrección aprobada y aplicada a la jornada.' : 'Corrección rechazada.', variant: 'success' });
       setReviewTarget(null);
       setReviewForm({ decision: 'approved', reviewNotes: '' });
-      await loadAdjustments();
+      await Promise.all([
+        loadAdjustments(),
+        loadHistory(),
+        detailSession?._id === reviewTarget.workSessionId ? openDetail(detailSession._id) : Promise.resolve()
+      ]);
     } catch (error) {
       showToast({ message: errorMessage(error, 'No se pudo revisar la solicitud de corrección.'), variant: 'error' });
     } finally {
@@ -267,6 +288,46 @@ export default function AttendancePage() {
     }
   }
 
+  function openAdministrativeAdjustment(session: WorkSession) {
+    setAdjustTarget(session);
+    setAdjustmentForm({
+      requestedStartAt: dateTimeInputValue(session.startedAt),
+      requestedEndAt: dateTimeInputValue(session.endedAt),
+      reviewNotes: ''
+    });
+  }
+
+  async function confirmAdministrativeAdjustment() {
+    if (!adjustTarget || !adjustmentForm.requestedStartAt) return;
+    const requestedStartAt = new Date(adjustmentForm.requestedStartAt);
+    const requestedEndAt = adjustmentForm.requestedEndAt ? new Date(adjustmentForm.requestedEndAt) : undefined;
+    if (Number.isNaN(requestedStartAt.getTime()) || (requestedEndAt && Number.isNaN(requestedEndAt.getTime()))) {
+      showToast({ message: 'Ingresá horarios válidos para continuar.', variant: 'error' });
+      return;
+    }
+    if (requestedEndAt && requestedEndAt.getTime() <= requestedStartAt.getTime()) {
+      showToast({ message: 'La salida debe ser posterior a la entrada.', variant: 'error' });
+      return;
+    }
+
+    setActing(true);
+    try {
+      await api.post(`/attendance/sessions/${adjustTarget._id}/adjust`, {
+        requestedStartAt: requestedStartAt.toISOString(),
+        ...(requestedEndAt ? { requestedEndAt: requestedEndAt.toISOString() } : {}),
+        ...(adjustmentForm.reviewNotes.trim() ? { reviewNotes: adjustmentForm.reviewNotes.trim() } : {})
+      });
+      showToast({ message: 'Horario ajustado y registrado en el historial.', variant: 'success' });
+      setAdjustTarget(null);
+      setAdjustmentForm({ requestedStartAt: '', requestedEndAt: '', reviewNotes: '' });
+      await Promise.all([loadHistory(), openDetail(adjustTarget._id)]);
+    } catch (error) {
+      showToast({ message: errorMessage(error, 'No se pudo ajustar el horario.'), variant: 'error' });
+    } finally {
+      setActing(false);
+    }
+  }
+
   const tabs: { id: Tab; label: string; icon: typeof UserRound }[] = [
     { id: 'active', label: 'Activos', icon: UserRound },
     { id: 'history', label: 'Historial', icon: History },
@@ -274,6 +335,9 @@ export default function AttendancePage() {
     { id: 'adjustments', label: 'Correcciones', icon: ClipboardList },
     ...(canManageSettings ? [{ id: 'settings' as Tab, label: 'Configuración', icon: Settings2 }] : [])
   ];
+  const adjustmentPreviewMinutes = adjustTarget && adjustmentForm.requestedStartAt && adjustmentForm.requestedEndAt
+    ? Math.round((new Date(adjustmentForm.requestedEndAt).getTime() - new Date(adjustmentForm.requestedStartAt).getTime()) / 60_000)
+    : null;
 
   return <section className="space-y-6">
     <PageHeader title="Asistencia y app móvil" description="Jornadas del personal fichadas desde la app móvil: control en vivo, historial, incidencias y correcciones." />
@@ -346,24 +410,40 @@ export default function AttendancePage() {
       <footer className="lg:col-span-3 flex justify-end"><Button disabled={savingSettings} onClick={() => void saveSettings()}>{savingSettings ? 'Guardando…' : 'Guardar configuración'}</Button></footer>
     </div>}
 
-    <Modal open={Boolean(detailSession)} onClose={() => { setDetailSession(null); setMapPunch(null); }} title="Detalle de jornada" description={detailSession ? `${personName(detailSession.userId)} · ${salonName(detailSession.salonId)}` : ''}>
+    <Modal open={Boolean(detailSession)} onClose={() => { setDetailSession(null); setMapPunch(null); setAdjustTarget(null); }} title="Detalle de jornada" description={detailSession ? `${personName(detailSession.userId)} · ${salonName(detailSession.salonId)}` : ''}>
       <div className="space-y-4 p-6">
         {loadingDetail ? <p className="text-sm text-zinc-500">Cargando…</p> : detailSession && <>
-          <dl className="grid gap-3 text-sm sm:grid-cols-2"><Metric label="Estado" value={workSessionStatusLabels[detailSession.status]} /><Metric label="Horas trabajadas" value={formatMinutes(detailSession.workedMinutes)} /><Metric label="Inicio" value={formatDateTime(detailSession.startedAt)} /><Metric label="Fin" value={formatDateTime(detailSession.endedAt)} /></dl>
+          <div className="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <dl className="grid flex-1 gap-x-6 gap-y-4 text-sm sm:grid-cols-2"><Metric label="Estado" value={workSessionStatusLabels[detailSession.status]} /><Metric label="Horas trabajadas" value={formatMinutes(detailSession.workedMinutes)} /><Metric label="Inicio" value={formatDateTime(detailSession.startedAt)} /><Metric label="Fin" value={formatDateTime(detailSession.endedAt)} /></dl>
+            {canManage && detailSession.status !== 'active' ? <Button className="shrink-0" onClick={() => openAdministrativeAdjustment(detailSession)}><Clock3 className="mr-2 h-4 w-4" />Ajustar horario</Button> : null}
+          </div>
           {detailSession.closeReason ? <section className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5"><h3 className="text-sm font-semibold text-amber-950">Cierre administrativo</h3><p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">{detailSession.closeReason}</p></section> : null}
           {detailSession.reviewNotes ? <section className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5"><h3 className="text-sm font-semibold text-emerald-950">Revisión administrativa</h3><p className="mt-1 whitespace-pre-wrap text-sm text-emerald-900">{detailSession.reviewNotes}</p>{detailSession.reviewedAt ? <p className="mt-1 text-xs text-emerald-700">{formatDateTime(detailSession.reviewedAt)}</p> : null}</section> : null}
-          <div><h3 className="text-sm font-semibold text-zinc-900">Registros de horario</h3><div className="mt-2 space-y-2">{detailPunches.map((punch) => <div key={punch._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">
+          <section><h3 className="text-sm font-semibold text-zinc-900">Registros de horario</h3><div className="mt-2 space-y-2">{detailPunches.map((punch) => <div key={punch._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">
             <div className="flex items-center justify-between"><span className="font-medium text-zinc-900">{punch.type === 'check_in' ? 'Entrada' : punch.type === 'check_out' ? 'Salida' : punch.type}</span><span className="text-zinc-500">{formatDateTime(punch.effectiveAt)}</span></div>
              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                {punch.locationValidationStatus !== 'outside_allowed_area' ? <span className="text-xs text-zinc-400">{locationValidationLabels[punch.locationValidationStatus ?? ''] ?? 'Sin ubicación'}{typeof punch.salonDistanceMeters === 'number' ? ` · ${Math.round(punch.salonDistanceMeters)} m del salón` : ''}</span> : null}
                {punch.location ? <button type="button" onClick={() => setMapPunch(punch)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50"><MapPin className="h-3.5 w-3.5" />Ver en el mapa</button> : null}
              </div>
              <PunchTechnicalDetails punch={punch} />
-           </div>)}{!detailPunches.length && <p className="text-sm text-zinc-500">Sin registros de horario.</p>}</div></div>
-           {Boolean(detailIncidents.length) && <div><h3 className="text-sm font-semibold text-zinc-900">Incidencias</h3><div className="mt-2 space-y-2">{detailIncidents.map((incident) => <div key={incident._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">{attendanceIncidentTypeLabels[incident.type] ?? incident.type} · {attendanceIncidentStatusLabels[incident.status]}</div>)}</div></div>}
-           {Boolean(detailAdjustments.length) && <div><h3 className="text-sm font-semibold text-zinc-900">Correcciones solicitadas</h3><div className="mt-2 space-y-2">{detailAdjustments.map((adjustment) => <div key={adjustment._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">{adjustment.reason} · {attendanceAdjustmentStatusLabels[adjustment.status]}</div>)}</div></div>}
+           </div>)}{!detailPunches.length && <p className="text-sm text-zinc-500">Sin registros de horario.</p>}</div></section>
+           <section className="border-t border-zinc-200 pt-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-zinc-900">Incidencias</h3><span className="text-xs tabular-nums text-zinc-500">{detailIncidents.length}</span></div>{detailIncidents.length ? <div className="mt-2 divide-y divide-zinc-100">{detailIncidents.map((incident) => <article key={incident._id} className="py-3 first:pt-0 last:pb-0"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-zinc-900">{attendanceIncidentTypeLabels[incident.type] ?? incident.type}</p><p className="mt-1 text-sm text-zinc-600">{incident.description}</p><p className="mt-1 text-xs text-zinc-500">Reportada {formatDateTime(incident.createdAt)}</p>{incident.resolution ? <p className="mt-2 text-sm text-zinc-600"><span className="font-medium text-zinc-800">Resolución:</span> {incident.resolution}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-2"><StatusBadge label={attendanceIncidentStatusLabels[incident.status]} tone={incident.status === 'resolved' ? 'ok' : incident.status === 'rejected' ? 'bad' : 'warn'} />{canManage && incident.status !== 'resolved' && incident.status !== 'rejected' ? <Button variant="secondary" className="px-3 py-2" onClick={() => { setResolveTarget(incident); setResolveForm({ status: 'resolved', resolution: '' }); }}>Revisar</Button> : null}</div></div></article>)}</div> : <p className="mt-2 text-sm text-zinc-500">No hay incidencias en esta jornada.</p>}</section>
+           <section className="border-t border-zinc-200 pt-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-zinc-900">Correcciones</h3><span className="text-xs tabular-nums text-zinc-500">{detailAdjustments.length}</span></div>{detailAdjustments.length ? <div className="mt-2 divide-y divide-zinc-100">{detailAdjustments.map((adjustment) => <article key={adjustment._id} className="py-3 first:pt-0 last:pb-0"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-zinc-900">{adjustment.reason}</p><p className="mt-1 text-sm text-zinc-600">Horario solicitado: {formatDateTime(adjustment.requestedStartAt)} → {formatDateTime(adjustment.requestedEndAt)}</p><p className="mt-1 text-xs text-zinc-500">Solicitada {formatDateTime(adjustment.createdAt)}</p>{adjustment.reviewNotes ? <p className="mt-2 text-sm text-zinc-600"><span className="font-medium text-zinc-800">Respuesta:</span> {adjustment.reviewNotes}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-2"><StatusBadge label={attendanceAdjustmentStatusLabels[adjustment.status]} tone={adjustment.status === 'approved' ? 'ok' : adjustment.status === 'rejected' ? 'bad' : 'warn'} />{canManage && adjustment.status === 'pending' ? <Button variant="secondary" className="px-3 py-2" onClick={() => { setReviewTarget(adjustment); setReviewForm({ decision: 'approved', reviewNotes: '' }); }}>Revisar</Button> : null}</div></div></article>)}</div> : <p className="mt-2 text-sm text-zinc-500">No hay correcciones solicitadas para esta jornada.</p>}</section>
            {canManage && detailSession.status !== 'active' && (detailSession.requiresReview || detailSession.status === 'under_review') ? <div className="flex justify-end border-t border-zinc-100 pt-4"><Button onClick={() => { setSessionReviewTarget(detailSession); setSessionReviewForm({ status: 'completed', reviewNotes: '' }); }}>Revisar estado de jornada</Button></div> : null}
          </>}
+       </div>
+     </Modal>
+
+    <Modal open={Boolean(adjustTarget)} onClose={() => setAdjustTarget(null)} title="Ajustar horario" description={adjustTarget ? `${personName(adjustTarget.userId)} · ${formatDateTime(adjustTarget.startedAt)}` : ''}>
+      <div className="space-y-5 p-6">
+        <p className="text-sm leading-6 text-zinc-600">Se actualizará la jornada y quedará registrada una corrección aprobada en su historial. Los fichajes originales se conservan como evidencia.</p>
+        <div className="grid gap-4 sm:grid-cols-2"><FilterField label="Entrada"><Input type="datetime-local" value={adjustmentForm.requestedStartAt} onChange={(event) => setAdjustmentForm((current) => ({ ...current, requestedStartAt: event.target.value }))} /></FilterField><FilterField label="Salida"><Input type="datetime-local" value={adjustmentForm.requestedEndAt} onChange={(event) => setAdjustmentForm((current) => ({ ...current, requestedEndAt: event.target.value }))} /></FilterField></div>
+        {adjustmentPreviewMinutes !== null ? adjustmentPreviewMinutes > 0
+          ? <p className="rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700">Duración recalculada: {formatMinutes(adjustmentPreviewMinutes)}.</p>
+          : <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">La salida debe ser posterior a la entrada.</p>
+          : null}
+        <FilterField label="Nota de la corrección (opcional)"><Textarea placeholder="Ej.: se corrigió la entrada informada por el encargado." value={adjustmentForm.reviewNotes} onChange={(event) => setAdjustmentForm((current) => ({ ...current, reviewNotes: event.target.value }))} /></FilterField>
+        <footer className="flex flex-wrap justify-end gap-3"><Button variant="secondary" onClick={() => setAdjustTarget(null)}>Cancelar</Button><Button disabled={acting || !adjustmentForm.requestedStartAt || adjustmentPreviewMinutes === 0 || (adjustmentPreviewMinutes !== null && adjustmentPreviewMinutes < 0)} onClick={() => void confirmAdministrativeAdjustment()}>{acting ? 'Guardando…' : 'Guardar ajuste'}</Button></footer>
       </div>
     </Modal>
 

@@ -336,6 +336,12 @@ export async function resolveIncident(id: string, actorId: string, status: strin
 
 export interface AdjustmentInput { workSessionId: string; requestedStartAt?: Date; requestedEndAt?: Date; reason: string; attachments?: unknown[]; }
 
+export interface AdministrativeAdjustmentInput {
+  requestedStartAt?: Date;
+  requestedEndAt?: Date;
+  reviewNotes?: string;
+}
+
 export async function createAdjustmentRequest(userId: string, input: AdjustmentInput) {
   const session: any = await WorkSession.findOne({ _id: input.workSessionId, userId }).lean();
   if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
@@ -347,6 +353,32 @@ export async function createAdjustmentRequest(userId: string, input: AdjustmentI
     originalSnapshot: { startedAt: session.startedAt, endedAt: session.endedAt, workedMinutes: session.workedMinutes, status: session.status },
     createdBy: userId, updatedBy: userId
   });
+}
+
+// Backoffice can resolve a horario correction immediately from a jornada detail.
+// It still creates the same adjustment record that the staff flow uses, preserving
+// the original snapshot and the complete audit trail.
+export async function applyAdministrativeAdjustment(sessionId: string, actorId: string, input: AdministrativeAdjustmentInput) {
+  const session: any = await WorkSession.findById(sessionId);
+  if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
+  if (session.status === WorkSessionStatus.ACTIVE) throw new ApiError(409, 'ATTENDANCE_ACTIVE_SESSION_ADJUSTMENT_NOT_ALLOWED');
+
+  const pending = await AttendanceAdjustmentRequest.exists({ workSessionId: sessionId, status: AttendanceAdjustmentStatus.PENDING });
+  if (pending) throw new ApiError(409, 'ATTENDANCE_ADJUSTMENT_ALREADY_PENDING');
+
+  const adjustment: any = await AttendanceAdjustmentRequest.create({
+    userId: session.userId,
+    workSessionId: session._id,
+    requestedStartAt: input.requestedStartAt,
+    requestedEndAt: input.requestedEndAt,
+    reason: 'Ajuste administrativo realizado desde el detalle de la jornada.',
+    attachments: [],
+    originalSnapshot: { startedAt: session.startedAt, endedAt: session.endedAt, workedMinutes: session.workedMinutes, status: session.status },
+    createdBy: actorId,
+    updatedBy: actorId
+  });
+
+  return reviewAdjustmentRequest(adjustment._id.toString(), actorId, 'approved', input.reviewNotes);
 }
 
 export async function reviewAdjustmentRequest(id: string, actorId: string, decision: 'approved' | 'rejected', reviewNotes?: string) {

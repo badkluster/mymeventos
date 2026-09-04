@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   workSessionFindById: vi.fn(),
   workSessionCreate: vi.fn(),
   workSessionFindOneAndUpdate: vi.fn(),
+  adjustmentExists: vi.fn(),
+  adjustmentFindOne: vi.fn(),
+  adjustmentCreate: vi.fn(),
   userFindOne: vi.fn(),
   salonFindOne: vi.fn(),
   assignmentFindOne: vi.fn(),
@@ -21,7 +24,7 @@ vi.mock('../src/modules/attendance/attendance.models', () => ({
   TimePunch: { findOne: mocks.timePunchFindOne, findById: mocks.timePunchFindById, create: mocks.timePunchCreate, updateOne: mocks.timePunchUpdateOne },
   WorkSession: { findOne: mocks.workSessionFindOne, findById: mocks.workSessionFindById, create: mocks.workSessionCreate, findOneAndUpdate: mocks.workSessionFindOneAndUpdate },
   AttendanceIncident: { exists: vi.fn(), create: vi.fn(), updateOne: vi.fn() },
-  AttendanceAdjustmentRequest: { exists: vi.fn(), findOne: vi.fn(), create: vi.fn() }
+  AttendanceAdjustmentRequest: { exists: mocks.adjustmentExists, findOne: mocks.adjustmentFindOne, create: mocks.adjustmentCreate }
 }));
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne } }));
 vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { findOne: mocks.salonFindOne } }));
@@ -230,6 +233,52 @@ describe('attendance.service', () => {
       await expect(
         attendanceService.reviewSession(new Types.ObjectId().toString(), userId, WorkSessionStatus.COMPLETED, 'Ya fue revisada.')
       ).rejects.toMatchObject({ status: 409, code: 'ATTENDANCE_SESSION_NOT_REVIEWABLE' });
+    });
+  });
+
+  describe('applyAdministrativeAdjustment', () => {
+    it('creates and approves an auditable correction from a closed jornada', async () => {
+      const sessionId = new Types.ObjectId().toString();
+      const adjustmentId = new Types.ObjectId();
+      const startedAt = new Date('2026-09-02T21:50:00.000Z');
+      const endedAt = new Date('2026-09-02T22:18:00.000Z');
+      const requestedStartAt = new Date('2026-09-02T11:00:00.000Z');
+      const session: any = {
+        _id: sessionId,
+        userId,
+        status: WorkSessionStatus.COMPLETED,
+        startedAt,
+        endedAt,
+        workedMinutes: 28,
+        breakMinutes: 0,
+        save: vi.fn().mockResolvedValue(undefined)
+      };
+      const adjustment: any = { _id: adjustmentId, status: 'pending', save: vi.fn().mockResolvedValue(undefined) };
+
+      mocks.workSessionFindById.mockResolvedValueOnce(session).mockResolvedValueOnce(session);
+      mocks.adjustmentExists.mockResolvedValue(null);
+      mocks.adjustmentCreate.mockImplementation(async (input) => Object.assign(adjustment, input));
+      mocks.adjustmentFindOne.mockResolvedValue(adjustment);
+
+      const result = await attendanceService.applyAdministrativeAdjustment(sessionId, userId, {
+        requestedStartAt,
+        requestedEndAt: endedAt,
+        reviewNotes: 'Entrada validada por administración.'
+      });
+
+      expect(result).toBe(adjustment);
+      expect(mocks.adjustmentCreate).toHaveBeenCalledWith(expect.objectContaining({
+        userId,
+        workSessionId: sessionId,
+        requestedStartAt,
+        requestedEndAt: endedAt,
+        createdBy: userId
+      }));
+      expect(session.startedAt).toEqual(requestedStartAt);
+      expect(session.workedMinutes).toBe(678);
+      expect(session.payableMinutes).toBe(678);
+      expect(session.status).toBe(WorkSessionStatus.ADJUSTED);
+      expect(adjustment.status).toBe('approved');
     });
   });
 });

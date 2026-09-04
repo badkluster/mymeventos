@@ -47,6 +47,14 @@ const reviewSessionSchema = z.object({
   }),
   params: z.object({ id: ObjectIdSchema }), query: z.object({})
 });
+const administrativeAdjustmentSchema = z.object({
+  body: z.object({
+    requestedStartAt: z.coerce.date().optional(),
+    requestedEndAt: z.coerce.date().optional(),
+    reviewNotes: z.string().trim().max(1000).optional()
+  }).refine((body) => Boolean(body.requestedStartAt || body.requestedEndAt), 'Indicá al menos un horario para ajustar.'),
+  params: z.object({ id: ObjectIdSchema }), query: z.object({})
+});
 const listIncidentsSchema = z.object({
   body: z.unknown().optional(), params: z.object({}),
   query: z.object({ status: z.nativeEnum(AttendanceIncidentStatus).optional(), userId: ObjectIdSchema.optional(), page: z.coerce.number().int().positive().default(1), limit: z.coerce.number().int().positive().max(200).default(50) })
@@ -126,6 +134,14 @@ router.post('/sessions/:id/review', requirePermission(Permission.ATTENDANCE_MANA
   const session = await attendanceService.reviewSession(request.params.id, request.user!.id, request.body.status, request.body.reviewNotes);
   await writeAuditLog(request, 'ATTENDANCE_SESSION_REVIEW', 'WorkSession', session._id.toString(), { status: request.body.status, reviewNotes: request.body.reviewNotes });
   return sendSuccess(response, { session }, 200, getApiMessage('ATTENDANCE_SESSION_REVIEWED'));
+}));
+
+router.post('/sessions/:id/adjust', requirePermission(Permission.ATTENDANCE_MANAGE), validateRequest(administrativeAdjustmentSchema), asyncHandler(async (request, response) => {
+  await assertSessionInScope(request, request.params.id);
+  const adjustment = await attendanceService.applyAdministrativeAdjustment(request.params.id, request.user!.id, request.body);
+  await writeAuditLog(request, 'ATTENDANCE_ADJUSTMENT_APPLY', 'AttendanceAdjustmentRequest', adjustment._id.toString(), { workSessionId: request.params.id });
+  const { session } = await attendanceService.getSessionDetail(request.user!.id, request.params.id, true);
+  return sendSuccess(response, { adjustment, session }, 200, getApiMessage('ATTENDANCE_ADJUSTMENT_APPLIED'));
 }));
 
 router.get('/incidents', requirePermission(Permission.ATTENDANCE_READ), validateRequest(listIncidentsSchema), asyncHandler(async (request, response) => {
