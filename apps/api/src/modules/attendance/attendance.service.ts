@@ -32,6 +32,7 @@ export interface ClockInput {
 export interface CheckInInput extends ClockInput { salonId?: string; eventId?: string; }
 
 interface PunchTiming { effectiveAt: Date; serverReceivedAt: Date; requiresReview: boolean; clockSkewMs: number; }
+const maxClockSkewMs = 5 * 60_000;
 
 function resolvePunchTiming(clientOccurredAt: Date, networkStatus: string): PunchTiming {
   const serverReceivedAt = new Date();
@@ -39,7 +40,17 @@ function resolvePunchTiming(clientOccurredAt: Date, networkStatus: string): Punc
   // The phone timestamp is audit-only. The server is the sole authority for
   // the official punch time, preventing a modified device clock from changing
   // worked hours. An offline-sync payload is never accepted (see checkIn/out).
-  return { effectiveAt: serverReceivedAt, serverReceivedAt, requiresReview: networkStatus !== 'online' || Math.abs(clockSkewMs) > 5 * 60_000, clockSkewMs };
+  return { effectiveAt: serverReceivedAt, serverReceivedAt, requiresReview: networkStatus !== 'online' || Math.abs(clockSkewMs) > maxClockSkewMs, clockSkewMs };
+}
+
+type CheckInReviewEvidence = { networkStatus?: string; clockSkewMs?: number; locationValidationStatus?: string };
+
+export function hasEffectiveReviewRequirement(session: { requiresReview?: boolean }, checkInPunch?: CheckInReviewEvidence | null): boolean {
+  if (!session.requiresReview || !checkInPunch) return Boolean(session.requiresReview);
+  const legacyOptionalLocationOnly = checkInPunch.locationValidationStatus === LocationValidationStatus.LOCATION_UNAVAILABLE
+    && checkInPunch.networkStatus === 'online'
+    && Math.abs(checkInPunch.clockSkewMs ?? 0) <= maxClockSkewMs;
+  return !legacyOptionalLocationOnly;
 }
 
 interface LocationValidationResult {
@@ -58,7 +69,9 @@ async function validateLocation(salonId: string | undefined, location: PunchLoca
     return { status: LocationValidationStatus.NOT_CONFIGURED, blocked: false, requiresReview: false, requiresReason: false };
   }
   if (!location) {
-    return { status: LocationValidationStatus.LOCATION_UNAVAILABLE, blocked: Boolean(rule.requireLocation), requiresReview: !rule.requireLocation, requiresReason: false };
+    // If the salon does not require GPS, a punch without a location is still
+    // valid and must not create an administrative review by itself.
+    return { status: LocationValidationStatus.LOCATION_UNAVAILABLE, blocked: Boolean(rule.requireLocation), requiresReview: false, requiresReason: false };
   }
   const distanceMeters = haversineDistanceMeters(location, rule);
   const radius = rule.allowedRadiusMeters ?? settings.defaultGeofenceRadiusMeters;
@@ -221,7 +234,10 @@ export async function checkOut(userId: string, input: ClockInput) {
   }
 
   const workedMinutes = Math.max(0, Math.round((timing.effectiveAt.getTime() - startedAtMs) / 60_000));
-  const requiresReview = activeSession.requiresReview || timing.requiresReview || locationResult.requiresReview;
+  const checkInPunch: any = activeSession.requiresReview && activeSession.checkInPunchId
+    ? await TimePunch.findById(activeSession.checkInPunchId).select('networkStatus clockSkewMs locationValidationStatus').lean()
+    : undefined;
+  const requiresReview = hasEffectiveReviewRequirement(activeSession, checkInPunch) || timing.requiresReview || locationResult.requiresReview;
   const attendanceClassification = await classifySession(activeSession, settings);
 
   const updated = await WorkSession.findOneAndUpdate(

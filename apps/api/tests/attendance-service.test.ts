@@ -4,6 +4,7 @@ import { TimePunchType, WorkSessionStatus } from '@mym/shared';
 
 const mocks = vi.hoisted(() => ({
   timePunchFindOne: vi.fn(),
+  timePunchFindById: vi.fn(),
   timePunchCreate: vi.fn(),
   timePunchUpdateOne: vi.fn(),
   workSessionFindOne: vi.fn(),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/modules/attendance/attendance.models', () => ({
-  TimePunch: { findOne: mocks.timePunchFindOne, create: mocks.timePunchCreate, updateOne: mocks.timePunchUpdateOne },
+  TimePunch: { findOne: mocks.timePunchFindOne, findById: mocks.timePunchFindById, create: mocks.timePunchCreate, updateOne: mocks.timePunchUpdateOne },
   WorkSession: { findOne: mocks.workSessionFindOne, findById: mocks.workSessionFindById, create: mocks.workSessionCreate, findOneAndUpdate: mocks.workSessionFindOneAndUpdate },
   AttendanceIncident: { exists: vi.fn(), create: vi.fn(), updateOne: vi.fn() },
   AttendanceAdjustmentRequest: { exists: vi.fn(), findOne: vi.fn(), create: vi.fn() }
@@ -121,6 +122,21 @@ describe('attendance.service', () => {
       expect(result.idempotentReplay).toBe(false);
       expect(mocks.workSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ requiresReview: false }));
     });
+
+    it('does not flag a check-in without GPS when the salon makes location optional', async () => {
+      mocks.timePunchFindOne.mockReturnValue(chainLean(null));
+      mocks.salonFindOne.mockReturnValue(chainSelectLean({ attendanceLocationRule: { latitude: 0, longitude: 0, requireLocation: false } }));
+      const punchId = new Types.ObjectId();
+      mocks.timePunchCreate.mockResolvedValue({ _id: punchId });
+      mocks.workSessionCreate.mockResolvedValue({ _id: new Types.ObjectId(), status: WorkSessionStatus.ACTIVE });
+      mocks.timePunchUpdateOne.mockResolvedValue({});
+
+      await attendanceService.checkIn(userId, {
+        requestId: 'req-checkin-optional-location', clientOccurredAt: new Date(), networkStatus: 'online', salonId: new Types.ObjectId().toString()
+      });
+
+      expect(mocks.workSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ requiresReview: false }));
+    });
   });
 
   describe('checkOut', () => {
@@ -164,6 +180,22 @@ describe('attendance.service', () => {
 
       expect(result.session.workedMinutes).toBeGreaterThanOrEqual(0);
       expect(result.session.requiresReview).toBe(true);
+    });
+
+    it('clears a legacy optional-location review marker when a normal session is checked out', async () => {
+      const startedAt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const activeSession: any = { _id: new Types.ObjectId(), userId, status: WorkSessionStatus.ACTIVE, startedAt, breakMinutes: 0, requiresReview: true, checkInPunchId: new Types.ObjectId() };
+      mocks.timePunchFindOne.mockReturnValue(chainLean(null));
+      mocks.workSessionFindOne.mockResolvedValue(activeSession);
+      mocks.timePunchFindById.mockReturnValue(chainSelectLean({ networkStatus: 'online', clockSkewMs: 0, locationValidationStatus: 'location_unavailable' }));
+      mocks.timePunchCreate.mockResolvedValue({ _id: new Types.ObjectId(), type: TimePunchType.CHECK_OUT });
+      mocks.timePunchUpdateOne.mockResolvedValue({});
+      mocks.workSessionFindOneAndUpdate.mockImplementation((_filter: unknown, update: Record<string, unknown>) => Promise.resolve({ ...activeSession, ...update }));
+
+      const result = await attendanceService.checkOut(userId, { requestId: 'req-checkout-legacy-optional-location', clientOccurredAt: new Date(), networkStatus: 'online' });
+
+      expect(result.session.status).toBe(WorkSessionStatus.COMPLETED);
+      expect(result.session.requiresReview).toBe(false);
     });
   });
 

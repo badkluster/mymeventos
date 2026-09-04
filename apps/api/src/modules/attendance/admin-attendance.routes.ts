@@ -78,8 +78,14 @@ router.get('/sessions/active', requirePermission(Permission.ATTENDANCE_READ), as
     .sort({ startedAt: -1 })
     .populate('userId', 'firstName lastName fullName avatarUrl staffProfile.staffCode staffProfile.staffSubroles')
     .populate('salonId', 'name city')
+    .populate('checkInPunchId', 'networkStatus clockSkewMs locationValidationStatus')
     .lean();
-  return sendSuccess(response, { sessions });
+  return sendSuccess(response, {
+    sessions: sessions.map(({ checkInPunchId, ...session }: any) => ({
+      ...session,
+      requiresReview: attendanceService.hasEffectiveReviewRequirement(session, checkInPunchId)
+    }))
+  });
 }));
 
 router.get('/sessions', requirePermission(Permission.ATTENDANCE_READ), validateRequest(listSessionsSchema), asyncHandler(async (request, response) => {
