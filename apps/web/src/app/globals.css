@@ -39,13 +39,6 @@
   --color-danger-bg: var(--danger-bg); --color-danger-border: var(--danger-border); --color-danger-foreground: var(--danger-foreground);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 html,
 body {
   max-width: 100%;
