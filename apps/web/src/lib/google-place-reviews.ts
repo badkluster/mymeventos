@@ -15,6 +15,8 @@ export type GooglePlaceReview = {
 type GooglePlace = { salonName: string; placeId: string };
 type GooglePlaceDetailsResponse = {
   googleMapsLinks?: { reviewsUri?: string };
+  rating?: number;
+  userRatingCount?: number;
   reviews?: Array<{
     name?: string;
     rating?: number;
@@ -31,6 +33,7 @@ const googlePlaces: GooglePlace[] = [
   { salonName: 'M&M Eventos Villa Elisa', placeId: 'ChIJ65pMr0HfopURwLXdlrTTk1s' }
 ];
 const GOOGLE_REVIEWS_FIELD_MASK = 'id,displayName,rating,userRatingCount,reviews,googleMapsLinks';
+const GOOGLE_REVIEWS_LANGUAGE_CODE = 'es';
 const GOOGLE_REVIEWS_TIMEOUT_MS = 4_500;
 const DEFAULT_REVALIDATE_SECONDS = 43_200;
 const DEFAULT_REVIEW_LIMIT = 6;
@@ -53,7 +56,9 @@ async function fetchPlaceDetails(place: GooglePlace, apiKey: string, revalidate:
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GOOGLE_REVIEWS_TIMEOUT_MS);
   try {
-    const response = await fetch(`https://places.googleapis.com/v1/places/${place.placeId}`, {
+    const url = new URL(`https://places.googleapis.com/v1/places/${place.placeId}`);
+    url.searchParams.set('languageCode', GOOGLE_REVIEWS_LANGUAGE_CODE);
+    const response = await fetch(url, {
       headers: {
         'X-Goog-Api-Key': apiKey,
         'X-Goog-FieldMask': GOOGLE_REVIEWS_FIELD_MASK
@@ -72,7 +77,7 @@ async function fetchPlaceDetails(place: GooglePlace, apiKey: string, revalidate:
       return rating >= 4 && rating <= 5;
     });
     const reviewsWithDirectLink = highRatedReviews.filter((review) => Boolean(review.googleMapsUri || placeReviewsUri));
-    console.info(`[google-place-reviews] ${place.salonName}: recibidas=${sourceReviews.length}, conTexto=${reviewsWithText.length}, 4o5Estrellas=${highRatedReviews.length}, conEnlaceGoogle=${reviewsWithDirectLink.length}`);
+    console.info(`[google-place-reviews] ${place.salonName}: calificacionGeneral=${payload.rating ?? 'sinDato'}, cantidadValoraciones=${payload.userRatingCount ?? 0}, recibidas=${sourceReviews.length}, conTexto=${reviewsWithText.length}, 4o5Estrellas=${highRatedReviews.length}, conEnlaceGoogle=${reviewsWithDirectLink.length}`);
 
     return sourceReviews.flatMap((review, index): GooglePlaceReview[] => {
       const text = review.text?.text?.trim() ?? '';
