@@ -14,6 +14,7 @@ export type GooglePlaceReview = {
 
 type GooglePlace = { salonName: string; placeId: string };
 type GooglePlaceDetailsResponse = {
+  googleMapsLinks?: { reviewsUri?: string };
   reviews?: Array<{
     name?: string;
     rating?: number;
@@ -29,7 +30,7 @@ const googlePlaces: GooglePlace[] = [
   { salonName: 'M&M Eventos San Carlos', placeId: 'ChIJpatAfCzpopURZtt8P-l3-Ss' },
   { salonName: 'M&M Eventos Villa Elisa', placeId: 'ChIJ65pMr0HfopURwLXdlrTTk1s' }
 ];
-const GOOGLE_REVIEWS_FIELD_MASK = 'id,displayName,rating,userRatingCount,reviews';
+const GOOGLE_REVIEWS_FIELD_MASK = 'id,displayName,rating,userRatingCount,reviews,googleMapsLinks';
 const GOOGLE_REVIEWS_TIMEOUT_MS = 4_500;
 const DEFAULT_REVALIDATE_SECONDS = 43_200;
 const DEFAULT_REVIEW_LIMIT = 6;
@@ -63,10 +64,21 @@ async function fetchPlaceDetails(place: GooglePlace, apiKey: string, revalidate:
     if (!response.ok) throw new Error(`Place Details respondió HTTP ${response.status}`);
 
     const payload = await response.json() as GooglePlaceDetailsResponse;
-    return (payload.reviews ?? []).flatMap((review, index): GooglePlaceReview[] => {
+    const sourceReviews = payload.reviews ?? [];
+    const placeReviewsUri = payload.googleMapsLinks?.reviewsUri;
+    const reviewsWithText = sourceReviews.filter((review) => Boolean(review.text?.text?.trim()));
+    const highRatedReviews = reviewsWithText.filter((review) => {
+      const rating = Number(review.rating ?? 0);
+      return rating >= 4 && rating <= 5;
+    });
+    const reviewsWithDirectLink = highRatedReviews.filter((review) => Boolean(review.googleMapsUri || placeReviewsUri));
+    console.info(`[google-place-reviews] ${place.salonName}: recibidas=${sourceReviews.length}, conTexto=${reviewsWithText.length}, 4o5Estrellas=${highRatedReviews.length}, conEnlaceGoogle=${reviewsWithDirectLink.length}`);
+
+    return sourceReviews.flatMap((review, index): GooglePlaceReview[] => {
       const text = review.text?.text?.trim() ?? '';
       const rating = Number(review.rating ?? 0);
-      if (!text || rating < 4 || rating > 5 || !review.googleMapsUri) return [];
+      const googleMapsUri = review.googleMapsUri || placeReviewsUri;
+      if (!text || rating < 4 || rating > 5 || !googleMapsUri) return [];
       return [{
         id: review.name || `${place.placeId}-${index}`,
         authorName: review.authorAttribution?.displayName?.trim() || 'Usuario de Google',
@@ -75,7 +87,7 @@ async function fetchPlaceDetails(place: GooglePlace, apiKey: string, revalidate:
         rating,
         text,
         salonName: place.salonName,
-        googleMapsUri: review.googleMapsUri,
+        googleMapsUri,
         publishedAt: review.publishTime
       }];
     });

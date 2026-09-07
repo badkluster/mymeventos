@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ThemeProvider } from '@/components/theme-provider';
 import { AdminClientLayout } from './admin-client-layout';
 
 export const metadata: Metadata = {
@@ -15,5 +16,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <AdminClientLayout>{children}</AdminClientLayout>;
+  return <ThemeProvider><AdminClientLayout>{children}</AdminClientLayout></ThemeProvider>;
 }
