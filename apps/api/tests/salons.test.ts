@@ -91,12 +91,12 @@ describe('salons management', () => {
     const response = await request(app)
       .patch(`/api/salons/${salonId}`)
       .set('Cookie', adminCookie)
-      .send({ name: 'San Carlos Norte', slug: 'san-carlos-norte', locality: 'San Carlos', maxCapacity: 180 });
+      .send({ name: 'San Carlos Norte', slug: 'san-carlos-norte', locality: 'San Carlos', maxCapacity: 180, googleReviewUrl: 'https://g.page/r/san-carlos/review' });
 
     expect(response.status).toBe(200);
     expect(mocks.salonFindOneAndUpdate).toHaveBeenCalledWith(
       { _id: salonId, deletedAt: null },
-      expect.objectContaining({ name: 'San Carlos Norte', updatedBy: adminId }),
+      expect.objectContaining({ name: 'San Carlos Norte', googleReviewUrl: 'https://g.page/r/san-carlos/review', updatedBy: adminId }),
       { new: true }
     );
   });

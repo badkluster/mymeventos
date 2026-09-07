@@ -1,4 +1,5 @@
 import { CalendarItem, Customer, Event } from './crm.models';
+import { Salon } from '../salons/salon.model';
 import { renderBrandedEmail } from '../email/email-template.util';
 import {
   idOf,
@@ -8,8 +9,8 @@ import {
   type GenericTickResult
 } from './reminder-engine';
 
-// Link the user asked to use verbatim — a Google share.google short link, which is Google's own
-// stable URL-shortening product, so there is no separate "canonical" Maps URL to resolve to.
+// Kept only as a fallback for existing calendar items and salons that have not configured their
+// own direct Google review URL yet.
 export const GOOGLE_REVIEW_URL = 'https://share.google/Zoetd8PLSfJVjAl1C';
 const REVIEW_DELAY_DAYS = 2;
 const REVIEW_DELAY_MS = REVIEW_DELAY_DAYS * 86_400_000;
@@ -26,8 +27,19 @@ async function syncPostEventReviewRequests(now: Date): Promise<number> {
     deletedAt: null,
     status: 'confirmed',
     eventDate: { $lte: cutoff }
-  }).select('_id eventName eventDate customerId').lean();
+  }).select('_id eventName eventDate customerId salonId').lean();
   if (!events.length) return 0;
+
+  const salonIds = [...new Set(events.map((event) => idOf(event.salonId)).filter((id): id is string => Boolean(id)))];
+  const salons: any[] = salonIds.length
+    ? await Salon.find({ _id: { $in: salonIds }, deletedAt: null }).select('_id googleReviewUrl').lean()
+    : [];
+  const reviewUrlBySalonId = new Map<string, string>();
+  for (const salon of salons) {
+    const salonId = idOf(salon);
+    const googleReviewUrl = typeof salon.googleReviewUrl === 'string' ? salon.googleReviewUrl.trim() : '';
+    if (salonId && googleReviewUrl) reviewUrlBySalonId.set(salonId, googleReviewUrl);
+  }
 
   let synced = 0;
   for (const event of events) {
@@ -47,9 +59,14 @@ async function syncPostEventReviewRequests(now: Date): Promise<number> {
           priority: 'normal',
           visibility: 'private',
           eventId: event._id,
+          salonId: event.salonId,
           customerId: event.customerId,
           automationKey,
-          metadata: { postEventReview: true, eventName: event.eventName },
+          metadata: {
+            postEventReview: true,
+            eventName: event.eventName,
+            googleReviewUrl: reviewUrlBySalonId.get(idOf(event.salonId) ?? '') ?? GOOGLE_REVIEW_URL
+          },
           notification: { enabled: true, channels: ['email'], sendAt, status: 'scheduled', attemptCount: 0 }
         }
       },
@@ -78,12 +95,13 @@ async function resolveRecipients(item: any): Promise<GenericReminderRecipients> 
 
 function buildContent(item: any) {
   const eventName = item?.metadata?.eventName || 'tu evento';
+  const googleReviewUrl = item?.metadata?.googleReviewUrl || GOOGLE_REVIEW_URL;
   const subject = '¿Cómo fue tu experiencia con M&M Eventos?';
   const text = [
     `¡Gracias por elegirnos para ${eventName}!`,
     'Esperamos que haya sido un día inolvidable.',
     '',
-    `Nos ayudaría muchísimo que dejes tu reseña acá: ${GOOGLE_REVIEW_URL}`,
+    `Nos ayudaría muchísimo que dejes tu reseña acá: ${googleReviewUrl}`,
     '',
     'Gracias por confiar en nosotros.'
   ].join('\n');
@@ -92,7 +110,7 @@ function buildContent(item: any) {
     heading: '¿Cómo fue tu experiencia?',
     intro: `¡Gracias por confiar en M&M Eventos para ${eventName}! Esperamos que haya sido un día inolvidable. Tu opinión nos ayuda muchísimo a seguir mejorando.`,
     ctaLabel: 'Dejar una reseña en Google',
-    ctaUrl: GOOGLE_REVIEW_URL,
+    ctaUrl: googleReviewUrl,
     footerNote: 'Te va a llevar menos de un minuto — muchas gracias.'
   });
   return { subject, text, html };

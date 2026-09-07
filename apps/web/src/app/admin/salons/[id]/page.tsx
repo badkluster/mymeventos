@@ -321,7 +321,8 @@ export default function SalonDetailPage() {
       allowsExtraHour: Boolean(form.get('allowsExtraHour')),
       extraHourPrice: toNumber(form.get('extraHourPrice')),
       operationalNotes: toText(form.get('operationalNotes')),
-      internalDescription: toText(form.get('internalDescription'))
+      internalDescription: toText(form.get('internalDescription')),
+      googleReviewUrl: toText(form.get('googleReviewUrl'))
     }, 'Datos generales guardados correctamente.');
   }
 
@@ -694,6 +695,7 @@ export default function SalonDetailPage() {
       <div className="lg:col-span-3"><p className="text-sm font-medium text-zinc-700">Tipos de evento permitidos</p><div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{eventTypeOptions.map(([value, label]) => <label key={value} className="flex items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-sm"><input name={`eventType:${value}`} type="checkbox" defaultChecked={salon.allowedEventTypes?.includes(value)} />{label}</label>)}</div></div>
       <Field label="Hora de inicio default"><Input name="defaultStartTime" defaultValue={salon.defaultStartTime} placeholder="21:00" /></Field><Field label="Hora de fin default"><Input name="defaultEndTime" defaultValue={salon.defaultEndTime} placeholder="05:00" /></Field><Field label="Duración default"><Input name="defaultDurationHours" type="number" min={1} defaultValue={salon.defaultDurationHours ?? 8} /></Field>
       <label className="flex items-center gap-2 text-sm text-zinc-700"><input name="allowsExtraHour" type="checkbox" defaultChecked={salon.allowsExtraHour} />Permite hora extra</label><Field label="Precio hora extra"><Input name="extraHourPrice" type="number" min={0} defaultValue={salon.extraHourPrice ?? 0} /></Field>
+      <Field label="URL de reseñas de Google" className="lg:col-span-2"><Input name="googleReviewUrl" type="url" defaultValue={salon.googleReviewUrl} placeholder="https://g.page/r/.../review o https://share.google/..." /><span className="mt-1.5 block text-xs font-normal text-zinc-500">El cliente recibirá este enlace en el correo automático de reseña posterior al evento.</span></Field>
       <Field label="Descripción interna" className="lg:col-span-3"><Textarea name="internalDescription" defaultValue={salon.internalDescription} /></Field><Field label="Notas operativas" className="lg:col-span-3"><Textarea name="operationalNotes" defaultValue={salon.operationalNotes} /></Field>
       <footer className="lg:col-span-3 flex justify-end"><Button disabled={saving}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar general'}</Button></footer>
     </form>}

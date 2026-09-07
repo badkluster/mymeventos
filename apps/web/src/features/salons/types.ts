@@ -101,6 +101,7 @@ export type Salon = {
   instagramUrl?: string;
   facebookUrl?: string;
   tiktokUrl?: string;
+  googleReviewUrl?: string;
   managerUserId?: string;
   manager?: SalonManager;
   active: boolean;

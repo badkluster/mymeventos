@@ -54,6 +54,7 @@ const salonSchema = new Schema({
   instagramUrl: String,
   facebookUrl: String,
   tiktokUrl: String,
+  googleReviewUrl: String,
   managerUserId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
   active: { type: Boolean, default: true, index: true },
   internalDescription: String,

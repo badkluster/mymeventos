@@ -63,6 +63,7 @@ const salonBaseFields = z.object({
   instagramUrl: urlField,
   facebookUrl: urlField,
   tiktokUrl: urlField,
+  googleReviewUrl: urlField,
   managerUserId: objectId.optional().or(z.literal('')),
   active: z.boolean().optional(),
   internalDescription: optionalText,

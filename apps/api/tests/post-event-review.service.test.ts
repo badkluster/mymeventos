@@ -54,6 +54,7 @@ const mocks = vi.hoisted(() => ({
   calendarUpdateOne: vi.fn(),
   eventFind: vi.fn(),
   eventFindOne: vi.fn(),
+  salonFind: vi.fn(),
   customerFindOne: vi.fn(),
   sendEmail: vi.fn(),
   userFind: vi.fn(),
@@ -65,6 +66,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   Event: { find: mocks.eventFind, findOne: mocks.eventFindOne },
   Customer: { findOne: mocks.customerFindOne }
 }));
+vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { find: mocks.salonFind } }));
 vi.mock('../src/modules/users/user.model', () => ({ User: { find: mocks.userFind } }));
 vi.mock('../src/modules/notifications/notification.model', () => ({ Notification: { bulkWrite: mocks.notificationBulkWrite } }));
 vi.mock('../src/modules/email/email.service', () => ({ sendEmail: mocks.sendEmail }));
@@ -103,6 +105,7 @@ describe('post-event review automation', () => {
     });
     mocks.eventFind.mockReturnValue(leanQuery([]));
     mocks.eventFindOne.mockReturnValue(leanQuery(undefined));
+    mocks.salonFind.mockReturnValue(leanQuery([]));
     mocks.customerFindOne.mockReturnValue(leanQuery(undefined));
     mocks.sendEmail.mockResolvedValue(true);
   });
@@ -147,6 +150,30 @@ describe('post-event review automation', () => {
     expect(result).toMatchObject({ synced: 0, delivered: 0, skipped: 0, failed: 0 });
     expect(mocks.sendEmail).not.toHaveBeenCalled();
     expect(calendarStore).toHaveLength(0);
+  });
+
+  it('uses the Google review URL configured for the event salon', async () => {
+    const salonId = 'salon-1';
+    const salonReviewUrl = 'https://g.page/r/custom-salon/review';
+    mocks.eventFind.mockReturnValue(leanQuery([{
+      _id: 'event-3',
+      eventName: 'Cumple de Martina',
+      eventDate: '2026-06-01',
+      customerId: 'customer-3',
+      salonId
+    }]));
+    mocks.salonFind.mockReturnValue(leanQuery([{ _id: salonId, googleReviewUrl: salonReviewUrl }]));
+    mocks.eventFindOne.mockReturnValue(leanQuery({ _id: 'event-3', status: 'confirmed' }));
+    mocks.customerFindOne.mockReturnValue(leanQuery({ email: 'martina@example.com' }));
+
+    const result = await processPostEventReviewTick(new Date('2026-06-03T15:00:00.000Z'));
+
+    expect(result).toMatchObject({ synced: 1, delivered: 1, failed: 0 });
+    const [emailArgs] = mocks.sendEmail.mock.calls[0];
+    expect(emailArgs.html).toContain(salonReviewUrl);
+    expect(emailArgs.text).toContain(salonReviewUrl);
+    expect(emailArgs.html).not.toContain(GOOGLE_REVIEW_URL);
+    expect(mocks.salonFind).toHaveBeenCalledWith({ _id: { $in: [salonId] }, deletedAt: null });
   });
 
   it('cancels a pending review request instead of sending it if the event was cancelled after being scheduled', async () => {
