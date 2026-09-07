@@ -34,6 +34,7 @@ const googlePlaces: GooglePlace[] = [
 ];
 const GOOGLE_REVIEWS_FIELD_MASK = 'id,displayName,rating,userRatingCount,reviews,googleMapsLinks';
 const GOOGLE_REVIEWS_LANGUAGE_CODE = 'es';
+const GOOGLE_REVIEWS_REGION_CODE = 'AR';
 const GOOGLE_REVIEWS_TIMEOUT_MS = 4_500;
 const DEFAULT_REVALIDATE_SECONDS = 43_200;
 const DEFAULT_REVIEW_LIMIT = 6;
@@ -58,6 +59,7 @@ async function fetchPlaceDetails(place: GooglePlace, apiKey: string, revalidate:
   try {
     const url = new URL(`https://places.googleapis.com/v1/places/${place.placeId}`);
     url.searchParams.set('languageCode', GOOGLE_REVIEWS_LANGUAGE_CODE);
+    url.searchParams.set('regionCode', GOOGLE_REVIEWS_REGION_CODE);
     const response = await fetch(url, {
       headers: {
         'X-Goog-Api-Key': apiKey,
