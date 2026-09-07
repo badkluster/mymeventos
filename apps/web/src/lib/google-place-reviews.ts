@@ -13,6 +13,11 @@ export type GooglePlaceReview = {
   relativePublishedAt?: string;
 };
 
+export type GooglePlaceReviewsResult = {
+  featured: GooglePlaceReview[];
+  bySalon: GooglePlaceReview[];
+};
+
 type GooglePlace = { salonName: string; placeId: string };
 type GooglePlaceDetailsResponse = {
   rating?: number;
@@ -135,20 +140,21 @@ export function selectBestGoogleReviews(reviews: GooglePlaceReview[], limit = DE
 }
 
 /**
- * Retrieves a small, curated pool of public Google Maps reviews exclusively on the server.
- * An empty result is intentional: callers must keep using their manual testimonials as a
- * silent fallback when the integration is disabled, times out, or returns no suitable reviews.
+ * Retrieves public Google Maps reviews exclusively on the server. `featured` is the curated
+ * gallery set, while `bySalon` keeps every eligible review returned for the individual salon
+ * detail. An empty result is intentional: callers must keep using their manual testimonials as
+ * a silent fallback when the integration is disabled, times out, or returns no suitable reviews.
  */
-export async function getGooglePlaceReviews(): Promise<GooglePlaceReview[]> {
+export async function getGooglePlaceReviews(): Promise<GooglePlaceReviewsResult> {
   if (isFallbackForced()) {
     console.info('[google-place-reviews] Fallback manual forzado por GOOGLE_REVIEWS_FORCE_FALLBACK.');
-    return [];
+    return { featured: [], bySalon: [] };
   }
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
   if (!apiKey) {
     logGoogleReviewsError('No se configuró GOOGLE_PLACES_API_KEY; se usarán testimonios manuales');
-    return [];
+    return { featured: [], bySalon: [] };
   }
 
   const limit = positiveInteger(process.env.GOOGLE_REVIEWS_MAX_ITEMS, DEFAULT_REVIEW_LIMIT, 6, 15);
@@ -156,13 +162,13 @@ export async function getGooglePlaceReviews(): Promise<GooglePlaceReview[]> {
   const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
   if (failures.length) {
     failures.forEach((result) => logGoogleReviewsError('No se pudo obtener una ubicación de Google Maps', result.reason));
-    return [];
+    return { featured: [], bySalon: [] };
   }
 
   const reviews = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
   if (!reviews.length) {
     logGoogleReviewsError('Google Maps no devolvió reseñas con texto y 4 o 5 estrellas; se usarán testimonios manuales');
-    return [];
+    return { featured: [], bySalon: [] };
   }
-  return selectBestGoogleReviews(reviews, limit);
+  return { featured: selectBestGoogleReviews(reviews, limit), bySalon: [...reviews].sort(compareReviews) };
 }

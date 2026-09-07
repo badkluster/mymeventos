@@ -21,8 +21,8 @@ type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescr
 type Package = { _id: string; name: string; salonId?: string; salonName?: string; description?: string; notes?: string; durationHours?: number; startTime?: string; endTime?: string; pricingMode?: 'per_person' | 'fixed'; pricePerPerson?: number; finalPricePerPerson?: number; fixedPrice?: number; finalFixedPrice?: number; depositAmount?: number; paymentTerms?: string; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
 type LandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
 type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroVideoUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
-type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; googleReviews: GooglePlaceReview[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[]; storySteps: LandingItem[] };
-const emptyLanding: LandingPayload = { salons: [], packages: [], promotions: [], gallery: [], testimonials: [], googleReviews: [], faqs: [], serviceBlocks: [], eventTypes: [], storySteps: [] };
+type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; googleReviews: GooglePlaceReview[]; salonGoogleReviews: GooglePlaceReview[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[]; storySteps: LandingItem[] };
+const emptyLanding: LandingPayload = { salons: [], packages: [], promotions: [], gallery: [], testimonials: [], googleReviews: [], salonGoogleReviews: [], faqs: [], serviceBlocks: [], eventTypes: [], storySteps: [] };
 function normalizeLanding(landing?: Partial<LandingPayload> | null): LandingPayload {
   return {
     ...landing,
@@ -32,6 +32,7 @@ function normalizeLanding(landing?: Partial<LandingPayload> | null): LandingPayl
     gallery: Array.isArray(landing?.gallery) ? landing.gallery : [],
     testimonials: Array.isArray(landing?.testimonials) ? landing.testimonials : [],
     googleReviews: Array.isArray(landing?.googleReviews) ? landing.googleReviews : [],
+    salonGoogleReviews: Array.isArray(landing?.salonGoogleReviews) ? landing.salonGoogleReviews : [],
     faqs: Array.isArray(landing?.faqs) ? landing.faqs : [],
     serviceBlocks: Array.isArray(landing?.serviceBlocks) ? landing.serviceBlocks : [],
     eventTypes: Array.isArray(landing?.eventTypes) ? landing.eventTypes : [],
@@ -157,6 +158,18 @@ function titleForSalon(salon: Salon) { return salon.publicTitle || salon.name; }
 function locationForSalon(salon: Salon) { return salon.locationText || salon.locality || salon.city || salon.address || 'La Plata'; }
 function heroLocationForSalon(salon: Salon) { return salon.locality || salon.city || titleForSalon(salon); }
 function descriptionForSalon(salon: Salon) { return salon.publicShortDescription || salon.publicDescription || 'Un espacio M&M preparado para celebrar con servicio integral.'; }
+function googleSalonKey(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-AR').replace(/m\s*&\s*m/g, 'mm').replace(/\beventos?\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function googleReviewsForSalon(salon: Salon, reviews: GooglePlaceReview[]): GooglePlaceReview[] {
+  const salonKey = googleSalonKey(titleForSalon(salon));
+  const salonWords = new Set(salonKey.split(' ').filter(Boolean));
+  return reviews.filter((review) => {
+    const reviewKey = googleSalonKey(review.salonName);
+    if (reviewKey === salonKey) return true;
+    return reviewKey.split(' ').filter(Boolean).every((word) => salonWords.has(word));
+  });
+}
 function imageForSalon(salon: Salon) { return cloudinaryImageUrl(salon.heroImageUrl || salon.mediaGallery?.[0]?.secureUrl || salon.mediaGallery?.[0]?.url || salon.galleryImageUrls?.[0] || fallbackHero); }
 function capacityForSalon(salon: Salon) {
   if (salon.minCapacity && salon.maxCapacity) return `${salon.minCapacity} a ${salon.maxCapacity} personas`;
@@ -484,11 +497,12 @@ function GalleryLightbox({ items, index, onClose, onSelect }: { items: LandingIt
   </Portal>;
 }
 
-function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | null; onClose: () => void; onRequestQuote: (salon: Salon) => void }) {
+function SalonDetailModal({ salon, googleReviews, onClose, onRequestQuote }: { salon: Salon | null; googleReviews: GooglePlaceReview[]; onClose: () => void; onRequestQuote: (salon: Salon) => void }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const media = useMemo(() => salon ? mediaForSalon(salon) : [], [salon]);
+  const salonGoogleReviews = useMemo(() => salon ? googleReviewsForSalon(salon, googleReviews) : [], [googleReviews, salon]);
 
   const panelRef = useRef<HTMLElement | null>(null);
   const lightboxPanelRef = useRef<HTMLElement | null>(null);
@@ -542,6 +556,38 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><PackageCheck className="h-5 w-5 text-[#c8cdd3]" /><p className="mt-3 text-xs uppercase tracking-[0.16em] text-zinc-400">Paquetes</p><p className="mt-1 font-semibold">{packages.length || 'A consultar'}</p></div>
               </div>
             </section>
+
+            {salonGoogleReviews.length ? <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 sm:p-5">
+              <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-2xl font-semibold">Reseñas de {titleForSalon(salon)}</h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">Reseñas con comentario de 4 y 5 estrellas, ordenadas por calificación, extensión y fecha.</p>
+                </div>
+                <div className="shrink-0 self-start rounded-lg bg-[#111113] px-[10px] pb-[5px] pt-[10px]">
+                  <Image src="/brand/google-maps-logo-white.svg" alt="Google Maps" width={98} height={18} className="h-[18px] w-[98px]" />
+                </div>
+              </div>
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                {salonGoogleReviews.map((item, index) => {
+                  const accent = accentFor(index);
+                  return <article key={item.id} className={`flex min-h-64 flex-col rounded-xl border p-5 ${accent.card}`}>
+                    <span className={`mb-4 block h-1 w-10 rounded-full ${accent.line}`} />
+                    <blockquote className="text-base leading-7 text-zinc-200">“{item.text}”</blockquote>
+                    <footer className="mt-auto flex items-end justify-between gap-3 pt-6">
+                      <div className="flex min-w-0 items-center gap-3">
+                        {item.authorPhotoUrl ? <img src={item.authorPhotoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-white/15 object-cover" referrerPolicy="no-referrer" /> : null}
+                        <div className="min-w-0">
+                          <a href={item.authorProfileUrl || item.googleMapsUri} target="_blank" rel="noreferrer" className={`block truncate font-semibold transition hover:text-white ${accent.text}`}>{item.authorName}</a>
+                          {item.relativePublishedAt ? <p className="truncate text-sm text-zinc-300">{item.relativePublishedAt}</p> : null}
+                        </div>
+                      </div>
+                      <span aria-label={`${item.rating} de 5 estrellas`} className="flex shrink-0 text-amber-400">{Array.from({ length: item.rating }).map((_, starIndex) => <Star key={starIndex} className="h-3.5 w-3.5 fill-current" />)}</span>
+                    </footer>
+                    <a href={item.googleMapsUri} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-1.5 self-start text-xs font-semibold text-zinc-300 transition hover:text-white">Ver reseña en Google Maps <ExternalLink className="h-3.5 w-3.5" /></a>
+                  </article>;
+                })}
+              </div>
+            </section> : null}
 
             {packages.length ? <section>
               <h3 className="text-2xl font-semibold">Paquetes disponibles</h3>
@@ -1166,7 +1212,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       </section>
     </div> : null}
 
-    <SalonDetailModal salon={selectedSalon} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
+    <SalonDetailModal salon={selectedSalon} googleReviews={landing.salonGoogleReviews} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
     <GalleryLightbox items={gallery} index={galleryLightboxIndex} onClose={() => setGalleryLightboxIndex(null)} onSelect={setGalleryLightboxIndex} />
 
     <button data-analytics-id="floating-whatsapp" type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>

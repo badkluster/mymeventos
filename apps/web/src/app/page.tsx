@@ -90,7 +90,9 @@ function structuredData(landing: PublicLanding | null) {
 
 export default async function HomePage() {
   const [landing, googleReviews] = await Promise.all([getPublicLanding(), getGooglePlaceReviews()]);
-  const landingWithReviews = landing && googleReviews.length ? { ...landing, googleReviews } : landing;
+  const landingWithReviews = landing && googleReviews.featured.length
+    ? { ...landing, googleReviews: googleReviews.featured, salonGoogleReviews: googleReviews.bySalon }
+    : landing;
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData(landing)) }} />
     <PublicLandingClient initialLanding={landingWithReviews} />
