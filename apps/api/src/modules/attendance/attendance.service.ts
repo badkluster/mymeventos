@@ -342,6 +342,87 @@ export interface AdministrativeAdjustmentInput {
   reviewNotes?: string;
 }
 
+export interface ManualSessionInput {
+  userId: string;
+  startedAt: Date;
+  endedAt: Date;
+  notes?: string;
+}
+
+// A manual reconstruction has the same immutable check-in/check-out evidence as
+// a mobile jornada. The only difference is its explicit BACKOFFICE source and
+// audit actor, which preserves why the effective timestamps were backdated.
+export async function createManualSession(actorId: string, input: ManualSessionInput) {
+  if (input.endedAt.getTime() <= input.startedAt.getTime()) throw new ApiError(422, 'ATTENDANCE_ADJUSTMENT_INVALID_RANGE');
+
+  const user: any = await User.findOne({ _id: input.userId, deletedAt: null }).lean();
+  if (!user) throw new ApiError(404, 'USER_NOT_FOUND');
+
+  const overlappingSession = await WorkSession.exists({
+    userId: input.userId,
+    status: { $ne: WorkSessionStatus.CANCELLED },
+    startedAt: { $lt: input.endedAt },
+    $or: [{ endedAt: { $gt: input.startedAt } }, { endedAt: null }]
+  });
+  if (overlappingSession) throw new ApiError(409, 'ATTENDANCE_SESSION_OVERLAP');
+
+  const now = new Date();
+  const salonId = user.attendanceConfig?.defaultWorkLocationSalonId?.toString() || user.primarySalonId?.toString();
+  const notes = input.notes?.trim() || 'Horario cargado manualmente por administración.';
+  const requestBase = `admin-manual-${new Types.ObjectId().toString()}`;
+
+  const [checkInPunch, checkOutPunch]: any[] = await Promise.all([
+    TimePunch.create({
+      userId: input.userId,
+      type: TimePunchType.CHECK_IN,
+      source: TimePunchSource.BACKOFFICE,
+      clientOccurredAt: input.startedAt,
+      serverReceivedAt: now,
+      effectiveAt: input.startedAt,
+      requestId: `${requestBase}-in`,
+      salonId,
+      networkStatus: 'online',
+      notes,
+      createdBy: actorId
+    }),
+    TimePunch.create({
+      userId: input.userId,
+      type: TimePunchType.CHECK_OUT,
+      source: TimePunchSource.BACKOFFICE,
+      clientOccurredAt: input.endedAt,
+      serverReceivedAt: now,
+      effectiveAt: input.endedAt,
+      requestId: `${requestBase}-out`,
+      salonId,
+      networkStatus: 'online',
+      notes,
+      createdBy: actorId
+    })
+  ]);
+  const workedMinutes = Math.round((input.endedAt.getTime() - input.startedAt.getTime()) / 60_000);
+  const session: any = await WorkSession.create({
+    userId: input.userId,
+    salonId,
+    status: WorkSessionStatus.COMPLETED,
+    checkInPunchId: checkInPunch._id,
+    checkOutPunchId: checkOutPunch._id,
+    startedAt: input.startedAt,
+    endedAt: input.endedAt,
+    workedMinutes,
+    payableMinutes: workedMinutes,
+    attendanceClassification: AttendanceClassification.NOT_SCHEDULED,
+    requiresReview: false,
+    notes,
+    createdBy: actorId,
+    updatedBy: actorId
+  });
+  await Promise.all([
+    TimePunch.updateOne({ _id: checkInPunch._id }, { workSessionId: session._id }),
+    TimePunch.updateOne({ _id: checkOutPunch._id }, { workSessionId: session._id })
+  ]);
+  return session;
+}
+
 export async function createAdjustmentRequest(userId: string, input: AdjustmentInput) {
   const session: any = await WorkSession.findOne({ _id: input.workSessionId, userId }).lean();
   if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');

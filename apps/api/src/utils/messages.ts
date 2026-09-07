@@ -78,6 +78,8 @@ export const ApiMessages = {
   ATTENDANCE_INCIDENT_RESOLVED: 'Incidencia resuelta correctamente.',
   ATTENDANCE_SESSION_CLOSED: 'Jornada cerrada administrativamente.',
   ATTENDANCE_SESSION_REVIEWED: 'Jornada revisada correctamente.',
+  ATTENDANCE_SESSION_MANUAL_CREATED: 'Horario agregado correctamente al historial.',
+  ATTENDANCE_SESSION_OVERLAP: 'El horario se superpone con una jornada ya registrada para este usuario.',
   ATTENDANCE_SETTINGS_UPDATED: 'Configuración de asistencia actualizada correctamente.',
   ATTENDANCE_CHECK_IN_SUCCESS: 'Entrada registrada correctamente.',
   ATTENDANCE_CHECK_OUT_SUCCESS: 'Salida registrada correctamente.',

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   timePunchUpdateOne: vi.fn(),
   workSessionFindOne: vi.fn(),
   workSessionFindById: vi.fn(),
+  workSessionExists: vi.fn(),
   workSessionCreate: vi.fn(),
   workSessionFindOneAndUpdate: vi.fn(),
   adjustmentExists: vi.fn(),
@@ -22,7 +23,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../src/modules/attendance/attendance.models', () => ({
   TimePunch: { findOne: mocks.timePunchFindOne, findById: mocks.timePunchFindById, create: mocks.timePunchCreate, updateOne: mocks.timePunchUpdateOne },
-  WorkSession: { findOne: mocks.workSessionFindOne, findById: mocks.workSessionFindById, create: mocks.workSessionCreate, findOneAndUpdate: mocks.workSessionFindOneAndUpdate },
+  WorkSession: { findOne: mocks.workSessionFindOne, findById: mocks.workSessionFindById, exists: mocks.workSessionExists, create: mocks.workSessionCreate, findOneAndUpdate: mocks.workSessionFindOneAndUpdate },
   AttendanceIncident: { exists: vi.fn(), create: vi.fn(), updateOne: vi.fn() },
   AttendanceAdjustmentRequest: { exists: mocks.adjustmentExists, findOne: mocks.adjustmentFindOne, create: mocks.adjustmentCreate }
 }));
@@ -47,6 +48,7 @@ describe('attendance.service', () => {
     vi.resetAllMocks();
     mocks.systemSettingFindOne.mockReturnValue(chainLean(null));
     mocks.userFindOne.mockReturnValue(chainLean({ _id: userId, active: true, staffProfile: {}, attendanceConfig: {} }));
+    mocks.workSessionExists.mockResolvedValue(null);
     mocks.assignmentFindOne.mockReturnValue({ sort: vi.fn().mockReturnValue({ populate: vi.fn().mockReturnValue(chainLean(null)) }) });
     mocks.salonFindOne.mockReturnValue(chainSelectLean(null));
   });
@@ -279,6 +281,71 @@ describe('attendance.service', () => {
       expect(session.payableMinutes).toBe(678);
       expect(session.status).toBe(WorkSessionStatus.ADJUSTED);
       expect(adjustment.status).toBe('approved');
+    });
+  });
+
+  describe('createManualSession', () => {
+    it('creates a completed jornada with immutable backoffice entry and exit punches', async () => {
+      const sessionId = new Types.ObjectId();
+      const checkInPunchId = new Types.ObjectId();
+      const checkOutPunchId = new Types.ObjectId();
+      const startedAt = new Date('2026-09-03T11:00:00.000Z');
+      const endedAt = new Date('2026-09-03T18:30:00.000Z');
+      mocks.timePunchCreate
+        .mockResolvedValueOnce({ _id: checkInPunchId })
+        .mockResolvedValueOnce({ _id: checkOutPunchId });
+      mocks.workSessionCreate.mockResolvedValue({ _id: sessionId, startedAt, endedAt });
+      mocks.timePunchUpdateOne.mockResolvedValue({});
+
+      const result = await attendanceService.createManualSession(userId, { userId, startedAt, endedAt, notes: 'Horario informado al encargado.' });
+
+      expect(result._id).toBe(sessionId);
+      expect(mocks.workSessionExists).toHaveBeenCalledWith(expect.objectContaining({
+        userId,
+        startedAt: { $lt: endedAt },
+        $or: [{ endedAt: { $gt: startedAt } }, { endedAt: null }]
+      }));
+      expect(mocks.timePunchCreate).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        userId,
+        type: TimePunchType.CHECK_IN,
+        source: 'backoffice',
+        effectiveAt: startedAt,
+        createdBy: userId
+      }));
+      expect(mocks.timePunchCreate).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        userId,
+        type: TimePunchType.CHECK_OUT,
+        source: 'backoffice',
+        effectiveAt: endedAt,
+        createdBy: userId
+      }));
+      expect(mocks.workSessionCreate).toHaveBeenCalledWith(expect.objectContaining({
+        userId,
+        status: WorkSessionStatus.COMPLETED,
+        checkInPunchId,
+        checkOutPunchId,
+        startedAt,
+        endedAt,
+        workedMinutes: 450,
+        payableMinutes: 450,
+        requiresReview: false,
+        createdBy: userId
+      }));
+      expect(mocks.timePunchUpdateOne).toHaveBeenCalledWith({ _id: checkInPunchId }, { workSessionId: sessionId });
+      expect(mocks.timePunchUpdateOne).toHaveBeenCalledWith({ _id: checkOutPunchId }, { workSessionId: sessionId });
+    });
+
+    it('rejects a manual jornada that overlaps an existing non-cancelled one', async () => {
+      mocks.workSessionExists.mockResolvedValue({ _id: new Types.ObjectId() });
+
+      await expect(attendanceService.createManualSession(userId, {
+        userId,
+        startedAt: new Date('2026-09-03T11:00:00.000Z'),
+        endedAt: new Date('2026-09-03T18:30:00.000Z')
+      })).rejects.toMatchObject({ status: 409, code: 'ATTENDANCE_SESSION_OVERLAP' });
+
+      expect(mocks.timePunchCreate).not.toHaveBeenCalled();
+      expect(mocks.workSessionCreate).not.toHaveBeenCalled();
     });
   });
 });

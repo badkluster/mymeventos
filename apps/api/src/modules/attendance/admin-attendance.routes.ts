@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, ObjectIdSchema, Role, WorkSessionStatus, AttendanceIncidentStatus, AttendanceAdjustmentStatus } from '@mym/shared';
-import { accessibleSalonIds, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, requireAuth, requirePermission, requireRole } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -11,9 +11,11 @@ import { getApiMessage } from '../../utils/messages';
 import { WorkSession, AttendanceIncident, AttendanceAdjustmentRequest } from './attendance.models';
 import * as attendanceService from './attendance.service';
 import { getAttendanceSettings, updateAttendanceSettings } from './attendance-settings.service';
+import { civilDateTimeInput } from '../../utils/argentina-date';
 
 const router = Router();
 const idParams = z.object({ body: z.unknown().optional(), params: z.object({ id: ObjectIdSchema }), query: z.object({}) });
+const civilDateTimeSchema = z.preprocess(civilDateTimeInput, z.coerce.date());
 
 function scopeFilter(request: Request): Record<string, unknown> {
   if (request.user!.roles.includes(Role.ADMIN)) return {};
@@ -54,6 +56,15 @@ const administrativeAdjustmentSchema = z.object({
     reviewNotes: z.string().trim().max(1000).optional()
   }).refine((body) => Boolean(body.requestedStartAt || body.requestedEndAt), 'Indicá al menos un horario para ajustar.'),
   params: z.object({ id: ObjectIdSchema }), query: z.object({})
+});
+const manualSessionSchema = z.object({
+  body: z.object({
+    userId: ObjectIdSchema,
+    startedAt: civilDateTimeSchema,
+    endedAt: civilDateTimeSchema,
+    notes: z.string().trim().max(1000).optional()
+  }).refine((body) => body.endedAt.getTime() > body.startedAt.getTime(), 'El horario de salida debe ser posterior al de entrada.'),
+  params: z.object({}), query: z.object({})
 });
 const listIncidentsSchema = z.object({
   body: z.unknown().optional(), params: z.object({}),
@@ -115,6 +126,20 @@ router.get('/sessions', requirePermission(Permission.ATTENDANCE_READ), validateR
     WorkSession.countDocuments(filter)
   ]);
   return sendSuccess(response, { items, total, page, limit });
+}));
+
+// Deliberately restricted to the administrator role: this is an exceptional,
+// audited reconstruction of a complete historical jornada, not the normal
+// attendance-management permission that managers may hold.
+router.post('/sessions/manual', requireRole(Role.ADMIN), validateRequest(manualSessionSchema), asyncHandler(async (request, response) => {
+  const session = await attendanceService.createManualSession(request.user!.id, request.body);
+  await writeAuditLog(request, 'ATTENDANCE_SESSION_MANUAL_CREATE', 'WorkSession', session._id.toString(), {
+    userId: request.body.userId,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt,
+    notes: request.body.notes
+  });
+  return sendSuccess(response, { session }, 201, getApiMessage('ATTENDANCE_SESSION_MANUAL_CREATED'));
 }));
 
 router.get('/sessions/:id', requirePermission(Permission.ATTENDANCE_READ), validateRequest(idParams), asyncHandler(async (request, response) => {

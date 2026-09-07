@@ -18,7 +18,9 @@ Módulo nuevo en el menú (submenú "Configuración", junto a Staff — ver §4)
 | **Correcciones** | Solicitudes de ajuste de horario, filtrables por estado | Aprobar (ajusta la jornada y la marca `adjusted`, conservando el registro original) o rechazar, con notas | `Permission.ATTENDANCE_MANAGE` |
 | **Configuración** | Zona horaria, tolerancias de llegada/salida, radio de geocerca por defecto, antigüedad máxima de marcaciones offline, jornada máxima, si se permiten incidencias | Editar | `Permission.ATTENDANCE_SETTINGS_MANAGE` (pestaña oculta sin este permiso) |
 
-Todas las acciones administrativas quedan en `AuditLog` (`ATTENDANCE_SESSION_ADMIN_CLOSE`, `ATTENDANCE_SESSION_REVIEW`, `ATTENDANCE_INCIDENT_RESOLVE`, `ATTENDANCE_ADJUSTMENT_REVIEW`, `ATTENDANCE_SETTINGS_UPDATE`) con el actor, la fecha y el motivo cuando corresponde — no hay ninguna modificación silenciosa.
+Además, el encabezado de Asistencia muestra **"Agregar horario"** únicamente al rol `ADMIN`. Permite seleccionar un usuario, fecha, hora de entrada y de salida, más una nota opcional. El sistema crea una jornada completada en el historial con los dos fichajes de origen administrativo y rechaza horarios superpuestos; queda auditado como `ATTENDANCE_SESSION_MANUAL_CREATE`.
+
+Todas las acciones administrativas quedan en `AuditLog` (`ATTENDANCE_SESSION_ADMIN_CLOSE`, `ATTENDANCE_SESSION_MANUAL_CREATE`, `ATTENDANCE_SESSION_REVIEW`, `ATTENDANCE_INCIDENT_RESOLVE`, `ATTENDANCE_ADJUSTMENT_REVIEW`, `ATTENDANCE_SETTINGS_UPDATE`) con el actor, la fecha y el motivo cuando corresponde — no hay ninguna modificación silenciosa.
 
 ## 3. Gestión de dispositivos de un usuario
 

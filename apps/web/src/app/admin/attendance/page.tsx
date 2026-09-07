@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, ClipboardList, Clock3, History, MapPin, Settings2, ShieldAlert, Square, UserRound } from 'lucide-react';
-import { Permission } from '@mym/shared';
+import { Permission, Role } from '@mym/shared';
 import { api } from '@/lib/api';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
@@ -18,6 +18,7 @@ import {
 
 type Tab = 'active' | 'history' | 'incidents' | 'adjustments' | 'settings';
 type SalonOption = { _id: string; name: string };
+type AttendanceUserOption = { _id: string; firstName?: string; lastName?: string; fullName?: string; username?: string; email?: string; active?: boolean };
 
 const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin registrar';
 
@@ -56,6 +57,7 @@ export default function AttendancePage() {
   const requestedSessionId = searchParams?.get('sessionId');
   const canManage = userCanAccess(sessionUser, [Permission.ATTENDANCE_MANAGE]);
   const canManageSettings = userCanAccess(sessionUser, [Permission.ATTENDANCE_SETTINGS_MANAGE]);
+  const isAdmin = Boolean(sessionUser?.roles?.includes(Role.ADMIN));
 
   const [tab, setTab] = useState<Tab>(() => requestedTab === 'history' ? 'history' : 'active');
   const [loading, setLoading] = useState(false);
@@ -94,6 +96,10 @@ export default function AttendancePage() {
   const [resolveForm, setResolveForm] = useState({ status: 'resolved', resolution: '' });
   const [reviewTarget, setReviewTarget] = useState<AttendanceAdjustmentRequest | null>(null);
   const [reviewForm, setReviewForm] = useState<{ decision: 'approved' | 'rejected'; reviewNotes: string }>({ decision: 'approved', reviewNotes: '' });
+  const [manualSessionOpen, setManualSessionOpen] = useState(false);
+  const [manualSessionUsers, setManualSessionUsers] = useState<AttendanceUserOption[]>([]);
+  const [loadingManualSessionUsers, setLoadingManualSessionUsers] = useState(false);
+  const [manualSessionForm, setManualSessionForm] = useState({ userId: '', date: '', startedTime: '', endedTime: '', notes: '' });
   const [acting, setActing] = useState(false);
 
   const loadActive = useCallback(async () => {
@@ -328,6 +334,50 @@ export default function AttendancePage() {
     }
   }
 
+  async function openManualSession() {
+    setManualSessionOpen(true);
+    if (manualSessionUsers.length || loadingManualSessionUsers) return;
+    setLoadingManualSessionUsers(true);
+    try {
+      const response = await api.get<{ items: AttendanceUserOption[] }>('/users/options?limit=200');
+      setManualSessionUsers(response.items ?? []);
+    } catch (error) {
+      showToast({ message: errorMessage(error, 'No se pudo cargar el listado de usuarios.'), variant: 'error' });
+    } finally {
+      setLoadingManualSessionUsers(false);
+    }
+  }
+
+  async function confirmManualSession() {
+    const { userId, date, startedTime, endedTime, notes } = manualSessionForm;
+    if (!userId || !date || !startedTime || !endedTime) {
+      showToast({ message: 'Seleccioná un usuario, una fecha y ambos horarios.', variant: 'error' });
+      return;
+    }
+    const startedAt = `${date}T${startedTime}`;
+    const endedAt = `${date}T${endedTime}`;
+    const durationMinutes = Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000);
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      showToast({ message: 'La salida debe ser posterior a la entrada.', variant: 'error' });
+      return;
+    }
+
+    setActing(true);
+    try {
+      await api.post('/attendance/sessions/manual', { userId, startedAt, endedAt, ...(notes.trim() ? { notes: notes.trim() } : {}) });
+      showToast({ message: 'Horario agregado correctamente al historial.', variant: 'success' });
+      setManualSessionOpen(false);
+      setManualSessionForm({ userId: '', date: '', startedTime: '', endedTime: '', notes: '' });
+      setHistoryFilters({ status: '', salonId: '', requiresReview: '', from: '', to: '' });
+      setHistoryPage(1);
+      setTab('history');
+    } catch (error) {
+      showToast({ message: errorMessage(error, 'No se pudo agregar el horario.'), variant: 'error' });
+    } finally {
+      setActing(false);
+    }
+  }
+
   const tabs: { id: Tab; label: string; icon: typeof UserRound }[] = [
     { id: 'active', label: 'Activos', icon: UserRound },
     { id: 'history', label: 'Historial', icon: History },
@@ -338,9 +388,12 @@ export default function AttendancePage() {
   const adjustmentPreviewMinutes = adjustTarget && adjustmentForm.requestedStartAt && adjustmentForm.requestedEndAt
     ? Math.round((new Date(adjustmentForm.requestedEndAt).getTime() - new Date(adjustmentForm.requestedStartAt).getTime()) / 60_000)
     : null;
+  const manualSessionPreviewMinutes = manualSessionForm.date && manualSessionForm.startedTime && manualSessionForm.endedTime
+    ? Math.round((new Date(`${manualSessionForm.date}T${manualSessionForm.endedTime}`).getTime() - new Date(`${manualSessionForm.date}T${manualSessionForm.startedTime}`).getTime()) / 60_000)
+    : null;
 
   return <section className="space-y-6">
-    <PageHeader title="Asistencia y app móvil" description="Jornadas del personal fichadas desde la app móvil: control en vivo, historial, incidencias y correcciones." />
+    <PageHeader title="Asistencia y app móvil" description="Jornadas del personal fichadas desde la app móvil: control en vivo, historial, incidencias y correcciones." action={isAdmin ? <Button onClick={() => void openManualSession()}><Clock3 className="mr-2 h-4 w-4" />Agregar horario</Button> : undefined} />
     <nav className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm" aria-label="Secciones de asistencia">
       {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${tab === id ? 'bg-zinc-950 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}><Icon className="h-4 w-4" />{label}</button>)}
     </nav>
@@ -410,6 +463,29 @@ export default function AttendancePage() {
       <footer className="lg:col-span-3 flex justify-end"><Button disabled={savingSettings} onClick={() => void saveSettings()}>{savingSettings ? 'Guardando…' : 'Guardar configuración'}</Button></footer>
     </div>}
 
+    <Modal open={manualSessionOpen} onClose={() => setManualSessionOpen(false)} title="Agregar horario al historial" description="Carga administrativa para una jornada que no pudo registrarse desde la app móvil.">
+      <div className="space-y-5 p-6">
+        <p className="text-sm leading-6 text-zinc-600">Se crearán los registros normales de entrada y salida con origen administrativo. No modifica jornadas ya existentes.</p>
+        <FilterField label="Usuario">
+          <Select disabled={loadingManualSessionUsers} value={manualSessionForm.userId} onChange={(event) => setManualSessionForm((current) => ({ ...current, userId: event.target.value }))}>
+            <option value="">{loadingManualSessionUsers ? 'Cargando usuarios…' : 'Seleccioná un usuario'}</option>
+            {manualSessionUsers.map((user) => <option key={user._id} value={user._id}>{user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || user.email || 'Usuario sin nombre'}{user.active === false ? ' · Inactivo' : ''}</option>)}
+          </Select>
+        </FilterField>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <FilterField label="Fecha"><Input type="date" value={manualSessionForm.date} onChange={(event) => setManualSessionForm((current) => ({ ...current, date: event.target.value }))} /></FilterField>
+          <FilterField label="Hora de entrada"><Input type="time" value={manualSessionForm.startedTime} onChange={(event) => setManualSessionForm((current) => ({ ...current, startedTime: event.target.value }))} /></FilterField>
+          <FilterField label="Hora de salida"><Input type="time" value={manualSessionForm.endedTime} onChange={(event) => setManualSessionForm((current) => ({ ...current, endedTime: event.target.value }))} /></FilterField>
+        </div>
+        {manualSessionPreviewMinutes !== null ? manualSessionPreviewMinutes > 0
+          ? <p className="rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-700">Duración calculada: {formatMinutes(manualSessionPreviewMinutes)}.</p>
+          : <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">La salida debe ser posterior a la entrada.</p>
+          : null}
+        <FilterField label="Motivo o nota (opcional)"><Textarea placeholder="Ej.: informó el horario al encargado y no pudo cargarlo desde la app." value={manualSessionForm.notes} onChange={(event) => setManualSessionForm((current) => ({ ...current, notes: event.target.value }))} /></FilterField>
+        <footer className="flex flex-wrap justify-end gap-3"><Button variant="secondary" onClick={() => setManualSessionOpen(false)}>Cancelar</Button><Button disabled={acting || loadingManualSessionUsers || !manualSessionForm.userId || !manualSessionForm.date || !manualSessionForm.startedTime || !manualSessionForm.endedTime || manualSessionPreviewMinutes === null || manualSessionPreviewMinutes <= 0} onClick={() => void confirmManualSession()}>{acting ? 'Agregando…' : 'Agregar al historial'}</Button></footer>
+      </div>
+    </Modal>
+
     <Modal open={Boolean(detailSession)} onClose={() => { setDetailSession(null); setMapPunch(null); setAdjustTarget(null); }} title="Detalle de jornada" description={detailSession ? `${personName(detailSession.userId)} · ${salonName(detailSession.salonId)}` : ''}>
       <div className="space-y-4 p-6">
         {loadingDetail ? <p className="text-sm text-zinc-500">Cargando…</p> : detailSession && <>
@@ -422,7 +498,7 @@ export default function AttendancePage() {
           <section><h3 className="text-sm font-semibold text-zinc-900">Registros de horario</h3><div className="mt-2 space-y-2">{detailPunches.map((punch) => <div key={punch._id} className="rounded-xl border border-zinc-100 px-3 py-2 text-sm">
             <div className="flex items-center justify-between"><span className="font-medium text-zinc-900">{punch.type === 'check_in' ? 'Entrada' : punch.type === 'check_out' ? 'Salida' : punch.type}</span><span className="text-zinc-500">{formatDateTime(punch.effectiveAt)}</span></div>
              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-               {punch.locationValidationStatus !== 'outside_allowed_area' ? <span className="text-xs text-zinc-400">{locationValidationLabels[punch.locationValidationStatus ?? ''] ?? 'Sin ubicación'}{typeof punch.salonDistanceMeters === 'number' ? ` · ${Math.round(punch.salonDistanceMeters)} m del salón` : ''}</span> : null}
+               <div className="flex flex-wrap items-center gap-2">{punch.source === 'backoffice' ? <span className="text-xs font-medium text-violet-700">Cargado por administración</span> : null}{punch.locationValidationStatus !== 'outside_allowed_area' ? <span className="text-xs text-zinc-400">{locationValidationLabels[punch.locationValidationStatus ?? ''] ?? 'Sin ubicación'}{typeof punch.salonDistanceMeters === 'number' ? ` · ${Math.round(punch.salonDistanceMeters)} m del salón` : ''}</span> : null}</div>
                {punch.location ? <button type="button" onClick={() => setMapPunch(punch)} className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50"><MapPin className="h-3.5 w-3.5" />Ver en el mapa</button> : null}
              </div>
              <PunchTechnicalDetails punch={punch} />
