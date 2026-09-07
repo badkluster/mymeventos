@@ -10,11 +10,11 @@ export type GooglePlaceReview = {
   salonName: string;
   googleMapsUri: string;
   publishedAt?: string;
+  relativePublishedAt?: string;
 };
 
 type GooglePlace = { salonName: string; placeId: string };
 type GooglePlaceDetailsResponse = {
-  googleMapsLinks?: { reviewsUri?: string };
   rating?: number;
   userRatingCount?: number;
   reviews?: Array<{
@@ -24,6 +24,7 @@ type GooglePlaceDetailsResponse = {
     authorAttribution?: { displayName?: string; photoUri?: string; uri?: string };
     googleMapsUri?: string;
     publishTime?: string;
+    relativePublishTimeDescription?: string;
   }>;
 };
 
@@ -32,12 +33,12 @@ const googlePlaces: GooglePlace[] = [
   { salonName: 'M&M Eventos San Carlos', placeId: 'ChIJpatAfCzpopURZtt8P-l3-Ss' },
   { salonName: 'M&M Eventos Villa Elisa', placeId: 'ChIJ65pMr0HfopURwLXdlrTTk1s' }
 ];
-const GOOGLE_REVIEWS_FIELD_MASK = 'id,displayName,rating,userRatingCount,reviews,googleMapsLinks';
+const GOOGLE_REVIEWS_FIELD_MASK = 'id,displayName,rating,userRatingCount,reviews';
 const GOOGLE_REVIEWS_LANGUAGE_CODE = 'es';
 const GOOGLE_REVIEWS_REGION_CODE = 'AR';
 const GOOGLE_REVIEWS_TIMEOUT_MS = 4_500;
-const DEFAULT_REVALIDATE_SECONDS = 43_200;
-const DEFAULT_REVIEW_LIMIT = 6;
+// Place Details (New) returns at most five reviews for each place, for a maximum of 15 here.
+const DEFAULT_REVIEW_LIMIT = 15;
 
 function positiveInteger(value: string | undefined, fallback: number, minimum: number, maximum: number): number {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -53,7 +54,7 @@ function logGoogleReviewsError(message: string, error?: unknown): void {
   console.error(`[google-place-reviews] ${message}${detail ? `: ${detail}` : ''}`);
 }
 
-async function fetchPlaceDetails(place: GooglePlace, apiKey: string, revalidate: number): Promise<GooglePlaceReview[]> {
+async function fetchPlaceDetails(place: GooglePlace, apiKey: string): Promise<GooglePlaceReview[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GOOGLE_REVIEWS_TIMEOUT_MS);
   try {
@@ -66,25 +67,26 @@ async function fetchPlaceDetails(place: GooglePlace, apiKey: string, revalidate:
         'X-Goog-FieldMask': GOOGLE_REVIEWS_FIELD_MASK
       },
       signal: controller.signal,
-      next: { revalidate }
+      // Google Maps content must not be persistently cached. The landing still has a
+      // manual fallback if this live request is unavailable.
+      cache: 'no-store'
     });
     if (!response.ok) throw new Error(`Place Details respondió HTTP ${response.status}`);
 
     const payload = await response.json() as GooglePlaceDetailsResponse;
     const sourceReviews = payload.reviews ?? [];
-    const placeReviewsUri = payload.googleMapsLinks?.reviewsUri;
     const reviewsWithText = sourceReviews.filter((review) => Boolean(review.text?.text?.trim()));
     const highRatedReviews = reviewsWithText.filter((review) => {
       const rating = Number(review.rating ?? 0);
       return rating >= 4 && rating <= 5;
     });
-    const reviewsWithDirectLink = highRatedReviews.filter((review) => Boolean(review.googleMapsUri || placeReviewsUri));
+    const reviewsWithDirectLink = highRatedReviews.filter((review) => Boolean(review.googleMapsUri));
     console.info(`[google-place-reviews] ${place.salonName}: calificacionGeneral=${payload.rating ?? 'sinDato'}, cantidadValoraciones=${payload.userRatingCount ?? 0}, recibidas=${sourceReviews.length}, conTexto=${reviewsWithText.length}, 4o5Estrellas=${highRatedReviews.length}, conEnlaceGoogle=${reviewsWithDirectLink.length}`);
 
     return sourceReviews.flatMap((review, index): GooglePlaceReview[] => {
       const text = review.text?.text?.trim() ?? '';
       const rating = Number(review.rating ?? 0);
-      const googleMapsUri = review.googleMapsUri || placeReviewsUri;
+      const googleMapsUri = review.googleMapsUri;
       if (!text || rating < 4 || rating > 5 || !googleMapsUri) return [];
       return [{
         id: review.name || `${place.placeId}-${index}`,
@@ -95,7 +97,8 @@ async function fetchPlaceDetails(place: GooglePlace, apiKey: string, revalidate:
         text,
         salonName: place.salonName,
         googleMapsUri,
-        publishedAt: review.publishTime
+        publishedAt: review.publishTime,
+        relativePublishedAt: review.relativePublishTimeDescription
       }];
     });
   } finally {
@@ -148,9 +151,8 @@ export async function getGooglePlaceReviews(): Promise<GooglePlaceReview[]> {
     return [];
   }
 
-  const revalidate = positiveInteger(process.env.GOOGLE_REVIEWS_REVALIDATE_SECONDS, DEFAULT_REVALIDATE_SECONDS, 21_600, 86_400);
-  const limit = positiveInteger(process.env.GOOGLE_REVIEWS_MAX_ITEMS, DEFAULT_REVIEW_LIMIT, 6, 9);
-  const results = await Promise.allSettled(googlePlaces.map((place) => fetchPlaceDetails(place, apiKey, revalidate)));
+  const limit = positiveInteger(process.env.GOOGLE_REVIEWS_MAX_ITEMS, DEFAULT_REVIEW_LIMIT, 6, 15);
+  const results = await Promise.allSettled(googlePlaces.map((place) => fetchPlaceDetails(place, apiKey)));
   const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
   if (failures.length) {
     failures.forEach((result) => logGoogleReviewsError('No se pudo obtener una ubicación de Google Maps', result.reason));

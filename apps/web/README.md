@@ -41,11 +41,12 @@ La landing consulta Place Details (New) exclusivamente desde el servidor para lo
 
 ```text
 GOOGLE_PLACES_API_KEY=
-GOOGLE_REVIEWS_REVALIDATE_SECONDS=43200
-GOOGLE_REVIEWS_MAX_ITEMS=6
+GOOGLE_REVIEWS_MAX_ITEMS=15
 GOOGLE_REVIEWS_FORCE_FALLBACK=false
 ```
 
 `GOOGLE_PLACES_API_KEY` debe ser una clave distinta, habilitada para Places API (New) y restringida para ejecución server-to-server (por ejemplo, la infraestructura de hosting). Una clave limitada por HTTP referrer no funciona en esta integración y no debe usarse aquí.
+
+Las reseñas se consultan en vivo y no se guardan en caché persistente, conforme a la política de contenido de Places API. Google entrega como máximo cinco reseñas por salón en Place Details (New), por lo que el máximo del pool es 15.
 
 Para verificar el fallback en un deployment de QA, configurá temporalmente `GOOGLE_REVIEWS_FORCE_FALLBACK=true`. La landing omitirá Google y mostrará los testimonios manuales existentes.

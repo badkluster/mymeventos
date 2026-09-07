@@ -619,6 +619,60 @@ function SalonDetailModal({ salon, onClose, onRequestQuote }: { salon: Salon | n
   </AnimatePresence>;
 }
 
+const GOOGLE_REVIEW_PAGE_SIZE = 6;
+
+function GoogleReviewsGallery({ reviews, shouldReduceMotion }: { reviews: GooglePlaceReview[]; shouldReduceMotion: boolean | null }) {
+  const [page, setPage] = useState(0);
+  const pages = useMemo(() => Array.from({ length: Math.ceil(reviews.length / GOOGLE_REVIEW_PAGE_SIZE) }, (_, index) => reviews.slice(index * GOOGLE_REVIEW_PAGE_SIZE, (index + 1) * GOOGLE_REVIEW_PAGE_SIZE)), [reviews]);
+  const safePage = Math.min(page, Math.max(0, pages.length - 1));
+  const visibleReviews = pages[safePage] ?? [];
+  const firstVisible = safePage * GOOGLE_REVIEW_PAGE_SIZE + 1;
+  const lastVisible = firstVisible + visibleReviews.length - 1;
+
+  return <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 sm:p-5">
+    <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
+      <p className="max-w-2xl text-sm leading-6 text-zinc-300">Mostramos reseñas con comentario de 4 y 5 estrellas, priorizadas por calificación, extensión y fecha.</p>
+      <div className="shrink-0 rounded-lg bg-[#111113] px-[10px] pb-[5px] pt-[10px]">
+        <Image src="/brand/google-maps-logo-white.svg" alt="Google Maps" width={98} height={18} className="h-[18px] w-[98px]" />
+      </div>
+    </div>
+
+    <div role="region" aria-label="Galería de reseñas de Google Maps" aria-live="polite">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div key={safePage} initial={shouldReduceMotion ? false : { opacity: 0, x: 18 }} animate={shouldReduceMotion ? undefined : { opacity: 1, x: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, x: -18 }} transition={{ duration: 0.22, ease: smoothEase }} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {visibleReviews.map((item, index) => {
+            const accent = accentFor(safePage * GOOGLE_REVIEW_PAGE_SIZE + index);
+            return <motion.blockquote key={item.id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`flex min-h-72 flex-col rounded-xl border p-6 ${accent.card}`}>
+              <motion.span className={`mb-5 block h-1 w-10 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.045)} />
+              <p className="text-base leading-7 text-zinc-200">“{item.text}”</p>
+              <footer className="mt-auto flex items-end justify-between gap-3 pt-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  {item.authorPhotoUrl ? <img src={item.authorPhotoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-white/15 object-cover" referrerPolicy="no-referrer" /> : null}
+                  <div className="min-w-0">
+                    <a href={item.authorProfileUrl || item.googleMapsUri} target="_blank" rel="noreferrer" className={`block truncate font-semibold transition hover:text-white ${accent.text}`}>{item.authorName}</a>
+                    <p className="truncate text-sm text-zinc-300">{item.salonName}{item.relativePublishedAt ? ` - ${item.relativePublishedAt}` : ''}</p>
+                  </div>
+                </div>
+                <span aria-label={`${item.rating} de 5 estrellas`} className="flex shrink-0 text-amber-400">{Array.from({ length: item.rating }).map((_, starIndex) => <motion.span key={starIndex} variants={starPop(index, starIndex)}><Star className="h-3.5 w-3.5 fill-current" /></motion.span>)}</span>
+              </footer>
+              <a href={item.googleMapsUri} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-1.5 self-start text-xs font-semibold text-zinc-300 transition hover:text-white">Ver reseña en Google Maps <ExternalLink className="h-3.5 w-3.5" /></a>
+            </motion.blockquote>;
+          })}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+
+    {pages.length > 1 ? <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+      <p className="text-sm text-zinc-400">Mostrando {firstVisible}-{lastVisible} de {reviews.length} reseñas.</p>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setPage(safePage - 1)} disabled={safePage === 0} aria-label="Ver reseñas anteriores" className={`grid h-10 w-10 place-items-center rounded-lg border border-white/15 text-white transition hover:border-[#c8cdd3] hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35 ${ctaFocusRing}`}><ChevronLeft className="h-5 w-5" /></button>
+        <span className="min-w-14 text-center text-sm font-semibold text-zinc-200">{safePage + 1} / {pages.length}</span>
+        <button type="button" onClick={() => setPage(safePage + 1)} disabled={safePage === pages.length - 1} aria-label="Ver reseñas siguientes" className={`grid h-10 w-10 place-items-center rounded-lg border border-white/15 text-white transition hover:border-[#c8cdd3] hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35 ${ctaFocusRing}`}><ChevronRight className="h-5 w-5" /></button>
+      </div>
+    </div> : null}
+  </div>;
+}
+
 export function PublicLandingClient({ initialLanding }: { initialLanding?: Partial<LandingPayload> | null }) {
   const [landing, setLanding] = useState<LandingPayload>(() => initialLanding ? normalizeLanding(initialLanding) : emptyLanding);
   const [selectedSalonId, setSelectedSalonId] = useState('');
@@ -1002,12 +1056,11 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
 
     <AnimatedSection data-analytics-section="testimonials" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
       <SectionTitle eyebrow="Testimonios" title="Lo que dicen quienes ya celebraron" />
-      <AnimatedGrid className="grid gap-4 md:grid-cols-3">{(googleReviews.length ? googleReviews : manualTestimonials.slice(0, 3)).map((item, index) => {
+      {googleReviews.length ? <GoogleReviewsGallery reviews={googleReviews} shouldReduceMotion={shouldReduceMotion} /> : <AnimatedGrid className="grid gap-4 md:grid-cols-3">{manualTestimonials.slice(0, 3).map((item, index) => {
         const accent = accentFor(index);
-        const isGoogleReview = 'googleMapsUri' in item;
-        if (!isGoogleReview) return <motion.blockquote key={item._id || item.customerName} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`rounded-xl border p-6 ${accent.card}`}><motion.span className={`mb-5 block h-1 w-10 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.045)} /><p className="text-base leading-7 text-zinc-200">“{item.quote}”</p><footer className="mt-6 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-sm text-zinc-300">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, starIndex) => <motion.span key={starIndex} variants={starPop(index, starIndex)}><Star className="h-3.5 w-3.5 fill-current" /></motion.span>)}</span></footer></motion.blockquote>;
-        return <motion.blockquote key={item.id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`rounded-xl border p-6 ${accent.card}`}><motion.span className={`mb-5 block h-1 w-10 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.045)} /><p className="text-base leading-7 text-zinc-200">“{item.text}”</p><footer className="mt-6 flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3">{item.authorPhotoUrl ? <img src={item.authorPhotoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-white/15 object-cover" referrerPolicy="no-referrer" /> : null}<div className="min-w-0"><a href={item.authorProfileUrl || item.googleMapsUri} target="_blank" rel="noreferrer" className={`block truncate font-semibold transition hover:text-white ${accent.text}`}>{item.authorName}</a><p className="truncate text-sm text-zinc-300">{item.salonName} · Reseña de Google</p></div></div><span aria-label={`${item.rating} de 5 estrellas`} className="flex shrink-0 text-amber-400">{Array.from({ length: item.rating }).map((_, starIndex) => <motion.span key={starIndex} variants={starPop(index, starIndex)}><Star className="h-3.5 w-3.5 fill-current" /></motion.span>)}</span></footer><a href={item.googleMapsUri} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-300 transition hover:text-white">Ver en Google Maps <ExternalLink className="h-3.5 w-3.5" /></a></motion.blockquote>;
+        return <motion.blockquote key={item._id || item.customerName} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`rounded-xl border p-6 ${accent.card}`}><motion.span className={`mb-5 block h-1 w-10 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.045)} /><p className="text-base leading-7 text-zinc-200">“{item.quote}”</p><footer className="mt-6 flex items-center justify-between"><div><p className={`font-semibold ${accent.text}`}>{item.customerName}</p><p className="text-sm text-zinc-300">{item.eventType}</p></div><span className="flex text-amber-400">{Array.from({ length: item.rating || 5 }).map((_, starIndex) => <motion.span key={starIndex} variants={starPop(index, starIndex)}><Star className="h-3.5 w-3.5 fill-current" /></motion.span>)}</span></footer></motion.blockquote>;
       })}</AnimatedGrid>
+      }
     </AnimatedSection>
 
     <AnimatedSection id="faq" className="border-y border-white/10 bg-[#0b0b0c] px-5 py-20 md:px-8 md:py-24">
