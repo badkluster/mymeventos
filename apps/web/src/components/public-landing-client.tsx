@@ -676,36 +676,33 @@ function GoogleReviewsGallery({ reviews, shouldReduceMotion }: { reviews: Google
   const lastVisible = firstVisible + visibleReviews.length - 1;
 
   return <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 sm:p-5">
-    <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
-      <p className="max-w-2xl text-sm leading-6 text-zinc-300">Mostramos reseñas con comentario de 4 y 5 estrellas, priorizadas por calificación, extensión y fecha.</p>
+    <div className="mb-5 flex justify-end border-b border-white/10 pb-5">
       <div className="shrink-0 rounded-lg bg-[#111113] px-[10px] pb-[5px] pt-[10px]">
         <Image src="/brand/google-maps-logo-white.svg" alt="Google Maps" width={98} height={18} className="h-[18px] w-[98px]" />
       </div>
     </div>
 
     <div role="region" aria-label="Galería de reseñas de Google Maps" aria-live="polite">
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={safePage} initial={shouldReduceMotion ? false : { opacity: 0, x: 18 }} animate={shouldReduceMotion ? undefined : { opacity: 1, x: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, x: -18 }} transition={{ duration: 0.22, ease: smoothEase }} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleReviews.map((item, index) => {
-            const accent = accentFor(safePage * GOOGLE_REVIEW_PAGE_SIZE + index);
-            return <motion.blockquote key={item.id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`flex min-h-72 flex-col rounded-xl border p-6 ${accent.card}`}>
-              <motion.span className={`mb-5 block h-1 w-10 origin-left rounded-full ${accent.line}`} variants={underlineGrow(0, index, 0.045)} />
-              <p className="text-base leading-7 text-zinc-200">“{item.text}”</p>
-              <footer className="mt-auto flex items-end justify-between gap-3 pt-6">
-                <div className="flex min-w-0 items-center gap-3">
-                  {item.authorPhotoUrl ? <img src={item.authorPhotoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-white/15 object-cover" referrerPolicy="no-referrer" /> : null}
-                  <div className="min-w-0">
-                    <a href={item.authorProfileUrl || item.googleMapsUri} target="_blank" rel="noreferrer" className={`block truncate font-semibold transition hover:text-white ${accent.text}`}>{item.authorName}</a>
-                    <p className="truncate text-sm text-zinc-300">{item.salonName}{item.relativePublishedAt ? ` - ${item.relativePublishedAt}` : ''}</p>
-                  </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {visibleReviews.map((item, index) => {
+          const accent = accentFor(safePage * GOOGLE_REVIEW_PAGE_SIZE + index);
+          return <motion.blockquote key={item.id} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`flex min-h-72 flex-col rounded-xl border p-6 ${accent.card}`}>
+            <span className={`mb-5 block h-1 w-10 rounded-full ${accent.line}`} />
+            <p className="text-base leading-7 text-zinc-200">“{item.text}”</p>
+            <footer className="mt-auto flex items-end justify-between gap-3 pt-6">
+              <div className="flex min-w-0 items-center gap-3">
+                {item.authorPhotoUrl ? <img src={item.authorPhotoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-white/15 object-cover" referrerPolicy="no-referrer" /> : null}
+                <div className="min-w-0">
+                  <a href={item.authorProfileUrl || item.googleMapsUri} target="_blank" rel="noreferrer" className={`block truncate font-semibold transition hover:text-white ${accent.text}`}>{item.authorName}</a>
+                  <p className="truncate text-sm text-zinc-300">{item.salonName}{item.relativePublishedAt ? ` - ${item.relativePublishedAt}` : ''}</p>
                 </div>
-                <span aria-label={`${item.rating} de 5 estrellas`} className="flex shrink-0 text-amber-400">{Array.from({ length: item.rating }).map((_, starIndex) => <motion.span key={starIndex} variants={starPop(index, starIndex)}><Star className="h-3.5 w-3.5 fill-current" /></motion.span>)}</span>
-              </footer>
-              <a href={item.googleMapsUri} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-1.5 self-start text-xs font-semibold text-zinc-300 transition hover:text-white">Ver reseña en Google Maps <ExternalLink className="h-3.5 w-3.5" /></a>
-            </motion.blockquote>;
-          })}
-        </motion.div>
-      </AnimatePresence>
+              </div>
+              <span aria-label={`${item.rating} de 5 estrellas`} className="flex shrink-0 text-amber-400">{Array.from({ length: item.rating }).map((_, starIndex) => <Star key={starIndex} className="h-3.5 w-3.5 fill-current" />)}</span>
+            </footer>
+            <a href={item.googleMapsUri} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-1.5 self-start text-xs font-semibold text-zinc-300 transition hover:text-white">Ver reseña en Google Maps <ExternalLink className="h-3.5 w-3.5" /></a>
+          </motion.blockquote>;
+        })}
+      </div>
     </div>
 
     {pages.length > 1 ? <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
