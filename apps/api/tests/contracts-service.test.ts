@@ -68,7 +68,16 @@ describe('event to contract service', () => {
       eventSnapshot: expect.objectContaining({ eventType: 'Cumpleaños', salonName: 'Salón Centro' }),
       commercialSnapshot: expect.objectContaining({ totalAmount: 100000, depositAmount: 20000 }),
       menuSnapshot: [{ title: 'Recepción', items: ['Entrada'] }],
-      servicesSnapshot: ['DJ']
+      servicesSnapshot: ['DJ'],
+      legalTermsSnapshot: expect.objectContaining({
+        clauses: expect.arrayContaining([
+          expect.objectContaining({
+            key: 'image_rights',
+            title: 'Autorización de registro y uso de imagen y contenido audiovisual',
+            text: expect.stringContaining('info.mymsalones@gmail.com')
+          })
+        ])
+      })
     }));
     expect(event.status).toBe('contract_draft');
     expect(event.save).toHaveBeenCalled();

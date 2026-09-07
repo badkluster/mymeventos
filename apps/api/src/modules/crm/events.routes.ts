@@ -500,7 +500,6 @@ async function getApplicablePackageForEvent(templateId: string, salonId: string)
   const template: any = await PackageTemplate.findOne({ _id: templateId, active: true, deletedAt: null }).lean();
   if (!template || (!template.isGlobal && !(template.salonIds ?? []).some((id: { toString(): string }) => id.toString() === salonId))) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   const rule: any = await VenuePackageRule.findOne({ packageTemplateId: templateId, salonId, deletedAt: null }).lean();
-  if (rule && !rule.active) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   return { ...template, ...(rule ? pickDefined(rule, packageOverrideKeys) : {}), packageTemplateId: template._id.toString(), packageName: rule?.name ?? template.name, ruleConfigured: Boolean(rule) };
 }
 
