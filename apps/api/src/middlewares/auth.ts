@@ -21,7 +21,7 @@ const backofficeOperationalPermissions = new Set<Permission>([
   Permission.EXPENSES_VIEW, Permission.EXPENSES_CREATE, Permission.EXPENSES_UPDATE, Permission.EXPENSES_DELETE
 ]);
 
-function hasBackofficeOperationalPermission(user: NonNullable<Express.Request['user']>, permission: Permission): boolean {
+export function hasBackofficeOperationalPermission(user: NonNullable<Express.Request['user']>, permission: Permission): boolean {
   return user.canAccessBackoffice
     && backofficeOperationalPermissions.has(permission)
     && !user.permissionDeniedOverrides.includes(permission);

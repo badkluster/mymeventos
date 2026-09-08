@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Permission, QuoteLineItemSourceType, QuoteMode, Role, hasPermission } from '@mym/shared';
 import { Customer, Lead, LeadActivity, PackageTemplate, Quote, QuoteRequest, QuoteRevision, VenuePackageRule } from './crm.models';
 import { Salon } from '../salons/salon.model';
-import { accessibleSalonIds, canAccessSalon, referenceId, requireAuth, requirePermission } from '../../middlewares/auth';
+import { accessibleSalonIds, canAccessSalon, hasBackofficeOperationalPermission, referenceId, requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../middlewares/errorHandler';
@@ -129,7 +129,11 @@ function getQueryIds(value: unknown): string[] {
   const values = Array.isArray(value) ? value : [value];
   return uniqueIds(values.flatMap((item) => typeof item === 'string' ? item.split(',') : []).map((item) => item.trim()).filter(Boolean));
 }
-function hasQuoteApproval(request: Request): boolean { return request.user!.roles.some((role) => hasPermission(role, Permission.QUOTES_APPROVE, request.user!.permissionOverrides)); }
+function hasQuoteApproval(request: Request): boolean {
+  const user = request.user!;
+  return user.roles.some((role) => hasPermission(role, Permission.QUOTES_APPROVE, user.permissionOverrides, user.permissionDeniedOverrides))
+    || hasBackofficeOperationalPermission(user, Permission.QUOTES_APPROVE);
+}
 async function ensureAccessibleSalons(request: Request, salonIds: string[]): Promise<void> {
   if (!salonIds.length || salonIds.some((salonId) => !canAccessSalon(request.user!, salonId))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
   const count = await Salon.countDocuments({ _id: { $in: salonIds }, active: true, deletedAt: null });

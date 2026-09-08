@@ -6,6 +6,7 @@ import { generateAccessToken } from '../src/utils/tokens';
 const mocks = vi.hoisted(() => ({
   userFindOne: vi.fn(),
   quoteFindOne: vi.fn(),
+  quoteRevisionFindOne: vi.fn(),
   quoteRequestFind: vi.fn(),
   leadActivityCreate: vi.fn(),
   writeAuditLog: vi.fn()
@@ -17,7 +18,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   Lead: { findOne: vi.fn() }, LeadActivity: { create: mocks.leadActivityCreate }, Customer: { findOne: vi.fn() }, ContactPerson: {},
   PackageTemplate: { find: vi.fn(), findOne: vi.fn(), exists: vi.fn() },
   VenuePackageRule: { find: vi.fn(), findOne: vi.fn(), findOneAndUpdate: vi.fn() },
-  Quote: { findOne: mocks.quoteFindOne }, QuoteRevision: { create: vi.fn() },
+  Quote: { findOne: mocks.quoteFindOne }, QuoteRevision: { findOne: mocks.quoteRevisionFindOne, create: vi.fn() },
   Event: { findOne: vi.fn() },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: mocks.quoteRequestFind, create: vi.fn() },
   Contract: { findOne: vi.fn() }, ContractAddendum: {}, Payment: { countDocuments: vi.fn(), find: vi.fn(), findOne: vi.fn() }
@@ -64,5 +65,50 @@ describe('quote deletion permission', () => {
 
     expect(response.status).toBe(403);
     expect(quote.deletedAt).toBeUndefined();
+  });
+});
+
+describe('quote approval permission', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.quoteRevisionFindOne.mockReturnValue({ sort: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }) });
+  });
+
+  it('allows a backoffice salon manager to accept a quote', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({
+      _id: managerId,
+      roles: [Role.SALON_MANAGER],
+      permissionOverrides: [],
+      permissionDeniedOverrides: [],
+      salonIds: [salonId],
+      active: true,
+      canAccessBackoffice: true
+    }));
+    const quote: any = { _id: quoteId, salonId, quoteNumber: 'P-2026-00001', leadId: null, customerId: null, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.quoteFindOne.mockResolvedValue(quote);
+
+    const response = await request(app).patch(`/api/quotes/${quoteId}/status`).set('Cookie', managerCookie).send({ status: 'accepted' });
+
+    expect(response.status).toBe(200);
+    expect(quote.status).toBe('accepted');
+  });
+
+  it('honors an explicit quote-approval denial for a backoffice salon manager', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({
+      _id: managerId,
+      roles: [Role.SALON_MANAGER],
+      permissionOverrides: [],
+      permissionDeniedOverrides: [Permission.QUOTES_APPROVE],
+      salonIds: [salonId],
+      active: true,
+      canAccessBackoffice: true
+    }));
+    const quote: any = { _id: quoteId, salonId, quoteNumber: 'P-2026-00001', leadId: null, customerId: null, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.quoteFindOne.mockResolvedValue(quote);
+
+    const response = await request(app).patch(`/api/quotes/${quoteId}/status`).set('Cookie', managerCookie).send({ status: 'accepted' });
+
+    expect(response.status).toBe(403);
+    expect(quote.status).toBeUndefined();
   });
 });
