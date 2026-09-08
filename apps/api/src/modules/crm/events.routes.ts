@@ -699,7 +699,11 @@ async function packageChangePreview(event: any, packageSnapshot: Record<string, 
   };
 }
 
-function buildQuery(request: Request): Record<string, unknown> {
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function buildQuery(request: Request): Promise<Record<string, unknown>> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }];
   if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: accessibleSalonIds(request.user!) } });
   const status = getQueryString(request.query.status);
@@ -723,7 +727,15 @@ function buildQuery(request: Request): Record<string, unknown> {
   const sourceQuoteId = getQueryString(request.query.sourceQuoteId);
   if (sourceQuoteId && objectId.safeParse(sourceQuoteId).success) terms.push({ sourceQuoteId });
   const term = getQueryString(request.query.search);
-  if (term) terms.push({ $or: ['eventName', 'eventType', 'notes'].map((field) => ({ [field]: { $regex: term, $options: 'i' } })) });
+  if (term) {
+    const expression = new RegExp(escapeRegex(term), 'i');
+    const customers = await Customer.find({ $or: ['fullName', 'firstName', 'lastName', 'documentNumber'].map((field) => ({ [field]: expression })) }).select('_id').lean();
+    const customerIds = customers.map((customer) => customer._id);
+    terms.push({ $or: [
+      ...['eventName', 'eventType', 'notes'].map((field) => ({ [field]: expression })),
+      ...(customerIds.length ? [{ customerId: { $in: customerIds } }] : [])
+    ] });
+  }
   return terms.length === 1 ? terms[0] : { $and: terms };
 }
 
@@ -734,7 +746,7 @@ router.get('/', requirePermission(Permission.EVENTS_READ), asyncHandler(async (r
   const limit = Math.min(100, Math.max(1, Number(getQueryString(request.query.limit)) || 20));
   const sortBy = ['createdAt', 'eventDate', 'status', 'eventName'].includes(getQueryString(request.query.sortBy) ?? '') ? getQueryString(request.query.sortBy)! : 'createdAt';
   const sortOrder = getQueryString(request.query.sortOrder) === 'asc' ? 1 : -1;
-  const query = buildQuery(request);
+  const query = await buildQuery(request);
   const totalItems = await Event.countDocuments(query);
   const items = await Event.find(query)
     .populate('customerId', 'fullName phone email')

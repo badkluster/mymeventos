@@ -53,8 +53,32 @@ function validateEvent(event: any): void {
 
 async function nextContractNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  const count = await Contract.countDocuments({ contractNumber: { $regex: `^C-${year}-` } });
-  return `C-${year}-${String(count + 1).padStart(5, '0')}`;
+  const prefix = `C-${year}-`;
+  // The serial is immutable and may have gaps when a historical contract is removed.
+  // Counting documents would then reuse a number that already exists.
+  const latest: any = await Contract.findOne({ contractNumber: { $regex: `^${prefix}\\d{5}$` } })
+    .sort({ contractNumber: -1 })
+    .select('contractNumber')
+    .lean();
+  const serial = Number.parseInt(latest?.contractNumber?.slice(prefix.length) ?? '0', 10);
+  return `${prefix}${String(Number.isFinite(serial) ? serial + 1 : 1).padStart(5, '0')}`;
+}
+
+function activeContractQuery(eventId: any) {
+  return { eventId, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } };
+}
+
+async function findActiveContractForEvent(eventId: any): Promise<any> {
+  return Contract.findOne(activeContractQuery(eventId)).lean();
+}
+
+function isContractNumberDuplicate(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const duplicate = error as { code?: unknown; keyPattern?: Record<string, unknown>; keyValue?: Record<string, unknown> };
+  return duplicate.code === 11000 && (
+    Boolean(duplicate.keyPattern?.contractNumber)
+    || typeof duplicate.keyValue?.contractNumber === 'string'
+  );
 }
 
 export async function createContractFromEvent(input: { eventId: string; userId: string }): Promise<{ contract: any; created: boolean }> {
@@ -67,7 +91,7 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
     .populate('sourceLeadId');
   if (!event) throw new ApiError(404, 'EVENT_NOT_FOUND');
 
-  const existing = await Contract.findOne({ eventId: event._id, deletedAt: null, status: { $nin: ['cancelled', 'superseded'] } }).lean();
+  const existing = await findActiveContractForEvent(event._id);
   if (existing) return { contract: existing, created: false };
 
   validateEvent(event);
@@ -81,8 +105,7 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
   const paidAmount = 0;
   const balanceAmount = Math.max(0, totalAmount - paidAmount);
 
-  const contract = await Contract.create({
-    contractNumber: await nextContractNumber(),
+  const contractInput = {
     eventId: event._id,
     quoteId: quote?._id,
     customerId: customer?._id,
@@ -170,7 +193,25 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
     observations: event.notes,
     createdBy: input.userId,
     updatedBy: input.userId
-  });
+  };
+
+  let contract: any;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      contract = await Contract.create({ ...contractInput, contractNumber: await nextContractNumber() });
+      break;
+    } catch (error) {
+      if (!isContractNumberDuplicate(error)) throw error;
+
+      // A simultaneous request for this event may have created its contract while
+      // this request was assigning a number. Preserve idempotency in that case.
+      const concurrentContract = await findActiveContractForEvent(event._id);
+      if (concurrentContract) return { contract: concurrentContract, created: false };
+      if (attempt === 2) {
+        throw new ApiError(409, 'CONTRACT_NUMBER_GENERATION_CONFLICT');
+      }
+    }
+  }
 
   event.status = 'contract_draft';
   event.updatedBy = input.userId;

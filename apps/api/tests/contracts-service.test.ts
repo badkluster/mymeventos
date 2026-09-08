@@ -31,6 +31,12 @@ function eventQuery(event: any) {
 function populateChain(value: unknown) {
   return { populate: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
 }
+function leanQuery(value: unknown) {
+  return { lean: vi.fn().mockResolvedValue(value) };
+}
+function latestContractNumberQuery(value: unknown) {
+  return { sort: vi.fn().mockReturnThis(), select: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
+}
 function sessionQuery(value: unknown) {
   return { session: vi.fn().mockResolvedValue(value) };
 }
@@ -42,7 +48,9 @@ describe('event to contract service', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.contractCount.mockResolvedValue(0);
-    mocks.contractFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
+    mocks.contractFindOne.mockImplementation((query: { contractNumber?: unknown }) => (
+      query.contractNumber ? latestContractNumberQuery(null) : leanQuery(null)
+    ));
     mocks.addendumCount.mockResolvedValue(0);
     mocks.addendumFind.mockResolvedValue([]);
   });
@@ -104,13 +112,53 @@ describe('event to contract service', () => {
 
   it('creates a fresh contract when the only prior one for the event was cancelled', async () => {
     mocks.eventFindOne.mockReturnValue(eventQuery(completeEvent()));
-    mocks.contractFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
     mocks.contractCreate.mockResolvedValue({ _id: 'contract-2', contractNumber: 'C-2026-00002' });
 
     const result = await createContractFromEvent({ eventId: 'event-1', userId: 'user-1' });
 
     expect(result.created).toBe(true);
     expect(mocks.contractCreate).toHaveBeenCalled();
+  });
+
+  it('uses the highest existing serial instead of the number of contracts when there is a gap', async () => {
+    const year = new Date().getFullYear();
+    mocks.eventFindOne.mockReturnValue(eventQuery(completeEvent()));
+    mocks.contractFindOne.mockImplementation((query: { contractNumber?: unknown }) => (
+      query.contractNumber
+        ? latestContractNumberQuery({ contractNumber: `C-${year}-00039` })
+        : leanQuery(null)
+    ));
+    mocks.contractCreate.mockResolvedValue({ _id: 'contract-40', contractNumber: `C-${year}-00040` });
+
+    await createContractFromEvent({ eventId: 'event-1', userId: 'user-1' });
+
+    expect(mocks.contractCreate).toHaveBeenCalledWith(expect.objectContaining({
+      contractNumber: `C-${year}-00040`
+    }));
+  });
+
+  it('retries a contract-number collision with the next available serial', async () => {
+    const year = new Date().getFullYear();
+    const serials = [`C-${year}-00039`, `C-${year}-00040`];
+    mocks.eventFindOne.mockReturnValue(eventQuery(completeEvent()));
+    mocks.contractFindOne.mockImplementation((query: { contractNumber?: unknown }) => (
+      query.contractNumber
+        ? latestContractNumberQuery({ contractNumber: serials.shift() })
+        : leanQuery(null)
+    ));
+    mocks.contractCreate
+      .mockRejectedValueOnce(Object.assign(new Error('duplicate contract number'), {
+        code: 11000,
+        keyPattern: { contractNumber: 1 },
+        keyValue: { contractNumber: `C-${year}-00040` }
+      }))
+      .mockResolvedValueOnce({ _id: 'contract-41', contractNumber: `C-${year}-00041` });
+
+    const result = await createContractFromEvent({ eventId: 'event-1', userId: 'user-1' });
+
+    expect(result.created).toBe(true);
+    expect(mocks.contractCreate).toHaveBeenNthCalledWith(1, expect.objectContaining({ contractNumber: `C-${year}-00040` }));
+    expect(mocks.contractCreate).toHaveBeenNthCalledWith(2, expect.objectContaining({ contractNumber: `C-${year}-00041` }));
   });
 
   it('does not modify the source quote when taking contract snapshots', async () => {

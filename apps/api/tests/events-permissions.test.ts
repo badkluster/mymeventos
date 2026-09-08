@@ -11,8 +11,10 @@ const mocks = vi.hoisted(() => ({
   packageFindOne: vi.fn(),
   ruleFindOne: vi.fn(),
   customerFindOne: vi.fn(),
+  customerFind: vi.fn(),
   eventFindOne: vi.fn(),
   eventFind: vi.fn(),
+  eventCountDocuments: vi.fn(),
   eventCreate: vi.fn(),
   leadActivityCreate: vi.fn(),
   contractFind: vi.fn(),
@@ -36,11 +38,11 @@ vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: v
 vi.mock('../src/modules/salons/salonStockItem.model', () => ({ SalonStockItem: { find: mocks.salonStockFind }, salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'] }));
 vi.mock('../src/modules/crm/eventTablewareAllocation.model', () => ({ EventTablewareAllocation: { find: mocks.tablewareFind, deleteMany: mocks.tablewareDeleteMany, insertMany: mocks.tablewareInsertMany } }));
 vi.mock('../src/modules/crm/crm.models', () => ({
-  Lead: {}, LeadActivity: { create: mocks.leadActivityCreate }, Customer: { findOne: mocks.customerFindOne }, ContactPerson: {},
+  Lead: {}, LeadActivity: { create: mocks.leadActivityCreate }, Customer: { find: mocks.customerFind, findOne: mocks.customerFindOne }, ContactPerson: {},
   PackageTemplate: { find: vi.fn(), findOne: mocks.packageFindOne, exists: vi.fn() },
   VenuePackageRule: { find: vi.fn(), findOne: mocks.ruleFindOne, findOneAndUpdate: vi.fn() },
   Quote: { findOne: vi.fn() }, QuoteRevision: {},
-  Event: { findOne: mocks.eventFindOne, find: mocks.eventFind, create: mocks.eventCreate },
+  Event: { countDocuments: mocks.eventCountDocuments, findOne: mocks.eventFindOne, find: mocks.eventFind, create: mocks.eventCreate },
   EventStaffAssignment: { find: vi.fn(), findOne: mocks.staffAssignmentFindOne, exists: mocks.staffAssignmentExists, create: mocks.staffAssignmentCreate },
   CalendarItem: { findOneAndUpdate: vi.fn(), updateMany: vi.fn().mockResolvedValue({}) },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
@@ -82,6 +84,9 @@ function populatedQuery(value: unknown) {
 }
 function sortedQuery(value: unknown) {
   return { sort: vi.fn().mockResolvedValue(value) };
+}
+function paginatedQuery(value: unknown) {
+  return { populate: vi.fn().mockReturnThis(), sort: vi.fn().mockReturnThis(), skip: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
 }
 
 describe('manual event creation from a package', () => {
@@ -141,6 +146,32 @@ describe('event detail salon scope', () => {
 
     expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(response.body.data.event).toEqual(event);
+  });
+});
+
+describe('event search by customer', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+  });
+
+  it('finds events by the customer name or DNI', async () => {
+    const customerId = '507f1f77bcf86cd799439016';
+    mocks.customerFind.mockReturnValue(queryChain([{ _id: customerId }]));
+    mocks.eventCountDocuments.mockResolvedValue(1);
+    mocks.eventFind.mockReturnValue(paginatedQuery([{ _id: eventId, eventName: 'Quince de Agus', customerId }]));
+
+    const response = await request(app).get('/api/events?search=Agus').set('Cookie', adminCookie);
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(mocks.customerFind).toHaveBeenCalledWith(expect.objectContaining({
+      $or: expect.arrayContaining([
+        { fullName: expect.any(RegExp) },
+        { documentNumber: expect.any(RegExp) }
+      ])
+    }));
+    const eventQuery = mocks.eventFind.mock.calls[0][0] as { $and: Array<{ $or?: unknown[] }> };
+    expect(eventQuery.$and.find((condition) => Array.isArray(condition.$or))?.$or).toContainEqual({ customerId: { $in: [customerId] } });
   });
 });
 
