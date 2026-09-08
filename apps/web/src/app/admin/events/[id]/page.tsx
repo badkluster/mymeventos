@@ -218,17 +218,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       setSaving(false);
     }
   };
-  const patchEvent = async (payload: Record<string, unknown>): Promise<boolean> => {
+  const patchEvent = async (payload: Record<string, unknown>, options: { notifySuccess?: boolean; notifyError?: boolean } = {}): Promise<boolean> => {
     if (!event) return false;
     setSaving(true);
     try {
       const result = await api.patch<{ event: Event; warnings?: string[] }>(`/events/${event._id}`, payload);
       await load(id);
-      notice('Evento actualizado correctamente.');
+      if (options.notifySuccess !== false) notice('Evento actualizado correctamente.');
       result.warnings?.forEach((warning) => notice(warning, 'info'));
       return true;
     } catch (error) {
-      notice(error instanceof Error ? error.message : 'No se pudo actualizar el evento.', 'error');
+      if (options.notifyError !== false) notice(error instanceof Error ? error.message : 'No se pudo actualizar el evento.', 'error');
       return false;
     } finally {
       setSaving(false);
@@ -369,7 +369,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const financialTotal = Number(event.finalAmount ?? event.estimatedAmount ?? commercial.totalAmount ?? contract?.totalAmount ?? 0);
   const financialPaid = Number(paymentSummary.paidAmount ?? 0);
   const financialBalance = Math.max(0, Number(contract?.balanceAmount ?? financialTotal - financialPaid));
-  const saveResourcePlan = (plan: typeof resourcePlan) => patchEvent({ resourcePlanSnapshot: plan });
+  const saveResourcePlan = (plan: typeof resourcePlan, options?: { automatic?: boolean }) => patchEvent({ resourcePlanSnapshot: plan }, { notifySuccess: !options?.automatic, notifyError: !options?.automatic });
   const toggleTaskStatus = (index: number) => {
     const tasks = (resourcePlan.tasks ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, status: item.status === 'done' ? 'pending' : 'done' } : item);
     saveResourcePlan({ ...resourcePlan, tasks });
