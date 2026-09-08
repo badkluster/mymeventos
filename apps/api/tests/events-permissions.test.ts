@@ -83,7 +83,14 @@ function populatedQuery(value: unknown) {
   return { populate: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
 }
 function sortedQuery(value: unknown) {
-  return { sort: vi.fn().mockResolvedValue(value) };
+  const query = {
+    sort: vi.fn(),
+    session: vi.fn(),
+    then: (resolve: (result: unknown) => unknown, reject: (error: unknown) => unknown) => Promise.resolve(value).then(resolve, reject)
+  };
+  query.sort.mockReturnValue(query);
+  query.session.mockReturnValue(query);
+  return query;
 }
 function paginatedQuery(value: unknown) {
   return { populate: vi.fn().mockReturnThis(), sort: vi.fn().mockReturnThis(), skip: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
@@ -246,6 +253,23 @@ describe('event package correction and application', () => {
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('EVENT_PACKAGE_CHANGE_BLOCKED');
     expect(event.save).not.toHaveBeenCalled();
+  });
+
+  it('applies non-commercial package sections when the package total is below the amount already paid', async () => {
+    const event: any = { _id: eventId, salonId, customerId: 'customer-1', status: 'draft', quoteMode: 'PACKAGE', guestCount: 10, startTime: '20:00', endTime: '04:00', updatedAt: new Date('2026-08-18T12:00:00.000Z'), finalAmount: 500000, estimatedAmount: 500000, commercialSnapshot: { packageName: 'Acuerdo anterior', totalAmount: 500000 }, menuSnapshot: [], servicesSnapshot: [], resourcePlanSnapshot: {}, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.paymentFind.mockResolvedValue([{ status: 'paid', amount: 300000, type: 'deposit', affectsContractBalance: true }]);
+
+    const response = await request(app).post(`/api/events/${eventId}/package-change`).set('Cookie', adminCookie).send({ packageTemplateId: templateId, mode: 'apply', sections: ['menu', 'services'], reason: 'Se conserva el acuerdo económico histórico.', expectedUpdatedAt: event.updatedAt.toISOString() });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(event.finalAmount).toBe(500000);
+    expect(event.estimatedAmount).toBe(500000);
+    expect(event.commercialSnapshot.packageName).toBe('Acuerdo anterior');
+    expect(event.menuSnapshot).toEqual(packageTemplate.menuSections);
+    expect(event.servicesSnapshot).toEqual(packageTemplate.includedServices);
+    expect(event.quoteMode).toBe('HYBRID');
+    expect(event.save).toHaveBeenCalledOnce();
   });
 });
 

@@ -1239,11 +1239,11 @@ router.post('/:id/package-change', requirePermission(Permission.EVENTS_UPDATE), 
   if (preview.impact.reasonRequired && !request.body.reason?.trim()) {
     throw new ApiError(422, 'EVENT_PACKAGE_CHANGE_REASON_REQUIRED', 'Indicá el motivo porque el evento ya tiene avances comerciales u operativos.');
   }
-  if (request.body.mode === 'apply' && preview.impact.applyingBlocked) {
+  const selectedSections = new Set(request.body.sections ?? packageChangeSections);
+  if (request.body.mode === 'apply' && selectedSections.has('commercial') && preview.impact.applyingBlocked) {
     throw new ApiError(422, 'EVENT_PACKAGE_CHANGE_BLOCKED', preview.impact.blockedReason);
   }
 
-  const selectedSections = new Set(request.body.sections ?? packageChangeSections);
   const appliedAt = new Date();
   event.packageTemplateId = packageSnapshot.packageTemplateId;
   event.packageSnapshot = {

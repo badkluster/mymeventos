@@ -150,11 +150,14 @@ export function EventPackageManager({ event, onApplied }: { event: Event; onAppl
     }
   };
 
-  const toggleSection = (key: SectionKey) => setSelectedSections((current) => {
-    const next = new Set(current);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
+  const toggleSection = (key: SectionKey) => {
+    setError('');
+    setSelectedSections((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   return <>
     <article className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
