@@ -1,12 +1,14 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { getCurrentUser, logout as logoutRequest, type SessionUser } from '@/lib/auth';
+import { SESSION_EXPIRED_EVENT } from '@/lib/api';
 
 type Session = {
   user: SessionUser | null;
   loading: boolean;
   isAuthenticated: boolean;
+  sessionExpired: boolean;
   establishSession: (user: SessionUser) => void;
   refreshSession: () => Promise<void>;
   logout: () => Promise<void>;
@@ -18,17 +20,24 @@ export function SessionProvider({ children, checkSession = true }: { children: R
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(checkSession);
   const [sessionChecked, setSessionChecked] = useState(!checkSession);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const hadAuthenticatedSession = useRef(false);
 
   const establishSession = (nextUser: SessionUser) => {
+    hadAuthenticatedSession.current = true;
     setUser(nextUser);
     setSessionChecked(true);
     setLoading(false);
+    setSessionExpired(false);
   };
 
   const refreshSession = async () => {
     setLoading(true);
     try {
-      setUser(await getCurrentUser());
+      const nextUser = await getCurrentUser();
+      hadAuthenticatedSession.current = true;
+      setUser(nextUser);
+      setSessionExpired(false);
     } catch {
       setUser(null);
     } finally {
@@ -38,10 +47,28 @@ export function SessionProvider({ children, checkSession = true }: { children: R
   };
 
   useEffect(() => {
+    const endExpiredSession = () => {
+      const wasAuthenticated = hadAuthenticatedSession.current;
+      hadAuthenticatedSession.current = false;
+      setUser(null);
+      setSessionChecked(true);
+      setLoading(false);
+      if (wasAuthenticated) setSessionExpired(true);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, endExpiredSession);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, endExpiredSession);
+  }, []);
+
+  useEffect(() => {
     if (!checkSession || sessionChecked) return;
     let mounted = true;
     void getCurrentUser()
-      .then((nextUser) => { if (mounted) setUser(nextUser); })
+      .then((nextUser) => {
+        if (!mounted) return;
+        hadAuthenticatedSession.current = true;
+        setUser(nextUser);
+        setSessionExpired(false);
+      })
       .catch(() => { if (mounted) setUser(null); })
       .finally(() => {
         if (!mounted) return;
@@ -60,7 +87,12 @@ export function SessionProvider({ children, checkSession = true }: { children: R
     const syncSession = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void getCurrentUser()
-        .then((nextUser) => { if (mounted) setUser(nextUser); })
+        .then((nextUser) => {
+          if (!mounted) return;
+          hadAuthenticatedSession.current = true;
+          setUser(nextUser);
+          setSessionExpired(false);
+        })
         .catch(() => { if (mounted) setUser(null); });
     };
     window.addEventListener('focus', syncSession);
@@ -74,12 +106,14 @@ export function SessionProvider({ children, checkSession = true }: { children: R
 
   const logout = async () => {
     await logoutRequest();
+    hadAuthenticatedSession.current = false;
     setUser(null);
     setSessionChecked(true);
     setLoading(false);
+    setSessionExpired(false);
   };
 
-  return <SessionContext.Provider value={{ user, loading, isAuthenticated: Boolean(user), establishSession, refreshSession, logout }}>{children}</SessionContext.Provider>;
+  return <SessionContext.Provider value={{ user, loading, isAuthenticated: Boolean(user), sessionExpired, establishSession, refreshSession, logout }}>{children}</SessionContext.Provider>;
 }
 
 export function useSession(): Session {

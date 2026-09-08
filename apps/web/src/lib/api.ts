@@ -5,6 +5,10 @@ type ApiErrorDetails = { fields?: ApiErrorField[]; [key: string]: unknown };
 type ApiErrorPayload = { code: string; message: string; details?: ApiErrorDetails };
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: ApiErrorPayload };
 
+// The API layer cannot use React context directly. It broadcasts this only after
+// the server has confirmed that the authentication session can no longer be renewed.
+export const SESSION_EXPIRED_EVENT = 'mym:session-expired';
+
 export class ApiClientError extends Error {
   constructor(
     public code: string,
@@ -17,6 +21,15 @@ export class ApiClientError extends Error {
 
 let refreshPromise: Promise<unknown> | null = null;
 const minimumPerformanceLoaderMs = 650;
+
+function notifySessionExpired(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+}
+
+function isUnauthenticated(response: Response, payload: ApiEnvelope<unknown>): boolean {
+  return response.status === 401 && payload.error?.code === 'UNAUTHENTICATED';
+}
 
 function detailedErrorMessage(error?: ApiErrorPayload, fallback = 'No se pudo completar la solicitud.'): string {
   const fieldMessages = Array.isArray(error?.details?.fields)
@@ -54,6 +67,7 @@ async function refreshSessionOnce(): Promise<void> {
   });
   const result = await refreshPromise as { response: Response; payload: ApiEnvelope<unknown> };
   if (!result.response.ok || !result.payload.success) {
+    notifySessionExpired();
     throw new ApiClientError(
       result.payload.error?.code ?? 'UNAUTHENTICATED',
       detailedErrorMessage(result.payload.error, 'La sesión expiró. Iniciá sesión nuevamente.'),
@@ -65,10 +79,12 @@ async function refreshSessionOnce(): Promise<void> {
 async function request<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   const { response, payload } = await rawRequest<T>(path, init);
   const canRefresh = !['/auth/login', '/auth/refresh', '/auth/logout', '/auth/logout-all'].includes(path);
-  if (response.status === 401 && payload.error?.code === 'UNAUTHENTICATED' && !retried && canRefresh) {
+  const unauthenticated = isUnauthenticated(response, payload);
+  if (unauthenticated && !retried && canRefresh) {
     await refreshSessionOnce();
     return request<T>(path, init, true);
   }
+  if (unauthenticated) notifySessionExpired();
   if (!response.ok || !payload.success) {
     throw new ApiClientError(
       payload.error?.code ?? 'NETWORK_ERROR',
@@ -92,9 +108,15 @@ async function get<T>(path: string): Promise<T> {
 
 async function download(path: string, retried = false): Promise<{ blob: Blob; filename: string }> {
   const response = await fetch(`${baseUrl}${path}`, { credentials: 'include' });
-  if (response.status === 401 && !retried) {
-    await refreshSessionOnce();
-    return download(path, true);
+  if (response.status === 401) {
+    const payload = await response.clone().json().catch(() => undefined) as ApiEnvelope<unknown> | undefined;
+    if (payload && isUnauthenticated(response, payload)) {
+      if (!retried) {
+        await refreshSessionOnce();
+        return download(path, true);
+      }
+      notifySessionExpired();
+    }
   }
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as ApiEnvelope<unknown> | undefined;

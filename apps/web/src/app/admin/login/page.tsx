@@ -13,7 +13,7 @@ const heroImage = 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?
 
 export default function LoginPage() {
   const router = useRouter();
-  const { establishSession } = useSession();
+  const { establishSession, sessionExpired } = useSession();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -126,6 +126,11 @@ export default function LoginPage() {
           </div>
 
           <div className="grid gap-5 px-6 py-6 sm:px-8 sm:py-7">
+            {sessionExpired ? (
+              <p role="status" className="rounded-xl border border-amber-300/25 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-50">
+                Tu sesión venció o fue cerrada. Iniciá sesión nuevamente para continuar.
+              </p>
+            ) : null}
             {error ? (
               <p className="rounded-xl border border-red-300/25 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">
                 {error}

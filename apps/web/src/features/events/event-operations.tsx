@@ -10,7 +10,7 @@ import type { Event, EventAlertItem, EventGuestList, EventInventoryItem, EventPr
 import { GuestListWorkspace } from '@/features/events/guest-list-workspace';
 
 type SaveEvent = (payload: Record<string, unknown>) => void;
-type SavePlan = (plan: EventResourcePlan) => void;
+type SavePlan = (plan: EventResourcePlan) => Promise<boolean>;
 
 const timelineStatusLabels: Record<string, string> = { pending: 'Pendiente', ready: 'Preparado', done: 'Hecho', cancelled: 'Cancelado' };
 const resourceStatusLabels: Record<string, string> = { planned: 'Planificado', reserved: 'Reservado', purchased: 'Comprado', used: 'Usado', delivered: 'Entregado', returned: 'Devuelto', missing: 'Faltante', damaged: 'Roto' };

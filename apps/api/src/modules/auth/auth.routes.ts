@@ -34,7 +34,31 @@ router.post('/login', validateRequest(loginSchema), asyncHandler(async (request,
   ]);
   return sendSuccess(response, { user: safeUser(user) });
 }));
-router.post('/refresh', asyncHandler(async (request, response) => { const token = request.cookies.refreshToken; if (!token) throw new ApiError(401, 'UNAUTHENTICATED'); const payload = verifyRefreshToken(token); const stored = await RefreshToken.findOne({ tokenHash: hashToken(token), userId: payload.sub, revokedAt: null }); if (!stored) throw new ApiError(401, 'UNAUTHENTICATED'); const user = await User.findOne({ _id: payload.sub, active: true, canAccessBackoffice: { $ne: false }, deletedAt: null }); if (!user) throw new ApiError(401, 'UNAUTHENTICATED'); await RefreshToken.updateOne({ _id: stored._id }, { revokedAt: new Date() }); await issueTokens(request, response, user); await writeAuditLog(request, 'AUTH_REFRESH_ROTATION', 'User', user._id.toString()); return sendSuccess(response, { refreshed: true }); }));
+router.post('/refresh', asyncHandler(async (request, response) => {
+  const rejectRefresh = () => {
+    clearTokens(response);
+    throw new ApiError(401, 'UNAUTHENTICATED');
+  };
+  const token = request.cookies.refreshToken;
+  if (!token) return rejectRefresh();
+
+  let payload: ReturnType<typeof verifyRefreshToken>;
+  try {
+    payload = verifyRefreshToken(token);
+  } catch {
+    return rejectRefresh();
+  }
+
+  const stored = await RefreshToken.findOne({ tokenHash: hashToken(token), userId: payload.sub, revokedAt: null });
+  if (!stored) return rejectRefresh();
+  const user = await User.findOne({ _id: payload.sub, active: true, canAccessBackoffice: { $ne: false }, deletedAt: null });
+  if (!user) return rejectRefresh();
+
+  await RefreshToken.updateOne({ _id: stored._id }, { revokedAt: new Date() });
+  await issueTokens(request, response, user);
+  await writeAuditLog(request, 'AUTH_REFRESH_ROTATION', 'User', user._id.toString());
+  return sendSuccess(response, { refreshed: true });
+}));
 router.post('/logout', asyncHandler(async (request, response) => { const token = request.cookies.refreshToken; if (token) await RefreshToken.updateOne({ tokenHash: hashToken(token), revokedAt: null }, { revokedAt: new Date() }); clearTokens(response); await writeAuditLog(request, 'AUTH_LOGOUT', 'User', request.user?.id); return sendSuccess(response, { loggedOut: true }); }));
 router.post('/logout-all', requireAuth, asyncHandler(async (request, response) => { await RefreshToken.updateMany({ userId: request.user!.id, revokedAt: null }, { revokedAt: new Date() }); clearTokens(response); await writeAuditLog(request, 'AUTH_LOGOUT_ALL', 'User', request.user!.id); return sendSuccess(response, { loggedOut: true }); }));
 router.get('/me', requireAuth, asyncHandler(async (request, response) => sendSuccess(response, { user: safeUser(request.authUser) })));

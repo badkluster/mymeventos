@@ -40,11 +40,54 @@ function section(document: PDFKit.PDFDocument, quote: any, title: string, hint?:
   if (hint) document.font('Helvetica').fontSize(8.5).fillColor(color.muted).text(hint, 280, y + 2, { width: 269, align: 'right' });
   document.moveTo(page.left, y + 22).lineTo(page.right, y + 22).strokeColor(color.gold).lineWidth(1).stroke(); document.y = y + 32;
 }
-function labeled(document: PDFKit.PDFDocument, label: string, content: string, x: number, y: number, width: number): void {
+function labeledHeight(document: PDFKit.PDFDocument, content: string, width: number): number {
+  document.font('Helvetica').fontSize(9.4);
+  return 11 + Math.max(12, document.heightOfString(content, { width, lineGap: 1.5 }));
+}
+function labeled(document: PDFKit.PDFDocument, label: string, content: string, x: number, y: number, width: number): number {
   document.font('Helvetica-Bold').fontSize(7.5).fillColor(color.muted).text(label.toUpperCase(), x, y, { width, characterSpacing: .35 });
-  document.font('Helvetica').fontSize(9.4).fillColor(color.ink).text(content, x, y + 11, { width, height: 24, ellipsis: true });
+  document.font('Helvetica').fontSize(9.4).fillColor(color.ink).text(content, x, y + 11, { width, lineGap: 1.5 });
+  return labeledHeight(document, content, width);
 }
 function card(document: PDFKit.PDFDocument, x: number, y: number, width: number, height: number, fill = color.card): void { document.roundedRect(x, y, width, height, 9).fill(fill); }
+function serviceCardHeight(document: PDFKit.PDFDocument, content: string, width: number): number {
+  document.font('Helvetica').fontSize(8.5);
+  return Math.max(24, document.heightOfString(content, { width: width - 40, lineGap: 1 }) + 16);
+}
+function serviceCard(document: PDFKit.PDFDocument, content: string, x: number, y: number, width: number, height: number): void {
+  card(document, x, y, width, height, color.card);
+  document.font('Helvetica-Bold').fontSize(8.3).fillColor(color.gold).text('✓', x + 10, y + 8);
+  document.font('Helvetica').fontSize(8.5).fillColor(color.ink).text(content, x + 25, y + 8, { width: width - 40, lineGap: 1 });
+}
+function contentThatFits(document: PDFKit.PDFDocument, content: string, width: number, maxHeight: number): [string, string] {
+  if (document.heightOfString(content, { width, lineGap: 1.5 }) <= maxHeight) return [content, ''];
+  let lastBreak = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    if (/\s/.test(content[index])) lastBreak = index + 1;
+    if (document.heightOfString(content.slice(0, index + 1), { width, lineGap: 1.5 }) > maxHeight) {
+      const splitAt = Math.max(1, lastBreak || index);
+      return [content.slice(0, splitAt).trimEnd(), content.slice(splitAt).trimStart()];
+    }
+  }
+  return [content, ''];
+}
+function flowingLabeledCards(document: PDFKit.PDFDocument, quote: any, label: string, content: string, fill = color.goldSoft): void {
+  let remaining = content;
+  let continuation = false;
+  do {
+    ensure(document, quote, 43);
+    const maxContentHeight = Math.max(12, page.bottom - 27 - document.y - 28);
+    const [chunk, next] = contentThatFits(document, remaining, 473, maxContentHeight);
+    const height = Math.max(43, document.heightOfString(chunk, { width: 473, lineGap: 1.5 }) + 28);
+    const y = document.y;
+    card(document, page.left, y, page.right - page.left, height, fill);
+    document.font('Helvetica-Bold').fontSize(8.5).fillColor(color.gold).text(`${label}${continuation ? ' (continuación)' : ''}`.toUpperCase(), page.left + 15, y + 11);
+    document.font('Helvetica').fontSize(8.8).fillColor(color.ink).text(chunk, page.left + 15, y + 23, { width: 473, lineGap: 1.5 });
+    document.y = y + height + 8;
+    remaining = next;
+    continuation = true;
+  } while (remaining);
+}
 function listCard(document: PDFKit.PDFDocument, quote: any, title: string, items: string[], x: number, width: number): number {
   const cleaned = items.filter((item) => value(item, '') !== ''); if (!cleaned.length) return 0;
   const contentHeight = cleaned.reduce((total, item) => total + Math.max(15, document.heightOfString(item, { width: width - 35 }) + 4), 0);
@@ -78,14 +121,45 @@ export async function generateAndUploadQuotePdf(quote: any): Promise<{ pdfSecure
   document.font('Helvetica').fontSize(8.4).fillColor(color.muted).text(`Seña ${money(quote.depositAmount)} · Saldo ${money(quote.balanceAmount)}`, page.left + 19, investmentY + 83, { width: 480 });
   document.y = investmentY + 137;
 
-  section(document, quote, 'Datos del evento');
   const details: Array<[string, string]> = [['Cliente', value(quote.contactName)], ['Agasajado/a', value(quote.honoreeName)], ['Tipo de evento', value(quote.eventType)], ['Fecha tentativa', date(quote.eventDate)], ['Horario', quote.startTime || quote.endTime ? `${quote.startTime || 'A definir'} a ${quote.endTime || 'A definir'}` : 'A definir'], ['Invitados', quote.guestCount ? `${quote.guestCount} personas` : 'A confirmar'], ['Mantelería', value(quote.tableLinenColor)], ['Restricciones', `Veg. ${quote.vegetarianCount ?? 0} · Veganas ${quote.veganCount ?? 0} · Celíacos ${quote.celiacCount ?? 0} · Lactosa ${quote.lactoseIntolerantCount ?? 0}`]];
-  const gridY = document.y; card(document, page.left, gridY, page.right - page.left, 112, color.ivory);
-  details.forEach(([label, content], index) => labeled(document, label, content, page.left + 15 + (index % 2) * 246, gridY + 13 + Math.floor(index / 2) * 26, 225)); document.y = gridY + 127;
+  const detailRows = Array.from({ length: Math.ceil(details.length / 2) }, (_, index) => details.slice(index * 2, index * 2 + 2));
+  const detailRowHeights = detailRows.map((row) => Math.max(...row.map(([, content]) => labeledHeight(document, content, 225))));
+  const detailsGridHeight = 23 + detailRowHeights.reduce((total, height) => total + height, 0) + Math.max(0, detailRows.length - 1) * 8;
+  ensure(document, quote, 42 + detailsGridHeight + 15);
+  section(document, quote, 'Datos del evento');
+  const gridY = document.y; card(document, page.left, gridY, page.right - page.left, detailsGridHeight, color.ivory);
+  let detailsCursor = gridY + 13;
+  detailRows.forEach((row, rowIndex) => {
+    row.forEach(([label, content], columnIndex) => labeled(document, label, content, page.left + 15 + columnIndex * 246, detailsCursor, 225));
+    detailsCursor += detailRowHeights[rowIndex] + 8;
+  });
+  document.y = gridY + detailsGridHeight + 15;
 
-  section(document, quote, 'Propuesta seleccionada');
-  const proposalY = document.y; card(document, page.left, proposalY, page.right - page.left, 58, color.goldSoft);
-  labeled(document, 'Paquete', value(quote.packageName, 'Propuesta personalizada'), page.left + 15, proposalY + 12, 220); labeled(document, 'Modalidad', quote.pricingMode === 'fixed' ? 'Precio final del evento' : 'Precio por persona', 285, proposalY + 12, 135); labeled(document, 'Condiciones', value(quote.paymentTerms, 'A coordinar'), 428, proposalY + 12, 105); document.y = proposalY + 72;
+  const packageContent = value(quote.packageName, 'Propuesta personalizada');
+  const modalityContent = quote.pricingMode === 'fixed' ? 'Precio final del evento' : 'Precio por persona';
+  const paymentTermsContent = value(quote.paymentTerms, 'A coordinar');
+  const proposalTopRowHeight = Math.max(labeledHeight(document, packageContent, 230), labeledHeight(document, modalityContent, 230));
+  const proposalTermsHeight = labeledHeight(document, paymentTermsContent, 473);
+  const proposalCardHeight = 24 + proposalTopRowHeight + proposalTermsHeight;
+  const maxCardHeight = page.bottom - 27 - 91;
+  if (proposalCardHeight <= maxCardHeight) {
+    ensure(document, quote, 42 + proposalCardHeight + 14);
+    section(document, quote, 'Propuesta seleccionada');
+    const proposalY = document.y; card(document, page.left, proposalY, page.right - page.left, proposalCardHeight, color.goldSoft);
+    labeled(document, 'Paquete', packageContent, page.left + 15, proposalY + 12, 230);
+    labeled(document, 'Modalidad', modalityContent, 304, proposalY + 12, 230);
+    labeled(document, 'Condiciones', paymentTermsContent, page.left + 15, proposalY + 12 + proposalTopRowHeight + 8, 473);
+    document.y = proposalY + proposalCardHeight + 14;
+  } else {
+    const proposalSummaryHeight = 20 + proposalTopRowHeight;
+    ensure(document, quote, 42 + proposalSummaryHeight + 8);
+    section(document, quote, 'Propuesta seleccionada');
+    const proposalY = document.y; card(document, page.left, proposalY, page.right - page.left, proposalSummaryHeight, color.goldSoft);
+    labeled(document, 'Paquete', packageContent, page.left + 15, proposalY + 12, 230);
+    labeled(document, 'Modalidad', modalityContent, 304, proposalY + 12, 230);
+    document.y = proposalY + proposalSummaryHeight + 8;
+    flowingLabeledCards(document, quote, 'Condiciones', paymentTermsContent);
+  }
 
   const hasSecondPage = Boolean(quote.menuSections?.some((item: any) => item.items?.length) || quote.includedServices?.length || quote.promotionText || quote.giftText || quote.notes || quote.lineItems?.length);
   if (hasSecondPage) {
@@ -95,9 +169,21 @@ export async function generateAndUploadQuotePdf(quote: any): Promise<{ pdfSecure
       section(document, quote, 'Menú incluido', 'Una experiencia pensada para disfrutar');
       for (let index = 0; index < menu.length; index += 2) { const y = document.y; const leftHeight = listCard(document, quote, value(menu[index].title ?? menu[index].name, 'Menú'), menu[index].items, page.left, 245); const right = menu[index + 1]; if (right) { document.y = y; const rightHeight = listCard(document, quote, value(right.title ?? right.name, 'Menú'), right.items, 304, 245); document.y = y + Math.max(leftHeight, rightHeight) + 9; } else document.y = y + leftHeight + 9; }
     }
-    if (quote.includedServices?.length) { section(document, quote, 'Servicios incluidos'); for (let index = 0; index < quote.includedServices.length; index += 2) { ensure(document, quote, 28); const y = document.y; card(document, page.left, y, 245, 24, color.card); card(document, 304, y, 245, 24, color.card); document.font('Helvetica-Bold').fontSize(8.3).fillColor(color.gold).text('✓', page.left + 10, y + 8); document.font('Helvetica').fontSize(8.5).fillColor(color.ink).text(quote.includedServices[index], page.left + 25, y + 8, { width: 210, ellipsis: true }); if (quote.includedServices[index + 1]) { document.font('Helvetica-Bold').fillColor(color.gold).text('✓', 314, y + 8); document.font('Helvetica').fillColor(color.ink).text(quote.includedServices[index + 1], 329, y + 8, { width: 210, ellipsis: true }); } document.y = y + 31; } }
+    if (quote.includedServices?.length) {
+      section(document, quote, 'Servicios incluidos');
+      for (let index = 0; index < quote.includedServices.length; index += 2) {
+        const leftService = String(quote.includedServices[index]);
+        const rightService = quote.includedServices[index + 1] ? String(quote.includedServices[index + 1]) : undefined;
+        const rowHeight = Math.max(serviceCardHeight(document, leftService, 245), rightService ? serviceCardHeight(document, rightService, 245) : 0);
+        ensure(document, quote, rowHeight + 7);
+        const y = document.y;
+        serviceCard(document, leftService, page.left, y, 245, rowHeight);
+        if (rightService) serviceCard(document, rightService, 304, y, 245, rowHeight);
+        document.y = y + rowHeight + 7;
+      }
+    }
     const benefits = [['Promoción', quote.promotionText], ['Beneficio especial', quote.giftText], ['Observaciones', quote.notes]].filter((item) => value(item[1], '') !== '');
-    if (benefits.length) { section(document, quote, 'Beneficios especiales'); for (const [label, content] of benefits) { const height = Math.max(43, document.heightOfString(String(content), { width: 455 }) + 28); ensure(document, quote, height + 8); const y = document.y; card(document, page.left, y, page.right - page.left, height, color.goldSoft); document.font('Helvetica-Bold').fontSize(8.5).fillColor(color.gold).text(label.toUpperCase(), page.left + 15, y + 11); document.font('Helvetica').fontSize(8.8).fillColor(color.ink).text(String(content), page.left + 15, y + 23, { width: 470 }); document.y = y + height + 8; } }
+    if (benefits.length) { section(document, quote, 'Beneficios especiales'); for (const [label, content] of benefits) flowingLabeledCards(document, quote, label, String(content)); }
     ensure(document, quote, 62); const ctaY = document.y; document.roundedRect(page.left, ctaY, page.right - page.left, 56, 9).fill(color.ink); document.font('Helvetica-Bold').fontSize(11).fillColor(color.white).text(`Reservá la fecha con una seña de ${money(quote.depositAmount)}`, page.left + 16, ctaY + 14); document.font('Helvetica').fontSize(8).fillColor('#e1d6bf').text('La fecha queda sujeta a disponibilidad hasta la acreditación de la seña.', page.left + 16, ctaY + 32); document.y = ctaY + 68;
   }
 

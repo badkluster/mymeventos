@@ -218,16 +218,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       setSaving(false);
     }
   };
-  const patchEvent = async (payload: Record<string, unknown>) => {
-    if (!event) return;
+  const patchEvent = async (payload: Record<string, unknown>): Promise<boolean> => {
+    if (!event) return false;
     setSaving(true);
     try {
       const result = await api.patch<{ event: Event; warnings?: string[] }>(`/events/${event._id}`, payload);
       await load(id);
       notice('Evento actualizado correctamente.');
       result.warnings?.forEach((warning) => notice(warning, 'info'));
+      return true;
     } catch (error) {
       notice(error instanceof Error ? error.message : 'No se pudo actualizar el evento.', 'error');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -367,7 +369,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const financialTotal = Number(event.finalAmount ?? event.estimatedAmount ?? commercial.totalAmount ?? contract?.totalAmount ?? 0);
   const financialPaid = Number(paymentSummary.paidAmount ?? 0);
   const financialBalance = Math.max(0, Number(contract?.balanceAmount ?? financialTotal - financialPaid));
-  const saveResourcePlan = (plan: typeof resourcePlan) => void patchEvent({ resourcePlanSnapshot: plan });
+  const saveResourcePlan = (plan: typeof resourcePlan) => patchEvent({ resourcePlanSnapshot: plan });
   const toggleTaskStatus = (index: number) => {
     const tasks = (resourcePlan.tasks ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, status: item.status === 'done' ? 'pending' : 'done' } : item);
     saveResourcePlan({ ...resourcePlan, tasks });
@@ -408,7 +410,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     {activeTab === 'comercial' && <div className="space-y-5">{!isTerminal ? <EventPackageManager event={event} onApplied={() => load(id)} /> : null}<EventCommercialEditor key={event.updatedAt} event={event} saving={editingDisabled} onSave={(payload) => void patchEvent(payload)} /></div>}
     {activeTab === 'menu' && <EventMenuEditor key={event.updatedAt} initialValue={menuSections} saving={editingDisabled} onSave={(value) => patchEvent({ menuSnapshot: cleanMenuSections(value) })} />}
     {activeTab === 'servicios' && <EventServicesEditor key={event.updatedAt} initialValue={event.servicesSnapshot ?? []} saving={editingDisabled} onSave={(value) => patchEvent({ servicesSnapshot: cleanStringList(value) })} />}
-    {activeTab === 'cronograma' && <EventOperationsWorkspace key={event.updatedAt} event={event} plan={resourcePlan} saving={editingDisabled} onSave={saveResourcePlan} onSyncSummary={(payload) => void patchEvent(payload)} onNotice={notice} />}
+    {activeTab === 'cronograma' && <EventOperationsWorkspace key={event._id} event={event} plan={resourcePlan} saving={editingDisabled} onSave={saveResourcePlan} onSyncSummary={(payload) => void patchEvent(payload)} onNotice={notice} />}
     {activeTab === 'proveedores' && <EventSuppliersEditor key={event.updatedAt} plan={resourcePlan} saving={editingDisabled} onSave={(items) => void saveSuppliers(items)} />}
     {activeTab === 'staff' && <Card title="Equipo del evento"><div className="flex justify-end"><Button disabled={saving} onClick={() => setStaffModalOpen(true)}><CalendarPlus className="mr-2 h-4 w-4" />Asignar integrante</Button></div>{staffAssignments.length ? <div className="overflow-x-auto"><table className="min-w-[840px] w-full text-sm"><thead className="text-left text-xs uppercase text-zinc-400"><tr><th className="py-2">Persona</th><th>Rol</th><th>Turno</th><th>Estado</th><th className="text-right">Acciones</th></tr></thead><tbody className="divide-y divide-zinc-100">{staffAssignments.map((assignment) => { const actions = staffLifecycleActions[assignment.status] ?? []; const canDelete = ['proposed', 'assigned'].includes(assignment.status); return <tr key={assignment._id}><td className="py-3">{staffName(assignment.staffUserId)}</td><td>{assignment.roleLabel || displayLabel(staffSubroleLabels, assignment.staffSubrole ?? '')}</td><td>{[formatDateTime(assignment.shiftStart), assignment.shiftEnd ? formatDateTime(assignment.shiftEnd) : ''].filter(Boolean).join(' - ')}</td><td>{displayLabel(eventStaffStatusLabels, assignment.status)}</td><td><div className="flex justify-end gap-2">{actions.map(({ action, label }) => <Button key={action} variant="secondary" className="px-3 py-2" disabled={saving} onClick={() => requestStaffAction(assignment, action)}>{label}</Button>)}{canDelete ? <Button variant="danger" className="px-3 py-2" disabled={saving} onClick={() => void updateStaffAssignment(assignment._id, 'delete')}><Trash2 className="h-4 w-4" /><span className="sr-only">Quitar</span></Button> : null}{!actions.length && !canDelete ? <span className="py-2 text-xs text-zinc-500">Sin acciones pendientes</span> : null}</div></td></tr>; })}</tbody></table></div> : <p className="rounded-xl bg-zinc-50 px-4 py-5 text-sm text-zinc-500">No hay integrantes asignados a este evento.</p>}</Card>}
     {activeTab === 'tareas' && <EventTasksEditor key={event.updatedAt} plan={resourcePlan} saving={editingDisabled} onSave={saveResourcePlan} />}

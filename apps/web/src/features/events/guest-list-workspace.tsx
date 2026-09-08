@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Eye, FileText, Mail, MessageCircle, Plus, RotateCcw, Save, Settings, TableProperties, UserPlus, Users } from 'lucide-react';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
@@ -15,7 +15,7 @@ type GuestListWorkspaceProps = {
   event: Event;
   plan?: EventResourcePlan;
   saving: boolean;
-  onSave: (plan: EventResourcePlan) => void;
+  onSave: (plan: EventResourcePlan) => Promise<boolean>;
   onSyncSummary: (payload: Record<string, unknown>) => void;
   onNotice?: (message: string, variant?: 'success' | 'error') => void;
 };
@@ -27,9 +27,11 @@ type GuestListWorkspaceContentProps = GuestListWorkspaceProps & {
 type GuestTab = 'guests' | 'seating' | 'summary';
 type GuestDraft = EventGuest & { id: string };
 type TableDraft = { id?: string; name: string; capacity: string; audience: string; notes: string };
+type LocalGuestListDraft = { version: 1; guestList: EventGuestList; updatedAt: string };
 
 const emptyGuestList: EventGuestList = { tables: [], guests: [], notes: '' };
 const publicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
+const localDraftPrefix = 'mym:backoffice-guest-list-draft:';
 
 function guestListPath(token: string): string {
   return `/invitados/${token}`;
@@ -62,6 +64,47 @@ function withIds(list: EventGuestList | undefined, guestCount?: number): EventGu
     tables: tables.length ? tables : defaultGuestTables(guestCount),
     guests: (list?.guests ?? []).map((guest) => ({ ...guest, id: guest.id || makeId() }))
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function localDraftKey(eventId: string): string {
+  return `${localDraftPrefix}${eventId}`;
+}
+
+function readLocalDraft(eventId: string): LocalGuestListDraft | undefined {
+  if (typeof window === 'undefined' || !eventId) return undefined;
+  try {
+    const raw = window.localStorage.getItem(localDraftKey(eventId));
+    if (!raw) return undefined;
+    const draft: unknown = JSON.parse(raw);
+    if (!isRecord(draft) || draft.version !== 1 || !isRecord(draft.guestList) || !Array.isArray(draft.guestList.tables) || !Array.isArray(draft.guestList.guests)) return undefined;
+    return { version: 1, guestList: draft.guestList as EventGuestList, updatedAt: typeof draft.updatedAt === 'string' ? draft.updatedAt : '' };
+  } catch {
+    return undefined;
+  }
+}
+
+function writeLocalDraft(eventId: string, guestList: EventGuestList): boolean {
+  if (typeof window === 'undefined' || !eventId) return false;
+  try {
+    const draft: LocalGuestListDraft = { version: 1, guestList, updatedAt: new Date().toISOString() };
+    window.localStorage.setItem(localDraftKey(eventId), JSON.stringify(draft));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearLocalDraft(eventId: string): void {
+  if (typeof window === 'undefined' || !eventId) return;
+  try {
+    window.localStorage.removeItem(localDraftKey(eventId));
+  } catch {
+    // Si el navegador bloquea esta limpieza, la versión ya guardada sigue siendo válida.
+  }
 }
 
 function customerName(event: Event): string {
@@ -119,6 +162,7 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
   const [guestList, setGuestList] = useState<EventGuestList>(initialGuestList);
   const [tab, setTab] = useState<GuestTab>('seating');
   const [dirty, setDirty] = useState(false);
+  const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
   const [guestEditorOpen, setGuestEditorOpen] = useState(false);
   const [guestDraft, setGuestDraft] = useState<GuestDraft>();
@@ -133,6 +177,8 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
   const [tableFilterId, setTableFilterId] = useState<string>();
   const [sharing, setSharing] = useState(false);
   const [shareToken, setShareToken] = useState(event.guestListAccessToken ?? '');
+  const hydratedEventId = useRef<string | undefined>(undefined);
+  const draftRevision = useRef(0);
   const shareUrl = shareToken ? shareableGuestListUrl(shareToken) : '';
   const shareContact = customerContact(event);
   const whatsappShareHref = shareUrl ? `https://wa.me/${shareContact.phone.replace(/\D/g, '')}?text=${encodeURIComponent(guestListShareMessage(event, shareUrl))}` : '';
@@ -148,7 +194,27 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
   const mealSummary = validGuests.reduce<Record<string, number>>((summary, guest) => { const key = guest.meal?.trim() || 'Sin menú definido'; summary[key] = (summary[key] ?? 0) + 1; return summary; }, {});
   const adults = validGuests.filter((guest) => !guest.ageGroup || guest.ageGroup === 'adult').length;
   const children = validGuests.filter((guest) => guest.ageGroup && guest.ageGroup !== 'adult').length;
-  const changeList = (changes: Partial<EventGuestList>) => { setGuestList((current) => { const next = { ...current, ...changes }; onGuestListChange?.(next); return next; }); setDirty(true); };
+  useEffect(() => {
+    if (!event._id || hydratedEventId.current === event._id) return;
+    hydratedEventId.current = event._id;
+    const localDraft = readLocalDraft(event._id);
+    const next = withIds(localDraft?.guestList ?? plan?.guestList, event.guestCount);
+    setGuestList(next);
+    onGuestListChange?.(next);
+    setDirty(Boolean(localDraft));
+    setHasLocalDraft(Boolean(localDraft));
+    draftRevision.current = localDraft ? 1 : 0;
+  }, [event._id, event.guestCount, onGuestListChange, plan?.guestList]);
+  const changeList = (changes: Partial<EventGuestList>) => {
+    const next = { ...guestList, ...changes };
+    setGuestList(next);
+    onGuestListChange?.(next);
+    setDirty(true);
+    draftRevision.current += 1;
+    const stored = writeLocalDraft(event._id, next);
+    setHasLocalDraft(stored);
+    if (!stored) onNotice?.('No se pudo guardar una copia local. Intentá guardar los cambios antes de cerrar esta pantalla.', 'error');
+  };
   const assignGuest = (guestId: string, tableId: string) => { changeList({ guests: guests.map((guest) => guest.id === guestId ? { ...guest, tableId } : guest) }); };
   const toggleGuest = (guestId: string) => setSelectedGuestIds((current) => current.includes(guestId) ? current.filter((id) => id !== guestId) : [...current, guestId]);
   const openGuestEditor = (guestId?: string, tableId = '') => {
@@ -191,16 +257,21 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
     setQuickText(''); setQuickTableId(''); setQuickImportOpen(false);
   };
   const bulkAssign = (tableId: string) => { changeList({ guests: guests.map((guest) => guest.id && selectedGuestIds.includes(guest.id) ? { ...guest, tableId } : guest) }); setSelectedGuestIds([]); };
-  const save = () => {
+  const save = async () => {
+    const revisionAtSave = draftRevision.current;
     const cleanTables = tables.filter((table) => table.name.trim()).map((table) => ({ ...table, name: table.name.trim(), notes: table.notes?.trim() }));
     const tableIds = new Set(cleanTables.map((table) => table.id));
     const cleanGuests = guests.filter((guest) => guest.fullName.trim()).map((guest) => ({ ...guest, fullName: guest.fullName.trim(), meal: guest.meal?.trim(), notes: guest.notes?.trim(), tableId: tableIds.has(guest.tableId) ? guest.tableId : '' }));
-    onSave({ ...(plan ?? {}), guestList: { tables: cleanTables, guests: cleanGuests, notes: guestList.notes?.trim(), submittedAt: guestList.submittedAt } });
+    const saved = await onSave({ ...(plan ?? {}), guestList: { tables: cleanTables, guests: cleanGuests, notes: guestList.notes?.trim(), submittedAt: guestList.submittedAt } });
+    if (!saved || draftRevision.current !== revisionAtSave) return;
+    clearLocalDraft(event._id);
+    setHasLocalDraft(false);
+    setDirty(false);
   };
-  const discard = () => { const restored = withIds(plan?.guestList, event.guestCount); setGuestList(restored); onGuestListChange?.(restored); setDirty(false); setSelectedGuestIds([]); setTableFilterId(undefined); };
+  const discard = () => { clearLocalDraft(event._id); const restored = withIds(plan?.guestList, event.guestCount); setGuestList(restored); onGuestListChange?.(restored); setDirty(false); setHasLocalDraft(false); draftRevision.current = 0; setSelectedGuestIds([]); setTableFilterId(undefined); };
   const syncSummary = () => onSyncSummary({ vegetarianCount: validGuests.filter((guest) => guest.dietaryPreference === 'vegetarian').length, veganCount: validGuests.filter((guest) => guest.dietaryPreference === 'vegan').length, celiacCount: validGuests.filter((guest) => guest.dietaryPreference === 'celiac').length, lactoseIntolerantCount: validGuests.filter((guest) => guest.dietaryPreference === 'lactose_free').length });
   const createShareLink = async () => { setSharing(true); try { const response = await api.post<{ token: string; created: boolean }>(`/events/${event._id}/guest-list-link`, {}); setShareToken(response.token); try { await globalThis.navigator.clipboard.writeText(shareableGuestListUrl(response.token)); onNotice?.(response.created ? 'Enlace para el cliente creado y copiado.' : 'Enlace existente copiado.'); } catch { onNotice?.(response.created ? 'Enlace para el cliente creado. Copialo desde el campo mostrado.' : 'El enlace existente sigue activo. Copialo desde el campo mostrado.'); } } catch (error) { onNotice?.(error instanceof Error ? error.message : 'No se pudo obtener el enlace para el cliente.', 'error'); } finally { setSharing(false); } };
-  const status = saving ? 'Guardando...' : dirty ? 'Hay cambios pendientes' : 'Cambios guardados';
+  const status = saving ? 'Guardando...' : hasLocalDraft ? 'Borrador local pendiente de guardar' : dirty ? 'Hay cambios pendientes' : 'Cambios guardados';
   const selectedTable = tables.find((table) => table.id === tableToDelete);
   const selectedTableGuests = selectedTable ? guests.filter((guest) => guest.tableId === selectedTable.id && guest.fullName.trim()) : [];
   return <div className="mx-auto w-full max-w-[1440px] space-y-5 rounded-3xl bg-zinc-50/80 p-1 sm:p-3"><header className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-6 text-white shadow-lg sm:px-7"><div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between"><div className="flex min-w-0 items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-amber-300/50 bg-amber-300/10 font-serif text-xl font-semibold text-amber-300">M</div><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.16em] text-amber-300">M&M Eventos</p><h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Lista de invitados</h1><p className="mt-1 truncate text-sm text-zinc-300">{displayLabel(eventTypeLabels, event.eventType || '')} · {customerName(event)} · {dateLabel(event.eventDate)}</p></div></div><div className="flex flex-col gap-3 xl:items-end"><p className={`inline-flex items-center gap-2 text-sm ${saving ? 'text-amber-200' : dirty ? 'text-amber-200' : 'text-emerald-300'}`}><CheckCircle2 className="h-4 w-4" />{status}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={sharing} onClick={() => void createShareLink()}>{sharing ? 'Preparando enlace...' : shareUrl ? 'Copiar enlace cliente' : 'Crear enlace cliente'}</Button><Button type="button" variant="secondary" onClick={() => setTab('summary')}><Eye className="mr-2 h-4 w-4" />Vista previa</Button><Button type="button" disabled={saving || !dirty} onClick={save}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</Button></div></div></div><div className="mt-6 flex gap-3 overflow-x-auto pb-1"><Metric value={validGuests.length} label="invitados" icon={<Users className="h-4 w-4" />} /><Metric value={assignedGuests.length} label="asignados" icon={<CheckCircle2 className="h-4 w-4" />} /><Metric value={unassignedGuests.length} label="sin mesa" icon={<UserPlus className="h-4 w-4" />} /><Metric value={tables.length} label="mesas" icon={<TableProperties className="h-4 w-4" />} /></div></header><GuestListTabs value={tab} onChange={setTab} />
@@ -208,7 +279,7 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
     {tab === 'seating' ? <div className="space-y-5"><section className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]"><UnassignedGuestsPanel guests={guests} tables={tables} selectedGuestIds={selectedGuestIds} onToggleSelected={toggleGuest} onEditGuest={(guestId) => openGuestEditor(guestId)} onAssign={assignGuest} /><section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold text-zinc-950">Organización de mesas</h2><p className="mt-1 text-sm text-zinc-500">Usá el plano para ubicar invitados y controlar la capacidad de cada mesa.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => openTableEditor()}><Plus className="mr-2 h-4 w-4" />Nueva mesa</Button><Button type="button" variant="secondary" onClick={() => setTablesManagerOpen(true)}><Settings className="mr-2 h-4 w-4" />Administrar mesas</Button><Button type="button" onClick={() => openGuestEditor()}><UserPlus className="mr-2 h-4 w-4" />Agregar invitado</Button></div></div><div className="mt-5"><GuestSeatingBoard tables={tables} guests={guests} showUnassigned={false} onAssign={assignGuest} onEditTable={openTableEditor} onViewTable={(tableId) => { setTableFilterId(tableId); setTab('guests'); }} onAddGuestToTable={(tableId) => openGuestEditor(undefined, tableId)} /></div></section></section><section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"><h2 className="text-base font-semibold text-zinc-950">Resumen rápido</h2><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><SummaryMetric value={validGuests.filter((guest) => guest.dietaryPreference === 'vegetarian').length} label="vegetarianos" tone="emerald" /><SummaryMetric value={validGuests.filter((guest) => guest.dietaryPreference === 'celiac').length} label="celíacos" tone="amber" /><SummaryMetric value={children} label="menús infantiles" tone="zinc" />{unassignedGuests.length ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 xl:col-span-2"><p className="flex items-center gap-2 font-semibold text-amber-950"><AlertTriangle className="h-4 w-4" />{unassignedGuests.length} invitado{unassignedGuests.length === 1 ? '' : 's'} todavía no tiene{unassignedGuests.length === 1 ? '' : 'n'} mesa</p><p className="mt-1 text-sm text-amber-800">Asignálos para completar la organización.</p></div> : <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 xl:col-span-2"><p className="flex items-center gap-2 font-semibold text-emerald-900"><CheckCircle2 className="h-4 w-4" />Todos los invitados tienen mesa</p><p className="mt-1 text-sm text-emerald-700">La distribución está completa.</p></div>}</div></section></div> : null}
     {tab === 'guests' ? <div className="space-y-5"><section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><div><h2 className="font-semibold text-zinc-950">Gestión de invitados</h2><p className="mt-1 text-sm text-zinc-500">Podés cargar invitados individualmente o en lote.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => setQuickImportOpen(true)}><Plus className="mr-2 h-4 w-4" />Carga rápida</Button><Button type="button" onClick={() => openGuestEditor()}><UserPlus className="mr-2 h-4 w-4" />Agregar invitado</Button></div></section><GuestDirectory guests={guests} tables={tables} selectedGuestIds={selectedGuestIds} tableFilterId={tableFilterId} onToggleSelected={toggleGuest} onClearSelected={() => setSelectedGuestIds([])} onBulkAssign={bulkAssign} onEditGuest={(guestId) => openGuestEditor(guestId)} onDeleteGuest={deleteGuest} onClearTableFilter={() => setTableFilterId(undefined)} /></div> : null}
     {tab === 'summary' ? <section className="space-y-5"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><SummaryMetric value={validGuests.length} label="invitados totales" /><SummaryMetric value={assignedGuests.length} label="invitados asignados" tone="emerald" /><SummaryMetric value={unassignedGuests.length} label="sin mesa" tone={unassignedGuests.length ? 'amber' : 'emerald'} /><SummaryMetric value={fullTables.length} label="mesas completas" tone="amber" /><SummaryMetric value={overCapacityTables.length} label="mesas excedidas" tone={overCapacityTables.length ? 'red' : 'zinc'} /></div><div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]"><section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-zinc-950">Menú y restricciones</h2><div className="mt-4 grid gap-4 sm:grid-cols-2"><div><p className="text-sm font-medium text-zinc-700">Menú por cantidad</p><div className="mt-2 space-y-2">{Object.entries(mealSummary).map(([name, count]) => <div key={name} className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-sm"><span>{name}</span><strong>{count}</strong></div>)}</div></div><div><p className="text-sm font-medium text-zinc-700">Restricciones alimentarias</p><div className="mt-2 space-y-2">{dietaryCounts.length ? dietaryCounts.map(([diet, count]) => <div key={diet} className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950"><span>{dietLabel(diet)}</span><strong>{count}</strong></div>) : <p className="rounded-lg bg-zinc-50 px-3 py-3 text-sm text-zinc-500">No hay restricciones cargadas.</p>}<div className="rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-600">{adults} adultos · {children} niños/as</div></div></div></div></section><section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-zinc-950">Alertas operativas</h2><div className="mt-4 space-y-3">{unassignedGuests.length ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{unassignedGuests.length} invitado{unassignedGuests.length === 1 ? '' : 's'} todavía no tiene{unassignedGuests.length === 1 ? '' : 'n'} mesa.</p> : null}{overCapacityTables.map((table) => { const count = guests.filter((guest) => guest.tableId === table.id && guest.fullName.trim()).length - Number(table.capacity); return <p key={table.id} className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">{table.name} supera su capacidad por {count} invitado{count === 1 ? '' : 's'}.</p>; })}{validGuests.filter((guest) => guest.dietaryPreference && guest.dietaryPreference !== 'none' && !guest.meal?.trim()).length ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Hay invitados con restricciones alimentarias sin menú definido.</p> : null}{!unassignedGuests.length && !overCapacityTables.length ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">No hay alertas críticas de distribución.</p> : null}</div></section></div><section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-zinc-950">Notas generales</h2><Textarea className="mt-4" value={guestList.notes ?? ''} onChange={(event) => changeList({ notes: event.target.value })} placeholder="Confirmaciones pendientes, cambios de última hora, contactos u observaciones para el equipo..." /><div className="mt-4 flex justify-end"><Button type="button" variant="secondary" disabled={saving || !validGuests.length} onClick={syncSummary}>Sincronizar cantidades con el evento</Button></div></section></section> : null}
-    {dirty ? <div className="sticky bottom-3 z-20 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-white shadow-2xl"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Cambios pendientes</p><p className="mt-1 text-sm text-zinc-300">Guardá la lista para actualizar el cronograma, los documentos y la operación.</p></div><div className="flex gap-2"><Button type="button" variant="secondary" disabled={saving} onClick={discard}><RotateCcw className="mr-2 h-4 w-4" />Descartar</Button><Button type="button" disabled={saving} onClick={save}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</Button></div></div></div> : null}
+    <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-zinc-950">{dirty ? 'Cambios pendientes' : 'Lista actualizada'}</h2><p className="mt-1 text-sm text-zinc-500">{dirty ? 'Tus cambios siguen guardados localmente hasta que los confirmes.' : 'No hay cambios pendientes para guardar.'}</p></div><div className="flex flex-wrap gap-2">{dirty ? <Button type="button" variant="secondary" disabled={saving} onClick={discard}><RotateCcw className="mr-2 h-4 w-4" />Descartar</Button> : null}<Button type="button" disabled={saving || !dirty} onClick={save}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</Button></div></div></section>
     <Modal open={guestEditorOpen} title={guestDraft && guests.some((guest) => guest.id === guestDraft.id) ? 'Editar invitado' : 'Agregar invitado'} description="Completá solo los datos necesarios para la organización del evento." onClose={() => setGuestEditorOpen(false)}>{guestDraft ? <div className="space-y-4 p-5 sm:p-6"><Input value={guestDraft.fullName} onChange={(event) => setGuestDraft({ ...guestDraft, fullName: event.target.value })} placeholder="Nombre y apellido" aria-label="Nombre y apellido" /><div className="grid gap-3 sm:grid-cols-2"><Select value={guestDraft.tableId ?? ''} onChange={(event) => setGuestDraft({ ...guestDraft, tableId: event.target.value })} aria-label="Mesa"><option value="">Sin mesa asignada</option>{tables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</Select><Select value={guestDraft.ageGroup ?? 'adult'} onChange={(event) => setGuestDraft({ ...guestDraft, ageGroup: event.target.value })} aria-label="Edad y tarifa"><option value="adult">Adulto / 18 años o más</option><option value="child_1_4">1 a 4 años · no paga</option><option value="child_5_9">5 a 9 años · paga la mitad</option><option value="minor_10_17">10 a 17 años · menor</option></Select><Input value={guestDraft.meal ?? ''} onChange={(event) => setGuestDraft({ ...guestDraft, meal: event.target.value })} placeholder="Menú / plato" /><Select value={guestDraft.dietaryPreference ?? 'none'} onChange={(event) => setGuestDraft({ ...guestDraft, dietaryPreference: event.target.value })} aria-label="Restricción alimentaria"><option value="none">Sin restricción</option><option value="vegetarian">Vegetariano/a</option><option value="vegan">Vegano/a</option><option value="celiac">Celíaco/a</option><option value="lactose_free">Sin lactosa</option></Select></div><Textarea value={guestDraft.notes ?? ''} onChange={(event) => setGuestDraft({ ...guestDraft, notes: event.target.value })} placeholder="Observaciones, alergias o ubicación especial" /><label className="flex items-center gap-2 text-sm text-zinc-700"><input type="checkbox" checked={guestDraft.confirmed !== false} onChange={(event) => setGuestDraft({ ...guestDraft, confirmed: event.target.checked })} />Confirmado</label>{!guestDraft.fullName.trim() ? <p className="text-sm text-red-600">El nombre del invitado es obligatorio.</p> : null}<div className="flex justify-between gap-2 border-t border-zinc-100 pt-4">{guests.some((guest) => guest.id === guestDraft.id) ? <Button type="button" variant="danger" onClick={() => { deleteGuest(guestDraft.id); setGuestEditorOpen(false); }}>Eliminar</Button> : <span />}<div className="flex gap-2"><Button type="button" variant="secondary" onClick={() => setGuestEditorOpen(false)}>Cancelar</Button><Button type="button" disabled={!guestDraft.fullName.trim()} onClick={saveGuestDraft}>Guardar invitado</Button></div></div></div> : null}</Modal>
     <Modal open={quickImportOpen} title="Carga rápida de invitados" description="Pegá un invitado por línea. Podés agregar el menú separándolo con una coma." onClose={() => setQuickImportOpen(false)}><div className="space-y-4 p-5 sm:p-6"><Textarea value={quickText} onChange={(event) => setQuickText(event.target.value)} placeholder={'Juan Pérez, Menú tradicional\nMaría López, Vegetariano\nCarlos Díaz'} aria-label="Invitados a cargar" /><Select value={quickTableId} onChange={(event) => setQuickTableId(event.target.value)}><option value="">Sin mesa inicial</option>{tables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</Select><p className="rounded-xl bg-zinc-50 px-3 py-3 text-sm text-zinc-600">Se agregarán <strong>{quickLines.length}</strong> invitado{quickLines.length === 1 ? '' : 's'}.</p><div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button type="button" variant="secondary" onClick={() => setQuickImportOpen(false)}>Cancelar</Button><Button type="button" disabled={!quickLines.length} onClick={importQuickGuests}>Agregar invitados</Button></div></div></Modal>
     <Modal open={tableEditorOpen} title={tableDraft.id ? 'Editar mesa' : 'Nueva mesa'} description="Definí nombre, capacidad, tipo de mesa y una referencia opcional para el salón." onClose={() => setTableEditorOpen(false)}><div className="space-y-4 p-5 sm:p-6"><Input value={tableDraft.name} onChange={(event) => { setTableError(''); setTableDraft({ ...tableDraft, name: event.target.value }); }} placeholder="Ej.: Mesa familia Gómez" aria-label="Nombre de mesa" /><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium text-zinc-700">Capacidad de la mesa<Input className="mt-1" type="number" min={1} value={tableDraft.capacity} onChange={(event) => { setTableError(''); setTableDraft({ ...tableDraft, capacity: event.target.value }); }} placeholder="Ej.: 10" aria-label="Capacidad de mesa" /></label><Select value={tableDraft.audience} onChange={(event) => setTableDraft({ ...tableDraft, audience: event.target.value })} aria-label="Tipo de mesa"><option value="open">Mesa libre / general</option><option value="children">Mesa de chicos</option><option value="family">Mesa familiar</option></Select></div><Textarea value={tableDraft.notes} onChange={(event) => setTableDraft({ ...tableDraft, notes: event.target.value })} placeholder="Descripción o referencia opcional" />{tableDraft.id ? <p className="rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-900">Actualmente hay {guests.filter((guest) => guest.tableId === tableDraft.id && guest.fullName.trim()).length} invitado{guests.filter((guest) => guest.tableId === tableDraft.id && guest.fullName.trim()).length === 1 ? '' : 's'} asignado{guests.filter((guest) => guest.tableId === tableDraft.id && guest.fullName.trim()).length === 1 ? '' : 's'}. Si reducís la capacidad por debajo de ese número, la mesa quedará marcada como excedida.</p> : null}{tableError ? <p className="text-sm text-red-600">{tableError}</p> : null}<div className="flex justify-between gap-2 border-t border-zinc-100 pt-4">{tableDraft.id ? <Button type="button" variant="danger" onClick={() => { setTableEditorOpen(false); setTableToDelete(tableDraft.id); }}>Eliminar mesa</Button> : <span />}<div className="flex gap-2"><Button type="button" variant="secondary" onClick={() => setTableEditorOpen(false)}>Cancelar</Button><Button type="button" onClick={saveTableDraft}>Guardar mesa</Button></div></div></div></Modal>
