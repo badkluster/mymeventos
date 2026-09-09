@@ -41,6 +41,7 @@ export type Quote = {
   menuSections?: { title?: string; name?: string; items: string[] }[];
   includedServices?: string[];
   notes?: string;
+  observations?: string;
   validUntil?: string;
   pdfUrl?: string;
   pdfSecureUrl?: string;

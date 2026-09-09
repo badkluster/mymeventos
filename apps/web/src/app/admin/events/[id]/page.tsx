@@ -369,7 +369,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const financialTotal = Number(event.finalAmount ?? event.estimatedAmount ?? commercial.totalAmount ?? contract?.totalAmount ?? 0);
   const financialPaid = Number(paymentSummary.paidAmount ?? 0);
   const financialBalance = Math.max(0, Number(contract?.balanceAmount ?? financialTotal - financialPaid));
-  const saveResourcePlan = (plan: typeof resourcePlan, options?: { automatic?: boolean }) => patchEvent({ resourcePlanSnapshot: plan }, { notifySuccess: !options?.automatic, notifyError: !options?.automatic });
+  const saveResourcePlan = (plan: typeof resourcePlan) => patchEvent({ resourcePlanSnapshot: plan });
   const toggleTaskStatus = (index: number) => {
     const tasks = (resourcePlan.tasks ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, status: item.status === 'done' ? 'pending' : 'done' } : item);
     saveResourcePlan({ ...resourcePlan, tasks });

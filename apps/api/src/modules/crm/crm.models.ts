@@ -135,6 +135,9 @@ const quoteSchema = new Schema({
   totalAmount: Number, depositAmount: { type: Number, default: 0 }, balanceAmount: Number,
   paymentTerms: String, promotionText: String, giftText: String,
   menuSections: { type: [menuSectionSchema], default: [] }, includedServices: { type: [String], default: [] }, notes: String,
+  // Texto libre propio del presupuesto. No se hereda de la plantilla y se
+  // conserva al convertir el presupuesto en evento.
+  observations: String,
   validUntil: Date, sentAt: Date, acceptedAt: Date, rejectedAt: Date,
   totalGuests: Number,
   adultsCount: Number,

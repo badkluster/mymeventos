@@ -67,6 +67,7 @@ const convertSchema = z.object({
     menuSections: menuSectionsSchema.optional(),
     includedServices: z.array(z.string().trim().min(1)).optional(),
     notes: z.string().trim().optional(),
+    observations: z.string().trim().optional(),
     validUntil: z.coerce.date().optional(),
     honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional()
   }).refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.'),
@@ -309,7 +310,8 @@ router.post('/:id/convert-to-quotes', requirePermission(Permission.QUOTES_CREATE
       tableLinenColor: request.body.tableLinenColor,
       packageName: request.body.manualMode ? request.body.packageName : (template as { name?: string }).name,
       packageTemplateId: request.body.packageTemplateId,
-      notes: [request.body.notes, quoteRequest.message].filter(Boolean).join('\n\n'),
+      notes: request.body.notes,
+      observations: [request.body.observations, quoteRequest.message].filter(Boolean).join('\n\n'),
       validUntil: await quoteValidUntil(salonId, request.body.validUntil),
       quoteNumber: quoteNumber(),
       createdBy: request.user!.id,

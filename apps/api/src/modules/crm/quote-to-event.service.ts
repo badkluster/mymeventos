@@ -12,6 +12,14 @@ type ConvertQuoteInput = {
   notes?: string;
 };
 
+function quoteObservations(quote: any): string | undefined {
+  const observations = typeof quote.observations === 'string' ? quote.observations.trim() : '';
+  // Los presupuestos emitidos antes de este campo guardaban el mismo dato en
+  // `notes`; conservar ese comportamiento evita perder información al convertirlos.
+  const legacyNotes = typeof quote.notes === 'string' ? quote.notes.trim() : '';
+  return observations || legacyNotes || undefined;
+}
+
 async function createRevision(quote: any, userId: string): Promise<void> {
   const latest: any = await QuoteRevision.findOne({ quoteId: quote._id }).sort({ version: -1 }).lean();
   await QuoteRevision.create({
@@ -62,7 +70,7 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     email: quote.email || lead?.email,
     salonIds: [quote.salonId?.toString()].filter(Boolean),
     quoteId: quote._id,
-    message: quote.notes,
+    message: quoteObservations(quote),
     userId: input.userId
   });
 
@@ -154,7 +162,7 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     status: 'quoted',
     estimatedAmount: quote.totalAmount,
     finalAmount: quote.totalAmount,
-    notes: [input.notes, quote.notes].filter(Boolean).join('\n\n'),
+    notes: [input.notes, quoteObservations(quote)].filter(Boolean).join('\n\n'),
     commercialSnapshot,
     menuSnapshot: quote.menuSections ?? [],
     servicesSnapshot: quote.includedServices ?? [],

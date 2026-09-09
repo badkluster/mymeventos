@@ -90,9 +90,9 @@ describe('quote package templates', () => {
     const response = await request(app)
       .post('/api/quotes')
       .set('Cookie', adminCookie)
-      .send({ customerId, salonId, packageTemplateId: packageId, contactName: 'Ana Pérez', phone: '1112345678', eventType: 'Cumpleaños', eventDate: '2026-12-05', startTime: '21:00', endTime: '05:00', guestCount: 40 });
+      .send({ customerId, salonId, packageTemplateId: packageId, contactName: 'Ana Pérez', phone: '1112345678', eventType: 'Cumpleaños', eventDate: '2026-12-05', startTime: '21:00', endTime: '05:00', guestCount: 40, observations: 'La familia necesita acceso anticipado para proveedores.' });
 
     expect(response.status).toBe(201);
-    expect(mocks.quoteCreate).toHaveBeenCalledWith(expect.objectContaining({ packageName: 'Alquiler de salón', packageTemplateId: packageId, totalAmount: 4000000 }));
+    expect(mocks.quoteCreate).toHaveBeenCalledWith(expect.objectContaining({ packageName: 'Alquiler de salón', packageTemplateId: packageId, totalAmount: 4000000, observations: 'La familia necesita acceso anticipado para proveedores.' }));
   });
 });

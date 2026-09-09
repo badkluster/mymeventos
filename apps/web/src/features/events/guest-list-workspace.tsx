@@ -15,7 +15,7 @@ type GuestListWorkspaceProps = {
   event: Event;
   plan?: EventResourcePlan;
   saving: boolean;
-  onSave: (plan: EventResourcePlan, options?: { automatic?: boolean }) => Promise<boolean>;
+  onSave: (plan: EventResourcePlan) => Promise<boolean>;
   onSyncSummary: (payload: Record<string, unknown>) => void;
   onNotice?: (message: string, variant?: 'success' | 'error') => void;
 };
@@ -28,7 +28,6 @@ type GuestTab = 'guests' | 'seating' | 'summary';
 type GuestDraft = EventGuest & { id: string };
 type TableDraft = { id?: string; name: string; capacity: string; audience: string; notes: string };
 type LocalGuestListDraft = { version: 1; guestList: EventGuestList; updatedAt: string };
-type AutoSaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'offline';
 
 const emptyGuestList: EventGuestList = { tables: [], guests: [], notes: '' };
 const publicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
@@ -171,7 +170,7 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
   const [tab, setTab] = useState<GuestTab>('seating');
   const [dirty, setDirty] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
+  const [localSaveFailed, setLocalSaveFailed] = useState(false);
   const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
   const [guestEditorOpen, setGuestEditorOpen] = useState(false);
   const [guestDraft, setGuestDraft] = useState<GuestDraft>();
@@ -189,10 +188,7 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
   const hydratedEventId = useRef<string | undefined>(undefined);
   const draftRevision = useRef(0);
   const guestListRef = useRef(guestList);
-  const autoSaveTimer = useRef<number | undefined>(undefined);
   const saveInProgress = useRef(false);
-  const autoSaveQueued = useRef(false);
-  const saveGuestListRef = useRef<(automatic: boolean) => Promise<boolean>>(() => Promise.resolve(false));
   const shareUrl = shareToken ? shareableGuestListUrl(shareToken) : '';
   const shareContact = customerContact(event);
   const whatsappShareHref = shareUrl ? `https://wa.me/${shareContact.phone.replace(/\D/g, '')}?text=${encodeURIComponent(guestListShareMessage(event, shareUrl))}` : '';
@@ -218,68 +214,30 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
     onGuestListChange?.(next);
     setDirty(Boolean(localDraft));
     setHasLocalDraft(Boolean(localDraft));
-    setAutoSaveStatus(localDraft ? 'pending' : 'idle');
+    setLocalSaveFailed(false);
     draftRevision.current = localDraft ? 1 : 0;
   }, [event._id, event.guestCount, onGuestListChange, plan?.guestList]);
-  const clearAutoSaveTimer = () => {
-    if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = undefined;
-  };
-  const saveGuestList = async (automatic: boolean): Promise<boolean> => {
-    if (saveInProgress.current) {
-      if (automatic) autoSaveQueued.current = true;
-      return false;
-    }
-    clearAutoSaveTimer();
+  const saveGuestList = async (): Promise<boolean> => {
+    if (saveInProgress.current) return false;
     const revisionAtSave = draftRevision.current;
     const guestListToSave = cleanGuestList(guestListRef.current);
     saveInProgress.current = true;
-    if (automatic) setAutoSaveStatus('saving');
     try {
-      const saved = await onSave({ ...(plan ?? {}), guestList: guestListToSave }, { automatic });
-      if (!saved) {
-        if (automatic) setAutoSaveStatus(typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'pending');
-        return false;
-      }
+      const saved = await onSave({ ...(plan ?? {}), guestList: guestListToSave });
+      if (!saved) return false;
       if (draftRevision.current === revisionAtSave) {
         clearLocalDraft(event._id);
         setHasLocalDraft(false);
         setDirty(false);
-        setAutoSaveStatus(automatic ? 'saved' : 'idle');
-        if (automatic) onNotice?.('Lista de invitados guardada automáticamente.', 'success');
+        setLocalSaveFailed(false);
       }
       return true;
     } catch {
-      if (automatic) setAutoSaveStatus(typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'pending');
       return false;
     } finally {
       saveInProgress.current = false;
-      if (autoSaveQueued.current || draftRevision.current !== revisionAtSave) {
-        autoSaveQueued.current = false;
-        scheduleAutoSave();
-      }
     }
   };
-  function scheduleAutoSave() {
-    clearAutoSaveTimer();
-    autoSaveTimer.current = window.setTimeout(() => {
-      autoSaveTimer.current = undefined;
-      void saveGuestList(true);
-    }, 800);
-  }
-  useEffect(() => {
-    saveGuestListRef.current = saveGuestList;
-  });
-  useEffect(() => {
-    const retryAutomaticSave = () => {
-      if (readLocalDraft(event._id)) void saveGuestListRef.current(true);
-    };
-    window.addEventListener('online', retryAutomaticSave);
-    return () => {
-      window.removeEventListener('online', retryAutomaticSave);
-      if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
-    };
-  }, [event._id]);
   const changeList = (changes: Partial<EventGuestList>) => {
     const next = { ...guestList, ...changes };
     setGuestList(next);
@@ -289,9 +247,8 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
     draftRevision.current += 1;
     const stored = writeLocalDraft(event._id, next);
     setHasLocalDraft(stored);
-    setAutoSaveStatus(typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'pending');
+    setLocalSaveFailed(!stored);
     if (!stored) onNotice?.('No se pudo guardar una copia local. Intentá guardar los cambios antes de cerrar esta pantalla.', 'error');
-    scheduleAutoSave();
   };
   const assignGuest = (guestId: string, tableId: string) => { changeList({ guests: guests.map((guest) => guest.id === guestId ? { ...guest, tableId } : guest) }); };
   const toggleGuest = (guestId: string) => setSelectedGuestIds((current) => current.includes(guestId) ? current.filter((id) => id !== guestId) : [...current, guestId]);
@@ -335,11 +292,11 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
     setQuickText(''); setQuickTableId(''); setQuickImportOpen(false);
   };
   const bulkAssign = (tableId: string) => { changeList({ guests: guests.map((guest) => guest.id && selectedGuestIds.includes(guest.id) ? { ...guest, tableId } : guest) }); setSelectedGuestIds([]); };
-  const save = () => void saveGuestList(false);
-  const discard = () => { clearAutoSaveTimer(); autoSaveQueued.current = false; clearLocalDraft(event._id); const restored = withIds(plan?.guestList, event.guestCount); setGuestList(restored); guestListRef.current = restored; onGuestListChange?.(restored); setDirty(false); setHasLocalDraft(false); setAutoSaveStatus('idle'); draftRevision.current = 0; setSelectedGuestIds([]); setTableFilterId(undefined); };
+  const save = () => void saveGuestList();
+  const discard = () => { clearLocalDraft(event._id); const restored = withIds(plan?.guestList, event.guestCount); setGuestList(restored); guestListRef.current = restored; onGuestListChange?.(restored); setDirty(false); setHasLocalDraft(false); setLocalSaveFailed(false); draftRevision.current = 0; setSelectedGuestIds([]); setTableFilterId(undefined); };
   const syncSummary = () => onSyncSummary({ vegetarianCount: validGuests.filter((guest) => guest.dietaryPreference === 'vegetarian').length, veganCount: validGuests.filter((guest) => guest.dietaryPreference === 'vegan').length, celiacCount: validGuests.filter((guest) => guest.dietaryPreference === 'celiac').length, lactoseIntolerantCount: validGuests.filter((guest) => guest.dietaryPreference === 'lactose_free').length });
   const createShareLink = async () => { setSharing(true); try { const response = await api.post<{ token: string; created: boolean }>(`/events/${event._id}/guest-list-link`, {}); setShareToken(response.token); try { await globalThis.navigator.clipboard.writeText(shareableGuestListUrl(response.token)); onNotice?.(response.created ? 'Enlace para el cliente creado y copiado.' : 'Enlace existente copiado.'); } catch { onNotice?.(response.created ? 'Enlace para el cliente creado. Copialo desde el campo mostrado.' : 'El enlace existente sigue activo. Copialo desde el campo mostrado.'); } } catch (error) { onNotice?.(error instanceof Error ? error.message : 'No se pudo obtener el enlace para el cliente.', 'error'); } finally { setSharing(false); } };
-  const status = saving || autoSaveStatus === 'saving' ? 'Guardando...' : autoSaveStatus === 'offline' ? 'Sin conexión: pendiente' : hasLocalDraft ? 'Cambios pendientes de sincronizar' : autoSaveStatus === 'saved' ? 'Guardado automáticamente' : dirty ? 'Hay cambios pendientes' : 'Cambios guardados';
+  const status = saving ? 'Guardando...' : localSaveFailed ? 'No se pudo guardar la copia local' : hasLocalDraft ? 'Cambios guardados localmente' : dirty ? 'Hay cambios pendientes' : 'Cambios guardados';
   const selectedTable = tables.find((table) => table.id === tableToDelete);
   const selectedTableGuests = selectedTable ? guests.filter((guest) => guest.tableId === selectedTable.id && guest.fullName.trim()) : [];
   return <div className="mx-auto w-full max-w-[1440px] space-y-5 rounded-3xl bg-zinc-50/80 p-1 sm:p-3"><header className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-6 text-white shadow-lg sm:px-7"><div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between"><div className="flex min-w-0 items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-amber-300/50 bg-amber-300/10 font-serif text-xl font-semibold text-amber-300">M</div><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.16em] text-amber-300">M&M Eventos</p><h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Lista de invitados</h1><p className="mt-1 truncate text-sm text-zinc-300">{displayLabel(eventTypeLabels, event.eventType || '')} · {customerName(event)} · {dateLabel(event.eventDate)}</p></div></div><div className="flex flex-col gap-3 xl:items-end"><p className={`inline-flex items-center gap-2 text-sm ${saving ? 'text-amber-200' : dirty ? 'text-amber-200' : 'text-emerald-300'}`}><CheckCircle2 className="h-4 w-4" />{status}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={sharing} onClick={() => void createShareLink()}>{sharing ? 'Preparando enlace...' : shareUrl ? 'Copiar enlace cliente' : 'Crear enlace cliente'}</Button><Button type="button" variant="secondary" onClick={() => setTab('summary')}><Eye className="mr-2 h-4 w-4" />Vista previa</Button><Button type="button" disabled={saving || !dirty} onClick={save}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</Button></div></div></div><div className="mt-6 flex gap-3 overflow-x-auto pb-1"><Metric value={validGuests.length} label="invitados" icon={<Users className="h-4 w-4" />} /><Metric value={assignedGuests.length} label="asignados" icon={<CheckCircle2 className="h-4 w-4" />} /><Metric value={unassignedGuests.length} label="sin mesa" icon={<UserPlus className="h-4 w-4" />} /><Metric value={tables.length} label="mesas" icon={<TableProperties className="h-4 w-4" />} /></div></header><GuestListTabs value={tab} onChange={setTab} />

@@ -60,6 +60,7 @@ function serviceCard(document: PDFKit.PDFDocument, content: string, x: number, y
   document.font('Helvetica').fontSize(8.5).fillColor(color.ink).text(content, x + 25, y + 8, { width: width - 40, lineGap: 1 });
 }
 function contentThatFits(document: PDFKit.PDFDocument, content: string, width: number, maxHeight: number): [string, string] {
+  document.font('Helvetica').fontSize(8.8);
   if (document.heightOfString(content, { width, lineGap: 1.5 }) <= maxHeight) return [content, ''];
   let lastBreak = 0;
   for (let index = 0; index < content.length; index += 1) {
@@ -161,7 +162,10 @@ export async function generateAndUploadQuotePdf(quote: any): Promise<{ pdfSecure
     flowingLabeledCards(document, quote, 'Condiciones', paymentTermsContent);
   }
 
-  const hasSecondPage = Boolean(quote.menuSections?.some((item: any) => item.items?.length) || quote.includedServices?.length || quote.promotionText || quote.giftText || quote.notes || quote.lineItems?.length);
+  const observations = value(quote.observations, '');
+  const legacyNotes = value(quote.notes, '');
+  const showLegacyNotes = Boolean(legacyNotes && legacyNotes !== observations);
+  const hasSecondPage = Boolean(quote.menuSections?.some((item: any) => item.items?.length) || quote.includedServices?.length || quote.promotionText || quote.giftText || observations || legacyNotes || quote.lineItems?.length);
   if (hasSecondPage) {
     document.addPage(); miniHeader(document, quote); document.y = 91;
     const menu = (quote.menuSections ?? []).filter((item: any) => item.items?.length);
@@ -182,8 +186,13 @@ export async function generateAndUploadQuotePdf(quote: any): Promise<{ pdfSecure
         document.y = y + rowHeight + 7;
       }
     }
-    const benefits = [['Promoción', quote.promotionText], ['Beneficio especial', quote.giftText], ['Observaciones', quote.notes]].filter((item) => value(item[1], '') !== '');
+    const benefits = [['Promoción', quote.promotionText], ['Beneficio especial', quote.giftText]].filter((item) => value(item[1], '') !== '');
     if (benefits.length) { section(document, quote, 'Beneficios especiales'); for (const [label, content] of benefits) flowingLabeledCards(document, quote, label, String(content)); }
+    if (showLegacyNotes || observations) {
+      section(document, quote, 'Observaciones');
+      if (showLegacyNotes) flowingLabeledCards(document, quote, observations ? 'Notas de la propuesta' : 'Observaciones', legacyNotes);
+      if (observations) flowingLabeledCards(document, quote, 'Observaciones', observations);
+    }
     ensure(document, quote, 62); const ctaY = document.y; document.roundedRect(page.left, ctaY, page.right - page.left, 56, 9).fill(color.ink); document.font('Helvetica-Bold').fontSize(11).fillColor(color.white).text(`Reservá la fecha con una seña de ${money(quote.depositAmount)}`, page.left + 16, ctaY + 14); document.font('Helvetica').fontSize(8).fillColor('#e1d6bf').text('La fecha queda sujeta a disponibilidad hasta la acreditación de la seña.', page.left + 16, ctaY + 32); document.y = ctaY + 68;
   }
 
