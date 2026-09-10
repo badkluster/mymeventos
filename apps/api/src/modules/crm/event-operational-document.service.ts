@@ -410,7 +410,7 @@ const compactPage = { width: 841.89, height: 595.28, left: 28, right: 813.89, co
 const compactGuestProfiles: CompactGuestProfile[] = [
   { columns: 2, rowHeight: 12, headingHeight: 20, noteHeight: 10, gap: 7, titleFont: 7.6, nameFont: 7.5, detailFont: 6.1 },
   { columns: 3, rowHeight: 12.2, headingHeight: 18, noteHeight: 9, gap: 6, titleFont: 7.1, nameFont: 7.4, detailFont: 6 },
-  { columns: 4, rowHeight: 8.5, headingHeight: 16, noteHeight: 8, gap: 5, titleFont: 6.1, nameFont: 5.9, detailFont: 4.9 },
+  { columns: 4, rowHeight: 10.8, headingHeight: 17, noteHeight: 8, gap: 5, titleFont: 6.4, nameFont: 6.6, detailFont: 5.3 },
   { columns: 5, rowHeight: 6.8, headingHeight: 14, noteHeight: 7, gap: 4, titleFont: 5.2, nameFont: 4.9, detailFont: 4.1 }
 ];
 
@@ -426,6 +426,8 @@ function compactGuestRows(entry: any): CompactGuestRow[] {
 function packCompactGuestEntries(entries: any[], profile: CompactGuestProfile): CompactGuestLayout | null {
   const contentHeight = compactPage.contentBottom - compactPage.contentTop;
   const columns = Array.from({ length: profile.columns }, () => [] as CompactGuestFragment[]);
+  const columnTargets = Array.from({ length: profile.columns }, (_, index) => Math.floor(entries.length / profile.columns) + (index < entries.length % profile.columns ? 1 : 0));
+  const allEntriesFitWhole = entries.every((entry) => profile.headingHeight + (entry.notes ? profile.noteHeight : 0) + profile.gap + compactGuestRows(entry).length * profile.rowHeight <= contentHeight);
   let columnIndex = 0;
   let usedHeight = 0;
 
@@ -437,6 +439,12 @@ function packCompactGuestEntries(entries: any[], profile: CompactGuestProfile): 
       const showNote = Boolean(entry.notes) && !continuation;
       const fixedHeight = profile.headingHeight + (showNote ? profile.noteHeight : 0) + profile.gap;
       const completeHeight = fixedHeight + rows.length * profile.rowHeight;
+      if (!continuation && allEntriesFitWhole && usedHeight > 0 && columns[columnIndex].length >= columnTargets[columnIndex]) {
+        columnIndex += 1;
+        usedHeight = 0;
+        if (columnIndex >= profile.columns) return null;
+        continue;
+      }
       if (!continuation && usedHeight > 0 && completeHeight <= contentHeight && usedHeight + completeHeight > contentHeight) {
         columnIndex += 1;
         usedHeight = 0;
