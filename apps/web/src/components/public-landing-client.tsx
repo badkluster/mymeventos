@@ -947,7 +947,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
 
   return <main className="min-h-screen overflow-x-hidden bg-[#050505] text-white">
     <header className={`fixed inset-x-0 top-0 z-40 border-b transition-[background-color,border-color,box-shadow,backdrop-filter] duration-500 ${scrolled ? 'border-white/10 bg-[#08050d]/88 shadow-[0_18px_60px_rgba(7,3,14,.24)] backdrop-blur-xl' : 'border-transparent bg-transparent'}`}>
-      <div className="mx-auto flex h-20 max-w-[1480px] items-center justify-between gap-4 px-5 sm:px-8 md:h-28 xl:px-6 2xl:px-0">
+      <div className="mx-auto flex h-20 max-w-[1600px] items-center justify-between gap-4 px-5 sm:px-8 md:h-28 lg:px-12 xl:px-16">
         <button type="button" onClick={() => scrollTo('inicio')} className="group inline-flex shrink-0 items-center rounded-2xl transition duration-300 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b98cff]" aria-label="Ir al inicio">
           <Image src={logoOnDark} alt="M&M Eventos" width={174} height={74} className="h-14 w-auto max-w-[152px] object-contain brightness-110 contrast-125 drop-shadow-[0_12px_28px_rgba(0,0,0,.55)] md:h-24 md:max-w-[190px]" priority />
         </button>
@@ -983,7 +983,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,3,9,.96)_0%,rgba(7,4,11,.83)_24%,rgba(8,5,13,.47)_49%,rgba(8,5,13,.12)_76%),linear-gradient(0deg,rgba(6,4,9,.76)_0%,rgba(6,4,9,.04)_35%,rgba(6,4,9,.48)_100%)]" />
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen [animation:hero-sheen_16s_ease-in-out_infinite] bg-[radial-gradient(52%_60%_at_20%_18%,rgba(166,104,235,.18),transparent_64%)]" />
       <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto grid min-h-[100svh] max-w-[1480px] items-center px-5 pb-36 pt-28 sm:px-8 md:pb-32 md:pt-36 xl:px-6 2xl:px-0">
+      <div className="relative mx-auto grid min-h-[100svh] max-w-[1600px] items-center px-5 pb-36 pt-28 sm:px-8 md:pb-32 md:pt-36 lg:px-12 xl:px-16">
         <motion.div initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : 'visible'} variants={listVariants} className="min-w-0 max-w-[780px]">
           <motion.div variants={cardVariants} className="flex items-center gap-5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.42em] text-white sm:text-[12px] sm:tracking-[0.55em]">M &amp; M&nbsp;&nbsp;Eventos</p>
