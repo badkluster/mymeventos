@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateOperationalPdf, generateOperationalWord } from '../src/modules/crm/event-operational-document.service';
+import { generateGuestListSinglePagePdf, generateOperationalPdf, generateOperationalWord } from '../src/modules/crm/event-operational-document.service';
 
 function html(buffer: Buffer): string {
   return buffer.toString('utf8');
@@ -157,5 +157,33 @@ describe('event-operational-document.service — existing single-purpose documen
       const word = generateOperationalWord(fullEvent, type);
       expect(word.buffer.length).toBeGreaterThan(0);
     }
+  });
+
+  it('fits 10 full tables into exactly one landscape A4 page', async () => {
+    const tables = Array.from({ length: 10 }, (_, index) => ({
+      id: `mesa${index + 1}`,
+      name: `Mesa ${index + 1}`,
+      capacity: 10,
+      audience: index === 0 ? 'children' : index < 4 ? 'family' : 'open',
+      notes: index === 0 ? 'Confirmar ingreso con la persona adulta responsable.' : ''
+    }));
+    const guests = Array.from({ length: 100 }, (_, index) => ({
+      fullName: `Invitado ${String(index + 1).padStart(2, '0')} Apellido`,
+      tableId: tables[Math.floor(index / 10)].id,
+      ageGroup: index < 10 ? 'minor_10_17' : undefined,
+      meal: index % 9 === 0 ? 'Menú infantil' : '',
+      dietaryPreference: index % 13 === 0 ? 'vegetarian' : 'none'
+    }));
+    const compact = await generateGuestListSinglePagePdf({
+      ...fullEvent,
+      guestCount: guests.length,
+      resourcePlanSnapshot: { ...fullEvent.resourcePlanSnapshot, guestList: { tables, guests } }
+    });
+    const source = compact.buffer.toString('latin1');
+
+    expect(compact.buffer.subarray(0, 4).toString()).toBe('%PDF');
+    expect(compact.fileName).toBe('control-ingreso-mesas-cumpleanos-de-camila-a4-una-hoja.pdf');
+    expect(source.match(/\/Type\s*\/Page\b/g)).toHaveLength(1);
+    expect(source).toContain('/MediaBox [0 0 841.89 595.28]');
   });
 });

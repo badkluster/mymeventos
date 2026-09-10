@@ -24,7 +24,7 @@ import { applyPaymentToPlan, createPayment, paymentSummary } from './payments.se
 import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
 import { sendEmail } from '../email/email.service';
 import { uploadBuffer } from '../uploads/cloudinary.service';
-import { generateOperationalPdf, generateOperationalWord, type OperationalDocumentType } from './event-operational-document.service';
+import { generateGuestListSinglePagePdf, generateOperationalPdf, generateOperationalWord, type OperationalDocumentType } from './event-operational-document.service';
 import { eventExpenses, syncEventSupplierExpenses } from './event-supplier-expenses.service';
 import { syncEventAlertCalendarItems } from './event-alert-calendar-sync.service';
 import { addDaysToDateKey, argentinaDateKey, civilDateInput, daysBetweenDateKeys, dueDateKey } from '../../utils/argentina-date';
@@ -1103,6 +1103,15 @@ router.post('/:id/activities', requirePermission(Permission.EVENTS_UPDATE), vali
   await ensureEventAccess(request, event);
   const activity = await LeadActivity.create({ eventId: event._id, customerId: event.customerId, type: 'note', title: 'Nota', description: request.body.description, createdBy: request.user!.id });
   return sendSuccess(response, { activity }, 201, getApiMessage('ACTIVITY_CREATED'));
+}));
+
+router.get('/:id/operational-documents/guest-list/a4-pdf', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const event = await getEventForOperationalDocument(request, request.params.id, 'guest_list');
+  const { buffer, fileName } = await generateGuestListSinglePagePdf(event);
+  response.setHeader('Content-Type', 'application/pdf');
+  response.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+  response.setHeader('Cache-Control', 'no-store');
+  return response.send(buffer);
 }));
 
 router.get('/:id/operational-documents/:documentType/preview-pdf', requirePermission(Permission.EVENTS_READ), validateRequest(operationalDocumentPreviewSchema), asyncHandler(async (request, response) => {

@@ -256,7 +256,7 @@ type OperationalDocument = { fileName: string; format: 'pdf' | 'word'; url: stri
 const operationalDocumentTitles: Record<OperationalDocumentType, string> = { timeline: 'cronograma', guest_list: 'control de invitados por mesa', tableware: 'reserva de vajilla', logistics: 'logística y coordinación interna', full: 'cronograma integral' };
 
 function EventOperationalDocumentActions({ event, type, disabled, onNotice }: { event: Event; type: OperationalDocumentType; disabled?: boolean; onNotice?: (message: string, variant?: 'success' | 'error') => void }) {
-  const [working, setWorking] = useState<'preview' | 'pdf' | 'word' | 'email' | 'whatsapp' | null>(null);
+  const [working, setWorking] = useState<'preview' | 'pdf' | 'a4' | 'word' | 'email' | 'whatsapp' | null>(null);
   const title = operationalDocumentTitles[type];
   const customer = typeof event.customerId === 'string' ? undefined : event.customerId;
   const customerName = customer?.fullName || [customer?.firstName, customer?.lastName].filter(Boolean).join(' ');
@@ -296,6 +296,23 @@ function EventOperationalDocumentActions({ event, type, disabled, onNotice }: { 
       onNotice?.(error instanceof Error ? error.message : `No se pudo generar el ${title}.`, 'error');
     } finally { setWorking(null); }
   };
+  const downloadSinglePagePdf = async () => {
+    setWorking('a4');
+    try {
+      const { blob, filename } = await api.download(`/events/${event._id}/operational-documents/guest-list/a4-pdf`);
+      const url = URL.createObjectURL(blob);
+      const link = globalThis.document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      globalThis.document.body.appendChild(link);
+      link.click();
+      link.remove();
+      globalThis.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      onNotice?.('PDF A4 de una sola hoja generado correctamente.');
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : 'No se pudo generar el PDF A4 de una sola hoja.', 'error');
+    } finally { setWorking(null); }
+  };
   const email = async () => {
     if (!emailRecipient.trim()) { onNotice?.('Indicá el email destinatario.', 'error'); return; }
     setWorking('email');
@@ -326,6 +343,7 @@ function EventOperationalDocumentActions({ event, type, disabled, onNotice }: { 
   return <><div className="flex flex-wrap gap-2">
     <Button type="button" variant="secondary" disabled={busy} onClick={() => void preview()}><Eye className="mr-2 h-4 w-4" />{working === 'preview' ? 'Generando vista previa...' : 'Vista previa'}</Button>
     <Button type="button" variant="secondary" disabled={busy} onClick={() => void exportDocument('pdf')}><Download className="mr-2 h-4 w-4" />{working === 'pdf' ? 'Generando...' : 'PDF'}</Button>
+    {type === 'guest_list' ? <Button type="button" variant="secondary" disabled={busy} title="Planilla A4 apaisada en una sola hoja" onClick={() => void downloadSinglePagePdf()}><Download className="mr-2 h-4 w-4" />{working === 'a4' ? 'Compactando...' : 'PDF A4 · 1 hoja'}</Button> : null}
     <Button type="button" variant="secondary" disabled={busy} onClick={() => void exportDocument('word')}><FileText className="mr-2 h-4 w-4" />{working === 'word' ? 'Generando...' : 'Word'}</Button>
     <Button type="button" variant="secondary" disabled={busy} onClick={() => setEmailOpen(true)}><Mail className="mr-2 h-4 w-4" />Email</Button>
     <Button type="button" variant="secondary" disabled={busy} onClick={() => setWhatsappOpen(true)}><MessageCircle className="mr-2 h-4 w-4" />WhatsApp</Button>
@@ -481,7 +499,7 @@ const operationalViews = [
 export function EventOperationsWorkspace({ event, plan, saving, onSave, onSyncSummary, onNotice }: { event: Event; plan?: EventResourcePlan; saving: boolean; onSave: SavePlan; onSyncSummary: (payload: Record<string, unknown>) => void; onNotice?: (message: string, variant?: 'success' | 'error') => void }) {
   const [view, setView] = useState<(typeof operationalViews)[number][0]>('moments');
   return <div className="space-y-5"><div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm"><div className="flex gap-2 overflow-x-auto"><div className="flex min-w-max gap-2">{operationalViews.map(([value, label]) => <button key={value} type="button" onClick={() => setView(value)} className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${view === value ? 'bg-zinc-950 text-white shadow-sm' : 'bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'}`}>{label}</button>)}</div></div></div>
-    <SectionCard title="Documentos operativos" icon={<FileText className="h-4 w-4" />}><p className="text-sm text-zinc-500">El cronograma reúne todas las vistas del evento. Desde aquí podés generar cada planilla por separado, sin depender de la pestaña que estés consultando.</p><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Cronograma integral</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Momentos, invitados, logística, vajilla y stock, productos, proveedores y staff asignado: una página por área, solo las que tengan contenido cargado.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="full" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Control de ingreso por mesa</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Lista para recepción con casillas de ingreso, menú y observaciones.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="guest_list" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Logística y coordinación</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Armado, cocina, barra, ambientación, accesos y riesgos.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="logistics" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Reserva de vajilla</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Vajilla propia del salón y adicional/externa asignada al evento.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="tableware" disabled={saving} onNotice={onNotice} /></div></div></div></SectionCard>
+    <SectionCard title="Documentos operativos" icon={<FileText className="h-4 w-4" />}><p className="text-sm text-zinc-500">El cronograma reúne todas las vistas del evento. Desde aquí podés generar cada planilla por separado, sin depender de la pestaña que estés consultando.</p><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Cronograma integral</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Momentos, invitados, logística, vajilla y stock, productos, proveedores y staff asignado: una página por área, solo las que tengan contenido cargado.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="full" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Control de ingreso por mesa</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Lista para recepción con casillas de ingreso, menú y observaciones. Incluye una versión A4 apaisada de una sola hoja.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="guest_list" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Logística y coordinación</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Armado, cocina, barra, ambientación, accesos y riesgos.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="logistics" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Reserva de vajilla</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Vajilla propia del salón y adicional/externa asignada al evento.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="tableware" disabled={saving} onNotice={onNotice} /></div></div></div></SectionCard>
     {view === 'moments' && <EventTimelineEditor plan={plan} saving={saving} onSave={onSave} />}
     {view === 'guests' && <EventGuestListEditor event={event} plan={plan} saving={saving} onSave={onSave} onSyncSummary={onSyncSummary} onNotice={onNotice} />}
     {view === 'logistics' && <EventLogisticsEditor plan={plan} saving={saving} onSave={onSave} />}

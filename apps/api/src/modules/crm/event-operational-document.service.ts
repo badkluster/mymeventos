@@ -384,6 +384,217 @@ function guestEntryControl(document: PDFKit.PDFDocument, event: any): void {
   });
 }
 
+type CompactGuestRow = { name: string; detail: string };
+type CompactGuestProfile = {
+  columns: number;
+  rowHeight: number;
+  headingHeight: number;
+  noteHeight: number;
+  gap: number;
+  titleFont: number;
+  nameFont: number;
+  detailFont: number;
+};
+type CompactGuestFragment = {
+  entry: any;
+  rows: CompactGuestRow[];
+  offset: number;
+  continuation: boolean;
+  showNote: boolean;
+  y: number;
+  height: number;
+};
+type CompactGuestLayout = { profile: CompactGuestProfile; columns: CompactGuestFragment[][] };
+
+const compactPage = { width: 841.89, height: 595.28, left: 28, right: 813.89, contentTop: 108, contentBottom: 562 };
+const compactGuestProfiles: CompactGuestProfile[] = [
+  { columns: 2, rowHeight: 12, headingHeight: 20, noteHeight: 10, gap: 7, titleFont: 7.6, nameFont: 7.5, detailFont: 6.1 },
+  { columns: 3, rowHeight: 12.2, headingHeight: 18, noteHeight: 9, gap: 6, titleFont: 7.1, nameFont: 7.4, detailFont: 6 },
+  { columns: 4, rowHeight: 8.5, headingHeight: 16, noteHeight: 8, gap: 5, titleFont: 6.1, nameFont: 5.9, detailFont: 4.9 },
+  { columns: 5, rowHeight: 6.8, headingHeight: 14, noteHeight: 7, gap: 4, titleFont: 5.2, nameFont: 4.9, detailFont: 4.1 }
+];
+
+function compactGuestRows(entry: any): CompactGuestRow[] {
+  return Array.from({ length: guestControlSlots(entry) }, (_, index) => {
+    const guest = entry.guests[index];
+    return guest
+      ? { name: text(guest.fullName), detail: guestControlDetail(guest) }
+      : { name: '........................................................', detail: '' };
+  });
+}
+
+function packCompactGuestEntries(entries: any[], profile: CompactGuestProfile): CompactGuestLayout | null {
+  const contentHeight = compactPage.contentBottom - compactPage.contentTop;
+  const columns = Array.from({ length: profile.columns }, () => [] as CompactGuestFragment[]);
+  let columnIndex = 0;
+  let usedHeight = 0;
+
+  for (const entry of entries) {
+    const rows = compactGuestRows(entry);
+    let offset = 0;
+    while (offset < rows.length) {
+      const continuation = offset > 0;
+      const showNote = Boolean(entry.notes) && !continuation;
+      const fixedHeight = profile.headingHeight + (showNote ? profile.noteHeight : 0) + profile.gap;
+      const completeHeight = fixedHeight + rows.length * profile.rowHeight;
+      if (!continuation && usedHeight > 0 && completeHeight <= contentHeight && usedHeight + completeHeight > contentHeight) {
+        columnIndex += 1;
+        usedHeight = 0;
+        if (columnIndex >= profile.columns) return null;
+        continue;
+      }
+      const rowCount = Math.min(rows.length - offset, Math.floor((contentHeight - usedHeight - fixedHeight) / profile.rowHeight));
+      if (rowCount < 1) {
+        columnIndex += 1;
+        usedHeight = 0;
+        if (columnIndex >= profile.columns) return null;
+        continue;
+      }
+      const height = profile.headingHeight + (showNote ? profile.noteHeight : 0) + rowCount * profile.rowHeight;
+      columns[columnIndex].push({ entry, rows: rows.slice(offset, offset + rowCount), offset, continuation, showNote, y: compactPage.contentTop + usedHeight, height });
+      usedHeight += height + profile.gap;
+      offset += rowCount;
+      if (offset < rows.length) {
+        columnIndex += 1;
+        usedHeight = 0;
+        if (columnIndex >= profile.columns) return null;
+      }
+    }
+  }
+
+  return { profile, columns };
+}
+
+function selectCompactGuestLayout(entries: any[]): CompactGuestLayout {
+  for (const profile of compactGuestProfiles) {
+    const layout = packCompactGuestEntries(entries, profile);
+    if (layout) return layout;
+  }
+
+  const totalRows = entries.reduce((sum, entry) => sum + compactGuestRows(entry).length, 0);
+  const contentHeight = compactPage.contentBottom - compactPage.contentTop;
+  const columns = 8;
+  const overhead = entries.length * 11;
+  let rowHeight = Math.min(6.2, Math.max(1.2, ((contentHeight * columns) - overhead) / Math.max(1, totalRows) * .96));
+  let fallback: CompactGuestLayout | null = null;
+  while (!fallback && rowHeight >= 1.2) {
+    const scale = Math.max(.45, rowHeight / 6.2);
+    const profile: CompactGuestProfile = {
+      columns,
+      rowHeight,
+      headingHeight: Math.max(5, 11 * scale),
+      noteHeight: Math.max(3.5, 5.5 * scale),
+      gap: Math.max(1, 2.5 * scale),
+      titleFont: Math.max(2.8, 4.5 * scale),
+      nameFont: Math.max(2.6, 4.2 * scale),
+      detailFont: Math.max(2.2, 3.5 * scale)
+    };
+    fallback = packCompactGuestEntries(entries, profile);
+    rowHeight -= .2;
+  }
+  if (!fallback) throw new Error('La cantidad de filas supera la capacidad física de una hoja A4.');
+  return fallback;
+}
+
+function drawCompactGuestHeader(document: PDFKit.PDFDocument, event: any, entries: any[]): void {
+  const { tables, guests } = guestListData(event);
+  const tableIds = new Set(tables.map((table: any) => table.id));
+  const assigned = guests.filter((guest: any) => tableIds.has(guest.tableId)).length;
+  const customer = typeof event.customerId === 'object' ? event.customerId?.fullName : undefined;
+  const salon = typeof event.salonId === 'object' ? event.salonId?.name : undefined;
+
+  document.rect(0, 0, compactPage.width, 66).fill(color.ink);
+  document.font('Times-Bold').fontSize(18).fillColor(color.white).text('M&M', compactPage.left, 14, { width: 62, align: 'center' });
+  document.font('Helvetica-Bold').fontSize(5).fillColor('#d8c9aa').text('E V E N T O S', compactPage.left, 39, { width: 62, align: 'center' });
+  document.font('Helvetica-Bold').fontSize(16).fillColor(color.white).text('CONTROL DE MESAS', 108, 15, { width: 393, height: 20, ellipsis: true, characterSpacing: .4 });
+  document.font('Helvetica').fontSize(7.2).fillColor('#d8c9aa').text(
+    [text(customer, ''), date(event.eventDate), text(salon, ''), 'Puerta y recepción'].filter(Boolean).join(' · '),
+    108,
+    38,
+    { width: 443, height: 12, ellipsis: true }
+  );
+  [
+    { label: 'INVITADOS', value: guests.length },
+    { label: 'ASIGNADOS', value: assigned },
+    { label: 'MESAS', value: entries.filter((entry) => entry.audienceKey).length }
+  ].forEach((metric, index) => {
+    const x = 584 + index * 76;
+    document.font('Helvetica').fontSize(5.8).fillColor('#d8c9aa').text(metric.label, x, 17, { width: 67, align: 'right' });
+    document.font('Helvetica-Bold').fontSize(14).fillColor(color.white).text(String(metric.value), x, 29, { width: 67, align: 'right' });
+  });
+
+  const legend = guestControlLegend(entries);
+  const legendGap = 8;
+  const legendWidth = (compactPage.right - compactPage.left - legendGap * 2) / 3;
+  legend.forEach((item, index) => {
+    const x = compactPage.left + index * (legendWidth + legendGap);
+    document.roundedRect(x, 74, legendWidth, 24, 4).fillAndStroke(color.cream, '#d8ccaf');
+    document.font('Helvetica-Bold').fontSize(6.8).fillColor(color.ink).text(item.label, x + 8, 80, { width: 55, height: 9, ellipsis: true });
+    document.font('Helvetica').fontSize(6.2).fillColor(color.muted).text(item.detail, x + 64, 80, { width: legendWidth - 72, height: 9, ellipsis: true });
+  });
+}
+
+function drawCompactGuestFragment(document: PDFKit.PDFDocument, fragment: CompactGuestFragment, profile: CompactGuestProfile, x: number, width: number): void {
+  const { entry, rows, offset, continuation, showNote, y, height } = fragment;
+  document.rect(x, y, width, height).fillAndStroke(color.white, '#d8ccaf');
+  document.rect(x, y, 3, height).fill(color.gold);
+  document.rect(x + 3, y, width - 3, profile.headingHeight).fill(color.cream);
+  const occupancy = entry.capacity ? `${entry.guests.length}/${entry.capacity}` : String(entry.guests.length);
+  const heading = `${entry.title.toUpperCase()} · ${occupancy}${entry.audience ? ` · ${entry.audience}` : ''}${continuation ? ' · continúa' : ''}`;
+  const headingTop = y + Math.max(2, (profile.headingHeight - profile.titleFont) / 2 - .5);
+  document.font('Helvetica-Bold').fontSize(profile.titleFont).fillColor(color.ink).text(heading, x + 9, headingTop, { width: width - 17, height: profile.headingHeight - 3, ellipsis: true });
+
+  let rowsTop = y + profile.headingHeight;
+  if (showNote) {
+    document.font('Helvetica-Oblique').fontSize(profile.detailFont).fillColor(color.muted).text(entry.notes, x + 9, rowsTop + 1.5, { width: width - 17, height: profile.noteHeight - 2, ellipsis: true });
+    rowsTop += profile.noteHeight;
+  }
+
+  rows.forEach((row, rowIndex) => {
+    const rowY = rowsTop + rowIndex * profile.rowHeight;
+    if (rowIndex % 2) document.rect(x + 3, rowY, width - 3, profile.rowHeight).fill('#fbfaf7');
+    document.moveTo(x + 3, rowY + profile.rowHeight).lineTo(x + width, rowY + profile.rowHeight).strokeColor('#e8e3d8').lineWidth(.35).stroke();
+    const textTop = rowY + Math.max(.5, (profile.rowHeight - profile.nameFont) / 2 - .6);
+    const numberWidth = profile.columns >= 5 ? 10 : 15;
+    const detailWidth = row.detail ? Math.max(24, width * .38) : 0;
+    const checkSize = Math.max(2.5, Math.min(5.2, profile.rowHeight - 3));
+    const checkX = x + width - checkSize - 5;
+    document.font('Helvetica-Bold').fontSize(profile.detailFont).fillColor(color.muted).text(String(offset + rowIndex + 1), x + 6, textTop, { width: numberWidth, height: profile.rowHeight, align: 'right', ellipsis: true });
+    const nameX = x + numberWidth + 10;
+    const nameWidth = Math.max(20, width - numberWidth - detailWidth - checkSize - 22);
+    document.font(row.detail ? 'Helvetica-Bold' : 'Helvetica').fontSize(profile.nameFont).fillColor(row.detail ? color.ink : color.muted).text(row.name, nameX, textTop, { width: nameWidth, height: profile.rowHeight, ellipsis: true });
+    if (row.detail) document.font('Helvetica').fontSize(profile.detailFont).fillColor(color.muted).text(row.detail, nameX + nameWidth + 4, textTop + .2, { width: detailWidth - 4, height: profile.rowHeight, ellipsis: true });
+    document.rect(checkX, rowY + (profile.rowHeight - checkSize) / 2, checkSize, checkSize).strokeColor('#98a2b3').lineWidth(.45).stroke();
+  });
+}
+
+export async function generateGuestListSinglePagePdf(event: any): Promise<{ buffer: Buffer; fileName: string }> {
+  const document = new PDFDocument({ autoFirstPage: false, margin: 0, bufferPages: true });
+  document.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+  const entries = guestControlEntries(event);
+  drawCompactGuestHeader(document, event, entries);
+
+  if (!entries.length) {
+    document.roundedRect(compactPage.left, 150, compactPage.right - compactPage.left, 96, 8).fillAndStroke(color.cream, '#d8ccaf');
+    document.font('Helvetica-Bold').fontSize(12).fillColor(color.ink).text('Todavía no hay mesas o invitados cargados.', compactPage.left + 24, 180, { width: compactPage.right - compactPage.left - 48, align: 'center' });
+    document.font('Helvetica').fontSize(8).fillColor(color.muted).text('La planilla A4 estará lista cuando se complete la organización de mesas.', compactPage.left + 24, 202, { width: compactPage.right - compactPage.left - 48, align: 'center' });
+  } else {
+    const layout = selectCompactGuestLayout(entries);
+    const columnGap = layout.profile.columns >= 5 ? 5 : 8;
+    const columnWidth = (compactPage.right - compactPage.left - columnGap * (layout.profile.columns - 1)) / layout.profile.columns;
+    layout.columns.forEach((fragments, columnIndex) => {
+      const x = compactPage.left + columnIndex * (columnWidth + columnGap);
+      fragments.forEach((fragment) => drawCompactGuestFragment(document, fragment, layout.profile, x, columnWidth));
+    });
+  }
+
+  document.moveTo(compactPage.left, 572).lineTo(compactPage.right, 572).strokeColor(color.line).lineWidth(.6).stroke();
+  document.font('Helvetica').fontSize(6.5).fillColor(color.muted).text('M&M Eventos · Control de mesas y puerta', compactPage.left, 579, { width: 320 });
+  document.text('A4 apaisado · 1 hoja', 650, 579, { width: compactPage.right - 650, align: 'right' });
+  const buffer = await collect(document);
+  return { buffer, fileName: `${fileStem(event, 'guest_list')}-a4-una-hoja.pdf` };
+}
+
 function logisticsActiveSections(event: any): Array<[string, string]> {
   const data = event.resourcePlanSnapshot?.logistics ?? {};
   return logisticSections.map(([title, key]) => [title, text(data[key], '')] as [string, string]).filter(([, content]) => content !== '');
