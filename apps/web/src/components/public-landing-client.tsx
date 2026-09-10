@@ -785,13 +785,14 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   }, []);
 
   useEffect(() => {
+    if (initialLanding) return;
     let mounted = true;
     void api.get<Partial<LandingPayload>>('/public/landing')
       .then((response) => { if (mounted) setLanding(normalizeLanding(response)); })
       .catch(() => undefined)
       .finally(() => { if (mounted) setLandingLoading(false); });
     return () => { mounted = false; };
-  }, []);
+  }, [initialLanding]);
 
   useEffect(() => {
     if (landingLoading || typeof window === 'undefined') return;
