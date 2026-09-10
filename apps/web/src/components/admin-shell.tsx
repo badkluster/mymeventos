@@ -9,6 +9,7 @@ import { ChartNoAxesCombined, ChevronDown, LogOut, Menu, Moon, PanelLeftClose, P
 import { useTheme } from 'next-themes';
 import { NotificationBell } from '@/components/admin/notification-bell';
 import { brandAssets } from '@/lib/brand-assets';
+import type { PublicLandingSettings } from '@/lib/public-landing';
 import { api } from '@/lib/api';
 import { moduleForPath, userCanAccess, visibleAdminModules } from '@/lib/admin-permissions';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -93,6 +94,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [controlOpen, setControlOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [newQuoteRequests, setNewQuoteRequests] = useState(0);
+  const [branding, setBranding] = useState<PublicLandingSettings>();
   const userMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const items = visibleAdminModules(user);
@@ -119,6 +121,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Usuario';
   const canSeeQuotes = userCanAccess(user, [Permission.QUOTES_READ]);
   const sidebarCollapsed = useSyncExternalStore(subscribeToSidebarPreference, getSidebarPreference, getServerSidebarPreference);
+  const logoOnLight = branding?.logoOnLightUrl || brandAssets.logoDarkOnLight;
+  const favicon = branding?.faviconUrl || brandAssets.icon64;
 
   useMobileDrawerA11y(mobileMenuOpen, () => setMobileMenuOpen(false), mobileMenuRef);
 
@@ -211,6 +215,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return () => { mounted = false; window.clearInterval(interval); };
   }, [canSeeQuotes]);
 
+  useEffect(() => {
+    let mounted = true;
+    void api.get<{ settings?: PublicLandingSettings }>('/public/landing')
+      .then((response) => { if (mounted) setBranding(response.settings); })
+      .catch(() => undefined);
+    return () => { mounted = false; };
+  }, []);
+
   async function logoutAll() {
     await api.post('/auth/logout-all');
     await logout();
@@ -222,7 +234,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <aside className={`fixed inset-y-0 z-30 hidden flex-col overflow-hidden border-r bg-card transition-[width,padding] duration-200 lg:flex ${sidebarCollapsed ? 'w-20 p-3' : 'w-64 p-5'}`}>
         <div className={`flex shrink-0 items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
           <Link href="/admin" className="block" aria-label="Ir al panel de M&M Eventos">
-            {sidebarCollapsed ? <Image src={brandAssets.icon64} alt="M&M Eventos" width={40} height={40} className="h-10 w-10 rounded-lg" priority /> : <Image src={brandAssets.logoDarkOnLight} alt="M&M Eventos" width={150} height={150} className="h-auto w-32 object-contain" priority />}
+            {sidebarCollapsed ? <Image src={favicon} alt="M&M Eventos" width={40} height={40} className="h-10 w-10 rounded-lg object-contain" priority /> : <Image src={logoOnLight} alt="M&M Eventos" width={150} height={150} className="h-auto w-32 object-contain" priority />}
           </Link>
           {!sidebarCollapsed ? <button type="button" aria-label="Contraer menú lateral" onClick={toggleSidebar} className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"><PanelLeftClose className="h-4 w-4" /></button> : null}
         </div>
@@ -236,7 +248,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div ref={mobileMenuRef} role="dialog" aria-modal="true" aria-label="Menú de navegación" className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-hidden border-r bg-card p-5 shadow-2xl">
             <div className="flex shrink-0 items-center justify-between">
               <Link href="/admin" onClick={() => setMobileMenuOpen(false)} className="block" aria-label="Ir al panel de M&M Eventos">
-                <Image src={brandAssets.logoDarkOnLight} alt="M&M Eventos" width={150} height={150} className="h-auto w-32 object-contain" priority />
+                <Image src={logoOnLight} alt="M&M Eventos" width={150} height={150} className="h-auto w-32 object-contain" priority />
               </Link>
               <button type="button" aria-label="Cerrar menú" onClick={() => setMobileMenuOpen(false)} className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>
             </div>

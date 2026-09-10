@@ -51,5 +51,5 @@ export default async function WhatsappPage() {
     };
   });
 
-  return <WhatsappSelector salons={salons} />;
+  return <WhatsappSelector salons={salons} logoOnDarkUrl={landing?.settings?.logoOnDarkUrl} />;
 }

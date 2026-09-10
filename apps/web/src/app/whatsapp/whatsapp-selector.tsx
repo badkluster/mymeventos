@@ -31,7 +31,7 @@ function sourceSuffix(utmSource: string, referrer: string): string {
   return '';
 }
 
-export function WhatsappSelector({ salons }: { salons: WhatsappSalonOption[] }) {
+export function WhatsappSelector({ salons, logoOnDarkUrl }: { salons: WhatsappSalonOption[]; logoOnDarkUrl?: string }) {
   const [suffix, setSuffix] = useState('');
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function WhatsappSelector({ salons }: { salons: WhatsappSalonOption[] }) 
     <main className="flex min-h-screen flex-col bg-zinc-950 text-white">
       <header className="mx-auto flex w-full max-w-3xl items-center justify-center px-4 py-8">
         <Link href="/" aria-label="Ir a M&M Eventos">
-          <img src={brandAssets.logoLightOnDark} alt="M&M Eventos" className="h-12 w-auto object-contain" />
+          <img src={logoOnDarkUrl || brandAssets.logoLightOnDark} alt="M&M Eventos" className="h-12 w-auto object-contain" />
         </Link>
       </header>
 

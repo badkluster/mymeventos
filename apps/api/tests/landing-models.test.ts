@@ -14,6 +14,16 @@ describe('Landing models', () => {
     expect(settings.heroTitle).toContain('Tu evento');
   });
 
+  it('accepts optional site branding assets', async () => {
+    const settings = new LandingSettings({
+      key: 'branding',
+      logoOnDarkUrl: 'https://res.cloudinary.com/example/image/upload/logo-dark.png',
+      logoOnLightUrl: 'https://res.cloudinary.com/example/image/upload/logo-light.png',
+      faviconUrl: 'https://res.cloudinary.com/example/image/upload/favicon.png',
+    });
+    await expect(settings.validate()).resolves.toBeUndefined();
+  });
+
   it('validates promotions with visibility defaults', async () => {
     const promotion = new LandingPromotion({ title: 'Promo Junio' });
     await expect(promotion.validate()).resolves.toBeUndefined();

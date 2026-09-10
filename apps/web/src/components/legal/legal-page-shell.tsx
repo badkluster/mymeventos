@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { brandAssets } from '@/lib/brand-assets';
+import { getPublicLanding } from '@/lib/public-landing';
 
 type LegalPageShellProps = {
   eyebrow: string;
@@ -11,13 +12,16 @@ type LegalPageShellProps = {
   children: ReactNode;
 };
 
-export function LegalPageShell({ eyebrow, title, intro, children }: LegalPageShellProps) {
+export async function LegalPageShell({ eyebrow, title, intro, children }: LegalPageShellProps) {
+  const landing = await getPublicLanding();
+  const logoOnDark = landing?.settings?.logoOnDarkUrl || brandAssets.logoLightOnDark;
+
   return (
     <main className="min-h-screen bg-[#070707] text-white">
       <header className="border-b border-white/10 bg-black/80 backdrop-blur">
         <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between gap-4 px-5 py-4 md:px-8">
           <Link href="/" className="inline-flex items-center gap-3" aria-label="Volver a M&M Eventos">
-            <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-12 w-auto object-contain" priority />
+            <Image src={logoOnDark} alt="M&M Eventos" width={150} height={64} className="h-12 w-auto object-contain" priority />
           </Link>
           <Link href="/" className="inline-flex items-center gap-2 rounded-xl border border-white/12 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-white/30 hover:bg-white/[0.06] hover:text-white">
             <ArrowLeft className="h-4 w-4" />

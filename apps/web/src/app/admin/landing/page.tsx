@@ -51,8 +51,17 @@ const emptyForms: Record<ResourceKey, LandingItem> = {
 const settingsSections: Array<{
   title: string;
   description: string;
-  fields: Array<{ key: string; label: string; helper?: string; type?: 'text' | 'textarea' | 'image' | 'video'; span?: boolean }>;
+  fields: Array<{ key: string; label: string; helper?: string; type?: 'text' | 'textarea' | 'image' | 'video'; span?: boolean; imageFit?: 'cover' | 'contain' }>;
 }> = [
+  {
+    title: 'Identidad visual del sitio',
+    description: 'Los logos se usan en la web pública y en el backoffice. La imagen para compartir se configura más abajo, en SEO.',
+    fields: [
+      { key: 'logoOnDarkUrl', label: 'Logo para fondo oscuro', helper: 'Se muestra en el encabezado, pie de página y páginas públicas oscuras.', type: 'image', imageFit: 'contain' },
+      { key: 'logoOnLightUrl', label: 'Logo para fondo claro', helper: 'Se muestra en el backoffice y otras superficies claras.', type: 'image', imageFit: 'contain' },
+      { key: 'faviconUrl', label: 'Ícono de pestaña (favicon)', helper: 'Usá preferentemente un PNG cuadrado, de al menos 192 × 192 px.', type: 'image', imageFit: 'contain' },
+    ],
+  },
   {
     title: 'Contenido principal',
     description: 'Textos y llamadas a la acción que aparecen en la primera pantalla de la landing.',
@@ -114,7 +123,7 @@ function normalizePayload(form: LandingItem) {
   return payload;
 }
 
-function ImageUploadField({ label = 'Imagen', value, required, onChange }: { label?: string; value?: string; required?: boolean; onChange: (value: string) => void }) {
+function ImageUploadField({ label = 'Imagen', value, required, imageFit = 'cover', onChange }: { label?: string; value?: string; required?: boolean; imageFit?: 'cover' | 'contain'; onChange: (value: string) => void }) {
   return <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -127,7 +136,7 @@ function ImageUploadField({ label = 'Imagen', value, required, onChange }: { lab
       </div>
     </div>
     {value ? <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 bg-white">
-      <div className="h-36 bg-cover bg-center" style={{ backgroundImage: `url(${value})` }} />
+      <div className={`h-36 bg-center bg-no-repeat ${imageFit === 'contain' ? 'bg-contain' : 'bg-cover'}`} style={{ backgroundImage: `url(${value})` }} />
       <p className="truncate px-3 py-2 text-xs text-zinc-500">{value}</p>
     </div> : <p className={`mt-3 rounded-xl border border-dashed px-3 py-4 text-sm ${required ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-zinc-300 text-zinc-500'}`}>{required ? 'Subí una imagen para poder guardar este elemento.' : 'Sin imagen cargada.'}</p>}
   </div>;
@@ -331,7 +340,7 @@ export default function LandingAdminPage() {
           {section.fields.map((field) => {
             const value = String(settings[field.key] ?? '');
             const className = field.span ? 'md:col-span-2' : '';
-            if (field.type === 'image') return <div key={field.key} className={className}><ImageUploadField label={field.label} value={value} onChange={(nextValue) => setSettings((current) => ({ ...current, [field.key]: nextValue }))} />{field.helper ? <p className="mt-2 text-xs text-zinc-500">{field.helper}</p> : null}</div>;
+            if (field.type === 'image') return <div key={field.key} className={className}><ImageUploadField label={field.label} value={value} imageFit={field.imageFit} onChange={(nextValue) => setSettings((current) => ({ ...current, [field.key]: nextValue }))} />{field.helper ? <p className="mt-2 text-xs text-zinc-500">{field.helper}</p> : null}</div>;
             if (field.type === 'video') return <div key={field.key} className={className}><VideoUploadField label={field.label} value={value} onChange={(nextValue) => setSettings((current) => ({ ...current, [field.key]: nextValue }))} />{field.helper ? <p className="mt-2 text-xs text-zinc-500">{field.helper}</p> : null}</div>;
             return <label key={field.key} className={className}>
               <span className="text-sm font-medium text-zinc-800">{field.label}</span>

@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { brandAssets } from '@/lib/brand-assets';
 import type { GooglePlaceReview } from '@/lib/google-place-reviews';
 import { localSeoPages, salonSeoPages } from '@/lib/local-seo';
+import type { PublicLandingSettings } from '@/lib/public-landing';
 import { analyticsAttributionId, emitAnalyticsEvent } from '@/components/analytics-tracker';
 
 type Media = { url: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
@@ -20,7 +21,7 @@ type SalonManager = { _id?: string; firstName?: string; lastName?: string; fullN
 type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; province?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; manager?: SalonManager; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
 type Package = { _id: string; name: string; salonId?: string; salonName?: string; description?: string; notes?: string; durationHours?: number; startTime?: string; endTime?: string; pricingMode?: 'per_person' | 'fixed'; pricePerPerson?: number; finalPricePerPerson?: number; fixedPrice?: number; finalFixedPrice?: number; depositAmount?: number; paymentTerms?: string; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
 type LandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
-type Settings = { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroVideoUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string };
+type Settings = PublicLandingSettings;
 type LandingPayload = { settings?: Settings; salons: Salon[]; packages: Package[]; promotions: LandingItem[]; gallery: LandingItem[]; testimonials: LandingItem[]; googleReviews: GooglePlaceReview[]; salonGoogleReviews: GooglePlaceReview[]; faqs: LandingItem[]; serviceBlocks: LandingItem[]; eventTypes: LandingItem[]; storySteps: LandingItem[] };
 const emptyLanding: LandingPayload = { salons: [], packages: [], promotions: [], gallery: [], testimonials: [], googleReviews: [], salonGoogleReviews: [], faqs: [], serviceBlocks: [], eventTypes: [], storySteps: [] };
 function normalizeLanding(landing?: Partial<LandingPayload> | null): LandingPayload {
@@ -306,6 +307,7 @@ const imageRevealVariants: Variants = {
   visible: { opacity: 1, scale: 1, transition: { duration: 0.45, ease: smoothEase } },
 };
 const displayFont = { fontFamily: 'var(--font-display)' } as const;
+const scriptFont = { fontFamily: 'var(--font-script)' } as const;
 const ctaFocusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c8cdd3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]';
 
 const underlineGrow = (delayBase: number, index: number, delayStep: number): Variants => ({ hidden: { scaleX: 0 }, visible: { scaleX: 1, transition: { duration: 0.3, delay: delayBase + index * delayStep, ease: smoothEase } } });
@@ -675,37 +677,37 @@ function GoogleReviewsGallery({ reviews, shouldReduceMotion }: { reviews: Google
   const firstVisible = safePage * GOOGLE_REVIEW_PAGE_SIZE + 1;
   const lastVisible = firstVisible + visibleReviews.length - 1;
 
-  return <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 sm:p-5">
+  return <div className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] p-3 sm:p-5">
     <div className="mb-5 flex justify-end border-b border-white/10 pb-5">
       <div className="shrink-0 rounded-lg bg-[#111113] px-[10px] pb-[5px] pt-[10px]">
         <Image src="/brand/google-maps-logo-white.svg" alt="Google Maps" width={98} height={18} className="h-[18px] w-[98px]" />
       </div>
     </div>
 
-    <div role="region" aria-label="Galería de reseñas de Google Maps" aria-live="polite">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div role="region" aria-label="Galería de reseñas de Google Maps" aria-live="polite" className="min-w-0 max-w-full">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 xl:grid-cols-3">
         {visibleReviews.map((item, index) => {
           const accent = accentFor(safePage * GOOGLE_REVIEW_PAGE_SIZE + index);
-          return <motion.blockquote key={item.id} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`flex min-h-72 flex-col rounded-xl border p-6 ${accent.card}`}>
+          return <motion.blockquote key={item.id} whileHover={shouldReduceMotion ? undefined : { y: -5 }} transition={softSpring} className={`flex min-h-72 w-full min-w-0 max-w-full flex-col overflow-hidden rounded-xl border p-4 sm:p-6 ${accent.card}`}>
             <span className={`mb-5 block h-1 w-10 rounded-full ${accent.line}`} />
-            <p className="text-base leading-7 text-zinc-200">“{item.text}”</p>
-            <footer className="mt-auto flex items-end justify-between gap-3 pt-6">
-              <div className="flex min-w-0 items-center gap-3">
+            <p className="break-words text-base leading-7 text-zinc-200 [overflow-wrap:anywhere]">“{item.text}”</p>
+            <footer className="mt-auto flex min-w-0 flex-col items-start gap-4 pt-6 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+              <div className="flex w-full min-w-0 items-center gap-3 sm:w-auto sm:flex-1">
                 {item.authorPhotoUrl ? <img src={item.authorPhotoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-white/15 object-cover" referrerPolicy="no-referrer" /> : null}
                 <div className="min-w-0">
-                  <a href={item.authorProfileUrl || item.googleMapsUri} target="_blank" rel="noreferrer" className={`block truncate font-semibold transition hover:text-white ${accent.text}`}>{item.authorName}</a>
+                  <a href={item.authorProfileUrl || item.googleMapsUri} target="_blank" rel="noreferrer" className={`block max-w-full truncate font-semibold transition hover:text-white ${accent.text}`}>{item.authorName}</a>
                   <p className="truncate text-sm text-zinc-300">{item.salonName}{item.relativePublishedAt ? ` - ${item.relativePublishedAt}` : ''}</p>
                 </div>
               </div>
               <span aria-label={`${item.rating} de 5 estrellas`} className="flex shrink-0 text-amber-400">{Array.from({ length: item.rating }).map((_, starIndex) => <Star key={starIndex} className="h-3.5 w-3.5 fill-current" />)}</span>
             </footer>
-            <a href={item.googleMapsUri} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-1.5 self-start text-xs font-semibold text-zinc-300 transition hover:text-white">Ver reseña en Google Maps <ExternalLink className="h-3.5 w-3.5" /></a>
+            <a href={item.googleMapsUri} target="_blank" rel="noreferrer" className="mt-5 inline-flex max-w-full items-center gap-1.5 self-start text-xs font-semibold text-zinc-300 transition hover:text-white"><span className="min-w-0 break-words">Ver reseña en Google Maps</span><ExternalLink className="h-3.5 w-3.5 shrink-0" /></a>
           </motion.blockquote>;
         })}
       </div>
     </div>
 
-    {pages.length > 1 ? <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+    {pages.length > 1 ? <div className="mt-5 flex flex-col items-start gap-3 border-t border-white/10 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
       <p className="text-sm text-zinc-400">Mostrando {firstVisible}-{lastVisible} de {reviews.length} reseñas.</p>
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => setPage(safePage - 1)} disabled={safePage === 0} aria-label="Ver reseñas anteriores" className={`grid h-10 w-10 place-items-center rounded-lg border border-white/15 text-white transition hover:border-[#c8cdd3] hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35 ${ctaFocusRing}`}><ChevronLeft className="h-5 w-5" /></button>
@@ -783,14 +785,13 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   }, []);
 
   useEffect(() => {
-    if (initialLanding) return;
     let mounted = true;
     void api.get<Partial<LandingPayload>>('/public/landing')
       .then((response) => { if (mounted) setLanding(normalizeLanding(response)); })
       .catch(() => undefined)
       .finally(() => { if (mounted) setLandingLoading(false); });
     return () => { mounted = false; };
-  }, [initialLanding]);
+  }, []);
 
   useEffect(() => {
     if (landingLoading || typeof window === 'undefined') return;
@@ -815,6 +816,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
 
   const settings = landing.settings ?? {};
   const salons = landing.salons;
+  const logoOnDark = settings.logoOnDarkUrl || brandAssets.logoLightOnDark;
   const heroImage = cloudinaryImageUrl(settings.heroImageUrl || salons[0]?.heroImageUrl || imageForSalon(salons[0] ?? { _id: '', name: 'M&M Eventos' }), 1920);
   const heroVideo = settings.heroVideoUrl ? cloudinaryImageUrl(settings.heroVideoUrl) : '';
   const serviceBlocks = landing.serviceBlocks.length ? landing.serviceBlocks : fallbackServices;
@@ -937,48 +939,67 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
 
   const activeSocial = socialOptions.find((item) => item.key === socialNetwork);
   const shouldReduceMotion = useReducedMotion();
+  const heroTitle = settings.heroTitle?.trim() || 'Tu evento, en el lugar que siempre soñaste';
+  const heroTitleWords = heroTitle.split(/\s+/);
+  const heroAccentWord = heroTitleWords.pop() || '';
+  const heroTitleLead = heroTitleWords.join(' ');
 
   return <main className="min-h-screen overflow-x-hidden bg-[#050505] text-white">
-    <header className={`fixed inset-x-0 top-0 z-40 border-b transition-[background-color,border-color] duration-300 ${scrolled ? 'border-white/10 bg-black/85 backdrop-blur-sm' : 'border-transparent bg-black/0'}`}>
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-3 px-4 md:h-24 md:px-8">
-        <button type="button" onClick={() => scrollTo('inicio')} className="group inline-flex shrink-0 items-center rounded-xl px-1 py-1 transition hover:opacity-85" aria-label="Ir al inicio">
-          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={174} height={74} className="h-11 w-auto max-w-[150px] object-contain brightness-110 contrast-125 drop-shadow-[0_8px_18px_rgba(0,0,0,.45)] md:h-16 md:max-w-none" priority />
+    <header className={`fixed inset-x-0 top-0 z-40 border-b transition-[background-color,border-color,box-shadow,backdrop-filter] duration-500 ${scrolled ? 'border-white/10 bg-[#08050d]/88 shadow-[0_18px_60px_rgba(7,3,14,.24)] backdrop-blur-xl' : 'border-transparent bg-transparent'}`}>
+      <div className="mx-auto flex h-20 max-w-[1480px] items-center justify-between gap-4 px-5 sm:px-8 md:h-28 xl:px-6 2xl:px-0">
+        <button type="button" onClick={() => scrollTo('inicio')} className="group inline-flex shrink-0 items-center rounded-2xl transition duration-300 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b98cff]" aria-label="Ir al inicio">
+          <Image src={logoOnDark} alt="M&M Eventos" width={174} height={74} className="h-14 w-auto max-w-[152px] object-contain brightness-110 contrast-125 drop-shadow-[0_12px_28px_rgba(0,0,0,.55)] md:h-24 md:max-w-[190px]" priority />
         </button>
-        <nav className="hidden items-center gap-6 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100 xl:gap-8 lg:flex">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="group relative pb-1 transition hover:text-[#dbe1e8]"><span>{label}</span><span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></button>)}{hasActiveTickets ? <Link href="/entradas" className="group relative pb-1 transition hover:text-[#dbe1e8]"><span>Entradas</span><span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></Link> : null}</nav>
-        <div className="hidden items-center gap-3 lg:flex"><Link href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 text-zinc-400 transition hover:border-[#c8cdd3]/45 hover:bg-white/[0.04] hover:text-white"><LogIn className="h-4.5 w-4.5" /></Link><button type="button" onClick={() => scrollTo('contacto')} className={`rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(229,231,235,.18)] transition hover:bg-[#e5e7eb] ${ctaFocusRing}`}>Solicitá presupuesto</button></div>
-        <button type="button" onClick={() => setMobileOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/[0.04] text-white lg:hidden" aria-label="Abrir menú"><Menu className="h-5 w-5" /></button>
-      </div>
-      {mobileOpen ? <Portal><div ref={mobileMenuRef as React.RefObject<HTMLDivElement>} className="fixed inset-0 z-[100] overflow-y-auto bg-[#050505] px-5 py-5 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú de navegación">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(200,205,211,.12),transparent_36%),linear-gradient(180deg,rgba(255,255,255,.04),transparent_42%)]" />
-        <div className="relative flex items-center justify-between border-b border-white/10 pb-5">
-          <Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={174} height={74} className="h-16 w-auto object-contain brightness-110 contrast-125" />
-          <button type="button" onClick={() => setMobileOpen(false)} className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/[0.03] text-white" aria-label="Cerrar menú"><X className="h-5 w-5" /></button>
+        <nav style={displayFont} className="hidden items-center gap-6 text-[17px] font-medium text-white/90 xl:flex 2xl:gap-10">
+          {nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="group relative py-3 transition-colors duration-300 hover:text-white focus-visible:outline-none focus-visible:text-white"><span>{label}</span><span className="absolute inset-x-0 bottom-1 h-px origin-center scale-x-0 bg-[#c7a3ff] transition-transform duration-300 group-hover:scale-x-100 group-focus-visible:scale-x-100" /></button>)}
+          {hasActiveTickets ? <Link href="/entradas" className="group relative py-3 transition-colors duration-300 hover:text-white focus-visible:outline-none focus-visible:text-white"><span>Entradas</span><span className="absolute inset-x-0 bottom-1 h-px origin-center scale-x-0 bg-[#c7a3ff] transition-transform duration-300 group-hover:scale-x-100 group-focus-visible:scale-x-100" /></Link> : null}
+        </nav>
+        <div className="hidden items-center gap-5 xl:flex">
+          <Link href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-14 w-14 place-items-center rounded-xl border border-[#b98cff]/55 bg-black/10 text-white/90 shadow-[inset_0_0_0_1px_rgba(255,255,255,.05)] backdrop-blur-sm transition duration-300 hover:border-[#cfadff] hover:bg-[#9f68ef]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff]"><LogIn className="h-5 w-5" /></Link>
+          <button type="button" onClick={() => scrollTo('contacto')} style={displayFont} className="h-14 min-w-[230px] rounded-xl bg-[#f4f2f5] px-8 text-[18px] font-semibold text-[#17131c] shadow-[0_14px_40px_rgba(9,4,18,.22)] transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_18px_44px_rgba(174,126,238,.22)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#08050d]">Solicitá presupuesto</button>
         </div>
-        <nav className="relative mt-8 grid gap-2">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo(id), 0); }} className="group flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-zinc-100 transition hover:border-[#dbe1e8]/60 hover:text-[#dbe1e8]"><span className="relative pb-1">{label}<span className="absolute inset-x-0 -bottom-0.5 h-px origin-left scale-x-0 bg-[#dbe1e8] transition-transform duration-300 group-hover:scale-x-100" /></span><ArrowRight className="h-4 w-4 text-[#c8cdd3] transition group-hover:text-[#dbe1e8]" /></button>)}{hasActiveTickets ? <Link href="/entradas" onClick={() => setMobileOpen(false)} className="group flex items-center justify-between rounded-2xl border border-[#dbe1e8]/30 bg-white/[0.06] px-4 py-4 text-left text-sm font-semibold uppercase tracking-[0.18em] text-white"><span>Entradas</span><ArrowRight className="h-4 w-4 text-[#c8cdd3]" /></Link> : null}</nav>
+        <button type="button" onClick={() => setMobileOpen(true)} className="grid h-12 w-12 place-items-center rounded-xl border border-[#b98cff]/45 bg-black/25 text-white backdrop-blur-sm transition hover:border-[#cfadff] hover:bg-[#9f68ef]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] xl:hidden" aria-label="Abrir menú"><Menu className="h-5 w-5" /></button>
+      </div>
+      {mobileOpen ? <Portal><div ref={mobileMenuRef as React.RefObject<HTMLDivElement>} className="fixed inset-0 z-[100] overflow-y-auto bg-[#08050d] px-5 py-5 xl:hidden" role="dialog" aria-modal="true" aria-label="Menú de navegación">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(154,92,230,.22),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(89,42,140,.18),transparent_42%)]" />
+        <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
+        <div className="relative flex items-center justify-between border-b border-white/10 pb-5">
+          <Image src={logoOnDark} alt="M&M Eventos" width={174} height={74} className="h-16 w-auto object-contain brightness-110 contrast-125" />
+          <button type="button" onClick={() => setMobileOpen(false)} className="grid h-12 w-12 place-items-center rounded-xl border border-[#b98cff]/40 bg-white/[0.035] text-white transition hover:border-[#cfadff] hover:bg-[#9f68ef]/15" aria-label="Cerrar menú"><X className="h-5 w-5" /></button>
+        </div>
+        <nav style={displayFont} className="relative mt-8 grid gap-2">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo(id), 0); }} className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 text-left text-xl font-medium text-white transition hover:border-[#b98cff]/55 hover:bg-[#9f68ef]/10"><span>{label}</span><ArrowRight className="h-4 w-4 text-[#c7a3ff] transition-transform duration-300 group-hover:translate-x-1" /></button>)}{hasActiveTickets ? <Link href="/entradas" onClick={() => setMobileOpen(false)} className="group flex items-center justify-between rounded-xl border border-[#b98cff]/35 bg-[#9f68ef]/10 px-5 py-4 text-left text-xl font-medium text-white"><span>Entradas</span><ArrowRight className="h-4 w-4 text-[#c7a3ff]" /></Link> : null}</nav>
         <div className="relative mt-8 grid gap-3">
-          <button type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo('contacto'), 0); }} className={`inline-flex items-center justify-center gap-2 rounded-xl bg-[#c8cdd3] px-5 py-4 text-sm font-semibold text-black ${ctaFocusRing}`}>Solicitá presupuesto <ArrowRight className="h-4 w-4" /></button>
-          <Link href="/admin/login" onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center rounded-xl border border-white/10 px-5 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Ingresar al backoffice</Link>
+          <button type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo('contacto'), 0); }} style={displayFont} className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#f4f2f5] px-5 py-4 text-lg font-semibold text-[#17131c] shadow-[0_14px_40px_rgba(0,0,0,.24)]">Solicitá presupuesto <ArrowRight className="h-4 w-4" /></button>
+          <Link href="/admin/login" onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-4 text-sm font-medium text-zinc-300"><LogIn className="h-4 w-4" />Ingresar al backoffice</Link>
         </div>
       </div></Portal> : null}
     </header>
 
-    <section ref={heroRef as React.RefObject<HTMLElement>} id="inicio" data-analytics-section="hero" className="relative min-h-[92vh] overflow-hidden pt-20 md:pt-24">
+    <section ref={heroRef as React.RefObject<HTMLElement>} id="inicio" data-analytics-section="hero" className="relative min-h-[100svh] overflow-hidden">
       {heroVideo && !heroVideoFailed
         ? <motion.video src={heroVideo} poster={heroImage} autoPlay muted loop playsInline onError={() => setHeroVideoFailed(true)} className="absolute inset-0 h-full w-full object-cover will-change-transform" style={shouldReduceMotion ? undefined : { scale: heroImageScale, y: heroImageY }} initial={shouldReduceMotion ? false : { opacity: 0.7 }} animate={shouldReduceMotion ? undefined : { opacity: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />
         : <motion.img src={heroImage} alt="Salón M&M preparado para evento" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover will-change-transform" style={shouldReduceMotion ? undefined : { scale: heroImageScale, y: heroImageY }} initial={shouldReduceMotion ? false : { opacity: 0.7 }} animate={shouldReduceMotion ? undefined : { opacity: 1 }} transition={{ duration: 1.1, ease: smoothEase }} />}
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.56),rgba(0,0,0,.22)),linear-gradient(0deg,rgba(7,7,7,1),rgba(7,7,7,.08)_38%,rgba(7,7,7,.64))]" />
-      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen [animation:hero-sheen_16s_ease-in-out_infinite] bg-[radial-gradient(55%_55%_at_25%_15%,rgba(229,229,231,.18),transparent_60%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,3,9,.96)_0%,rgba(7,4,11,.83)_24%,rgba(8,5,13,.47)_49%,rgba(8,5,13,.12)_76%),linear-gradient(0deg,rgba(6,4,9,.76)_0%,rgba(6,4,9,.04)_35%,rgba(6,4,9,.48)_100%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen [animation:hero-sheen_16s_ease-in-out_infinite] bg-[radial-gradient(52%_60%_at_20%_18%,rgba(166,104,235,.18),transparent_64%)]" />
       <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto grid min-h-[calc(92vh-5rem)] max-w-7xl content-center px-4 py-12 md:min-h-[calc(92vh-6rem)] md:px-8 md:py-16">
-        <motion.div initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : 'visible'} variants={listVariants} className="min-w-0 max-w-3xl">
-          <motion.p variants={cardVariants} className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f2f2f4] sm:text-xs sm:tracking-[0.42em]">M&M Eventos</motion.p>
-          <motion.h1 variants={cardVariants} className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-[1.02] tracking-tight text-white sm:text-5xl md:text-7xl">{settings.heroTitle || 'Tu evento, en el lugar que siempre soñaste'}</motion.h1>
-          <motion.p variants={cardVariants} className="mt-6 max-w-xl text-sm leading-7 text-zinc-200 sm:text-base md:text-lg">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</motion.p>
-          <motion.div variants={cardVariants} className="mt-8 grid gap-3 sm:flex sm:flex-wrap"><motion.button type="button" onClick={() => scrollTo('contacto')} whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.02 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg bg-[#e5e5e7] px-5 py-3 text-sm font-semibold text-black shadow-[0_0_0_rgba(200,205,211,0)] transition hover:bg-[#f4f4f5] hover:shadow-[0_8px_30px_rgba(200,205,211,.25)] sm:px-6 ${ctaFocusRing}`}>{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button><motion.button type="button" onClick={() => scrollTo('salones')} whileHover={shouldReduceMotion ? undefined : { y: -3 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 px-5 py-3 text-sm font-semibold text-white transition hover:border-[#e5e5e7] hover:text-[#f2f2f4] sm:px-6 ${ctaFocusRing}`}>{settings.heroSecondaryCtaLabel || 'Ver salones'} <motion.span whileHover={shouldReduceMotion ? undefined : { x: 3 }} transition={softSpring}><ArrowRight className="h-4 w-4" /></motion.span></motion.button></motion.div>
-          <motion.div variants={listVariants} className="mt-7 flex max-w-full flex-wrap gap-2">{(heroSalons.length ? heroSalons : displaySalons.slice(0, 4)).map((salon) => <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => openSalon(salon)} whileHover={shouldReduceMotion ? undefined : { y: -2, borderColor: 'rgba(200,205,211,.8)' }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#e5e5e7]/25 bg-black/35 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur transition hover:border-[#e5e5e7] hover:bg-[#e5e5e7]/12 hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-3.5 w-3.5 shrink-0 text-[#f2f2f4]" /><span className="truncate">{heroLocationForSalon(salon)}</span></motion.button>)}</motion.div>
+      <div className="relative mx-auto grid min-h-[100svh] max-w-[1480px] items-center px-5 pb-36 pt-28 sm:px-8 md:pb-32 md:pt-36 xl:px-6 2xl:px-0">
+        <motion.div initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : 'visible'} variants={listVariants} className="min-w-0 max-w-[780px]">
+          <motion.div variants={cardVariants} className="flex items-center gap-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.42em] text-white sm:text-[12px] sm:tracking-[0.55em]">M &amp; M&nbsp;&nbsp;Eventos</p>
+            <span aria-hidden className="h-px w-10 bg-[#c7a3ff]/80 sm:w-12" />
+          </motion.div>
+          <motion.h1 variants={cardVariants} style={displayFont} className="mt-6 max-w-[760px] text-balance text-[3.35rem] font-normal leading-[0.98] tracking-[-0.045em] text-white sm:text-[4.2rem] md:text-[4.75rem] xl:text-[5.25rem]">
+            {heroTitleLead ? <>{heroTitleLead}{' '}</> : null}<span style={scriptFont} className="inline-block whitespace-nowrap text-[1.18em] font-normal leading-[0.72] tracking-normal text-[#c7a3ff] drop-shadow-[0_8px_26px_rgba(143,83,221,.24)]">{heroAccentWord}</span>
+          </motion.h1>
+          <motion.p variants={cardVariants} style={displayFont} className="mt-7 max-w-[690px] text-pretty text-[17px] leading-7 text-white/82 sm:text-[20px] sm:leading-8">{settings.heroSubtitle || 'Salones únicos, catering premium, ambientación, DJ y organización integral para que disfrutes sin preocupaciones.'}</motion.p>
+          <motion.div variants={cardVariants} className="mt-9 grid gap-3 sm:flex sm:flex-wrap">
+            <motion.button type="button" onClick={() => scrollTo('contacto')} whileHover={shouldReduceMotion ? undefined : { y: -3 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.985 }} transition={softSpring} style={displayFont} className="inline-flex min-h-14 items-center justify-center gap-4 rounded-xl bg-[#f5f3f6] px-8 text-[18px] font-semibold text-[#17131c] shadow-[0_16px_44px_rgba(4,2,8,.28)] transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#08050d] sm:min-w-[290px]">{settings.heroPrimaryCtaLabel || 'Solicitá presupuesto'} <ArrowRight className="h-5 w-5" /></motion.button>
+            <motion.button type="button" onClick={() => scrollTo('salones')} whileHover={shouldReduceMotion ? undefined : { y: -3 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.985 }} transition={softSpring} style={displayFont} className="inline-flex min-h-14 items-center justify-center gap-4 rounded-xl border border-white/55 bg-black/10 px-8 text-[18px] font-medium text-white backdrop-blur-[2px] transition hover:border-[#c7a3ff] hover:bg-[#8e59cf]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] sm:min-w-[205px]">{settings.heroSecondaryCtaLabel || 'Ver salones'} <ArrowRight className="h-5 w-5" /></motion.button>
+          </motion.div>
+          <motion.div variants={listVariants} className="mt-7 flex max-w-full flex-wrap gap-3">{(heroSalons.length ? heroSalons : displaySalons).slice(0, 3).map((salon) => <motion.button key={salon._id} variants={cardVariants} type="button" onClick={() => openSalon(salon)} whileHover={shouldReduceMotion ? undefined : { y: -2, borderColor: 'rgba(199,163,255,.9)' }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} transition={softSpring} style={displayFont} className="inline-flex min-h-11 min-w-[145px] items-center justify-center gap-3 rounded-full border border-[#b98cff]/45 bg-black/20 px-5 text-[15px] text-white/90 backdrop-blur-sm transition-colors hover:bg-[#8e59cf]/12 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff]" aria-label={`Ver salón ${titleForSalon(salon)}`}><MapPin className="h-4 w-4 shrink-0 text-[#b98cff]" strokeWidth={2.5} /><span className="truncate">{heroLocationForSalon(salon)}</span></motion.button>)}</motion.div>
         </motion.div>
       </div>
-      <motion.button type="button" onClick={() => scrollTo('salones')} aria-label="Ver más contenido" initial={shouldReduceMotion ? false : { opacity: 0 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: [0, 8, 0] }} transition={shouldReduceMotion ? undefined : { opacity: { delay: 0.6, duration: 0.4 }, y: { delay: 1, duration: 1.8, repeat: Infinity, ease: 'easeInOut' } }} className={`absolute bottom-6 left-1/2 hidden -translate-x-1/2 rounded-full border border-white/20 bg-black/30 p-2 text-white backdrop-blur transition hover:border-[#e5e5e7] hover:text-[#e5e5e7] md:grid ${ctaFocusRing}`}>
+      <motion.button type="button" onClick={() => scrollTo('salones')} aria-label="Ver más contenido" initial={shouldReduceMotion ? false : { opacity: 0 }} animate={shouldReduceMotion ? undefined : { opacity: 1, y: [0, 8, 0] }} transition={shouldReduceMotion ? undefined : { opacity: { delay: 0.6, duration: 0.4 }, y: { delay: 1, duration: 1.8, repeat: Infinity, ease: 'easeInOut' } }} className="absolute bottom-6 left-1/2 hidden h-14 w-14 -translate-x-1/2 place-items-center rounded-full border border-white/55 bg-black/15 text-white backdrop-blur-sm transition hover:border-[#c7a3ff] hover:bg-[#8e59cf]/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] md:grid">
         <ChevronDown className="h-5 w-5" />
       </motion.button>
     </section>
@@ -1191,7 +1212,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
 
     <footer className="border-t border-white/10 bg-[#080808] px-5 py-10 md:px-8">
       <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-5">
-        <div><Image src={brandAssets.logoLightOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-400">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div>
+        <div><Image src={logoOnDark} alt="M&M Eventos" width={150} height={64} className="h-14 w-auto object-contain" /><p className="mt-3 text-sm leading-6 text-zinc-400">{settings.footerText || 'Creamos momentos únicos que permanecen para siempre.'}</p><div className="mt-4 flex gap-2">{socialOptions.map((item) => <button key={item.key} type="button" onClick={() => setSocialNetwork(item.key)} aria-label={`Elegir salón para ${item.label}`} title={item.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[#c8cdd3]/30 text-[#c8cdd3] transition hover:bg-[#c8cdd3] hover:text-black"><item.icon className="h-4 w-4" /></button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Navegación</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => scrollTo(id)} className="text-left hover:text-white">{label}</button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Nuestros salones</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{displaySalons.map((salon) => <button key={salon._id} type="button" onClick={() => openSalon(salon)} className="text-left hover:text-white" aria-label={`Ver salón ${titleForSalon(salon)}`}>{titleForSalon(salon)}</button>)}</div></div>
         <div><h3 className="text-xs uppercase tracking-[0.24em] text-[#c8cdd3]">Búsquedas locales</h3><div className="mt-4 grid gap-2 text-sm text-zinc-400">{footerSeoLinks.map((item) => <Link key={item.href} href={item.href} className="text-left hover:text-white">{item.label}</Link>)}</div></div>
@@ -1212,8 +1233,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
     <SalonDetailModal salon={selectedSalon} googleReviews={landing.salonGoogleReviews} onClose={() => setSelectedSalon(null)} onRequestQuote={(salon) => { setSelectedSalon(null); setSelectedSalonId(salon._id); window.setTimeout(() => scrollTo('contacto'), 0); }} />
     <GalleryLightbox items={gallery} index={galleryLightboxIndex} onClose={() => setGalleryLightboxIndex(null)} onSelect={setGalleryLightboxIndex} />
 
-    <button data-analytics-id="floating-whatsapp" type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-2xl transition hover:scale-105 md:bottom-8"><WhatsAppIcon className="h-7 w-7" /></button>
-    <button data-analytics-id="floating-request-quote" type="button" onClick={() => scrollTo('contacto')} className="fixed bottom-4 left-4 right-4 z-30 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black shadow-2xl md:bottom-8 md:left-auto md:right-24">Solicitá tu presupuesto</button>
+    <button data-analytics-id="floating-whatsapp" type="button" onClick={() => setSocialNetwork('whatsapp')} aria-label="Contactar por WhatsApp" className="fixed bottom-24 right-5 z-30 grid h-16 w-16 place-items-center rounded-full border border-white/15 bg-[#20c967] text-white shadow-[0_18px_50px_rgba(0,0,0,.35)] transition duration-300 hover:-translate-y-1 hover:bg-[#25d366] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white md:bottom-8 md:right-7"><WhatsAppIcon className="h-8 w-8" /></button>
+    <button data-analytics-id="floating-request-quote" type="button" onClick={() => scrollTo('contacto')} style={displayFont} className="fixed bottom-4 left-4 right-4 z-30 min-h-14 rounded-xl border border-[#c7a3ff]/55 bg-[#171020]/82 px-6 text-[17px] font-medium text-white shadow-[0_18px_50px_rgba(0,0,0,.34)] backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-[#d6bbff] hover:bg-[#21152e]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] md:bottom-8 md:left-auto md:right-28 md:min-w-[270px]">Solicitá tu presupuesto</button>
     <button type="button" onClick={() => scrollTo('inicio')} aria-label="Volver arriba" className="fixed bottom-4 left-4 z-30 hidden rounded-lg border border-white/20 bg-black/60 p-3 backdrop-blur md:grid"><ChevronUp className="h-4 w-4" /></button>
   </main>;
 }

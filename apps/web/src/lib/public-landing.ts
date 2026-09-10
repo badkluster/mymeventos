@@ -57,8 +57,31 @@ export type PublicSalon = {
   defaultPaymentTerms?: string;
   packages?: PublicPackage[];
 };
+export type PublicLandingSettings = {
+  heroTitle?: string;
+  heroSubtitle?: string;
+  heroImageUrl?: string;
+  heroVideoUrl?: string;
+  logoOnDarkUrl?: string;
+  logoOnLightUrl?: string;
+  faviconUrl?: string;
+  heroPrimaryCtaLabel?: string;
+  heroSecondaryCtaLabel?: string;
+  whatsappNumber?: string;
+  whatsappDefaultMessage?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
+  tiktokUrl?: string;
+  footerText?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  openGraphImageUrl?: string;
+};
+
 export type PublicLanding = {
-  settings?: { heroTitle?: string; heroSubtitle?: string; heroImageUrl?: string; heroVideoUrl?: string; heroPrimaryCtaLabel?: string; heroSecondaryCtaLabel?: string; whatsappNumber?: string; whatsappDefaultMessage?: string; contactEmail?: string; contactPhone?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; footerText?: string; seoTitle?: string; seoDescription?: string; openGraphImageUrl?: string };
+  settings?: PublicLandingSettings;
   salons: PublicSalon[];
   packages: PublicPackage[];
   promotions: PublicLandingItem[];

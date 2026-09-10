@@ -8,6 +8,7 @@ import { capacityForPublicSalon, imageForPublicSalon, locationForPublicSalon, ti
 function jsonLdForPage(page: LocalSeoPage, path: string, salonMode: boolean, salon?: PublicSalon, packages: PublicPackage[] = [], landing?: PublicLanding | null) {
   const url = absoluteUrl(path);
   const image = imageForPublicSalon(salon, page.heroImage) || page.heroImage;
+  const openGraphImage = landing?.settings?.openGraphImageUrl || brandAssets.openGraphImage;
   const phone = salon?.phone || landing?.settings?.contactPhone;
   const address = salon?.address || page.address || locationForPublicSalon(salon) || page.location;
   const faqs = landing?.faqs?.filter((faq) => faq.question && faq.answer).slice(0, 4).map((faq) => ({ question: faq.question!, answer: faq.answer! })) ?? page.faqs;
@@ -35,7 +36,7 @@ function jsonLdForPage(page: LocalSeoPage, path: string, salonMode: boolean, sal
       '@type': 'LocalBusiness',
       name: 'M&M Eventos',
       url: siteUrl,
-      image: absoluteUrl(brandAssets.openGraphImage),
+      image: openGraphImage,
       areaServed: ['La Plata', 'San Carlos', 'Villa Elisa'],
       makesOffer: (packages.length ? packages.map((item) => item.name) : page.packages).map((name) => ({ '@type': 'Offer', name }))
     },
@@ -84,6 +85,7 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
   const highlights = realHighlights.length ? realHighlights : page.highlights;
   const faqs = landing?.faqs?.filter((faq) => faq.question && faq.answer).slice(0, 4) ?? [];
   const visibleFaqs = faqs.length ? faqs.map((faq) => ({ question: faq.question!, answer: faq.answer! })) : page.faqs;
+  const logoOnDark = landing?.settings?.logoOnDarkUrl || brandAssets.logoLightOnDark;
 
   return <main className="min-h-screen overflow-x-hidden bg-zinc-950 text-white">
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdForPage(page, path, salonMode, salon, packages, landing)) }} />
@@ -91,7 +93,7 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
       <Image src={heroImage} alt={heading} fill priority sizes="100vw" className="object-cover" />
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/72 to-black/20" />
       <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-5 md:px-8 md:py-6">
-        <Link href="/" aria-label="Ir a M&M Eventos"><img src={brandAssets.logoLightOnDark} alt="M&M Eventos" className="h-11 w-auto max-w-[150px] object-contain md:h-14 md:max-w-none" /></Link>
+        <Link href="/" aria-label="Ir a M&M Eventos"><img src={logoOnDark} alt="M&M Eventos" className="h-11 w-auto max-w-[150px] object-contain md:h-14 md:max-w-none" /></Link>
         <Link href="/#contacto" className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold transition hover:bg-white hover:text-black">Consultar</Link>
       </header>
       <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-16 pt-14 md:px-8 lg:grid-cols-[1fr_360px] lg:pt-24">

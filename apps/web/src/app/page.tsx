@@ -38,7 +38,7 @@ function structuredData(landing: PublicLanding | null) {
       '@type': 'Organization',
       name: 'M&M Eventos',
       url: siteUrl,
-      logo: absoluteUrl('/brand/mym-logo-dark-on-light.jpg'),
+      logo: landing?.settings?.logoOnLightUrl || absoluteUrl('/brand/mym-logo-dark-on-light.jpg'),
       contactPoint: landing?.settings?.contactPhone ? [{ '@type': 'ContactPoint', telephone: landing.settings.contactPhone, contactType: 'customer service', areaServed: 'AR', availableLanguage: 'es' }] : undefined
     },
     {
