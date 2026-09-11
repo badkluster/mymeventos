@@ -11,7 +11,7 @@
 | `scheme` (deep links) | `mymeventos` |
 | iOS `bundleIdentifier` | `com.mymeventos.staff` |
 | Android `package` | `com.mymeventos.staff` |
-| Ícono / splash / adaptive icon | `apps/mobile/assets/*.png` (reutilizan el logo ya existente en `apps/web/public/brand/mym-icon-512.png`, copiado — no se generó arte nuevo). **Corregido 2026-08-04**: `adaptive-icon.png` ocupaba casi el 100% del lienzo de 512×512 (el wordmark llegaba a ~8px de cada borde); Android aplica una máscara de "zona segura" de 66% de diámetro sobre el foreground de un ícono adaptativo, así que el launcher recortaba las puntas de las letras al instalar. Se regeneró como un recorte con transparencia real (alpha = luminancia del arte original, sin fondo negro sólido embebido) escalado al ~68% y centrado, quedando dentro de la zona segura sin costura visible contra el `backgroundColor` configurado (`#0B0B0F`). `icon.png` (iOS/store, con esquinas redondeadas mucho menos agresivas) no se tocó. |
+| Ícono / splash / adaptive icon | `apps/mobile/assets/mym-logo-primary.png`, copia exacta del logo institucional vigente. El PNG cuadrado con transparencia se usa como fuente única para el ícono de tienda, el foreground adaptable de Android, el favicon, el splash y las pantallas de acceso. |
 
 Estos identificadores (`com.mymeventos.staff`) son **provisorios** — hay que confirmarlos con quien gestione las cuentas de Apple/Google antes de un build real, ya que no se puede cambiar el bundle id/package después de publicar.
 

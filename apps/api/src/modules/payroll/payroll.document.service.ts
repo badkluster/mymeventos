@@ -1,8 +1,7 @@
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
 import PDFDocument from 'pdfkit';
 import { uploadBuffer } from '../uploads/cloudinary.service';
 import { PayrollSettlement } from './payroll.models';
+import { resolveBrandLogoPath } from '../../utils/brand-logo';
 
 const collect = (document: PDFKit.PDFDocument) => new Promise<Buffer>((resolve, reject) => {
   const chunks: Buffer[] = [];
@@ -25,8 +24,8 @@ function employeeName(employee: any): string {
 }
 
 function tryBrandLogo(document: PDFKit.PDFDocument): void {
-  const candidate = join(process.cwd(), '..', 'web', 'public', 'brand', 'mym-logo-dark-on-light.jpg');
-  if (existsSync(candidate)) document.image(readFileSync(candidate), 42, 30, { fit: [105, 55] });
+  const candidate = resolveBrandLogoPath();
+  if (candidate) document.image(candidate, 42, 24, { fit: [62, 62] });
   else document.fontSize(20).fillColor('#111827').text('M&M Eventos', 42, 42);
 }
 

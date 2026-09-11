@@ -36,6 +36,7 @@ function elapsedLabel(startedAt: string): string {
 }
 
 const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
+const compactCount = (value: number) => value > 99 ? '99+' : String(value);
 
 function StatusBadge({ label, tone }: { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
   const styles = { ok: 'bg-emerald-100 text-emerald-700', warn: 'bg-amber-100 text-amber-700', bad: 'bg-red-100 text-red-700', neutral: 'bg-muted text-muted-foreground' };
@@ -75,6 +76,7 @@ export default function AttendancePage() {
 
   const [adjustments, setAdjustments] = useState<AttendanceAdjustmentRequest[]>([]);
   const [adjustmentStatus, setAdjustmentStatus] = useState('');
+  const [reviewCounts, setReviewCounts] = useState({ incidents: 0, adjustments: 0 });
 
   const [settings, setSettings] = useState<AttendanceSettings | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -161,6 +163,23 @@ export default function AttendancePage() {
     }
   }, [adjustmentStatus, showToast]);
 
+  const loadReviewCounts = useCallback(async () => {
+    if (!canManage) return;
+    try {
+      const [pendingIncidents, incidentsInReview, pendingAdjustments] = await Promise.all([
+        api.get<{ total?: number }>('/attendance/incidents?page=1&limit=1&status=pending'),
+        api.get<{ total?: number }>('/attendance/incidents?page=1&limit=1&status=in_review'),
+        api.get<{ total?: number }>('/attendance/adjustments?page=1&limit=1&status=pending')
+      ]);
+      setReviewCounts({
+        incidents: (pendingIncidents.total ?? 0) + (incidentsInReview.total ?? 0),
+        adjustments: pendingAdjustments.total ?? 0
+      });
+    } catch {
+      // Los indicadores no deben interrumpir el trabajo si falla una actualización en segundo plano.
+    }
+  }, [canManage]);
+
   const loadSettings = useCallback(async () => {
     setLoading(true);
     try {
@@ -182,6 +201,16 @@ export default function AttendancePage() {
     if (tab === 'adjustments') void loadAdjustments();
     if (tab === 'settings' && canManageSettings) void loadSettings();
   }, [tab, loadActive, loadHistory, loadIncidents, loadAdjustments, loadSettings, canManageSettings]);
+
+  useEffect(() => {
+    if (!canManage) {
+      setReviewCounts({ incidents: 0, adjustments: 0 });
+      return;
+    }
+    void loadReviewCounts();
+    const refreshInterval = window.setInterval(() => void loadReviewCounts(), 60_000);
+    return () => window.clearInterval(refreshInterval);
+  }, [canManage, loadReviewCounts]);
 
   const openDetail = useCallback(async (session: WorkSession | string) => {
     const sessionId = typeof session === 'string' ? session : session._id;
@@ -251,6 +280,7 @@ export default function AttendancePage() {
       setResolveForm({ status: 'resolved', resolution: '' });
       await Promise.all([
         loadIncidents(),
+        loadReviewCounts(),
         currentDetailSessionId && currentDetailSessionId === resolveTarget.workSessionId ? openDetail(currentDetailSessionId) : Promise.resolve()
       ]);
     } catch (error) {
@@ -270,6 +300,7 @@ export default function AttendancePage() {
       setReviewForm({ decision: 'approved', reviewNotes: '' });
       await Promise.all([
         loadAdjustments(),
+        loadReviewCounts(),
         loadHistory(),
         detailSession?._id === reviewTarget.workSessionId ? openDetail(detailSession._id) : Promise.resolve()
       ]);
@@ -395,7 +426,15 @@ export default function AttendancePage() {
   return <section className="space-y-6">
     <PageHeader title="Asistencia y app móvil" description="Jornadas del personal fichadas desde la app móvil: control en vivo, historial, incidencias y correcciones." action={isAdmin ? <Button onClick={() => void openManualSession()}><Clock3 className="mr-2 h-4 w-4" />Agregar horario</Button> : undefined} />
     <nav className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm" aria-label="Secciones de asistencia">
-      {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${tab === id ? 'bg-zinc-950 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}><Icon className="h-4 w-4" />{label}</button>)}
+      {tabs.map(({ id, label, icon: Icon }) => {
+        const reviewCount = id === 'incidents' ? reviewCounts.incidents : id === 'adjustments' ? reviewCounts.adjustments : 0;
+        const hasPendingReview = canManage && reviewCount > 0;
+        const reviewBadgeClass = id === 'incidents'
+          ? tab === id ? 'bg-amber-300 text-amber-950' : 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200'
+          : tab === id ? 'bg-violet-300 text-violet-950' : 'bg-violet-100 text-violet-800 ring-1 ring-inset ring-violet-200';
+        const pendingLabel = `${reviewCount} pendiente${reviewCount === 1 ? '' : 's'} por revisar`;
+        return <button key={id} type="button" onClick={() => setTab(id)} aria-label={hasPendingReview ? `${label}: ${pendingLabel}` : label} title={hasPendingReview ? pendingLabel : undefined} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${tab === id ? 'bg-zinc-950 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}><Icon className="h-4 w-4" />{label}{hasPendingReview ? <span aria-hidden="true" className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold tabular-nums ${reviewBadgeClass}`}>{compactCount(reviewCount)}</span> : null}</button>;
+      })}
     </nav>
 
     {tab === 'active' && <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">

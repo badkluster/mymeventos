@@ -8,7 +8,7 @@
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 30,
-      "includeFiles": "../web/public/brand/mym-logo-dark-on-light.jpg"
+      "includeFiles": "../web/public/brand/mym-logo-primary.png"
     }
   },
   "rewrites": [

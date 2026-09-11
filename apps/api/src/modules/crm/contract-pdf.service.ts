@@ -1,7 +1,6 @@
-import fs from 'fs';
-import path from 'path';
 import PDFDocument from 'pdfkit';
 import { uploadBuffer } from '../uploads/cloudinary.service';
+import { resolveBrandLogoPath } from '../../utils/brand-logo';
 
 const page = { width: 595.28, height: 841.89, left: 46, right: 549, bottom: 785 };
 const color = { ink: '#101a2c', gold: '#b78b45', muted: '#64748b', line: '#d8dee8', card: '#f5f7fa', white: '#ffffff' };
@@ -16,7 +15,7 @@ const date = (value?: unknown) => value ? new Intl.DateTimeFormat('es-AR', { dat
 const instantDate = (value?: unknown) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(value as string)) : 'No informado';
 
 function buffer(document: PDFKit.PDFDocument): Promise<Buffer> { return new Promise((resolve, reject) => { const chunks: Buffer[] = []; document.on('data', (chunk) => chunks.push(Buffer.from(chunk))); document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject); document.end(); }); }
-function logo(document: PDFKit.PDFDocument, x: number, y: number) { const assets = [path.resolve(process.cwd(), '../web/public/brand/mym-logo-light-on-dark.jpg'), path.resolve(process.cwd(), 'apps/web/public/brand/mym-logo-light-on-dark.jpg')]; const asset = assets.find(fs.existsSync); if (asset) document.image(asset, x, y, { width: 65 }); else document.font('Helvetica-Bold').fontSize(13).fillColor(color.white).text('M&M\nEVENTOS', x, y + 8); }
+function logo(document: PDFKit.PDFDocument, x: number, y: number) { const asset = resolveBrandLogoPath(); if (asset) document.image(asset, x, y, { width: 60 }); else document.font('Helvetica-Bold').fontSize(13).fillColor(color.white).text('M&M\nEVENTOS', x, y + 8); }
 function header(document: PDFKit.PDFDocument, contract: any) { document.rect(0, 0, page.width, 76).fill(color.ink); logo(document, page.left, 8); document.font('Helvetica').fontSize(8).fillColor('#ddc99f').text('CONTRATO DE PRESTACIÓN DE SERVICIOS', 250, 20, { width: 299, align: 'right', characterSpacing: 1 }); document.font('Helvetica-Bold').fontSize(11).fillColor(color.white).text(contract.contractNumber, 250, 36, { width: 299, align: 'right' }); }
 function footer(document: PDFKit.PDFDocument, current: number, total: number) { document.moveTo(page.left, page.bottom - 12).lineTo(page.right, page.bottom - 12).strokeColor(color.line).stroke(); document.font('Helvetica').fontSize(7.5).fillColor(color.muted).text(`M&M Eventos · Contrato ${current} de ${total}`, page.left, page.bottom - 3, { width: page.right - page.left }); }
 function ensure(document: PDFKit.PDFDocument, contract: any, height: number) { if (document.y + height < page.bottom - 35) return; document.addPage(); header(document, contract); document.y = 98; }

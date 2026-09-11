@@ -252,7 +252,7 @@ async function sendPaymentCollectionJob(): Promise<void> {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;overflow:hidden;border-radius:22px;background:#ffffff;border:1px solid #e4e4e7;box-shadow:0 18px 45px rgba(24,24,27,.08);">
           <tr><td style="background:#09090b;padding:24px 28px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
-              <td><img src="cid:${EMAIL_LOGO_CID}" alt="M&M Eventos" width="132" height="56" style="display:block;width:132px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;background:#ffffff;"></td>
+              <td><img src="cid:${EMAIL_LOGO_CID}" alt="M&M Eventos" width="96" height="96" style="display:block;width:96px;height:auto;border:0;outline:none;text-decoration:none;"></td>
               <td align="right" style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#d4d4d8;">Backoffice</td>
             </tr></table>
           </td></tr>

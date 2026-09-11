@@ -1,7 +1,6 @@
-import fs from 'fs';
-import path from 'path';
 import PDFDocument from 'pdfkit';
 import { uploadBuffer } from '../uploads/cloudinary.service';
+import { resolveBrandLogoPath } from '../../utils/brand-logo';
 
 const page = { width: 595.28, height: 841.89, left: 46, right: 549, bottom: 782 };
 const color = { ink: '#101827', gold: '#b8965a', goldSoft: '#f5eedf', ivory: '#fcfbf8', card: '#f4f6f8', line: '#dfe3e8', muted: '#667085', white: '#ffffff' };
@@ -18,8 +17,7 @@ function value(input?: unknown, fallback = 'A definir'): string { return typeof 
 function pdfBuffer(document: PDFKit.PDFDocument): Promise<Buffer> { return new Promise((resolve, reject) => { const chunks: Buffer[] = []; document.on('data', (chunk) => chunks.push(Buffer.from(chunk))); document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject); document.end(); }); }
 
 function logo(document: PDFKit.PDFDocument, x: number, y: number, width = 86): void {
-  const candidates = [path.resolve(process.cwd(), '../web/public/brand/mym-logo-light-on-dark.jpg'), path.resolve(process.cwd(), 'apps/web/public/brand/mym-logo-light-on-dark.jpg')];
-  const asset = candidates.find(fs.existsSync);
+  const asset = resolveBrandLogoPath();
   if (asset) document.image(asset, x, y, { width });
   else document.font('Helvetica-Bold').fontSize(17).fillColor(color.white).text('M&M EVENTOS', x, y + 10);
 }

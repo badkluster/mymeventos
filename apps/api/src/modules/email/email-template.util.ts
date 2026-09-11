@@ -1,6 +1,5 @@
-import { existsSync } from 'fs';
-import path from 'path';
 import { env } from '../../config/env';
+import { BRAND_LOGO_FILE_NAME, BRAND_LOGO_PUBLIC_PATH, resolveBrandLogoPath } from '../../utils/brand-logo';
 
 // Extracted from quote-request-notifications.service.ts (the only prior HTML email in the
 // codebase) so every new automation email shares the same logo resolution and escaping instead
@@ -16,19 +15,14 @@ export function escapeHtml(value: unknown): string {
 }
 
 export function resolveEmailLogoPath(): string | undefined {
-  const candidates = [
-    path.resolve(process.cwd(), 'apps/web/public/brand/mym-logo-dark-on-light.jpg'),
-    path.resolve(process.cwd(), '../web/public/brand/mym-logo-dark-on-light.jpg'),
-    path.resolve(__dirname, '../../../../web/public/brand/mym-logo-dark-on-light.jpg'),
-  ];
-  return candidates.find((candidate) => existsSync(candidate));
+  return resolveBrandLogoPath();
 }
 
-export const EMAIL_LOGO_CID = 'mym-logo-dark-on-light';
+export const EMAIL_LOGO_CID = 'mym-logo-primary';
 
 export function logoEmailAttachments(): Array<{ filename: string; path: string; cid: string }> | undefined {
   const logoPath = resolveEmailLogoPath();
-  return logoPath ? [{ filename: 'mym-logo-dark-on-light.jpg', path: logoPath, cid: EMAIL_LOGO_CID }] : undefined;
+  return logoPath ? [{ filename: BRAND_LOGO_FILE_NAME, path: logoPath, cid: EMAIL_LOGO_CID }] : undefined;
 }
 
 /**
@@ -38,7 +32,7 @@ export function logoEmailAttachments(): Array<{ filename: string; path: string; 
  */
 export function resolveEmailLogoUrl(): string {
   const publicOrigin = env.CORS_ORIGIN.replace(/\/+$/, '');
-  return `${publicOrigin}/brand/mym-logo-dark-on-light.jpg`;
+  return `${publicOrigin}${BRAND_LOGO_PUBLIC_PATH}`;
 }
 
 export type BrandedEmailInput = {
@@ -76,7 +70,7 @@ export function renderBrandedEmail(input: BrandedEmailInput): string {
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
                     <td>
-                      <img src="${escapeHtml(logoUrl)}" alt="M&M Eventos" width="132" style="display:block;width:132px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;background:#ffffff;">
+                      <img src="${escapeHtml(logoUrl)}" alt="M&M Eventos" width="96" style="display:block;width:96px;height:auto;border:0;outline:none;text-decoration:none;">
                     </td>
                     <td align="right" style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#d4d4d8;">${escapeHtml(headerLabel)}</td>
                   </tr>

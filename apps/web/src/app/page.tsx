@@ -3,6 +3,7 @@ import { PublicLandingClient } from '@/components/public-landing-client';
 import { getGooglePlaceReviews } from '@/lib/google-place-reviews';
 import { absoluteUrl, defaultOgImage, siteUrl } from '@/lib/local-seo';
 import { getPublicLanding, imageForPublicSalon, titleForPublicSalon, type PublicLanding } from '@/lib/public-landing';
+import { brandAssets } from '@/lib/brand-assets';
 
 export const revalidate = 300;
 
@@ -38,7 +39,7 @@ function structuredData(landing: PublicLanding | null) {
       '@type': 'Organization',
       name: 'M&M Eventos',
       url: siteUrl,
-      logo: landing?.settings?.logoOnLightUrl || absoluteUrl('/brand/mym-logo-dark-on-light.jpg'),
+      logo: landing?.settings?.logoOnLightUrl || absoluteUrl(brandAssets.logoDarkOnLight),
       contactPoint: landing?.settings?.contactPhone ? [{ '@type': 'ContactPoint', telephone: landing.settings.contactPhone, contactType: 'customer service', areaServed: 'AR', availableLanguage: 'es' }] : undefined
     },
     {

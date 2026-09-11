@@ -1,6 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import PDFDocument from 'pdfkit';
+import { resolveBrandLogoPath } from '../../utils/brand-logo';
 
 export type OperationalDocumentType = 'timeline' | 'logistics' | 'guest_list' | 'tableware' | 'full';
 
@@ -94,10 +93,9 @@ function collect(document: PDFKit.PDFDocument): Promise<Buffer> {
   });
 }
 
-function logo(document: PDFKit.PDFDocument, x: number, y: number): void {
-  const candidates = [path.resolve(process.cwd(), '../web/public/brand/mym-logo-light-on-dark.jpg'), path.resolve(process.cwd(), 'apps/web/public/brand/mym-logo-light-on-dark.jpg')];
-  const asset = candidates.find(fs.existsSync);
-  if (asset) document.image(asset, x, y, { width: 60 });
+function logo(document: PDFKit.PDFDocument, x: number, y: number, width = 60): void {
+  const asset = resolveBrandLogoPath();
+  if (asset) document.image(asset, x, y, { width });
   else document.font('Helvetica-Bold').fontSize(14).fillColor(color.white).text('M&M\nEVENTOS', x, y + 6);
 }
 
@@ -512,14 +510,13 @@ function drawCompactGuestHeader(document: PDFKit.PDFDocument, event: any, entrie
   const salon = typeof event.salonId === 'object' ? event.salonId?.name : undefined;
 
   document.rect(0, 0, compactPage.width, 66).fill(color.ink);
-  document.font('Times-Bold').fontSize(18).fillColor(color.white).text('M&M', compactPage.left, 14, { width: 62, align: 'center' });
-  document.font('Helvetica-Bold').fontSize(5).fillColor('#d8c9aa').text('E V E N T O S', compactPage.left, 39, { width: 62, align: 'center' });
-  document.font('Helvetica-Bold').fontSize(16).fillColor(color.white).text('CONTROL DE MESAS', 108, 15, { width: 393, height: 20, ellipsis: true, characterSpacing: .4 });
+  logo(document, compactPage.left, 8, 50);
+  document.font('Helvetica-Bold').fontSize(16).fillColor(color.white).text('CONTROL DE MESAS', 96, 15, { width: 405, height: 20, ellipsis: true, characterSpacing: .4 });
   document.font('Helvetica').fontSize(7.2).fillColor('#d8c9aa').text(
     [text(customer, ''), date(event.eventDate), text(salon, ''), 'Puerta y recepción'].filter(Boolean).join(' · '),
-    108,
+    96,
     38,
-    { width: 443, height: 12, ellipsis: true }
+    { width: 455, height: 12, ellipsis: true }
   );
   [
     { label: 'INVITADOS', value: guests.length },

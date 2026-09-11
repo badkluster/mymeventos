@@ -1,7 +1,6 @@
-import fs from 'fs';
-import path from 'path';
 import PDFDocument from 'pdfkit';
 import { uploadBuffer } from '../uploads/cloudinary.service';
+import { resolveBrandLogoPath } from '../../utils/brand-logo';
 
 const money = (value?: unknown) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(value ?? 0));
 // `payment.paidAt` es un instante real (hora de cobro) — se muestra en hora de Argentina (la
@@ -14,7 +13,7 @@ const civilDate = (value?: unknown) => value ? new Intl.DateTimeFormat('es-AR', 
 const value = (input?: unknown, fallback = 'No informado') => typeof input === 'string' && input.trim() ? input.trim() : fallback;
 const paymentMethod = (method?: string) => ({ cash: 'Efectivo', bank_transfer: 'Transferencia bancaria', mercado_pago: 'Mercado Pago', card: 'Tarjeta', other: 'Otro medio de pago' }[method ?? ''] ?? 'No informado');
 function collect(document: PDFKit.PDFDocument): Promise<Buffer> { return new Promise((resolve, reject) => { const chunks: Buffer[] = []; document.on('data', (chunk) => chunks.push(Buffer.from(chunk))); document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject); document.end(); }); }
-function logo(document: PDFKit.PDFDocument) { const paths = [path.resolve(process.cwd(), '../web/public/brand/mym-logo-light-on-dark.jpg'), path.resolve(process.cwd(), 'apps/web/public/brand/mym-logo-light-on-dark.jpg')]; const asset = paths.find(fs.existsSync); if (asset) document.image(asset, 46, 24, { width: 72 }); else document.font('Helvetica-Bold').fontSize(14).fillColor('#ffffff').text('M&M EVENTOS', 46, 35); }
+function logo(document: PDFKit.PDFDocument) { const asset = resolveBrandLogoPath(); if (asset) document.image(asset, 46, 21, { width: 72 }); else document.font('Helvetica-Bold').fontSize(14).fillColor('#ffffff').text('M&M EVENTOS', 46, 35); }
 function item(document: PDFKit.PDFDocument, label: string, content: unknown, x: number, y: number, width: number) { document.font('Helvetica-Bold').fontSize(7.5).fillColor('#64748b').text(label.toUpperCase(), x, y, { width }); document.font('Helvetica').fontSize(10).fillColor('#101a2c').text(value(content), x, y + 12, { width }); }
 
 export async function generateAndUploadPaymentReceiptPdf(payment: any, event: any, customer: any, contract: any): Promise<{ receiptPdfUrl: string; receiptPdfSecureUrl: string; receiptPdfPublicId: string; receiptPdfGeneratedAt: Date; pdfBuffer: Buffer }> {
