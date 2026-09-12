@@ -162,13 +162,13 @@ describe('event search by customer', () => {
     mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
   });
 
-  it('finds events by the customer name or DNI', async () => {
+  it('finds events by customer or honoree names without distinguishing accents or case', async () => {
     const customerId = '507f1f77bcf86cd799439016';
     mocks.customerFind.mockReturnValue(queryChain([{ _id: customerId }]));
     mocks.eventCountDocuments.mockResolvedValue(1);
     mocks.eventFind.mockReturnValue(paginatedQuery([{ _id: eventId, eventName: 'Quince de Agus', customerId }]));
 
-    const response = await request(app).get('/api/events?search=Agus').set('Cookie', adminCookie);
+    const response = await request(app).get('/api/events?search=YESICA').set('Cookie', adminCookie);
 
     expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(mocks.customerFind).toHaveBeenCalledWith(expect.objectContaining({
@@ -177,8 +177,13 @@ describe('event search by customer', () => {
         { documentNumber: expect.any(RegExp) }
       ])
     }));
+    const customerQuery = mocks.customerFind.mock.calls[0][0] as { $or: Array<Record<string, RegExp>> };
+    expect(customerQuery.$or.find((condition) => condition.fullName)?.fullName.test('Yésica Fernández')).toBe(true);
     const eventQuery = mocks.eventFind.mock.calls[0][0] as { $and: Array<{ $or?: unknown[] }> };
-    expect(eventQuery.$and.find((condition) => Array.isArray(condition.$or))?.$or).toContainEqual({ customerId: { $in: [customerId] } });
+    const searchConditions = eventQuery.$and.find((condition) => Array.isArray(condition.$or))?.$or as Array<Record<string, unknown>>;
+    expect(searchConditions).toContainEqual({ customerId: { $in: [customerId] } });
+    const honoreeExpression = searchConditions.find((condition) => condition.honoreeName)?.honoreeName as RegExp;
+    expect(honoreeExpression.test('Yésica')).toBe(true);
   });
 });
 

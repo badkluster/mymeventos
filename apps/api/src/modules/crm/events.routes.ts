@@ -30,6 +30,7 @@ import { syncEventAlertCalendarItems } from './event-alert-calendar-sync.service
 import { addDaysToDateKey, argentinaDateKey, civilDateInput, daysBetweenDateKeys, dueDateKey } from '../../utils/argentina-date';
 import { installmentDueDateKey, isOpenInstallment, planFor } from './financial-reminders.service';
 import { activeEventStatuses, cancelEvent, cancellationPreview, deleteDraftEvent, deletionPreview, reactivateEvent, terminalEventStatuses } from './event-lifecycle.service';
+import { diacriticInsensitiveRegex } from '../../utils/search';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const optionalObjectId = objectId.optional().or(z.literal(''));
@@ -699,10 +700,6 @@ async function packageChangePreview(event: any, packageSnapshot: Record<string, 
   };
 }
 
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 async function buildQuery(request: Request): Promise<Record<string, unknown>> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }];
   if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: accessibleSalonIds(request.user!) } });
@@ -728,11 +725,11 @@ async function buildQuery(request: Request): Promise<Record<string, unknown>> {
   if (sourceQuoteId && objectId.safeParse(sourceQuoteId).success) terms.push({ sourceQuoteId });
   const term = getQueryString(request.query.search);
   if (term) {
-    const expression = new RegExp(escapeRegex(term), 'i');
+    const expression = diacriticInsensitiveRegex(term);
     const customers = await Customer.find({ $or: ['fullName', 'firstName', 'lastName', 'documentNumber'].map((field) => ({ [field]: expression })) }).select('_id').lean();
     const customerIds = customers.map((customer) => customer._id);
     terms.push({ $or: [
-      ...['eventName', 'eventType', 'notes'].map((field) => ({ [field]: expression })),
+      ...['eventName', 'eventType', 'honoreeName', 'notes'].map((field) => ({ [field]: expression })),
       ...(customerIds.length ? [{ customerId: { $in: customerIds } }] : [])
     ] });
   }
