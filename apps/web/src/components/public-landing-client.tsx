@@ -740,7 +740,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   const socialPanelRef = useRef<HTMLElement | null>(null);
   const heroRef = useRef<HTMLElement | null>(null);
   const [storyStep, setStoryStep] = useState(0);
-  const storyRowRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const storySectionRef = useRef<HTMLElement | null>(null);
+  const storyStepCount = Math.max(landing.storySteps.length || fallbackStorySteps.length, 1);
 
   const openSalon = (salon: Salon) => {
     emitAnalyticsEvent('salon_view', { sectionId: 'salons', elementId: titleForSalon(salon), entityId: salon._id });
@@ -752,37 +753,13 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const heroImageScale = useTransform(heroProgress, [0, 1], [1, 1.18]);
   const heroImageY = useTransform(heroProgress, [0, 1], ['0%', '14%']);
+  const { scrollYProgress: storyProgress } = useScroll({ target: storySectionRef, offset: ['start start', 'end end'] });
+  useMotionValueEvent(storyProgress, 'change', (latest) => {
+    const nextStep = Math.min(storyStepCount - 1, Math.floor(latest * storyStepCount));
+    setStoryStep((current) => current === nextStep ? current : nextStep);
+  });
   useDialogA11y(mobileOpen, () => setMobileOpen(false), mobileMenuRef);
   useDialogA11y(Boolean(socialNetwork), () => setSocialNetwork(null), socialPanelRef);
-
-  // Picks whichever step row's center sits closest to the viewport center on every scroll
-  // position, instead of reacting to a narrow "entered the viewport" crossing — a fast
-  // scroll/fling can skip a thin trigger band entirely, silently jumping over a step.
-  useEffect(() => {
-    let frame = 0;
-    const evaluate = () => {
-      frame = 0;
-      const center = window.innerHeight / 2;
-      let closestIndex = 0;
-      let closestDistance = Infinity;
-      storyRowRefs.current.forEach((row, index) => {
-        if (!row) return;
-        const rect = row.getBoundingClientRect();
-        const distance = Math.abs(rect.top + rect.height / 2 - center);
-        if (distance < closestDistance) { closestDistance = distance; closestIndex = index; }
-      });
-      setStoryStep(closestIndex);
-    };
-    const onScroll = () => { if (!frame) frame = window.requestAnimationFrame(evaluate); };
-    evaluate();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, []);
 
   useEffect(() => {
     if (initialLanding) return;
@@ -944,8 +921,17 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   const heroTitleWords = heroTitle.split(/\s+/);
   const heroAccentWord = heroTitleWords.pop() || '';
   const heroTitleLead = heroTitleWords.join(' ');
+  const selectStoryStep = (index: number) => {
+    setStoryStep(index);
+    if (shouldReduceMotion || window.innerWidth < 1024) return;
+    const section = storySectionRef.current;
+    if (!section) return;
+    const travel = Math.max(section.offsetHeight - window.innerHeight, 0);
+    const stepProgress = (index + 0.5) / storyStepCount;
+    window.scrollTo({ top: section.offsetTop + travel * stepProgress, behavior: 'smooth' });
+  };
 
-  return <main className="min-h-screen overflow-x-hidden bg-[#050505] text-white">
+  return <main className="min-h-screen overflow-x-clip bg-[#050505] text-white">
     <header className={`fixed inset-x-0 top-0 z-40 border-b transition-[background-color,border-color,box-shadow,backdrop-filter] duration-500 ${scrolled ? 'border-white/10 bg-[#08050d]/88 shadow-[0_18px_60px_rgba(7,3,14,.24)] backdrop-blur-xl' : 'border-transparent bg-transparent'}`}>
       <div className="mx-auto flex h-20 max-w-[1600px] items-center justify-between gap-4 px-5 sm:px-8 md:h-28 lg:px-12 xl:px-16">
         <button type="button" onClick={() => scrollTo('inicio')} className="group inline-flex shrink-0 items-center rounded-2xl transition duration-300 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b98cff]" aria-label="Ir al inicio">
@@ -1070,11 +1056,12 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       </div>
     </AnimatedSection>
 
-    <AnimatedSection data-analytics-section="story" className="relative overflow-hidden border-b border-white/[0.08] bg-[#050505] px-5 py-20 sm:px-8 md:py-28 lg:px-12 xl:px-16" variants={sectionVariantsSync}>
-      <div aria-hidden className="pointer-events-none absolute -left-44 bottom-0 h-[30rem] w-[30rem] rounded-full bg-[#7d3dc5]/[0.06] blur-[130px]" />
-      <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto grid max-w-[1600px] gap-12 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:items-start lg:gap-16 xl:gap-24">
-        <div className="min-w-0 lg:py-5">
+    <motion.section ref={storySectionRef as React.RefObject<HTMLElement>} data-analytics-section="story" className={`relative border-b border-white/[0.08] bg-[#050505] motion-reduce:lg:h-auto ${shouldReduceMotion ? '' : 'lg:h-[calc(100svh+var(--story-scroll-distance))]'}`} style={{ '--story-scroll-distance': `${storyStepCount * 65}svh` } as React.CSSProperties} initial={shouldReduceMotion ? false : 'hidden'} whileInView={shouldReduceMotion ? undefined : 'visible'} viewport={viewport} variants={sectionVariantsSync}>
+      <div className={`relative overflow-hidden px-5 py-20 sm:px-8 md:py-28 lg:px-12 motion-reduce:lg:relative motion-reduce:lg:h-auto motion-reduce:lg:py-28 xl:px-16 ${shouldReduceMotion ? '' : 'lg:sticky lg:top-0 lg:h-[100svh] lg:py-0'}`}>
+        <div aria-hidden className="pointer-events-none absolute -left-44 bottom-0 h-[30rem] w-[30rem] rounded-full bg-[#7d3dc5]/[0.06] blur-[130px]" />
+        <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
+        <div className={`relative mx-auto grid max-w-[1600px] gap-12 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-16 motion-reduce:lg:h-auto motion-reduce:lg:items-start motion-reduce:lg:pt-0 xl:gap-24 ${shouldReduceMotion ? 'lg:items-start' : 'lg:h-[100svh] lg:items-center lg:pt-28'}`}>
+          <div className="min-w-0 lg:py-0">
           <motion.div variants={titleVariants}>
             <div className="flex items-center gap-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.42em] text-[#d7c4ef] sm:text-xs sm:tracking-[0.5em]">Cómo trabajamos</p>
@@ -1089,7 +1076,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
           <motion.div variants={imageRevealVariants} className="relative mt-9 aspect-[4/5] overflow-hidden rounded-[1.2rem] border border-[#a663ef]/50 bg-[#0c0910] lg:hidden">
             {storySteps.map((step, index) => {
               const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
-              return <Image key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 900)} alt={index === storyStep ? step.altText || step.title || 'Asesoramiento personalizado para tu evento' : ''} aria-hidden={index !== storyStep} fill unoptimized sizes="(max-width: 1023px) 100vw, 1px" className="object-cover transition-[opacity,transform] duration-700 ease-out" style={{ opacity: index === storyStep ? 1 : 0, transform: index === storyStep ? 'scale(1)' : 'scale(1.035)' }} />;
+              return <Image key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 900)} alt={index === storyStep ? step.altText || step.title || 'Asesoramiento personalizado para tu evento' : ''} aria-hidden={index !== storyStep} fill unoptimized sizes="(max-width: 1023px) 100vw, 1px" className="object-cover transition-[opacity,transform] duration-[450ms] ease-[cubic-bezier(0.77,0,0.175,1)]" style={{ opacity: index === storyStep ? 1 : 0, transform: index === storyStep ? 'scale(1)' : 'scale(1.035)' }} />;
             })}
             <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,3,8,.02)_42%,rgba(5,3,8,.92)_100%)]" />
             <div className="absolute right-5 top-5 flex items-center gap-2 text-xs font-semibold"><span className="text-[#c17aff]">{String(storyStep + 1).padStart(2, '0')}</span><span className="text-white/35">/ {String(storySteps.length).padStart(2, '0')}</span></div>
@@ -1099,14 +1086,14 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
             </div>
           </motion.div>
 
-          <motion.div variants={listVariants} className="relative mt-9 lg:mt-10">
+          <motion.div variants={listVariants} className="relative mt-9 lg:mt-6 xl:mt-10">
             <span aria-hidden className="absolute bottom-5 left-[6px] top-5 w-px bg-white/15" />
-            <motion.span aria-hidden className="absolute left-[6px] top-5 w-px origin-top bg-[#b56cff]" animate={{ height: `${(Math.min(storyStep + 1, storySteps.length) / Math.max(storySteps.length, 1)) * 100}%` }} transition={{ duration: 0.45, ease: smoothEase }} />
+            <motion.span aria-hidden className="absolute bottom-5 left-[6px] top-5 w-px origin-top bg-[#b56cff]" animate={{ transform: `scaleY(${Math.min(storyStep + 1, storySteps.length) / Math.max(storySteps.length, 1)})` }} transition={{ duration: 0.45, ease: smoothEase }} />
             {storySteps.map((step, index) => {
               const active = index === storyStep;
-              return <motion.div key={step._id || step.title || index} ref={(el) => { storyRowRefs.current[index] = el; }} variants={cardVariants} className="relative">
-                <button type="button" onClick={() => setStoryStep(index)} aria-current={active ? 'step' : undefined} className="group relative w-full py-4 pl-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-4 focus-visible:ring-offset-[#050505]">
-                  <span aria-hidden className={`absolute left-0 top-[1.55rem] z-10 h-[13px] w-[13px] rounded-full border transition-all duration-300 ${active ? 'border-[#d6bbff] bg-[#b56cff] shadow-[0_0_18px_rgba(181,108,255,.62)]' : 'border-white/35 bg-[#17131c] group-hover:border-[#b56cff]'}`} />
+              return <motion.div key={step._id || step.title || index} variants={cardVariants} className="relative">
+                <button type="button" onClick={() => selectStoryStep(index)} aria-current={active ? 'step' : undefined} className="group relative w-full py-4 pl-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-4 focus-visible:ring-offset-[#050505] lg:py-3 xl:py-4">
+                  <span aria-hidden className={`absolute left-0 top-[1.55rem] z-10 h-[13px] w-[13px] rounded-full border transition-[border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${active ? 'border-[#d6bbff] bg-[#b56cff] shadow-[0_0_18px_rgba(181,108,255,.62)]' : 'border-white/35 bg-[#17131c] group-hover:border-[#b56cff]'}`} />
                   <span className="grid grid-cols-[2.6rem_minmax(0,1fr)] items-baseline gap-3">
                     <span className={`text-lg font-semibold transition-colors duration-300 ${active ? 'text-[#c17aff]' : 'text-white/42 group-hover:text-white/65'}`}>{String(index + 1).padStart(2, '0')}</span>
                     <span className={`text-lg font-semibold transition-colors duration-300 sm:text-xl ${active ? 'text-white' : 'text-white/68 group-hover:text-white'}`}>{step.title}</span>
@@ -1118,17 +1105,17 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
             })}
           </motion.div>
 
-          <motion.button variants={cardVariants} type="button" onClick={() => scrollTo('contacto')} className={`group mt-8 inline-flex items-center gap-5 border-b border-[#a663ef] pb-2 text-base font-semibold text-white transition-colors hover:text-[#d6bbff] ${ctaFocusRing}`}>
+          <motion.button variants={cardVariants} type="button" onClick={() => scrollTo('contacto')} className={`group mt-8 inline-flex items-center gap-5 border-b border-[#a663ef] pb-2 text-base font-semibold text-white transition-colors hover:text-[#d6bbff] lg:mt-5 xl:mt-8 ${ctaFocusRing}`}>
             Contanos tu idea <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
           </motion.button>
         </div>
 
-        <motion.div variants={imageRevealVariants} className="relative hidden lg:sticky lg:top-32 lg:block">
+        <motion.div variants={imageRevealVariants} className="relative hidden lg:block">
           <span aria-hidden className="absolute -right-5 bottom-20 top-16 w-px bg-[#b56cff]/85" />
-          <div className="relative h-[720px] overflow-hidden rounded-[1.25rem] border border-[#a663ef]/55 bg-[#0c0910] shadow-[0_28px_80px_rgba(0,0,0,.3)] xl:h-[800px]">
+          <div className="relative h-[calc(100svh-10rem)] min-h-[520px] max-h-[760px] overflow-hidden rounded-[1.25rem] border border-[#a663ef]/55 bg-[#0c0910] shadow-[0_28px_80px_rgba(0,0,0,.3)]">
             {storySteps.map((step, index) => {
               const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
-              return <Image key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 1200)} alt={index === storyStep ? step.altText || step.title || 'Asesoramiento personalizado para tu evento' : ''} aria-hidden={index !== storyStep} fill unoptimized sizes="(max-width: 1023px) 1px, 55vw" className="object-cover transition-[opacity,transform] duration-700 ease-out" style={{ opacity: index === storyStep ? 1 : 0, transform: index === storyStep ? 'scale(1)' : 'scale(1.035)' }} />;
+              return <Image key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 1200)} alt={index === storyStep ? step.altText || step.title || 'Asesoramiento personalizado para tu evento' : ''} aria-hidden={index !== storyStep} fill unoptimized sizes="(max-width: 1023px) 1px, 55vw" className="object-cover transition-[opacity,transform] duration-[450ms] ease-[cubic-bezier(0.77,0,0.175,1)]" style={{ opacity: index === storyStep ? 1 : 0, transform: index === storyStep ? 'scale(1)' : 'scale(1.035)' }} />;
             })}
             <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,3,8,.03)_48%,rgba(5,3,8,.94)_100%)]" />
             <div className="absolute right-8 top-8 flex items-center gap-3 text-sm font-semibold"><span aria-hidden className="h-px w-12 bg-white/25" /><span className="text-[#c17aff]">{String(storyStep + 1).padStart(2, '0')}</span><span className="text-white/35">/ {String(storySteps.length).padStart(2, '0')}</span></div>
@@ -1142,8 +1129,9 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
             <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-white/[0.04]" />
           </div>
         </motion.div>
+        </div>
       </div>
-    </AnimatedSection>
+    </motion.section>
 
     <AnimatedSection id="paquetes" data-analytics-section="packages" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24" variants={sectionVariantsSync} onViewportEnter={() => setPackagesRevealed(true)}>
       <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, descubrilos." />
