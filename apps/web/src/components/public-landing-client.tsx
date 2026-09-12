@@ -1070,34 +1070,80 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       </div>
     </AnimatedSection>
 
-    <section data-analytics-section="story" className="relative border-y border-white/10 bg-[#050505] px-5 py-20 md:px-8 md:py-28">
+    <AnimatedSection data-analytics-section="story" className="relative overflow-hidden border-b border-white/[0.08] bg-[#050505] px-5 py-20 sm:px-8 md:py-28 lg:px-12 xl:px-16" variants={sectionVariantsSync}>
+      <div aria-hidden className="pointer-events-none absolute -left-44 bottom-0 h-[30rem] w-[30rem] rounded-full bg-[#7d3dc5]/[0.06] blur-[130px]" />
       <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto grid max-w-7xl gap-12 md:grid-cols-2 md:items-start md:gap-16">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#dcdcdf]">Cómo trabajamos</p>
-          <h2 style={displayFont} className="mt-4 text-3xl font-medium italic text-white md:text-5xl">De la idea a la fiesta</h2>
-          <div className="mt-10 space-y-0">{storySteps.map((step, index) => {
-            const active = index === storyStep;
-            const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
-            return <div key={step._id || step.title || index} ref={(el) => { storyRowRefs.current[index] = el; }} className={`border-l-2 py-6 pl-5 transition-colors duration-300 ${active ? 'border-white/70' : 'border-white/10'}`}>
-              <div className="flex items-baseline gap-3">
-                <span className={`text-xl font-semibold transition-colors duration-300 ${active ? 'text-white' : 'text-white/25'}`}>{String(index + 1).padStart(2, '0')}</span>
-                <h3 className={`text-lg font-semibold transition-colors duration-300 ${active ? 'text-white' : 'text-white/45'}`}>{step.title}</h3>
+      <div className="relative mx-auto grid max-w-[1600px] gap-12 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:items-start lg:gap-16 xl:gap-24">
+        <div className="min-w-0 lg:py-5">
+          <motion.div variants={titleVariants}>
+            <div className="flex items-center gap-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.42em] text-[#d7c4ef] sm:text-xs sm:tracking-[0.5em]">Cómo trabajamos</p>
+              <span aria-hidden className="h-px w-12 bg-[#a663ef]/70 sm:w-16" />
+            </div>
+            <h2 style={displayFont} className="mt-5 max-w-[680px] text-balance text-[2.7rem] font-normal leading-[0.98] tracking-[-0.035em] text-white sm:text-5xl md:text-6xl xl:text-[4.5rem]">
+              De una idea al <span className="italic text-[#d6bbff]">gran día.</span>
+            </h2>
+            <p className="mt-5 max-w-xl text-pretty text-base leading-7 text-white/62 md:text-lg">Te acompañamos en cada decisión para que disfrutes el proceso tanto como la celebración.</p>
+          </motion.div>
+
+          <motion.div variants={imageRevealVariants} className="relative mt-9 aspect-[4/5] overflow-hidden rounded-[1.2rem] border border-[#a663ef]/50 bg-[#0c0910] lg:hidden">
+            {storySteps.map((step, index) => {
+              const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
+              return <Image key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 900)} alt={index === storyStep ? step.altText || step.title || 'Asesoramiento personalizado para tu evento' : ''} aria-hidden={index !== storyStep} fill unoptimized sizes="(max-width: 1023px) 100vw, 1px" className="object-cover transition-[opacity,transform] duration-700 ease-out" style={{ opacity: index === storyStep ? 1 : 0, transform: index === storyStep ? 'scale(1)' : 'scale(1.035)' }} />;
+            })}
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,3,8,.02)_42%,rgba(5,3,8,.92)_100%)]" />
+            <div className="absolute right-5 top-5 flex items-center gap-2 text-xs font-semibold"><span className="text-[#c17aff]">{String(storyStep + 1).padStart(2, '0')}</span><span className="text-white/35">/ {String(storySteps.length).padStart(2, '0')}</span></div>
+            <div className="absolute inset-x-0 bottom-0 p-6">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.34em] text-white/72">Asesoramiento personalizado</p>
+              <p style={displayFont} className="mt-2 text-2xl font-normal italic text-white">Cada detalle, pensado con vos.</p>
+            </div>
+          </motion.div>
+
+          <motion.div variants={listVariants} className="relative mt-9 lg:mt-10">
+            <span aria-hidden className="absolute bottom-5 left-[6px] top-5 w-px bg-white/15" />
+            <motion.span aria-hidden className="absolute left-[6px] top-5 w-px origin-top bg-[#b56cff]" animate={{ height: `${(Math.min(storyStep + 1, storySteps.length) / Math.max(storySteps.length, 1)) * 100}%` }} transition={{ duration: 0.45, ease: smoothEase }} />
+            {storySteps.map((step, index) => {
+              const active = index === storyStep;
+              return <motion.div key={step._id || step.title || index} ref={(el) => { storyRowRefs.current[index] = el; }} variants={cardVariants} className="relative">
+                <button type="button" onClick={() => setStoryStep(index)} aria-current={active ? 'step' : undefined} className="group relative w-full py-4 pl-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-4 focus-visible:ring-offset-[#050505]">
+                  <span aria-hidden className={`absolute left-0 top-[1.55rem] z-10 h-[13px] w-[13px] rounded-full border transition-all duration-300 ${active ? 'border-[#d6bbff] bg-[#b56cff] shadow-[0_0_18px_rgba(181,108,255,.62)]' : 'border-white/35 bg-[#17131c] group-hover:border-[#b56cff]'}`} />
+                  <span className="grid grid-cols-[2.6rem_minmax(0,1fr)] items-baseline gap-3">
+                    <span className={`text-lg font-semibold transition-colors duration-300 ${active ? 'text-[#c17aff]' : 'text-white/42 group-hover:text-white/65'}`}>{String(index + 1).padStart(2, '0')}</span>
+                    <span className={`text-lg font-semibold transition-colors duration-300 sm:text-xl ${active ? 'text-white' : 'text-white/68 group-hover:text-white'}`}>{step.title}</span>
+                  </span>
+                  <span className={`mt-1.5 block pl-[3.35rem] text-sm leading-6 transition-colors duration-300 ${active ? 'text-white/72' : 'text-white/43 group-hover:text-white/60'}`}>{step.description}</span>
+                  {active ? <motion.span layoutId="story-step-accent" aria-hidden className="ml-[3.35rem] mt-3 block h-px w-12 bg-[#b56cff]" transition={softSpring} /> : null}
+                </button>
+              </motion.div>;
+            })}
+          </motion.div>
+
+          <motion.button variants={cardVariants} type="button" onClick={() => scrollTo('contacto')} className={`group mt-8 inline-flex items-center gap-5 border-b border-[#a663ef] pb-2 text-base font-semibold text-white transition-colors hover:text-[#d6bbff] ${ctaFocusRing}`}>
+            Contanos tu idea <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+          </motion.button>
+        </div>
+
+        <motion.div variants={imageRevealVariants} className="relative hidden lg:sticky lg:top-32 lg:block">
+          <span aria-hidden className="absolute -right-5 bottom-20 top-16 w-px bg-[#b56cff]/85" />
+          <div className="relative h-[720px] overflow-hidden rounded-[1.25rem] border border-[#a663ef]/55 bg-[#0c0910] shadow-[0_28px_80px_rgba(0,0,0,.3)] xl:h-[800px]">
+            {storySteps.map((step, index) => {
+              const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
+              return <Image key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 1200)} alt={index === storyStep ? step.altText || step.title || 'Asesoramiento personalizado para tu evento' : ''} aria-hidden={index !== storyStep} fill unoptimized sizes="(max-width: 1023px) 1px, 55vw" className="object-cover transition-[opacity,transform] duration-700 ease-out" style={{ opacity: index === storyStep ? 1 : 0, transform: index === storyStep ? 'scale(1)' : 'scale(1.035)' }} />;
+            })}
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,3,8,.03)_48%,rgba(5,3,8,.94)_100%)]" />
+            <div className="absolute right-8 top-8 flex items-center gap-3 text-sm font-semibold"><span aria-hidden className="h-px w-12 bg-white/25" /><span className="text-[#c17aff]">{String(storyStep + 1).padStart(2, '0')}</span><span className="text-white/35">/ {String(storySteps.length).padStart(2, '0')}</span></div>
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-6 p-8 xl:p-10">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-white/75">Asesoramiento personalizado</p>
+                <p style={displayFont} className="mt-3 text-3xl font-normal italic text-white xl:text-4xl">Cada detalle, pensado con vos.</p>
               </div>
-              <p className={`mt-1 pl-9 text-sm leading-6 transition-colors duration-300 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{step.description}</p>
-              <div className="mt-4 overflow-hidden rounded-xl md:hidden"><img src={cloudinaryImageUrl(stepImage, 700)} alt="" loading="lazy" decoding="async" className="h-48 w-full object-cover" /></div>
-            </div>;
-          })}</div>
-        </div>
-        <div className="relative hidden aspect-[4/5] overflow-hidden rounded-2xl border border-white/15 md:sticky md:top-28 md:block">
-          {storySteps.map((step, index) => {
-            const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
-            return <img key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 900)} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-opacity duration-700" style={{ opacity: index === storyStep ? 1 : 0 }} />;
-          })}
-          <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        </div>
+              <p className="shrink-0 text-[9px] uppercase tracking-[0.36em] text-white/55">M &amp; M<br />Eventos</p>
+            </div>
+            <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-white/[0.04]" />
+          </div>
+        </motion.div>
       </div>
-    </section>
+    </AnimatedSection>
 
     <AnimatedSection id="paquetes" data-analytics-section="packages" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24" variants={sectionVariantsSync} onViewportEnter={() => setPackagesRevealed(true)}>
       <SectionTitle eyebrow="Propuestas por salón" title="Elegí el salón y mirá sus combos" subtitle="Cada espacio tiene paquetes y beneficios propios, descubrilos." />
