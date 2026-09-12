@@ -1005,18 +1005,69 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       </motion.button>
     </section>
 
-    <AnimatedSection id="salones" data-analytics-section="salons" className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-24">
-      <SectionTitle display eyebrow="Nuestros salones" title="Tres espacios para celebrar a tu manera" subtitle="Salones totalmente equipados, listos para llevar adelante tu evento" />
-      <AnimatedGrid className="grid items-stretch gap-5 md:grid-cols-3">{displaySalons.slice(0, 3).map((salon) => <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -6 }} transition={softSpring} className="group relative flex h-[58vh] min-h-[420px] flex-col justify-end overflow-hidden rounded-2xl border border-white/10">
-        <img src={cloudinaryImageUrl(imageForSalon(salon), 900)} alt={titleForSalon(salon)} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-        <div className="relative p-6">
-          <h3 style={displayFont} className="text-2xl font-medium italic text-white">{titleForSalon(salon)}</h3>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-200"><span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#dcdcdf]" />{heroLocationForSalon(salon)}</span><span className="inline-flex min-w-0 items-center gap-1.5"><Users className="h-3.5 w-3.5 shrink-0 text-[#dcdcdf]" />{capacityForSalon(salon)}</span></div>
-          <p className="mt-3 line-clamp-2 text-sm leading-6 text-zinc-300">{descriptionForSalon(salon)}</p>
-          <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => openSalon(salon)} className="rounded-lg border border-white/25 px-3 py-2.5 text-sm font-semibold text-white transition hover:border-[#e5e5e7]">Ver salón</button><button type="button" onClick={() => { setSelectedSalonId(salon._id); scrollTo('contacto'); }} className="rounded-lg bg-[#e5e5e7] px-3 py-2.5 text-sm font-semibold text-black transition hover:bg-[#f4f4f5]">Pedir presupuesto</button></div>
-        </div>
-      </motion.article>)}</AnimatedGrid>
+    <AnimatedSection id="salones" data-analytics-section="salons" className="relative overflow-hidden border-y border-white/[0.08] bg-[#07050a] px-5 py-20 sm:px-8 md:py-28 lg:px-12 xl:px-16">
+      <div aria-hidden className="pointer-events-none absolute -left-56 top-1/3 h-[34rem] w-[34rem] rounded-full bg-[#7d3dc5]/[0.08] blur-[120px]" />
+      <div aria-hidden className="pointer-events-none absolute -right-52 bottom-0 h-[30rem] w-[30rem] rounded-full bg-[#8f4ee0]/[0.09] blur-[130px]" />
+      <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
+
+      <div className="relative mx-auto max-w-[1600px]">
+        <motion.div variants={titleVariants} className="mb-10 grid gap-8 md:mb-14 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="max-w-[1040px]">
+            <div className="flex items-center gap-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.42em] text-[#d7c4ef] sm:text-xs sm:tracking-[0.5em]">Nuestros espacios</p>
+              <span aria-hidden className="h-px w-12 bg-[#a663ef]/70 sm:w-16" />
+            </div>
+            <h2 style={displayFont} className="mt-5 text-balance text-[2.55rem] font-normal leading-[0.98] tracking-[-0.035em] text-white sm:text-5xl md:text-6xl xl:text-[4.35rem]">
+              Tres salones. Una celebración <span className="text-[#d6bbff]">inolvidable.</span>
+            </h2>
+            <p className="mt-5 max-w-3xl text-pretty text-base leading-7 text-white/62 md:text-lg">Espacios únicos, ambientes versátiles y todo lo que necesitás para vivir un evento a tu medida.</p>
+          </div>
+          <button type="button" onClick={() => scrollTo('ubicaciones')} className={`group inline-flex w-fit items-center gap-3 border-b border-[#a663ef] pb-2 text-sm font-semibold text-white transition-colors hover:text-[#d6bbff] md:text-base ${ctaFocusRing}`}>
+            Ver ubicaciones <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+          </button>
+        </motion.div>
+
+        <AnimatedGrid className="grid gap-4 lg:h-[700px] lg:grid-cols-[1.04fr_1fr] lg:grid-rows-2 xl:h-[740px]">{displaySalons.slice(0, 3).map((salon, index) => {
+          const featured = index === 0;
+          return <motion.article key={salon._id} variants={cardVariants} whileHover={shouldReduceMotion ? undefined : { y: -4 }} transition={softSpring} className={`group relative isolate flex min-h-[360px] flex-col justify-end overflow-hidden rounded-[1.2rem] border border-[#a663ef]/55 bg-[#0c0910] shadow-[0_24px_70px_rgba(0,0,0,.24)] focus-within:border-[#c89cff] sm:min-h-[400px] ${featured ? 'min-h-[540px] lg:row-span-2 lg:min-h-0' : 'lg:min-h-0'}`}>
+            <Image
+              src={cloudinaryImageUrl(imageForSalon(salon), featured ? 1400 : 1000)}
+              alt={`${titleForSalon(salon)}, salón preparado para un evento`}
+              fill
+              unoptimized
+              loading={featured ? 'eager' : 'lazy'}
+              sizes={featured ? '(max-width: 1023px) 100vw, 51vw' : '(max-width: 1023px) 100vw, 49vw'}
+              className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.035]"
+            />
+            <div aria-hidden className={`pointer-events-none absolute inset-0 ${featured ? 'bg-[linear-gradient(180deg,rgba(5,3,8,.02)_25%,rgba(5,3,8,.28)_52%,rgba(5,3,8,.97)_100%)]' : 'bg-[linear-gradient(180deg,rgba(5,3,8,.03)_12%,rgba(5,3,8,.35)_46%,rgba(5,3,8,.98)_100%)]'}`} />
+            <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-white/[0.04]" />
+
+            <div className={`relative flex flex-col gap-4 p-6 sm:p-7 ${featured ? 'lg:p-9 xl:p-10' : 'lg:flex-row lg:items-end lg:justify-between lg:gap-8 xl:p-8'}`}>
+              <div className="min-w-0">
+                <h3 style={displayFont} className={`font-normal italic leading-none tracking-[-0.025em] text-white ${featured ? 'text-4xl sm:text-5xl' : 'text-3xl sm:text-4xl'}`}>{titleForSalon(salon)}</h3>
+                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/82 sm:text-[15px]">
+                  <span className="inline-flex min-w-0 items-center gap-2"><MapPin className="h-4 w-4 shrink-0 text-[#b56cff]" strokeWidth={2.4} />{heroLocationForSalon(salon)}</span>
+                  <span aria-hidden className="hidden h-4 w-px bg-white/30 sm:block" />
+                  <span className="inline-flex min-w-0 items-center gap-2"><Users className="h-4 w-4 shrink-0 text-[#b56cff]" strokeWidth={2.4} />{capacityForSalon(salon)}</span>
+                </div>
+                <p className={`mt-4 max-w-2xl text-sm leading-6 text-white/68 sm:text-base ${featured ? 'line-clamp-2' : 'line-clamp-1 lg:max-w-xl'}`}>{descriptionForSalon(salon)}</p>
+              </div>
+              <button type="button" onClick={() => openSalon(salon)} aria-label={`Conocer ${titleForSalon(salon)}`} className="group/link inline-flex w-fit shrink-0 items-center gap-3 border-b border-[#b56cff] pb-2 text-sm font-semibold text-white transition-colors hover:text-[#d6bbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-4 focus-visible:ring-offset-[#09060d] sm:text-base">
+                Conocer el salón <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover/link:translate-x-1" />
+              </button>
+            </div>
+          </motion.article>;
+        })}</AnimatedGrid>
+
+        <motion.div variants={titleVariants} className="mt-12 flex items-center justify-center gap-5 sm:gap-7">
+          <span aria-hidden className="h-px w-12 bg-[#a663ef]/55 sm:w-24" />
+          <div className="text-center">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.34em] text-white/72 sm:text-[11px] sm:tracking-[0.48em]">Tres espacios · infinitas historias</p>
+            <p className="mt-3 text-[8px] uppercase tracking-[0.5em] text-[#b987f0]/75 sm:text-[9px]">M &amp; M Eventos</p>
+          </div>
+          <span aria-hidden className="h-px w-12 bg-[#a663ef]/55 sm:w-24" />
+        </motion.div>
+      </div>
     </AnimatedSection>
 
     <section data-analytics-section="story" className="relative border-y border-white/10 bg-[#050505] px-5 py-20 md:px-8 md:py-28">
