@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import { PublicLandingClient } from '@/components/public-landing-client';
-import { getGooglePlaceReviews } from '@/lib/google-place-reviews';
+import { PublicLandingWithGoogleReviews } from '@/components/public-landing-with-google-reviews';
 import { absoluteUrl, defaultOgImage, siteUrl } from '@/lib/local-seo';
 import { getPublicLanding, imageForPublicSalon, titleForPublicSalon, type PublicLanding } from '@/lib/public-landing';
 import { brandAssets } from '@/lib/brand-assets';
@@ -90,12 +89,9 @@ function structuredData(landing: PublicLanding | null) {
 }
 
 export default async function HomePage() {
-  const [landing, googleReviews] = await Promise.all([getPublicLanding(), getGooglePlaceReviews()]);
-  const landingWithReviews = landing && googleReviews.featured.length
-    ? { ...landing, googleReviews: googleReviews.featured, salonGoogleReviews: googleReviews.bySalon }
-    : landing;
+  const landing = await getPublicLanding();
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData(landing)) }} />
-    <PublicLandingClient initialLanding={landingWithReviews} />
+    <PublicLandingWithGoogleReviews initialLanding={landing} />
   </>;
 }
