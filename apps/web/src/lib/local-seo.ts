@@ -17,6 +17,8 @@ export type LocalSeoPage = {
   heroImage: string;
   highlights: string[];
   services: string[];
+  servicesHeading?: string;
+  servicesIntro?: string;
   packages: string[];
   faqs: { question: string; answer: string }[];
   relatedSlugs: string[];
@@ -25,23 +27,25 @@ export type LocalSeoPage = {
 export const localSeoPages: LocalSeoPage[] = [
   {
     slug: 'salon-eventos-la-plata',
-    title: 'Salón de eventos en La Plata',
-    metaTitle: 'Salón de eventos en La Plata con catering | M&M Eventos',
-    metaDescription: 'M&M Eventos ofrece salón de eventos en La Plata con catering, DJ, ambientación, vajilla, staff y organización integral para fiestas, 15 años, casamientos y egresados.',
-    h1: 'Salón de eventos en La Plata con catering y organización integral',
-    eyebrow: 'Eventos sociales en La Plata',
-    intro: 'Organizá tu fiesta en un salón preparado para recibir invitados con servicio completo: catering, bebida, DJ, ambientación, sectores de fotos y coordinación del evento.',
+    title: 'Salones para eventos en La Plata',
+    metaTitle: 'Salones para eventos en La Plata | M&M Eventos',
+    metaDescription: 'Conocé nuestros salones de fiestas en La Plata para cumpleaños, 15 años, casamientos y egresados, con catering, DJ, ambientación y organización integral.',
+    h1: 'Salones para eventos en La Plata con servicio integral',
+    eyebrow: 'Salones de fiestas en La Plata',
+    intro: 'Encontrá el espacio que mejor se adapta a tu celebración. Nuestros salones para cumpleaños en La Plata también reciben fiestas de 15, casamientos, egresados y encuentros familiares, con propuestas que reúnen catering, bebida, DJ, ambientación y coordinación.',
     location: 'La Plata, Buenos Aires',
-    primaryKeyword: 'salón de eventos en La Plata',
-    secondaryKeywords: ['salón de fiestas en La Plata', 'salón con catering La Plata', 'eventos sociales La Plata'],
+    primaryKeyword: 'salones para eventos en La Plata',
+    secondaryKeywords: ['salones La Plata', 'salones de fiestas en La Plata', 'salones para cumpleaños en La Plata', 'salón de eventos en La Plata'],
     heroImage: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1600&q=82',
-    highlights: ['Propuestas para eventos de noche de 21:00 a 05:00', 'Paquetes con catering, bebida y staff de servicio', 'Sectores de fotos, torta y mesa principal'],
+    highlights: ['Opciones para distintos tipos de fiesta y cantidad de invitados', 'Paquetes con catering, bebida y staff de servicio', 'Sectores de fotos, torta y mesa principal'],
     services: ['Catering completo', 'DJ, sonido e iluminación', 'Vajilla y mantelería', 'Organización y cronograma', 'Staff de salón y cocina'],
+    servicesHeading: 'Espacios y servicios para celebrar a tu manera',
+    servicesIntro: 'Compará las propuestas según la cantidad de invitados, el estilo de la fiesta y los servicios que querés incluir. Para cumpleaños, 15 años, casamientos, egresados o reuniones familiares, M&M Eventos combina el espacio y la organización en una sola propuesta.',
     packages: ['Fiesta de egresados M&M La Plata', 'Black Service La Plata', 'Salón completo M&M La Plata'],
     faqs: [
-      { question: '¿El salón de La Plata incluye catering?', answer: 'Sí. Hay paquetes con catering completo y una opción de salón completo para quienes necesitan solo el espacio y servicios base.' },
+      { question: '¿Los salones de La Plata incluyen catering?', answer: 'Sí. Hay paquetes con catering completo y opciones de salón con servicios base para elegir según cada celebración.' },
       { question: '¿Se puede congelar el precio con seña?', answer: 'Sí. Las propuestas vigentes permiten congelar el valor con seña y abonar el saldo en cuotas según las condiciones del paquete.' },
-      { question: '¿Qué tipo de eventos se pueden realizar?', answer: 'El salón está pensado para fiestas de 15, casamientos, egresados, cumpleaños, eventos familiares y reuniones sociales.' }
+      { question: '¿Qué tipo de eventos se pueden realizar?', answer: 'Las propuestas están pensadas para fiestas de 15, casamientos, egresados, cumpleaños, eventos familiares y reuniones sociales.' }
     ],
     relatedSlugs: ['salon-15-anos-la-plata', 'salon-casamientos-la-plata', 'cumpleanos-la-plata', 'eventos-empresariales-la-plata']
   },
@@ -225,7 +229,21 @@ export const localSeoPages: LocalSeoPage[] = [
 ];
 
 export const salonSeoPages: LocalSeoPage[] = [
-  { ...localSeoPages[0], slug: 'la-plata', title: 'M&M La Plata', metaTitle: 'M&M La Plata | Salón de eventos con catering', h1: 'M&M La Plata: salón de eventos con propuestas integrales', relatedSlugs: ['san-carlos', 'villa-elisa'] },
+  {
+    ...localSeoPages[0],
+    slug: 'la-plata',
+    title: 'M&M La Plata',
+    metaTitle: 'M&M La Plata | Salón de eventos con catering',
+    metaDescription: 'M&M La Plata es un salón de eventos con catering, DJ, ambientación, vajilla, staff y organización integral para fiestas y celebraciones.',
+    h1: 'M&M La Plata: salón de eventos con propuestas integrales',
+    eyebrow: 'M&M La Plata',
+    intro: 'Un espacio preparado para celebrar con catering, bebidas, DJ, ambientación y un equipo que coordina cada momento del evento.',
+    primaryKeyword: 'salón de eventos en La Plata',
+    secondaryKeywords: ['salón de fiestas en La Plata', 'salón con catering La Plata', 'eventos sociales La Plata'],
+    servicesHeading: 'Todo lo que necesitás para tu evento en un solo lugar',
+    servicesIntro: 'Organizá tu celebración sin tener que contratar cada servicio por separado. M&M La Plata reúne salón, catering, bebidas, DJ, iluminación, ambientación, vajilla y personal para acompañarte durante toda la noche.',
+    relatedSlugs: ['san-carlos', 'villa-elisa']
+  },
   { ...localSeoPages[3], slug: 'san-carlos', title: 'M&M San Carlos', metaTitle: 'M&M San Carlos | Salón de fiestas en La Plata', h1: 'M&M San Carlos: salón de fiestas y eventos familiares', relatedSlugs: ['la-plata', 'villa-elisa'] },
   { ...localSeoPages[4], slug: 'villa-elisa', title: 'M&M Villa Elisa', metaTitle: 'M&M Villa Elisa | Salón de eventos', h1: 'M&M Villa Elisa: salón de eventos con catering y organización', relatedSlugs: ['la-plata', 'san-carlos'] }
 ];

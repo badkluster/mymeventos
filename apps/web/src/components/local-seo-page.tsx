@@ -19,7 +19,7 @@ function jsonLdForPage(page: LocalSeoPage, path: string, salonMode: boolean, sal
       name: salon ? titleForPublicSalon(salon) : page.title,
       url,
       image,
-      description: salon?.publicDescription || salon?.publicShortDescription || page.metaDescription,
+      description: salonMode && salon ? salon.publicDescription || salon.publicShortDescription || page.metaDescription : page.metaDescription,
       address: {
         '@type': 'PostalAddress',
         streetAddress: address,
@@ -72,7 +72,7 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
   const crossLinks = salonMode ? localSeoPages.slice(0, 4).map((item) => ({ href: `/${item.slug}`, label: item.title })) : salonSeoPages.map((item) => ({ href: `/salones/${item.slug}`, label: item.title }));
   const heroImage = imageForPublicSalon(salon, page.heroImage) || page.heroImage;
   const heading = salonMode && salon ? `${titleForPublicSalon(salon)}: ${page.h1.split(':').pop()?.trim() ?? page.title}` : page.h1;
-  const intro = salon?.publicDescription || salon?.publicShortDescription || page.intro;
+  const intro = salonMode && salon ? salon.publicDescription || salon.publicShortDescription || page.intro : page.intro;
   const location = locationForPublicSalon(salon) || page.location;
   const packageNames = packages.length ? packages.map((item) => item.name) : page.packages;
   const realServices = [...new Set(packages.flatMap((item) => item.includedServices ?? []))].slice(0, 8);
@@ -107,7 +107,6 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
           </div>
           <div className="mt-8 flex flex-wrap gap-2 text-sm text-zinc-300">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1.5"><MapPin className="h-4 w-4" />{location}</span>
-            {page.secondaryKeywords.map((keyword) => <span key={keyword} className="rounded-full border border-white/15 px-3 py-1.5">{keyword}</span>)}
           </div>
         </div>
         <aside className="self-end border border-white/15 bg-black/45 p-5 backdrop-blur">
@@ -122,8 +121,8 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
     <section className="mx-auto grid max-w-7xl gap-8 px-5 py-16 md:px-8 lg:grid-cols-[0.9fr_1.1fr]">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Servicios</p>
-        <h2 className="mt-3 text-3xl font-semibold">Una propuesta pensada para búsquedas locales reales</h2>
-        <p className="mt-4 leading-7 text-zinc-400">Esta página responde específicamente a quienes buscan {page.primaryKeyword}. La información comercial se arma con los datos públicos cargados en el backend: salones, paquetes, servicios, capacidad, horarios e imágenes.</p>
+        <h2 className="mt-3 text-3xl font-semibold">{page.servicesHeading || 'Todo lo que necesitás para tu evento en un solo lugar'}</h2>
+        <p className="mt-4 leading-7 text-zinc-400">{page.servicesIntro || 'Organizá tu celebración en La Plata sin tener que contratar cada servicio por separado. M&M Eventos reúne salón, catering, bebidas, DJ, iluminación, ambientación, vajilla y personal para acompañarte durante toda la noche.'}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {services.map((service) => <article key={service} className="border border-white/10 bg-white/[0.03] p-4">
