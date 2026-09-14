@@ -102,14 +102,15 @@ describe('financial reminders service', () => {
     expect(upsertCalls()).toHaveLength(6);
     expect(upsertCalls().map(([, update]) => ({
       rule: update.$set.metadata.rule,
+      startAt: update.$set.startAt.toISOString(),
       sendAt: update.$setOnInsert.notification.sendAt.toISOString()
     }))).toEqual([
-      { rule: 'due_7_days', sendAt: '2026-06-01T03:00:00.000Z' },
-      { rule: 'due_3_days', sendAt: '2026-06-05T03:00:00.000Z' },
-      { rule: 'due_today', sendAt: '2026-06-08T03:00:00.000Z' },
-      { rule: 'overdue', sendAt: '2026-06-09T03:00:00.000Z' },
-      { rule: 'second_notice', sendAt: '2026-06-11T03:00:00.000Z' },
-      { rule: 'escalation', sendAt: '2026-06-15T03:00:00.000Z' }
+      { rule: 'due_7_days', startAt: '2026-06-01T03:00:00.000Z', sendAt: '2026-06-01T03:00:00.000Z' },
+      { rule: 'due_3_days', startAt: '2026-06-05T03:00:00.000Z', sendAt: '2026-06-05T03:00:00.000Z' },
+      { rule: 'due_today', startAt: '2026-06-08T03:00:00.000Z', sendAt: '2026-06-08T03:00:00.000Z' },
+      { rule: 'overdue', startAt: '2026-06-09T03:00:00.000Z', sendAt: '2026-06-09T03:00:00.000Z' },
+      { rule: 'second_notice', startAt: '2026-06-11T03:00:00.000Z', sendAt: '2026-06-11T03:00:00.000Z' },
+      { rule: 'escalation', startAt: '2026-06-15T03:00:00.000Z', sendAt: '2026-06-15T03:00:00.000Z' }
     ]);
 
     const d7Call = upsertCalls().find(([filter]) => filter.automationKey === 'financial:installment:event-1:installment-1:due_7_days:2026-06-08');
@@ -229,7 +230,7 @@ describe('financial reminders service', () => {
       $set: {
         title: 'Saldo pendiente a 15 días del evento',
         priority: 'high',
-        startAt: new Date('2026-06-16T03:00:00.000Z'),
+        startAt: new Date('2026-06-01T03:00:00.000Z'),
         assignedToUserId: 'lead-user',
         metadata: {
           financialReminder: true,

@@ -261,7 +261,9 @@ async function upsertFinancialCalendarItem(context: ReminderContext): Promise<vo
         type: 'payment_window',
         title: context.title,
         description: context.description,
-        startAt: argentinaMidnight(context.dueDateKey ?? context.sendAtKey),
+        // The calendar represents when the reminder needs attention. The actual
+        // payment due date stays in metadata/description for context.
+        startAt: argentinaMidnight(context.sendAtKey),
         allDay: true,
         priority: context.priority,
         visibility: 'shared',
