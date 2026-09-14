@@ -67,6 +67,53 @@ body { background: var(--background); color: var(--foreground); font-family: Ari
   mix-blend-mode: overlay;
 }
 
+/* Keep the pinned story fully visible on short desktop and notebook viewports. */
+@media (min-width: 1024px) and (max-height: 860px) {
+  .story-sticky-grid {
+    gap: clamp(2.5rem, 4vw, 4rem);
+    padding-top: 7rem;
+  }
+
+  .story-title {
+    margin-top: 0.75rem;
+    font-size: clamp(2.75rem, 4.5vw, 3.75rem);
+    line-height: 1;
+  }
+
+  .story-intro {
+    margin-top: 0.75rem;
+    max-width: 34rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .story-timeline { margin-top: 0.75rem; }
+  .story-step { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  .story-step-dot { top: 0.85rem; }
+  .story-step-description { margin-top: 0.125rem; line-height: 1.25rem; }
+  .story-step-accent { margin-top: 0.375rem; }
+  .story-cta { margin-top: 0.75rem; }
+  .story-image-counter { right: 1.5rem; top: 1.5rem; }
+  .story-image-caption { padding: 1.5rem; }
+  .story-image-caption-title { margin-top: 0.5rem; font-size: 1.75rem; line-height: 2rem; }
+}
+
+/* Very short landscape windows cannot hold the narrative safely while pinned. */
+@media (min-width: 1024px) and (max-height: 680px) {
+  .story-scroll-section { height: auto !important; }
+  .story-sticky-viewport {
+    position: relative !important;
+    height: auto !important;
+    padding-top: 8rem !important;
+    padding-bottom: 5rem !important;
+  }
+  .story-sticky-grid {
+    height: auto !important;
+    align-items: start !important;
+    padding-top: 0 !important;
+  }
+}
+
 .dark [data-admin-shell] .bg-white { background-color: #151517; }
 .dark [data-admin-shell] .bg-zinc-50,
 .dark [data-admin-shell] .bg-zinc-50\/80 { background-color: #1f2024; }

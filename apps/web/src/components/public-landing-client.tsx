@@ -1056,21 +1056,21 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       </div>
     </AnimatedSection>
 
-    <motion.section ref={storySectionRef as React.RefObject<HTMLElement>} data-analytics-section="story" className={`relative border-b border-white/[0.08] bg-[#050505] motion-reduce:lg:h-auto ${shouldReduceMotion ? '' : 'lg:h-[calc(100svh+var(--story-scroll-distance))]'}`} style={{ '--story-scroll-distance': `${storyStepCount * 65}svh` } as React.CSSProperties} initial={shouldReduceMotion ? false : 'hidden'} whileInView={shouldReduceMotion ? undefined : 'visible'} viewport={viewport} variants={sectionVariantsSync}>
-      <div className={`relative overflow-hidden px-5 py-20 sm:px-8 md:py-28 lg:px-12 motion-reduce:lg:relative motion-reduce:lg:h-auto motion-reduce:lg:py-28 xl:px-16 ${shouldReduceMotion ? '' : 'lg:sticky lg:top-0 lg:h-[100svh] lg:py-0'}`}>
+    <motion.section ref={storySectionRef as React.RefObject<HTMLElement>} data-analytics-section="story" className={`story-scroll-section relative border-b border-white/[0.08] bg-[#050505] motion-reduce:lg:h-auto ${shouldReduceMotion ? '' : 'lg:h-[calc(100svh+var(--story-scroll-distance))]'}`} style={{ '--story-scroll-distance': `${storyStepCount * 65}svh` } as React.CSSProperties} initial={shouldReduceMotion ? false : 'hidden'} whileInView={shouldReduceMotion ? undefined : 'visible'} viewport={viewport} variants={sectionVariantsSync}>
+      <div className={`story-sticky-viewport relative overflow-hidden px-5 py-20 sm:px-8 md:py-28 lg:px-12 motion-reduce:lg:relative motion-reduce:lg:h-auto motion-reduce:lg:py-28 xl:px-16 ${shouldReduceMotion ? '' : 'lg:sticky lg:top-0 lg:h-[100svh] lg:py-0'}`}>
         <div aria-hidden className="pointer-events-none absolute -left-44 bottom-0 h-[30rem] w-[30rem] rounded-full bg-[#7d3dc5]/[0.06] blur-[130px]" />
         <div aria-hidden className="mym-grain pointer-events-none absolute inset-0" />
-        <div className={`relative mx-auto grid max-w-[1600px] gap-12 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-16 motion-reduce:lg:h-auto motion-reduce:lg:items-start motion-reduce:lg:pt-0 xl:gap-24 ${shouldReduceMotion ? 'lg:items-start' : 'lg:h-[100svh] lg:items-center lg:pt-28'}`}>
+        <div className={`story-sticky-grid relative mx-auto grid max-w-[1600px] gap-12 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-16 motion-reduce:lg:h-auto motion-reduce:lg:items-start motion-reduce:lg:pt-0 xl:gap-24 ${shouldReduceMotion ? 'lg:items-start' : 'lg:h-[100svh] lg:items-center lg:pt-28'}`}>
           <div className="min-w-0 lg:py-0">
-          <motion.div variants={titleVariants}>
+          <motion.div variants={titleVariants} className="story-heading">
             <div className="flex items-center gap-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.42em] text-[#d7c4ef] sm:text-xs sm:tracking-[0.5em]">Cómo trabajamos</p>
               <span aria-hidden className="h-px w-12 bg-[#a663ef]/70 sm:w-16" />
             </div>
-            <h2 style={displayFont} className="mt-5 max-w-[680px] text-balance text-[2.7rem] font-normal leading-[0.98] tracking-[-0.035em] text-white sm:text-5xl md:text-6xl xl:text-[4.5rem]">
+            <h2 style={displayFont} className="story-title mt-5 max-w-[680px] text-balance text-[2.7rem] font-normal leading-[0.98] tracking-[-0.035em] text-white sm:text-5xl md:text-6xl xl:text-[4.5rem]">
               De una idea al <span className="italic text-[#d6bbff]">gran día.</span>
             </h2>
-            <p className="mt-5 max-w-xl text-pretty text-base leading-7 text-white/62 md:text-lg">Te acompañamos en cada decisión para que disfrutes el proceso tanto como la celebración.</p>
+            <p className="story-intro mt-5 max-w-xl text-pretty text-base leading-7 text-white/62 md:text-lg">Te acompañamos en cada decisión para que disfrutes el proceso tanto como la celebración.</p>
           </motion.div>
 
           <motion.div variants={imageRevealVariants} className="relative mt-9 aspect-[4/5] overflow-hidden rounded-[1.2rem] border border-[#a663ef]/50 bg-[#0c0910] lg:hidden">
@@ -1086,43 +1086,43 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
             </div>
           </motion.div>
 
-          <motion.div variants={listVariants} className="relative mt-9 lg:mt-6 xl:mt-10">
+          <motion.div variants={listVariants} className="story-timeline relative mt-9 lg:mt-6 xl:mt-10">
             <span aria-hidden className="absolute bottom-5 left-[6px] top-5 w-px bg-white/15" />
             <motion.span aria-hidden className="absolute bottom-5 left-[6px] top-5 w-px origin-top bg-[#b56cff]" animate={{ transform: `scaleY(${Math.min(storyStep + 1, storySteps.length) / Math.max(storySteps.length, 1)})` }} transition={{ duration: 0.45, ease: smoothEase }} />
             {storySteps.map((step, index) => {
               const active = index === storyStep;
               return <motion.div key={step._id || step.title || index} variants={cardVariants} className="relative">
-                <button type="button" onClick={() => selectStoryStep(index)} aria-current={active ? 'step' : undefined} className="group relative w-full py-4 pl-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-4 focus-visible:ring-offset-[#050505] lg:py-3 xl:py-4">
-                  <span aria-hidden className={`absolute left-0 top-[1.55rem] z-10 h-[13px] w-[13px] rounded-full border transition-[border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${active ? 'border-[#d6bbff] bg-[#b56cff] shadow-[0_0_18px_rgba(181,108,255,.62)]' : 'border-white/35 bg-[#17131c] group-hover:border-[#b56cff]'}`} />
+                <button type="button" onClick={() => selectStoryStep(index)} aria-current={active ? 'step' : undefined} className="story-step group relative w-full py-4 pl-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-4 focus-visible:ring-offset-[#050505] lg:py-3 xl:py-4">
+                  <span aria-hidden className={`story-step-dot absolute left-0 top-[1.55rem] z-10 h-[13px] w-[13px] rounded-full border transition-[border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${active ? 'border-[#d6bbff] bg-[#b56cff] shadow-[0_0_18px_rgba(181,108,255,.62)]' : 'border-white/35 bg-[#17131c] group-hover:border-[#b56cff]'}`} />
                   <span className="grid grid-cols-[2.6rem_minmax(0,1fr)] items-baseline gap-3">
                     <span className={`text-lg font-semibold transition-colors duration-300 ${active ? 'text-[#c17aff]' : 'text-white/42 group-hover:text-white/65'}`}>{String(index + 1).padStart(2, '0')}</span>
                     <span className={`text-lg font-semibold transition-colors duration-300 sm:text-xl ${active ? 'text-white' : 'text-white/68 group-hover:text-white'}`}>{step.title}</span>
                   </span>
-                  <span className={`mt-1.5 block pl-[3.35rem] text-sm leading-6 transition-colors duration-300 ${active ? 'text-white/72' : 'text-white/43 group-hover:text-white/60'}`}>{step.description}</span>
-                  {active ? <motion.span layoutId="story-step-accent" aria-hidden className="ml-[3.35rem] mt-3 block h-px w-12 bg-[#b56cff]" transition={softSpring} /> : null}
+                  <span className={`story-step-description mt-1.5 block pl-[3.35rem] text-sm leading-6 transition-colors duration-300 ${active ? 'text-white/72' : 'text-white/43 group-hover:text-white/60'}`}>{step.description}</span>
+                  {active ? <motion.span layoutId="story-step-accent" aria-hidden className="story-step-accent ml-[3.35rem] mt-3 block h-px w-12 bg-[#b56cff]" transition={softSpring} /> : null}
                 </button>
               </motion.div>;
             })}
           </motion.div>
 
-          <motion.button variants={cardVariants} type="button" onClick={() => scrollTo('contacto')} className={`group mt-8 inline-flex items-center gap-5 border-b border-[#a663ef] pb-2 text-base font-semibold text-white transition-colors hover:text-[#d6bbff] lg:mt-5 xl:mt-8 ${ctaFocusRing}`}>
+          <motion.button variants={cardVariants} type="button" onClick={() => scrollTo('contacto')} className={`story-cta group mt-8 inline-flex items-center gap-5 border-b border-[#a663ef] pb-2 text-base font-semibold text-white transition-colors hover:text-[#d6bbff] lg:mt-5 xl:mt-8 ${ctaFocusRing}`}>
             Contanos tu idea <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
           </motion.button>
         </div>
 
         <motion.div variants={imageRevealVariants} className="relative hidden lg:block">
           <span aria-hidden className="absolute -right-5 bottom-20 top-16 w-px bg-[#b56cff]/85" />
-          <div className="relative h-[calc(100svh-10rem)] min-h-[520px] max-h-[760px] overflow-hidden rounded-[1.25rem] border border-[#a663ef]/55 bg-[#0c0910] shadow-[0_28px_80px_rgba(0,0,0,.3)]">
+          <div className="story-image-frame relative h-[clamp(28rem,calc(100svh-16rem),47.5rem)] overflow-hidden rounded-[1.25rem] border border-[#a663ef]/55 bg-[#0c0910] shadow-[0_28px_80px_rgba(0,0,0,.3)]">
             {storySteps.map((step, index) => {
               const stepImage = step.imageUrl || fallbackStorySteps[index % fallbackStorySteps.length].imageUrl;
               return <Image key={step._id || step.title || index} src={cloudinaryImageUrl(stepImage, 1200)} alt={index === storyStep ? step.altText || step.title || 'Asesoramiento personalizado para tu evento' : ''} aria-hidden={index !== storyStep} fill unoptimized sizes="(max-width: 1023px) 1px, 55vw" className="object-cover transition-[opacity,transform] duration-[450ms] ease-[cubic-bezier(0.77,0,0.175,1)]" style={{ opacity: index === storyStep ? 1 : 0, transform: index === storyStep ? 'scale(1)' : 'scale(1.035)' }} />;
             })}
             <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,3,8,.03)_48%,rgba(5,3,8,.94)_100%)]" />
-            <div className="absolute right-8 top-8 flex items-center gap-3 text-sm font-semibold"><span aria-hidden className="h-px w-12 bg-white/25" /><span className="text-[#c17aff]">{String(storyStep + 1).padStart(2, '0')}</span><span className="text-white/35">/ {String(storySteps.length).padStart(2, '0')}</span></div>
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-6 p-8 xl:p-10">
+            <div className="story-image-counter absolute right-8 top-8 flex items-center gap-3 text-sm font-semibold"><span aria-hidden className="h-px w-12 bg-white/25" /><span className="text-[#c17aff]">{String(storyStep + 1).padStart(2, '0')}</span><span className="text-white/35">/ {String(storySteps.length).padStart(2, '0')}</span></div>
+            <div className="story-image-caption absolute inset-x-0 bottom-0 flex items-end justify-between gap-6 p-8 xl:p-10">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-white/75">Asesoramiento personalizado</p>
-                <p style={displayFont} className="mt-3 text-3xl font-normal italic text-white xl:text-4xl">Cada detalle, pensado con vos.</p>
+                <p style={displayFont} className="story-image-caption-title mt-3 text-3xl font-normal italic text-white xl:text-4xl">Cada detalle, pensado con vos.</p>
               </div>
               <p className="shrink-0 text-[9px] uppercase tracking-[0.36em] text-white/55">M &amp; M<br />Eventos</p>
             </div>
