@@ -31,6 +31,19 @@ Sin `RESEND_API_KEY` (o con `MARKETING_EMAIL_PROVIDER=mock`), el sistema usa `Mo
 4. Copiar el "Signing secret" (`whsec_...`) que Resend genera para ese webhook y cargarlo como `RESEND_WEBHOOK_SECRET`.
 5. Setear `MARKETING_EMAIL_PROVIDER=resend`.
 
+El valor efectivo de `from` debe pertenecer exactamente al dominio o subdominio
+verificado en Resend. Por ejemplo, si se verificó `envios.ejemplo.com`, usar
+`campanas@envios.ejemplo.com` y no `campanas@ejemplo.com`. Una dirección pública
+como Gmail puede configurarse en `MARKETING_REPLY_TO` / “Email de respuesta”,
+pero no como `MARKETING_FROM_EMAIL` / “Email del remitente”. La configuración
+guardada desde **Marketing > Configuración** tiene prioridad sobre las variables
+de entorno.
+
+Después de corregir el remitente de una campaña fallida, usar **Reintentar
+fallidos** desde el detalle de la campaña. No reintentar antes de que el dominio
+figure como verificado en el panel de Resend, porque cada destinatario volverá a
+ser rechazado.
+
 ## Verificación de firma (sin SDK)
 
 Resend firma sus webhooks con el esquema **Svix**: headers `svix-id`, `svix-timestamp`, `svix-signature`, HMAC-SHA256 sobre `${id}.${timestamp}.${rawBody}` usando el payload base64 del secreto `whsec_...`. Se implementó a mano en `ResendMarketingEmailProvider.verifyWebhookSignature` (mismo criterio "fetch + crypto, sin SDK" ya usado para Mercado Pago), incluyendo:

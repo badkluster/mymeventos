@@ -26,6 +26,24 @@ export interface MarketingEmailProvider {
 
 const RESEND_BATCH_LIMIT = 100;
 
+function resendErrorMessage(status: number, responseBody: string): string {
+  let providerMessage = responseBody.trim();
+  try {
+    const parsed = JSON.parse(responseBody) as { message?: unknown };
+    if (typeof parsed.message === 'string') providerMessage = parsed.message.trim();
+  } catch {
+    // Resend normally responds with JSON, but preserve a bounded plain-text
+    // response if an intermediary ever returns something else.
+  }
+
+  const unverifiedDomain = providerMessage.match(/the domain\s+([^\s]+)\s+is not verified/i)?.[1]?.replace(/["']/g, '');
+  if (status === 403 && unverifiedDomain) {
+    return `El dominio remitente "${unverifiedDomain}" no está verificado en Resend. Configurá en Marketing > Configuración un email de un dominio verificado. Un Gmail puede usarse como email de respuesta, pero no como remitente.`;
+  }
+
+  return `Resend ${status}: ${(providerMessage || 'Error sin detalle.').slice(0, 300)}`;
+}
+
 export class MockMarketingEmailProvider implements MarketingEmailProvider {
   readonly name = 'mock' as const;
   async sendBatch(inputs: SendMarketingEmailInput[]): Promise<SendMarketingEmailResult[]> {
@@ -78,7 +96,8 @@ export class ResendMarketingEmailProvider implements MarketingEmailProvider {
     }
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
-      return chunk.map((input) => ({ to: input.to, success: false, errorMessage: `Resend ${response.status}: ${errorText.slice(0, 300)}` }));
+      const errorMessage = resendErrorMessage(response.status, errorText);
+      return chunk.map((input) => ({ to: input.to, success: false, errorMessage }));
     }
     const body = (await response.json().catch(() => ({}))) as { data?: Array<{ id?: string }> };
     const items = body.data ?? [];

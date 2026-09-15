@@ -20,6 +20,8 @@ export default function MarketingSettingsPage() {
   const [form, setForm] = useState<MarketingSettings>(empty);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const senderDomain = form.senderEmail?.trim().split('@')[1]?.toLowerCase();
+  const senderUsesGmail = senderDomain === 'gmail.com' || senderDomain === 'googlemail.com';
 
   useEffect(() => {
     void api.get<{ settings: MarketingSettings }>('/marketing/settings')
@@ -69,9 +71,20 @@ export default function MarketingSettingsPage() {
 
           <fieldset className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm md:grid-cols-2">
             <legend className="mb-1 text-sm font-semibold text-zinc-800 md:col-span-2">Remitente</legend>
-            <Input placeholder="Nombre del remitente" value={form.senderName ?? ''} onChange={(e) => setForm((c) => ({ ...c, senderName: e.target.value }))} />
-            <Input type="email" placeholder="Email del remitente" value={form.senderEmail ?? ''} onChange={(e) => setForm((c) => ({ ...c, senderEmail: e.target.value }))} />
-            <Input type="email" placeholder="Email de respuesta" value={form.replyToEmail ?? ''} onChange={(e) => setForm((c) => ({ ...c, replyToEmail: e.target.value }))} />
+            <label className="text-sm font-medium text-zinc-700">Nombre visible
+              <Input className="mt-1.5" placeholder="M&M Eventos" value={form.senderName ?? ''} onChange={(e) => setForm((c) => ({ ...c, senderName: e.target.value }))} />
+            </label>
+            <label className="text-sm font-medium text-zinc-700">Email del remitente
+              <Input className="mt-1.5" type="email" placeholder="campanas@tu-dominio.com" aria-describedby="sender-email-help" value={form.senderEmail ?? ''} onChange={(e) => setForm((c) => ({ ...c, senderEmail: e.target.value }))} />
+            </label>
+            <label className="text-sm font-medium text-zinc-700">Email de respuesta
+              <Input className="mt-1.5" type="email" placeholder="consultas@gmail.com" value={form.replyToEmail ?? ''} onChange={(e) => setForm((c) => ({ ...c, replyToEmail: e.target.value }))} />
+            </label>
+            <div id="sender-email-help" className={`rounded-xl px-3 py-2 text-xs ${senderUsesGmail ? 'border border-amber-300 bg-amber-50 text-amber-900' : 'bg-zinc-50 text-zinc-600'}`}>
+              {senderUsesGmail
+                ? 'Resend rechazará este remitente: gmail.com no puede verificarse como dominio propio. Usá aquí una dirección del dominio que verificaste en Resend y dejá Gmail como email de respuesta.'
+                : 'El dominio de esta dirección debe coincidir exactamente con un dominio verificado en Resend, incluido el subdominio si corresponde.'}
+            </div>
           </fieldset>
 
           <fieldset className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
