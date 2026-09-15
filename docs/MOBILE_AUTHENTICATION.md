@@ -86,7 +86,7 @@ Decisión tomada explícitamente por el usuario (evaluadas dos alternativas: cac
 
 **Nunca se toca `unlockWithBiometrics`, `BiometricUnlockScreen` ni el mecanismo de la sección 5.1** — siguen protegiendo únicamente el acceso local a una sesión ya abierta, sin credenciales cacheadas de por medio. Esa pantalla ya tenía (y conserva) su propio fallback a contraseña ("Ingresar con contraseña" → vuelve a `LoginScreen`), que sigue siendo la salida si el sensor de huella falla.
 
-## 6. Fuera de alcance de esta tarea (documentado, no fingido)
+## 6. Permiso separado para el escáner de entradas
 
-- **Validación de entradas QR desde el móvil.** El prompt original es explícito: debe ser un permiso y flujo separado del fichaje, no mezclado. `Permission.TICKETS_VALIDATE` ya existe (módulo de Entradas Digitales) y es independiente de `Permission.MOBILE_ACCESS`/`ATTENDANCE_CLOCK` — no se tocó ni se mezcló.
+- **Validación de entradas QR desde el móvil.** Desde la versión 1.1 está implementada como pestaña condicional. Sigue siendo un permiso y flujo separado del fichaje: requiere `Permission.TICKETS_VALIDATE`, además de la elegibilidad normal para ingresar a la app. El rol `STAFF` no recibe ese permiso por defecto; debe asignarse como override a cada operador de puerta que corresponda. Un override denegado prevalece y oculta la pestaña.
 - **Rate limiting distribuido.** `/api/mobile/auth/login` limita a 10 intentos por IP cada 15 minutos y devuelve `429`/`Retry-After` al superar ese umbral. El límite actual es local en memoria, igual que el de recuperación de contraseña; en un despliegue con varias instancias debe reemplazarse por un almacén compartido, por ejemplo Redis.

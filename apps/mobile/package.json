@@ -1,6 +1,6 @@
 {
   "name": "@mym/mobile",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -33,6 +33,7 @@
     "expo": "~57.0.22",
     "expo-application": "~57.0.3",
     "expo-asset": "~57.0.17",
+    "expo-camera": "~57.0.5",
     "expo-constants": "~57.0.18",
     "expo-crypto": "~57.0.3",
     "expo-device": "~57.0.2",

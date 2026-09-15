@@ -1,5 +1,9 @@
 # Mobile releases
 
+## Version 1.1 — ticket scanner
+
+Version 1.1 adds `expo-camera` and therefore changes the native runtime. It cannot be shipped as an OTA-only update: publish a new Android/iOS binary first. The Expo version is `1.1.0`, with local Android `versionCode` 2 and iOS `buildNumber` 2 (EAS production builds continue using remote auto-incrementing versions).
+
 ## One-time setup
 
 From `apps/mobile`:

@@ -32,6 +32,36 @@ const totalQuantity = (lines: Array<{ quantity: number }>) =>
 const publicAppUrl = () => process.env.CORS_ORIGIN || "http://localhost:3000";
 export const ticketTokenHash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
+
+const ticketScanTokenPattern = /^[A-Za-z0-9_-]{8,200}$/;
+
+/**
+ * Digital ticket QR codes contain the public `/entrada/:token` URL, while the
+ * validation lookup uses only the opaque token. Manual entry also accepts the
+ * human-readable ticket code, so keep both forms behind one strict parser.
+ */
+export function normalizeTicketScanValue(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (ticketScanTokenPattern.test(trimmed)) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    const segments = parsed.pathname
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => decodeURIComponent(segment));
+    const entrySegment = segments.findIndex(
+      (segment) => segment.toLowerCase() === "entrada",
+    );
+    const tokenFromUrl = entrySegment >= 0 ? segments[entrySegment + 1] : undefined;
+    return tokenFromUrl && ticketScanTokenPattern.test(tokenFromUrl)
+      ? tokenFromUrl
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const signedToken = (value: string) =>
   createHmac("sha256", env.ACCESS_TOKEN_SECRET)
     .update(value)

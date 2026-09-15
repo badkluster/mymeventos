@@ -13,7 +13,7 @@ vi.mock('../src/modules/tickets/ticket.models', () => ({
   DigitalTicket: { insertMany: mocks.ticketInsertMany, find: mocks.ticketFind, findOneAndUpdate: mocks.ticketFindOneAndUpdate, create: mocks.ticketCreate },
   TicketStockReservation: { create: mocks.reservationCreate },
 }));
-import { claimTicketCheckIn, reservePublicOrder } from '../src/modules/tickets/ticket.service';
+import { claimTicketCheckIn, normalizeTicketScanValue, reservePublicOrder } from '../src/modules/tickets/ticket.service';
 
 const sale = { _id: '507f1f77bcf86cd799439011', status: 'active', capacity: 1, reservedCount: 0, soldCount: 0, maxTicketsPerOrder: 2, allowFreeTickets: true };
 
@@ -29,6 +29,17 @@ describe('ticket capacity and QR concurrency', () => {
     mocks.typeUpdateOne.mockResolvedValue({});
     mocks.typeFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ status: 'active', maxPerOrder: 50, minPerOrder: 1 }) });
     mocks.reservationCreate.mockResolvedValue({});
+  });
+
+  it('extracts the opaque ticket token from generated QR URLs and accepts manual ticket codes', () => {
+    const token = 'opaque-ticket-token-1234567890';
+    expect(normalizeTicketScanValue(`https://www.mymsalones.com.ar/entrada/${token}`)).toBe(token);
+    expect(normalizeTicketScanValue('TKT-2026-A1B2C3D4E5F6')).toBe('TKT-2026-A1B2C3D4E5F6');
+  });
+
+  it('rejects unrelated URLs and malformed scanner payloads', () => {
+    expect(normalizeTicketScanValue('https://example.com/orders/opaque-ticket-token-1234567890')).toBeUndefined();
+    expect(normalizeTicketScanValue('not a ticket value')).toBeUndefined();
   });
 
   it('admits only one concurrent reservation when the last seat is requested', async () => {

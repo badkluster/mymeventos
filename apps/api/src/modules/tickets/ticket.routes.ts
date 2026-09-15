@@ -37,6 +37,7 @@ import {
   claimTicketCheckInById,
   regenerateTicketQr,
   findTicketForValidation,
+  normalizeTicketScanValue,
   resolveCheckInResult,
 } from "./ticket.service";
 import { getTicketPaymentProvider } from "./ticket-payment.provider";
@@ -51,6 +52,7 @@ const slug = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   .max(100);
 const publicToken = z.string().regex(/^[A-Za-z0-9_-]{24,}$/);
+const ticketScanValue = z.string().trim().min(1).max(2000);
 const publicationBody = z.object({
   title: z.string().trim().min(2).max(180),
   slug,
@@ -196,7 +198,7 @@ const orderBody = z.object({
   expiresInMinutes: z.coerce.number().int().min(1).max(120).optional(),
 });
 const checkInBody = z.object({
-  token: publicToken,
+  token: ticketScanValue,
   accessPoint: z.string().trim().max(120).optional(),
   idempotencyKey: z.string().trim().min(8).max(200).optional(),
 });
@@ -1004,6 +1006,21 @@ admin.get(
     });
   }),
 );
+admin.get(
+  "/publications/check-in-options",
+  requirePermission(Permission.TICKETS_VALIDATE),
+  asyncHandler(async (_req, res) => {
+    const publications = await TicketPublication.find({
+      deletedAt: null,
+      status: { $nin: ["draft", "archived"] },
+    })
+      .select("_id title status startsAt endsAt venueName qrConfig.validFrom qrConfig.validUntil")
+      .sort({ startsAt: 1 })
+      .limit(100)
+      .lean();
+    return sendSuccess(res, { publications });
+  }),
+);
 admin.post(
   "/publications",
   requirePermission(Permission.TICKETS_CREATE),
@@ -1456,7 +1473,10 @@ admin.post(
       if (prior)
         return sendSuccess(res, { result: prior.result, idempotent: true });
     }
-    const existing: any = await findTicketForValidation(payload.token);
+    const scanToken = normalizeTicketScanValue(payload.token);
+    const existing: any = scanToken
+      ? await findTicketForValidation(scanToken)
+      : undefined;
     const result = resolveCheckInResult(
       existing,
       req.params.publicationId,
@@ -1574,13 +1594,15 @@ admin.post(
     const publication = await publicationForUser(req.params.publicationId);
     if (!publication.qrConfig?.allowRevert)
       throw new ApiError(409, "TICKET_REVERT_DISABLED");
+    const scanToken = normalizeTicketScanValue(req.body.token);
+    if (!scanToken) throw new ApiError(409, "TICKET_NOT_USED");
     const ticket: any = await DigitalTicket.findOneAndUpdate(
       {
         publicationId: publication._id,
         $or: [
-          { qrTokenHash: ticketTokenHash(req.body.token) },
-          { publicToken: req.body.token },
-          { ticketCode: req.body.token },
+          { qrTokenHash: ticketTokenHash(scanToken) },
+          { publicToken: scanToken },
+          { ticketCode: scanToken },
         ],
         status: "checked_in",
         deletedAt: null,

@@ -3,6 +3,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { HomeNavigator } from './HomeNavigator';
 import { HistoryNavigator } from './HistoryNavigator';
 import { ProfileNavigator } from './ProfileNavigator';
+import { ScannerNavigator } from './ScannerNavigator';
+import { canValidateTickets } from '../lib/permissions';
+import { useAuthStore } from '../state/authStore';
 import { colors } from '../theme/tokens';
 import type { AppTabParamList } from './types';
 
@@ -10,6 +13,7 @@ const Tab = createBottomTabNavigator<AppTabParamList>();
 
 const tabLabels: Record<keyof AppTabParamList, string> = {
   HomeTab: 'Inicio',
+  ScannerTab: 'Escáner',
   HistoryTab: 'Historial',
   ProfileTab: 'Perfil'
 };
@@ -18,12 +22,15 @@ function NavigationIcon({ name, focused, color }: { name: keyof AppTabParamList;
   const glyph = { borderColor: color };
   return <View style={[styles.iconShell, focused && styles.iconShellActive]}>
     {name === 'HomeTab' ? <View style={styles.homeIcon}><View style={[styles.homeRoof, glyph]} /><View style={[styles.homeBody, glyph]} /></View> : null}
+    {name === 'ScannerTab' ? <View style={styles.qrIcon}><View style={[styles.qrCorner, styles.qrTopLeft, glyph]} /><View style={[styles.qrCorner, styles.qrTopRight, glyph]} /><View style={[styles.qrCorner, styles.qrBottomLeft, glyph]} /><View style={[styles.qrCorner, styles.qrBottomRight, glyph]} /><View style={[styles.qrDot, { backgroundColor: color }]} /></View> : null}
     {name === 'HistoryTab' ? <View style={[styles.clockIcon, glyph]}><View style={[styles.clockHandLong, { backgroundColor: color }]} /><View style={[styles.clockHandShort, { backgroundColor: color }]} /></View> : null}
     {name === 'ProfileTab' ? <View style={styles.profileIcon}><View style={[styles.profileHead, glyph]} /><View style={[styles.profileBody, glyph]} /></View> : null}
   </View>;
 }
 
 export function AppNavigator() {
+  const user = useAuthStore((state) => state.user);
+  const showScanner = canValidateTickets(user);
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -39,6 +46,7 @@ export function AppNavigator() {
       })}
     >
       <Tab.Screen name="HomeTab" component={HomeNavigator} options={{ title: 'Inicio' }} />
+      {showScanner ? <Tab.Screen name="ScannerTab" component={ScannerNavigator} options={{ title: 'Escáner' }} /> : null}
       <Tab.Screen name="HistoryTab" component={HistoryNavigator} options={{ title: 'Historial' }} />
       <Tab.Screen name="ProfileTab" component={ProfileNavigator} options={{ title: 'Perfil' }} />
     </Tab.Navigator>
@@ -68,6 +76,13 @@ const styles = StyleSheet.create({
   homeIcon: { width: 22, height: 22, alignItems: 'center' },
   homeRoof: { position: 'absolute', top: 2, width: 13, height: 13, borderTopWidth: 2, borderLeftWidth: 2, transform: [{ rotate: '45deg' }] },
   homeBody: { position: 'absolute', bottom: 1, width: 15, height: 12, borderWidth: 2, borderTopWidth: 0, borderTopLeftRadius: 2, borderTopRightRadius: 2 },
+  qrIcon: { width: 22, height: 22 },
+  qrCorner: { position: 'absolute', width: 8, height: 8, borderWidth: 2 },
+  qrTopLeft: { left: 0, top: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 2 },
+  qrTopRight: { right: 0, top: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 2 },
+  qrBottomLeft: { left: 0, bottom: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 2 },
+  qrBottomRight: { right: 0, bottom: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 2 },
+  qrDot: { position: 'absolute', left: 9, top: 9, width: 4, height: 4, borderRadius: 1 },
   clockIcon: { width: 21, height: 21, borderWidth: 2, borderRadius: 12 },
   clockHandLong: { position: 'absolute', width: 2, height: 7, left: 8, top: 3, borderRadius: 2 },
   clockHandShort: { position: 'absolute', width: 6, height: 2, left: 9, top: 10, borderRadius: 2, transform: [{ rotate: '32deg' }] },

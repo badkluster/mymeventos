@@ -14,6 +14,8 @@ export interface SessionUser {
   lastName: string;
   fullName?: string;
   roles: string[];
+  permissionOverrides?: string[];
+  permissionDeniedOverrides?: string[];
   active?: boolean;
   salonIds?: string[];
   primarySalonId?: string;
