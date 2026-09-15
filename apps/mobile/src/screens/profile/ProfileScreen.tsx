@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import * as ImagePicker from 'expo-image-picker';
+import * as Updates from 'expo-updates';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -82,6 +84,11 @@ export function ProfileScreen({ navigation }: Props) {
   const staffFunctions = (user?.staffProfile?.staffSubroles ?? [])
     .map((subrole) => staffSubroleLabels[subrole] ?? subrole)
     .join(', ');
+  const appVersion = Application.nativeApplicationVersion || Constants.expoConfig?.version || 'Sin informar';
+  const buildVersion = Application.nativeBuildVersion || 'Desarrollo';
+  const updateCode = Updates.updateId?.slice(0, 8) || (Updates.isEmbeddedLaunch ? 'Integrada' : 'Sin informar');
+  const updateChannel = Updates.channel || (Updates.isEmbeddedLaunch ? 'Incluida en el build' : 'Sin informar');
+  const supportCode = `v${appVersion} · b${buildVersion} · u${updateCode}`;
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl }]} showsVerticalScrollIndicator={false}>
@@ -137,23 +144,37 @@ export function ProfileScreen({ navigation }: Props) {
         </View>
       </AnimatedEntrance>
 
+      <AnimatedEntrance delay={200} distance={12}>
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Información para soporte</Text>
+          <Text style={styles.sectionSubtitle}>Compartí estos datos si necesitás reportar un problema.</Text>
+        </View>
+        <AppCard style={styles.card}>
+          <Row label="Versión instalada" value={appVersion} selectable />
+          <Row label="Número de build" value={buildVersion} selectable />
+          <Row label="Actualización activa" value={updateCode} selectable />
+          <Row label="Canal" value={updateChannel} selectable />
+          <View style={styles.divider} />
+          <Text style={styles.supportCodeLabel}>CÓDIGO PARA SOPORTE</Text>
+          <Text selectable style={styles.supportCode}>{supportCode}</Text>
+        </AppCard>
+      </AnimatedEntrance>
+
       <AnimatedEntrance delay={220} distance={12}>
         <View style={styles.links}>
           <AppButton title="Cerrar todas las sesiones" variant="ghost" onPress={() => void logoutAllDevices()} />
           <AppButton title="Cerrar sesión" variant="danger" onPress={() => void logout()} />
         </View>
       </AnimatedEntrance>
-
-      <Text style={styles.version}>Versión {Constants.expoConfig?.version ?? '1.0.0'}</Text>
     </ScrollView>
   );
 }
 
-function Row({ label, value }: { label: string; value?: string }) {
+function Row({ label, value, selectable = false }: { label: string; value?: string; selectable?: boolean }) {
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+      <Text selectable={selectable} style={styles.value}>{value}</Text>
     </View>
   );
 }
@@ -181,5 +202,6 @@ const styles = StyleSheet.create({
   label: { ...typography.small, color: colors.textMuted, flex: 1 },
   value: { ...typography.bodyStrong, color: colors.text, flex: 1.35, textAlign: 'right' },
   links: { gap: spacing.sm },
-  version: { ...typography.caption, color: colors.textSubtle, textAlign: 'center' }
+  supportCodeLabel: { ...typography.caption, color: colors.textSubtle, fontWeight: '700', letterSpacing: 0.8, textAlign: 'center' },
+  supportCode: { ...typography.bodyStrong, color: colors.primarySoft, textAlign: 'center', fontVariant: ['tabular-nums'] }
 });

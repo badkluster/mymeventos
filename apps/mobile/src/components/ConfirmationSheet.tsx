@@ -1,4 +1,5 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, shadow, spacing, typography } from '../theme/tokens';
 import { AppButton } from './AppButton';
 
@@ -16,11 +17,13 @@ export function ConfirmationSheet({
   danger?: boolean;
   children?: React.ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityLabel="Cerrar" />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: spacing.xl + insets.bottom }]}>
           <View style={styles.handle} />
           <View style={[styles.icon, danger ? styles.iconDanger : styles.iconPrimary]}><Text style={[styles.iconText, danger ? styles.iconTextDanger : styles.iconTextPrimary]}>{danger ? '!' : '◈'}</Text></View>
           <Text style={styles.title}>{title}</Text>

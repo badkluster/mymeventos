@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, shadow, spacing, typography } from '../theme/tokens';
 
 const ROW_HEIGHT = 44;
@@ -17,6 +18,7 @@ function fromHhMm(value?: string): { hour: number; minute: number } | null {
 }
 
 export function TimePickerField({ label, value, onChange, hint }: { label: string; value?: string; onChange: (value: string) => void; hint?: string }) {
+  const insets = useSafeAreaInsets();
   const parsed = fromHhMm(value);
   const [visible, setVisible] = useState(false);
   const [hour, setHour] = useState(parsed?.hour ?? 0);
@@ -59,7 +61,7 @@ export function TimePickerField({ label, value, onChange, hint }: { label: strin
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
         <View style={styles.overlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setVisible(false)} accessibilityLabel="Cerrar selector de hora" />
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: spacing.xl + insets.bottom }]}>
             <View style={styles.handle} />
             <Text style={styles.sheetTitle}>{label}</Text>
             <View style={styles.pickerRow}>

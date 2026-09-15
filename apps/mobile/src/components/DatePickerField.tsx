@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, shadow, spacing, typography } from '../theme/tokens';
 
 const weekDays = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -41,6 +42,7 @@ function monthDays(month: Date) {
 }
 
 export function DatePickerField({ label, value, onChange, hint }: { label: string; value?: string; onChange: (value: string) => void; hint?: string }) {
+  const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const [viewingMonth, setViewingMonth] = useState(() => fromIsoDate(value) ?? new Date());
   const selectedDate = fromIsoDate(value);
@@ -79,7 +81,7 @@ export function DatePickerField({ label, value, onChange, hint }: { label: strin
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
         <View style={styles.overlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setVisible(false)} accessibilityLabel="Cerrar calendario" />
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: spacing.xl + insets.bottom }]}>
             <View style={styles.handle} />
             <Text style={styles.sheetEyebrow}>DATOS PERSONALES</Text>
             <Text style={styles.sheetTitle}>Fecha de nacimiento</Text>
