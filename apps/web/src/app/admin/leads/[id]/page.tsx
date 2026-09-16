@@ -9,6 +9,7 @@ import { activityTypeLabels, displayLabel, eventStatusLabels, eventTypeLabels, l
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { formatCivilDate } from '@/lib/dates';
+import { EntityChangeHistoryCard, type EntityChangeHistory } from '@/components/entity-change-history';
 
 type Lead = {
   _id: string;
@@ -59,6 +60,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
   const { showToast } = useToast();
   const [lead, setLead] = useState<Lead>();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [changeHistory, setChangeHistory] = useState<EntityChangeHistory>();
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequest[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -80,7 +82,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
 
   const load = async (currentId: string) => {
     const [leadResponse, activitiesResponse, salonsResponse, requestsResponse, quotesResponse, historyResponse] = await Promise.all([
-      api.get<{ lead: Lead }>(`/leads/${currentId}`),
+      api.get<{ lead: Lead; changeHistory?: EntityChangeHistory }>(`/leads/${currentId}`),
       api.get<{ activities: Activity[] }>(`/leads/${currentId}/activities`),
       api.get<{ salons: Salon[] }>('/salons'),
       api.get<{ items: QuoteRequest[] }>(`/quote-requests?limit=50&leadId=${currentId}`),
@@ -88,6 +90,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
       api.get<{ events: EventItem[]; convertedCustomer?: CustomerItem }>(`/leads/${currentId}/commercial-history`),
     ]);
     setLead(leadResponse.lead);
+    setChangeHistory(leadResponse.changeHistory);
     setActivities(activitiesResponse.activities);
     setSalons(salonsResponse.salons);
     setQuoteRequests(requestsResponse.items ?? []);
@@ -270,6 +273,8 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
           </div>
         </article>
       </div>
+
+      <EntityChangeHistoryCard history={changeHistory} subjectLabel="lead" />
 
       <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
         <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">

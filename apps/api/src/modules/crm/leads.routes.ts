@@ -11,6 +11,7 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
+import { getEntityChangeHistory } from '../audit/entity-change-history.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const leadStatuses = ['new', 'contacted', 'follow_up', 'quote_sent', 'negotiation', 'won', 'lost', 'converted'] as const;
@@ -241,9 +242,15 @@ router.get(
   requirePermission(Permission.LEADS_READ),
   validateRequest(idParamsSchema),
   asyncHandler(async (request, response) => {
-    const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+    const lead: any = await Lead.findOne({ _id: request.params.id, deletedAt: null }).lean();
     await ensureLeadAccess(request, lead as LeadLike | null);
-    return sendSuccess(response, { lead });
+    const changeHistory = await getEntityChangeHistory({
+      entityType: 'Lead',
+      entityId: request.params.id,
+      entity: lead,
+      actions: ['LEAD_CREATE', 'LEAD_UPDATE', 'LEAD_STATUS_UPDATE', 'LEAD_ASSIGN', 'LEAD_MARK_LOST']
+    });
+    return sendSuccess(response, { lead, changeHistory });
   })
 );
 

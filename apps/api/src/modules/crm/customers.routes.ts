@@ -9,6 +9,7 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
+import { getEntityChangeHistory } from '../audit/entity-change-history.service';
 import { normalizeEmail, normalizePhone } from './contact-dedupe.service';
 import { paymentSummary } from './payments.service';
 
@@ -93,18 +94,26 @@ router.post('/', requirePermission(Permission.CUSTOMERS_CREATE), validateRequest
 }));
 
 router.get('/:id', requirePermission(Permission.CUSTOMERS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
-  const customer = await Customer.findOne({ _id: request.params.id, deletedAt: null }).populate('sourceLeadId', 'fullName phone email').lean();
+  const customer: any = await Customer.findOne({ _id: request.params.id, deletedAt: null })
+    .populate('sourceLeadId', 'fullName phone email')
+    .lean();
   await ensureCustomerAccess(request, customer);
-  const [quotes, events, quoteRequests, contracts, payments, summary, activities] = await Promise.all([
+  const [quotes, events, quoteRequests, contracts, payments, summary, activities, changeHistory] = await Promise.all([
     Quote.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
     Event.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('salonId', 'name').sort({ eventDate: -1, createdAt: -1 }).lean(),
     QuoteRequest.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedQuoteRequestQuery(request)] }).sort({ createdAt: -1 }).lean(),
     Contract.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name').sort({ createdAt: -1 }).lean(),
     Payment.find({ $and: [{ customerId: request.params.id, deletedAt: null }, ...scopedSalonQuery(request)] }).populate('contractId', 'contractNumber totalAmount balanceAmount status').populate('eventId', 'eventName eventType eventDate').populate('salonId', 'name').sort({ paidAt: -1, dueDate: 1, createdAt: -1 }).limit(50).lean(),
     paymentSummary({ $and: [{ customerId: request.params.id }, ...scopedSalonQuery(request)] }),
-    LeadActivity.find({ customerId: request.params.id }).sort({ createdAt: -1 }).limit(50).lean()
+    LeadActivity.find({ customerId: request.params.id }).sort({ createdAt: -1 }).limit(50).lean(),
+    getEntityChangeHistory({
+      entityType: 'Customer',
+      entityId: request.params.id,
+      entity: customer,
+      actions: ['CUSTOMER_CREATE', 'CUSTOMER_UPDATE']
+    })
   ]);
-  return sendSuccess(response, { customer, quotes, events, quoteRequests, contracts, payments, paymentSummary: summary, activities });
+  return sendSuccess(response, { customer, quotes, events, quoteRequests, contracts, payments, paymentSummary: summary, activities, changeHistory });
 }));
 
 router.patch('/:id', requirePermission(Permission.CUSTOMERS_UPDATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
