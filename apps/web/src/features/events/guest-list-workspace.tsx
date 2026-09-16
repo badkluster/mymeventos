@@ -16,6 +16,7 @@ type GuestListWorkspaceProps = {
   plan?: EventResourcePlan;
   saving: boolean;
   onSaveGuestList: (guestList: EventGuestList) => Promise<EventGuestList | undefined>;
+  onServerGuestList: (guestList: EventGuestList) => void;
   onSyncSummary: (payload: Record<string, unknown>) => void;
   onNotice?: (message: string, variant?: 'success' | 'error') => void;
 };
@@ -168,12 +169,13 @@ function GuestListTabs({ value, onChange }: { value: GuestTab; onChange: (value:
   return <nav className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-sm"><div className="flex min-w-max gap-1">{tabs.map(([tab, label, Icon]) => <button key={tab} type="button" onClick={() => onChange(tab)} className={`inline-flex min-w-48 flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition ${value === tab ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950'}`}><Icon className="h-4 w-4" />{label}</button>)}</div></nav>;
 }
 
-function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onSyncSummary, onNotice, onGuestListChange }: GuestListWorkspaceContentProps) {
+function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onServerGuestList, onSyncSummary, onNotice, onGuestListChange }: GuestListWorkspaceContentProps) {
   const initialGuestList = useMemo(() => withIds(plan?.guestList, event.guestCount), [plan, event.guestCount]);
   const [guestList, setGuestList] = useState<EventGuestList>(initialGuestList);
   const [tab, setTab] = useState<GuestTab>('seating');
   const [dirty, setDirty] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
+  const [staleDraft, setStaleDraft] = useState<LocalGuestListDraft>();
   const [localSaveFailed, setLocalSaveFailed] = useState(false);
   const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
   const [guestEditorOpen, setGuestEditorOpen] = useState(false);
@@ -189,6 +191,7 @@ function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onSyn
   const [tableFilterId, setTableFilterId] = useState<string>();
   const [sharing, setSharing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [discardStaleOpen, setDiscardStaleOpen] = useState(false);
   const [shareToken, setShareToken] = useState(event.guestListAccessToken ?? '');
   const hydratedEventId = useRef<string | undefined>(undefined);
   const serverGuestListRevision = useRef<string | undefined>(undefined);
@@ -214,16 +217,17 @@ function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onSyn
     if (!event._id || hydratedEventId.current === event._id) return;
     hydratedEventId.current = event._id;
     const localDraft = readLocalDraft(event._id);
-    if (localDraftConflictsWithServer(localDraft, plan?.guestList)) onNotice?.('La lista del servidor cambió desde que se creó este borrador. Revisá los cambios antes de guardarlo.', 'error');
+    const draftIsStale = localDraftConflictsWithServer(localDraft, plan?.guestList);
+    setStaleDraft(draftIsStale ? localDraft : undefined);
     serverGuestListRevision.current = plan?.guestList?.submittedAt;
-    const next = withIds(localDraft?.guestList ?? plan?.guestList, event.guestCount);
+    const next = withIds(draftIsStale ? plan?.guestList : localDraft?.guestList ?? plan?.guestList, event.guestCount);
     setGuestList(next);
     guestListRef.current = next;
     onGuestListChange?.(next);
-    setDirty(Boolean(localDraft));
+    setDirty(Boolean(localDraft && !draftIsStale));
     setHasLocalDraft(Boolean(localDraft));
     setLocalSaveFailed(false);
-    draftRevision.current = localDraft ? 1 : 0;
+    draftRevision.current = localDraft && !draftIsStale ? 1 : 0;
   }, [event._id, event.guestCount, onGuestListChange, onNotice, plan?.guestList]);
   useEffect(() => {
     const revision = plan?.guestList?.submittedAt;
@@ -235,7 +239,7 @@ function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onSyn
     onGuestListChange?.(next);
   }, [event._id, event.guestCount, plan?.guestList, dirty, onGuestListChange]);
   const saveGuestList = async (): Promise<boolean> => {
-    if (saveInProgress.current) return false;
+    if (saveInProgress.current || staleDraft) return false;
     const revisionAtSave = draftRevision.current;
     const guestListToSave = cleanGuestList(guestListRef.current);
     saveInProgress.current = true;
@@ -336,11 +340,13 @@ function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onSyn
       const serverList = response.event.resourcePlanSnapshot?.guestList;
       const restored = withIds(serverList, response.event.guestCount);
       if (discardPending) clearLocalDraft(event._id);
+      onServerGuestList(serverList ?? { tables: [], guests: [], notes: '' });
       setGuestList(restored);
       guestListRef.current = restored;
       onGuestListChange?.(restored);
       setDirty(false);
       setHasLocalDraft(false);
+      setStaleDraft(undefined);
       setLocalSaveFailed(false);
       draftRevision.current = 0;
       setSelectedGuestIds([]);
@@ -358,6 +364,19 @@ function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onSyn
   const status = saving ? 'Guardando...' : localSaveFailed ? 'No se pudo guardar la copia local' : hasLocalDraft ? 'Cambios guardados localmente' : dirty ? 'Hay cambios pendientes' : 'Cambios guardados';
   const selectedTable = tables.find((table) => table.id === tableToDelete);
   const selectedTableGuests = selectedTable ? guests.filter((guest) => guest.tableId === selectedTable.id && guest.fullName.trim()) : [];
+  if (staleDraft) return <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm sm:p-7" role="alert">
+    <h2 className="text-lg font-semibold">Hay un borrador anterior en este navegador</h2>
+    <p className="mt-2 text-sm">El enlace del cliente ya guardó una versión más reciente. No aplicamos el borrador antiguo ni lo borramos: por eso podía parecer que la lista anterior seguía vigente al recargar la página.</p>
+    <p className="mt-3 text-sm font-medium">Versión del servidor: {validGuests.length} invitados. Borrador local: {(staleDraft.guestList.guests ?? []).filter((guest) => guest.fullName.trim()).length} invitados.</p>
+    <details className="mt-4 rounded-xl border border-amber-200 bg-white p-4 text-sm">
+      <summary className="cursor-pointer font-semibold">Revisar el contenido del borrador local antes de descartarlo</summary>
+      <p className="mt-3">Mesas: {(staleDraft.guestList.tables ?? []).map((table) => table.name).join(' · ') || 'ninguna'}</p>
+      <ul className="mt-3 max-h-64 list-disc space-y-1 overflow-y-auto pl-5">{(staleDraft.guestList.guests ?? []).map((guest, index) => <li key={guest.id ?? index}>{guest.fullName || 'Sin nombre'}{guest.meal ? ` · ${guest.meal}` : ''}{guest.notes ? ` · ${guest.notes}` : ''}</li>)}</ul>
+      {staleDraft.guestList.notes ? <p className="mt-3 whitespace-pre-wrap">Notas: {staleDraft.guestList.notes}</p> : null}
+    </details>
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-sm">Para editar la lista actual, revisá el borrador y luego descartalo explícitamente.</p><Button type="button" disabled={saving || refreshing} onClick={() => setDiscardStaleOpen(true)}>{refreshing ? 'Cargando...' : 'Descartar borrador y abrir lista actual'}</Button></div>
+    <Modal open={discardStaleOpen} title="¿Descartar el borrador anterior?" description="Sólo se eliminará la copia pendiente guardada en este navegador; no se modificará la lista del servidor." onClose={() => setDiscardStaleOpen(false)}><div className="flex flex-wrap justify-end gap-2 p-5"><Button type="button" variant="secondary" onClick={() => setDiscardStaleOpen(false)}>Cancelar</Button><Button type="button" variant="danger" onClick={() => { setDiscardStaleOpen(false); void refreshList(true); }}>Descartar y cargar lista actual</Button></div></Modal>
+  </section>;
   return <div className="mx-auto w-full max-w-[1440px] space-y-5 rounded-3xl bg-zinc-50/80 p-1 sm:p-3"><header className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-6 text-white shadow-lg sm:px-7"><div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between"><div className="flex min-w-0 items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-amber-300/50 bg-amber-300/10 font-serif text-xl font-semibold text-amber-300">M</div><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.16em] text-amber-300">M&M Eventos</p><h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Lista de invitados</h1><p className="mt-1 truncate text-sm text-zinc-300">{displayLabel(eventTypeLabels, event.eventType || '')} · {customerName(event)} · {dateLabel(event.eventDate)}</p></div></div><div className="flex flex-col gap-3 xl:items-end"><p className={`inline-flex items-center gap-2 text-sm ${saving ? 'text-amber-200' : dirty ? 'text-amber-200' : 'text-emerald-300'}`}><CheckCircle2 className="h-4 w-4" />{status}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={sharing} onClick={() => void createShareLink()}>{sharing ? 'Preparando enlace...' : shareUrl ? 'Copiar enlace cliente' : 'Crear enlace cliente'}</Button><Button type="button" variant="secondary" onClick={() => setTab('summary')}><Eye className="mr-2 h-4 w-4" />Vista previa</Button><Button type="button" disabled={saving || !dirty} onClick={save}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</Button></div></div></div><div className="mt-6 flex gap-3 overflow-x-auto pb-1"><Metric value={validGuests.length} label="invitados" icon={<Users className="h-4 w-4" />} /><Metric value={assignedGuests.length} label="asignados" icon={<CheckCircle2 className="h-4 w-4" />} /><Metric value={unassignedGuests.length} label="sin mesa" icon={<UserPlus className="h-4 w-4" />} /><Metric value={tables.length} label="mesas" icon={<TableProperties className="h-4 w-4" />} /></div></header><GuestListTabs value={tab} onChange={setTab} />
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600">
       <span>{dirty ? 'Hay un borrador local pendiente. Descartalo si querés ver la versión enviada por el cliente.' : 'Consultá la última lista enviada por el cliente sin salir de esta pantalla.'}</span>
