@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   customerFindOne: vi.fn(),
   customerFind: vi.fn(),
   eventFindOne: vi.fn(),
+  eventFindOneAndUpdate: vi.fn(),
   eventFind: vi.fn(),
   eventCountDocuments: vi.fn(),
   eventCreate: vi.fn(),
@@ -42,7 +43,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   PackageTemplate: { find: vi.fn(), findOne: mocks.packageFindOne, exists: vi.fn() },
   VenuePackageRule: { find: vi.fn(), findOne: mocks.ruleFindOne, findOneAndUpdate: vi.fn() },
   Quote: { findOne: vi.fn() }, QuoteRevision: {},
-  Event: { countDocuments: mocks.eventCountDocuments, findOne: mocks.eventFindOne, find: mocks.eventFind, create: mocks.eventCreate },
+  Event: { countDocuments: mocks.eventCountDocuments, findOne: mocks.eventFindOne, findOneAndUpdate: mocks.eventFindOneAndUpdate, find: mocks.eventFind, create: mocks.eventCreate },
   EventStaffAssignment: { find: vi.fn(), findOne: mocks.staffAssignmentFindOne, exists: mocks.staffAssignmentExists, create: mocks.staffAssignmentCreate },
   CalendarItem: { findOneAndUpdate: vi.fn(), updateMany: vi.fn().mockResolvedValue({}) },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
@@ -135,6 +136,61 @@ describe('manual event creation from a package', () => {
     expect(missingEnd.status).toBe(400);
     expect(sameTime.status).toBe(400);
     expect(mocks.eventCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('public guest-list persistence', () => {
+  const token = 'guest-list-token-with-more-than-thirty-two-characters';
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('writes only the guest-list path and returns the saved version', async () => {
+    const event = { _id: eventId, eventDate: new Date('2028-12-05T00:00:00.000Z'), resourcePlanSnapshot: { tasks: [{ id: 'task-1' }] } };
+    const guestList = { tables: [{ id: 'mesa-1', name: 'Mesa 1' }], guests: [{ id: 'guest-1', fullName: 'Ana Pérez', tableId: 'mesa-1' }] };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.eventFindOneAndUpdate.mockImplementation(async (_query, update) => ({
+      resourcePlanSnapshot: { ...event.resourcePlanSnapshot, guestList: update.$set['resourcePlanSnapshot.guestList'] }
+    }));
+
+    const response = await request(app).patch(`/api/public/guest-list/${token}`).send({ guestList });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(mocks.eventFindOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ guestListAccessToken: token, eventDate: event.eventDate, 'resourcePlanSnapshot.guestList.submittedAt': null }),
+      { $set: { 'resourcePlanSnapshot.guestList': expect.objectContaining({ ...guestList, submittedAt: expect.any(String) }) } },
+      { new: true }
+    );
+    expect(response.body.data.guestList.guests).toEqual(guestList.guests);
+    expect(response.body.data.savedAt).toBe(response.body.data.guestList.submittedAt);
+  });
+
+  it('does not acknowledge a save when the event changed before the atomic update', async () => {
+    mocks.eventFindOne.mockResolvedValue({ _id: eventId, eventDate: new Date('2028-12-05T00:00:00.000Z') });
+    mocks.eventFindOneAndUpdate.mockResolvedValue(null);
+
+    const response = await request(app).patch(`/api/public/guest-list/${token}`).send({ guestList: { tables: [], guests: [] } });
+
+    expect(response.status).toBe(409);
+    expect(response.body.success).toBe(false);
+  });
+
+  it('rejects a stale public draft without touching the saved list', async () => {
+    mocks.eventFindOne.mockResolvedValue({
+      _id: eventId,
+      eventDate: new Date('2028-12-05T00:00:00.000Z'),
+      resourcePlanSnapshot: { guestList: { submittedAt: '2026-09-16T12:00:00.000Z' } }
+    });
+
+    const response = await request(app).patch(`/api/public/guest-list/${token}`).send({
+      guestList: { tables: [], guests: [{ fullName: 'Borrador anterior' }] },
+      expectedSubmittedAt: null
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('GUEST_LIST_CHANGED');
+    expect(mocks.eventFindOneAndUpdate).not.toHaveBeenCalled();
   });
 });
 
@@ -655,18 +711,61 @@ describe('event supplier financial synchronization', () => {
 
   it('preserves financial supplier assignments when the generic event editor sends a full resource plan', async () => {
     const originalAssignments = [{ id: 'original', supplierId: '507f1f77bcf86cd799439015', agreedAmount: 85000, status: 'confirmed' }];
-    const event: any = { _id: eventId, salonId, status: 'confirmed', eventType: 'Cumpleaños', eventDate: new Date('2026-12-05T00:00:00.000Z'), startTime: '21:00', endTime: '05:00', guestCount: 80, resourcePlanSnapshot: { supplierAssignments: originalAssignments, timelineItems: [] }, save: vi.fn().mockResolvedValue(undefined) };
+    const savedGuestList = { tables: [{ id: 'mesa-1', name: 'Mesa actual' }], guests: [{ id: 'guest-1', fullName: 'Invitado actual' }], submittedAt: '2026-09-16T12:00:00.000Z' };
+    const event: any = { _id: eventId, salonId, status: 'confirmed', eventType: 'Cumpleaños', eventDate: new Date('2026-12-05T00:00:00.000Z'), startTime: '21:00', endTime: '05:00', guestCount: 80, resourcePlanSnapshot: { supplierAssignments: originalAssignments, guestList: savedGuestList, timelineItems: [] }, save: vi.fn().mockResolvedValue(undefined) };
+    event.set = vi.fn((path: string, value: unknown) => { event.resourcePlanSnapshot[path.split('.')[1]] = value; });
     mocks.eventFindOne.mockResolvedValue(event);
 
     const response = await request(app).patch(`/api/events/${eventId}`).set('Cookie', adminCookie).send({ resourcePlanSnapshot: {
       timelineItems: [{ id: 'arrival', title: 'Llegada' }],
       supplierAssignments: [{ id: 'forged', supplierId: '507f1f77bcf86cd799439017', agreedAmount: 1, status: 'confirmed' }],
+      guestList: { tables: [], guests: [] },
     } });
 
     expect(response.status).toBe(200);
     expect(event.resourcePlanSnapshot.timelineItems).toEqual([{ id: 'arrival', title: 'Llegada' }]);
     expect(event.resourcePlanSnapshot.supplierAssignments).toEqual(originalAssignments);
+    expect(event.resourcePlanSnapshot.guestList).toEqual(savedGuestList);
+    expect(event.set).toHaveBeenCalledWith('resourcePlanSnapshot.timelineItems', [{ id: 'arrival', title: 'Llegada' }]);
+    expect(event.set).not.toHaveBeenCalledWith('resourcePlanSnapshot.guestList', expect.anything());
     expect(mocks.syncEventSupplierExpenses).not.toHaveBeenCalled();
+  });
+
+  it('saves backoffice guest changes on the guest-list path without replacing the rest of the plan', async () => {
+    const event = { _id: eventId, salonId, status: 'confirmed', resourcePlanSnapshot: { tasks: [{ id: 'task-1' }] } };
+    const guestList = { tables: [{ id: 'mesa-1', name: 'Mesa 1' }], guests: [{ id: 'guest-1', fullName: 'Ana Pérez', tableId: 'mesa-1' }] };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.eventFindOneAndUpdate.mockImplementation(async (_query, update) => ({
+      resourcePlanSnapshot: { ...event.resourcePlanSnapshot, guestList: update.$set['resourcePlanSnapshot.guestList'] }
+    }));
+
+    const response = await request(app).patch(`/api/events/${eventId}/guest-list`).set('Cookie', adminCookie).send({ guestList });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(mocks.eventFindOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: eventId, 'resourcePlanSnapshot.guestList.submittedAt': null }),
+      { $set: { 'resourcePlanSnapshot.guestList': expect.objectContaining({ ...guestList, submittedAt: expect.any(String) }), updatedBy: adminId } },
+      { new: true }
+    );
+    expect(response.body.data.guestList.guests).toEqual(guestList.guests);
+  });
+
+  it('rejects a stale backoffice draft instead of overwriting a client submission', async () => {
+    mocks.eventFindOne.mockResolvedValue({
+      _id: eventId,
+      salonId,
+      status: 'confirmed',
+      resourcePlanSnapshot: { guestList: { submittedAt: '2026-09-16T12:00:00.000Z' } }
+    });
+
+    const response = await request(app).patch(`/api/events/${eventId}/guest-list`).set('Cookie', adminCookie).send({
+      guestList: { tables: [], guests: [{ fullName: 'Borrador anterior' }] },
+      expectedSubmittedAt: null
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('GUEST_LIST_CHANGED');
+    expect(mocks.eventFindOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('does not allow clearing the resource plan to bypass supplier expense synchronization', async () => {

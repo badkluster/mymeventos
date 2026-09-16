@@ -15,7 +15,7 @@ type GuestListWorkspaceProps = {
   event: Event;
   plan?: EventResourcePlan;
   saving: boolean;
-  onSave: (plan: EventResourcePlan) => Promise<boolean>;
+  onSaveGuestList: (guestList: EventGuestList) => Promise<EventGuestList | undefined>;
   onSyncSummary: (payload: Record<string, unknown>) => void;
   onNotice?: (message: string, variant?: 'success' | 'error') => void;
 };
@@ -85,6 +85,10 @@ function readLocalDraft(eventId: string): LocalGuestListDraft | undefined {
   } catch {
     return undefined;
   }
+}
+
+function localDraftConflictsWithServer(draft: LocalGuestListDraft | undefined, serverList: EventGuestList | undefined): boolean {
+  return Boolean(draft && serverList?.submittedAt && draft.guestList.submittedAt !== serverList.submittedAt);
 }
 
 function writeLocalDraft(eventId: string, guestList: EventGuestList): boolean {
@@ -164,7 +168,7 @@ function GuestListTabs({ value, onChange }: { value: GuestTab; onChange: (value:
   return <nav className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-sm"><div className="flex min-w-max gap-1">{tabs.map(([tab, label, Icon]) => <button key={tab} type="button" onClick={() => onChange(tab)} className={`inline-flex min-w-48 flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition ${value === tab ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950'}`}><Icon className="h-4 w-4" />{label}</button>)}</div></nav>;
 }
 
-function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary, onNotice, onGuestListChange }: GuestListWorkspaceContentProps) {
+function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onSyncSummary, onNotice, onGuestListChange }: GuestListWorkspaceContentProps) {
   const initialGuestList = useMemo(() => withIds(plan?.guestList, event.guestCount), [plan, event.guestCount]);
   const [guestList, setGuestList] = useState<EventGuestList>(initialGuestList);
   const [tab, setTab] = useState<GuestTab>('seating');
@@ -184,8 +188,10 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
   const [tableToDelete, setTableToDelete] = useState<string>();
   const [tableFilterId, setTableFilterId] = useState<string>();
   const [sharing, setSharing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [shareToken, setShareToken] = useState(event.guestListAccessToken ?? '');
   const hydratedEventId = useRef<string | undefined>(undefined);
+  const serverGuestListRevision = useRef<string | undefined>(undefined);
   const draftRevision = useRef(0);
   const guestListRef = useRef(guestList);
   const saveInProgress = useRef(false);
@@ -208,6 +214,8 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
     if (!event._id || hydratedEventId.current === event._id) return;
     hydratedEventId.current = event._id;
     const localDraft = readLocalDraft(event._id);
+    if (localDraftConflictsWithServer(localDraft, plan?.guestList)) onNotice?.('La lista del servidor cambió desde que se creó este borrador. Revisá los cambios antes de guardarlo.', 'error');
+    serverGuestListRevision.current = plan?.guestList?.submittedAt;
     const next = withIds(localDraft?.guestList ?? plan?.guestList, event.guestCount);
     setGuestList(next);
     guestListRef.current = next;
@@ -216,20 +224,42 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
     setHasLocalDraft(Boolean(localDraft));
     setLocalSaveFailed(false);
     draftRevision.current = localDraft ? 1 : 0;
-  }, [event._id, event.guestCount, onGuestListChange, plan?.guestList]);
+  }, [event._id, event.guestCount, onGuestListChange, onNotice, plan?.guestList]);
+  useEffect(() => {
+    const revision = plan?.guestList?.submittedAt;
+    if (hydratedEventId.current !== event._id || revision === serverGuestListRevision.current || dirty) return;
+    serverGuestListRevision.current = revision;
+    const next = withIds(plan?.guestList, event.guestCount);
+    setGuestList(next);
+    guestListRef.current = next;
+    onGuestListChange?.(next);
+  }, [event._id, event.guestCount, plan?.guestList, dirty, onGuestListChange]);
   const saveGuestList = async (): Promise<boolean> => {
     if (saveInProgress.current) return false;
     const revisionAtSave = draftRevision.current;
     const guestListToSave = cleanGuestList(guestListRef.current);
     saveInProgress.current = true;
     try {
-      const saved = await onSave({ ...(plan ?? {}), guestList: guestListToSave });
-      if (!saved) return false;
+      const savedList = await onSaveGuestList(guestListToSave);
+      if (!savedList) return false;
       if (draftRevision.current === revisionAtSave) {
+        guestListRef.current = withIds(savedList, event.guestCount);
+        setGuestList(guestListRef.current);
+        serverGuestListRevision.current = savedList.submittedAt;
         clearLocalDraft(event._id);
         setHasLocalDraft(false);
         setDirty(false);
         setLocalSaveFailed(false);
+      } else {
+        const latest = { ...guestListRef.current, submittedAt: savedList.submittedAt };
+        guestListRef.current = latest;
+        setGuestList(latest);
+        const stored = writeLocalDraft(event._id, latest);
+        setHasLocalDraft(stored);
+        setLocalSaveFailed(!stored);
+        onNotice?.(stored
+          ? 'Se guardó una versión anterior. Tus cambios más recientes siguen en este dispositivo; volvé a guardarlos para confirmarlos.'
+          : 'Se guardó una versión anterior, pero no se pudo conservar el borrador más reciente. Volvé a guardar antes de salir.', 'error');
       }
       return true;
     } catch {
@@ -291,17 +321,52 @@ function GuestListWorkspaceContent({ event, plan, saving, onSave, onSyncSummary,
     changeList({ guests: [...guests, ...imported] });
     setQuickText(''); setQuickTableId(''); setQuickImportOpen(false);
   };
-  const bulkAssign = (tableId: string) => { changeList({ guests: guests.map((guest) => guest.id && selectedGuestIds.includes(guest.id) ? { ...guest, tableId } : guest) }); setSelectedGuestIds([]); };
+  const bulkAssignGuests = (guestIds: string[], tableId: string) => {
+    const ids = new Set(guestIds);
+    changeList({ guests: guests.map((guest) => guest.id && ids.has(guest.id) ? { ...guest, tableId } : guest) });
+    setSelectedGuestIds((current) => current.filter((id) => !ids.has(id)));
+  };
+  const bulkAssign = (tableId: string) => bulkAssignGuests(selectedGuestIds, tableId);
   const save = () => void saveGuestList();
-  const discard = () => { clearLocalDraft(event._id); const restored = withIds(plan?.guestList, event.guestCount); setGuestList(restored); guestListRef.current = restored; onGuestListChange?.(restored); setDirty(false); setHasLocalDraft(false); setLocalSaveFailed(false); draftRevision.current = 0; setSelectedGuestIds([]); setTableFilterId(undefined); };
+  const refreshList = async (discardPending = false) => {
+    if (dirty && !discardPending) return;
+    setRefreshing(true);
+    try {
+      const response = await api.get<{ event: Event }>(`/events/${event._id}`);
+      const serverList = response.event.resourcePlanSnapshot?.guestList;
+      const restored = withIds(serverList, response.event.guestCount);
+      if (discardPending) clearLocalDraft(event._id);
+      setGuestList(restored);
+      guestListRef.current = restored;
+      onGuestListChange?.(restored);
+      setDirty(false);
+      setHasLocalDraft(false);
+      setLocalSaveFailed(false);
+      draftRevision.current = 0;
+      setSelectedGuestIds([]);
+      setTableFilterId(undefined);
+      onNotice?.(discardPending ? 'Borrador descartado. Se cargó la versión actual del servidor.' : 'Lista actualizada desde el servidor.');
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : 'No se pudo actualizar la lista desde el servidor.', 'error');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  const discard = () => void refreshList(true);
   const syncSummary = () => onSyncSummary({ vegetarianCount: validGuests.filter((guest) => guest.dietaryPreference === 'vegetarian').length, veganCount: validGuests.filter((guest) => guest.dietaryPreference === 'vegan').length, celiacCount: validGuests.filter((guest) => guest.dietaryPreference === 'celiac').length, lactoseIntolerantCount: validGuests.filter((guest) => guest.dietaryPreference === 'lactose_free').length });
   const createShareLink = async () => { setSharing(true); try { const response = await api.post<{ token: string; created: boolean }>(`/events/${event._id}/guest-list-link`, {}); setShareToken(response.token); try { await globalThis.navigator.clipboard.writeText(shareableGuestListUrl(response.token)); onNotice?.(response.created ? 'Enlace para el cliente creado y copiado.' : 'Enlace existente copiado.'); } catch { onNotice?.(response.created ? 'Enlace para el cliente creado. Copialo desde el campo mostrado.' : 'El enlace existente sigue activo. Copialo desde el campo mostrado.'); } } catch (error) { onNotice?.(error instanceof Error ? error.message : 'No se pudo obtener el enlace para el cliente.', 'error'); } finally { setSharing(false); } };
   const status = saving ? 'Guardando...' : localSaveFailed ? 'No se pudo guardar la copia local' : hasLocalDraft ? 'Cambios guardados localmente' : dirty ? 'Hay cambios pendientes' : 'Cambios guardados';
   const selectedTable = tables.find((table) => table.id === tableToDelete);
   const selectedTableGuests = selectedTable ? guests.filter((guest) => guest.tableId === selectedTable.id && guest.fullName.trim()) : [];
   return <div className="mx-auto w-full max-w-[1440px] space-y-5 rounded-3xl bg-zinc-50/80 p-1 sm:p-3"><header className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 px-5 py-6 text-white shadow-lg sm:px-7"><div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between"><div className="flex min-w-0 items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-amber-300/50 bg-amber-300/10 font-serif text-xl font-semibold text-amber-300">M</div><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.16em] text-amber-300">M&M Eventos</p><h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Lista de invitados</h1><p className="mt-1 truncate text-sm text-zinc-300">{displayLabel(eventTypeLabels, event.eventType || '')} · {customerName(event)} · {dateLabel(event.eventDate)}</p></div></div><div className="flex flex-col gap-3 xl:items-end"><p className={`inline-flex items-center gap-2 text-sm ${saving ? 'text-amber-200' : dirty ? 'text-amber-200' : 'text-emerald-300'}`}><CheckCircle2 className="h-4 w-4" />{status}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={sharing} onClick={() => void createShareLink()}>{sharing ? 'Preparando enlace...' : shareUrl ? 'Copiar enlace cliente' : 'Crear enlace cliente'}</Button><Button type="button" variant="secondary" onClick={() => setTab('summary')}><Eye className="mr-2 h-4 w-4" />Vista previa</Button><Button type="button" disabled={saving || !dirty} onClick={save}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</Button></div></div></div><div className="mt-6 flex gap-3 overflow-x-auto pb-1"><Metric value={validGuests.length} label="invitados" icon={<Users className="h-4 w-4" />} /><Metric value={assignedGuests.length} label="asignados" icon={<CheckCircle2 className="h-4 w-4" />} /><Metric value={unassignedGuests.length} label="sin mesa" icon={<UserPlus className="h-4 w-4" />} /><Metric value={tables.length} label="mesas" icon={<TableProperties className="h-4 w-4" />} /></div></header><GuestListTabs value={tab} onChange={setTab} />
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600">
+      <span>{dirty ? 'Hay un borrador local pendiente. Descartalo si querés ver la versión enviada por el cliente.' : 'Consultá la última lista enviada por el cliente sin salir de esta pantalla.'}</span>
+      <Button type="button" variant="secondary" disabled={saving || refreshing || dirty} onClick={() => void refreshList()}>
+        <RotateCcw className="mr-2 h-4 w-4" />{refreshing ? 'Actualizando...' : 'Actualizar desde servidor'}
+      </Button>
+    </div>
     {shareUrl ? <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950"><p className="font-medium">Enlace permanente del cliente</p><p className="mt-1 text-sky-800">Este mismo enlace seguirá activo aunque vuelvas a editar la lista.</p><div className="mt-2 flex flex-col gap-2 sm:flex-row"><Input readOnly value={shareUrl} /><a className="inline-flex shrink-0 items-center justify-center rounded-xl bg-white px-4 py-2.5 font-medium shadow-sm ring-1 ring-sky-200" href={shareUrl} target="_blank" rel="noreferrer">Abrir formulario</a></div><div className="mt-2 flex flex-wrap gap-2"><a className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 font-medium shadow-sm ring-1 ring-sky-200" href={whatsappShareHref} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" />Compartir por WhatsApp</a><a className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 font-medium shadow-sm ring-1 ring-sky-200" href={emailShareHref}><Mail className="h-4 w-4" />Compartir por email</a></div></div> : null}
-    {tab === 'seating' ? <div className="space-y-5"><section className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]"><UnassignedGuestsPanel guests={guests} tables={tables} selectedGuestIds={selectedGuestIds} onToggleSelected={toggleGuest} onEditGuest={(guestId) => openGuestEditor(guestId)} onAssign={assignGuest} /><section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold text-zinc-950">Organización de mesas</h2><p className="mt-1 text-sm text-zinc-500">Usá el plano para ubicar invitados y controlar la capacidad de cada mesa.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => openTableEditor()}><Plus className="mr-2 h-4 w-4" />Nueva mesa</Button><Button type="button" variant="secondary" onClick={() => setTablesManagerOpen(true)}><Settings className="mr-2 h-4 w-4" />Administrar mesas</Button><Button type="button" onClick={() => openGuestEditor()}><UserPlus className="mr-2 h-4 w-4" />Agregar invitado</Button></div></div><div className="mt-5"><GuestSeatingBoard tables={tables} guests={guests} showUnassigned={false} onAssign={assignGuest} onEditTable={openTableEditor} onViewTable={(tableId) => { setTableFilterId(tableId); setTab('guests'); }} onAddGuestToTable={(tableId) => openGuestEditor(undefined, tableId)} /></div></section></section><section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"><h2 className="text-base font-semibold text-zinc-950">Resumen rápido</h2><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><SummaryMetric value={validGuests.filter((guest) => guest.dietaryPreference === 'vegetarian').length} label="vegetarianos" tone="emerald" /><SummaryMetric value={validGuests.filter((guest) => guest.dietaryPreference === 'celiac').length} label="celíacos" tone="amber" /><SummaryMetric value={children} label="menús infantiles" tone="zinc" />{unassignedGuests.length ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 xl:col-span-2"><p className="flex items-center gap-2 font-semibold text-amber-950"><AlertTriangle className="h-4 w-4" />{unassignedGuests.length} invitado{unassignedGuests.length === 1 ? '' : 's'} todavía no tiene{unassignedGuests.length === 1 ? '' : 'n'} mesa</p><p className="mt-1 text-sm text-amber-800">Asignálos para completar la organización.</p></div> : <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 xl:col-span-2"><p className="flex items-center gap-2 font-semibold text-emerald-900"><CheckCircle2 className="h-4 w-4" />Todos los invitados tienen mesa</p><p className="mt-1 text-sm text-emerald-700">La distribución está completa.</p></div>}</div></section></div> : null}
+    {tab === 'seating' ? <div className="space-y-5"><section className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]"><UnassignedGuestsPanel guests={guests} tables={tables} selectedGuestIds={selectedGuestIds} onToggleSelected={toggleGuest} onEditGuest={(guestId) => openGuestEditor(guestId)} onAssign={assignGuest} onBulkAssign={bulkAssignGuests} /><section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold text-zinc-950">Organización de mesas</h2><p className="mt-1 text-sm text-zinc-500">Usá el plano para ubicar invitados y controlar la capacidad de cada mesa.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => openTableEditor()}><Plus className="mr-2 h-4 w-4" />Nueva mesa</Button><Button type="button" variant="secondary" onClick={() => setTablesManagerOpen(true)}><Settings className="mr-2 h-4 w-4" />Administrar mesas</Button><Button type="button" onClick={() => openGuestEditor()}><UserPlus className="mr-2 h-4 w-4" />Agregar invitado</Button></div></div><div className="mt-5"><GuestSeatingBoard tables={tables} guests={guests} showUnassigned={false} onAssign={assignGuest} onEditTable={openTableEditor} onViewTable={(tableId) => { setTableFilterId(tableId); setTab('guests'); }} onAddGuestToTable={(tableId) => openGuestEditor(undefined, tableId)} /></div></section></section><section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"><h2 className="text-base font-semibold text-zinc-950">Resumen rápido</h2><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><SummaryMetric value={validGuests.filter((guest) => guest.dietaryPreference === 'vegetarian').length} label="vegetarianos" tone="emerald" /><SummaryMetric value={validGuests.filter((guest) => guest.dietaryPreference === 'celiac').length} label="celíacos" tone="amber" /><SummaryMetric value={children} label="menús infantiles" tone="zinc" />{unassignedGuests.length ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 xl:col-span-2"><p className="flex items-center gap-2 font-semibold text-amber-950"><AlertTriangle className="h-4 w-4" />{unassignedGuests.length} invitado{unassignedGuests.length === 1 ? '' : 's'} todavía no tiene{unassignedGuests.length === 1 ? '' : 'n'} mesa</p><p className="mt-1 text-sm text-amber-800">Asignálos para completar la organización.</p></div> : <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 xl:col-span-2"><p className="flex items-center gap-2 font-semibold text-emerald-900"><CheckCircle2 className="h-4 w-4" />Todos los invitados tienen mesa</p><p className="mt-1 text-sm text-emerald-700">La distribución está completa.</p></div>}</div></section></div> : null}
     {tab === 'guests' ? <div className="space-y-5"><section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><div><h2 className="font-semibold text-zinc-950">Gestión de invitados</h2><p className="mt-1 text-sm text-zinc-500">Podés cargar invitados individualmente o en lote.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => setQuickImportOpen(true)}><Plus className="mr-2 h-4 w-4" />Carga rápida</Button><Button type="button" onClick={() => openGuestEditor()}><UserPlus className="mr-2 h-4 w-4" />Agregar invitado</Button></div></section><GuestDirectory guests={guests} tables={tables} selectedGuestIds={selectedGuestIds} tableFilterId={tableFilterId} onToggleSelected={toggleGuest} onClearSelected={() => setSelectedGuestIds([])} onBulkAssign={bulkAssign} onEditGuest={(guestId) => openGuestEditor(guestId)} onDeleteGuest={deleteGuest} onClearTableFilter={() => setTableFilterId(undefined)} /></div> : null}
     {tab === 'summary' ? <section className="space-y-5"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><SummaryMetric value={validGuests.length} label="invitados totales" /><SummaryMetric value={assignedGuests.length} label="invitados asignados" tone="emerald" /><SummaryMetric value={unassignedGuests.length} label="sin mesa" tone={unassignedGuests.length ? 'amber' : 'emerald'} /><SummaryMetric value={fullTables.length} label="mesas completas" tone="amber" /><SummaryMetric value={overCapacityTables.length} label="mesas excedidas" tone={overCapacityTables.length ? 'red' : 'zinc'} /></div><div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]"><section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-zinc-950">Menú y restricciones</h2><div className="mt-4 grid gap-4 sm:grid-cols-2"><div><p className="text-sm font-medium text-zinc-700">Menú por cantidad</p><div className="mt-2 space-y-2">{Object.entries(mealSummary).map(([name, count]) => <div key={name} className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-sm"><span>{name}</span><strong>{count}</strong></div>)}</div></div><div><p className="text-sm font-medium text-zinc-700">Restricciones alimentarias</p><div className="mt-2 space-y-2">{dietaryCounts.length ? dietaryCounts.map(([diet, count]) => <div key={diet} className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950"><span>{dietLabel(diet)}</span><strong>{count}</strong></div>) : <p className="rounded-lg bg-zinc-50 px-3 py-3 text-sm text-zinc-500">No hay restricciones cargadas.</p>}<div className="rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-600">{adults} adultos · {children} niños/as</div></div></div></div></section><section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-zinc-950">Alertas operativas</h2><div className="mt-4 space-y-3">{unassignedGuests.length ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{unassignedGuests.length} invitado{unassignedGuests.length === 1 ? '' : 's'} todavía no tiene{unassignedGuests.length === 1 ? '' : 'n'} mesa.</p> : null}{overCapacityTables.map((table) => { const count = guests.filter((guest) => guest.tableId === table.id && guest.fullName.trim()).length - Number(table.capacity); return <p key={table.id} className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">{table.name} supera su capacidad por {count} invitado{count === 1 ? '' : 's'}.</p>; })}{validGuests.filter((guest) => guest.dietaryPreference && guest.dietaryPreference !== 'none' && !guest.meal?.trim()).length ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Hay invitados con restricciones alimentarias sin menú definido.</p> : null}{!unassignedGuests.length && !overCapacityTables.length ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">No hay alertas críticas de distribución.</p> : null}</div></section></div><section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-zinc-950">Notas generales</h2><Textarea className="mt-4" value={guestList.notes ?? ''} onChange={(event) => changeList({ notes: event.target.value })} placeholder="Confirmaciones pendientes, cambios de última hora, contactos u observaciones para el equipo..." /><div className="mt-4 flex justify-end"><Button type="button" variant="secondary" disabled={saving || !validGuests.length} onClick={syncSummary}>Sincronizar cantidades con el evento</Button></div></section></section> : null}
     <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-zinc-950">{dirty ? 'Cambios pendientes' : 'Lista actualizada'}</h2><p className="mt-1 text-sm text-zinc-500">{dirty ? 'Tus cambios siguen guardados localmente hasta que los confirmes.' : 'No hay cambios pendientes para guardar.'}</p></div><div className="flex flex-wrap gap-2">{dirty ? <Button type="button" variant="secondary" disabled={saving} onClick={discard}><RotateCcw className="mr-2 h-4 w-4" />Descartar</Button> : null}<Button type="button" disabled={saving || !dirty} onClick={save}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando...' : 'Guardar cambios'}</Button></div></div></section>

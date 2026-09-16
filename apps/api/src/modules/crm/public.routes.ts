@@ -11,6 +11,7 @@ import { validateRequest } from '../../middlewares/validateRequest';
 import { ApiError } from '../../middlewares/errorHandler';
 import { createQuoteRequest } from './quote-request.service';
 import { publicGuestListAccess, publicGuestListAccessPayload } from './public-guest-list-access';
+import { guestListSchema } from './guest-list.schema';
 
 const router = Router();
 const messageMaxWords = 120;
@@ -45,11 +46,8 @@ const schema = z.object({
   query: z.object({})
 });
 const guestListToken = z.string().regex(/^[A-Za-z0-9_-]{32,}$/);
-const publicGuestTableSchema = z.object({ id: z.string().trim().max(120).optional(), name: z.string().trim().min(1).max(120), capacity: z.coerce.number().int().positive().max(100).optional(), audience: z.enum(['children', 'family', 'open']).optional(), notes: z.string().trim().max(500).optional() });
-const publicGuestSchema = z.object({ id: z.string().trim().max(120).optional(), fullName: z.string().trim().min(1).max(160), tableId: z.string().trim().max(120).optional(), meal: z.string().trim().max(100).optional(), ageGroup: z.enum(['adult', 'child_1_4', 'child_5_9', 'minor_10_17']).optional(), dietaryPreference: z.enum(['vegetarian', 'vegan', 'celiac', 'lactose_free', 'none']).optional(), notes: z.string().trim().max(600).optional(), confirmed: z.boolean().optional() });
-const publicGuestListSchema = z.object({ tables: z.array(publicGuestTableSchema).max(80).default([]), guests: z.array(publicGuestSchema).max(1000).default([]), notes: z.string().trim().max(2500).optional() });
 const publicGuestListGetSchema = z.object({ body: z.unknown().optional(), params: z.object({ token: guestListToken }), query: z.object({}) });
-const publicGuestListUpdateSchema = z.object({ body: z.object({ guestList: publicGuestListSchema }), params: z.object({ token: guestListToken }), query: z.object({}) });
+const publicGuestListUpdateSchema = z.object({ body: z.object({ guestList: guestListSchema, expectedSubmittedAt: z.string().datetime().nullable().optional() }), params: z.object({ token: guestListToken }), query: z.object({}) });
 
 async function readLeanList(query: any, sort?: Record<string, 1 | -1>): Promise<any[]> {
   if (!query) return [];
@@ -155,14 +153,23 @@ router.get('/guest-list/:token', validateRequest(publicGuestListGetSchema), asyn
 }));
 
 router.patch('/guest-list/:token', validateRequest(publicGuestListUpdateSchema), asyncHandler(async (request, response) => {
-  const event: any = await Event.findOne({ guestListAccessToken: request.params.token, guestListAccessTokenRevokedAt: null, status: { $nin: ['cancelled', 'lost'] }, deletedAt: null });
+  const eventQuery = { guestListAccessToken: request.params.token, guestListAccessTokenRevokedAt: null, status: { $nin: ['cancelled', 'lost'] }, deletedAt: null };
+  const event: any = await Event.findOne(eventQuery);
   if (!event) throw new ApiError(404, 'El enlace de lista de invitados no es válido o ya no está disponible.');
   const access = publicGuestListAccess(event.eventDate);
   if (!access.editable) throw new ApiError(403, 'GUEST_LIST_EDITING_CLOSED', 'La lista de invitados quedó cerrada para edición 15 días antes del evento. El equipo de M&M Eventos puede seguir gestionándola internamente.');
-  event.resourcePlanSnapshot = { ...(event.resourcePlanSnapshot ?? {}), guestList: { ...request.body.guestList, submittedAt: new Date().toISOString() } };
-  event.markModified('resourcePlanSnapshot');
-  await event.save();
-  return sendSuccess(response, { guestList: event.resourcePlanSnapshot.guestList, savedAt: new Date().toISOString() });
+  const expectedSubmittedAt = request.body.expectedSubmittedAt ?? null;
+  if ((event.resourcePlanSnapshot?.guestList?.submittedAt ?? null) !== expectedSubmittedAt) {
+    throw new ApiError(409, 'GUEST_LIST_CHANGED', 'La lista cambió desde otra sesión. Tus cambios siguen en este dispositivo; consultá la versión actual antes de reemplazarla.');
+  }
+  const guestList = { ...request.body.guestList, submittedAt: new Date().toISOString() };
+  const savedEvent: any = await Event.findOneAndUpdate(
+    { ...eventQuery, eventDate: event.eventDate, 'resourcePlanSnapshot.guestList.submittedAt': expectedSubmittedAt },
+    { $set: { 'resourcePlanSnapshot.guestList': guestList } },
+    { new: true }
+  );
+  if (!savedEvent) throw new ApiError(409, 'GUEST_LIST_EVENT_CHANGED', 'El evento cambió mientras guardabas. Actualizá la página y volvé a intentar.');
+  return sendSuccess(response, { guestList: savedEvent.resourcePlanSnapshot.guestList, savedAt: guestList.submittedAt });
 }));
 
 router.post('/quick-quote', validateRequest(schema), asyncHandler(async (request, response) => {

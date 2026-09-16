@@ -17,6 +17,7 @@ import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
 import { findOrCreateCustomer } from './contact-dedupe.service';
 import { buildInitialResourcePlan } from './event-resource-plan';
+import { guestListSchema } from './guest-list.schema';
 import { buildDefaultEventAlerts } from './event-alert-defaults';
 import { createContractFromEvent } from './event-to-contract.service';
 import { convertQuoteToEvent } from './quote-to-event.service';
@@ -1361,6 +1362,29 @@ router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(id
   return sendSuccess(response, { event, contract, proposedContract, contracts });
 }));
 
+router.patch('/:id/guest-list', requirePermission(Permission.EVENTS_UPDATE), validateRequest(z.object({
+  body: z.object({ guestList: guestListSchema, expectedSubmittedAt: z.string().datetime().nullable().optional() }),
+  params: z.object({ id: objectId }),
+  query: z.object({})
+})), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
+  const expectedSubmittedAt = request.body.expectedSubmittedAt ?? null;
+  if ((event.resourcePlanSnapshot?.guestList?.submittedAt ?? null) !== expectedSubmittedAt) {
+    throw new ApiError(409, 'GUEST_LIST_CHANGED', 'La lista cambió desde otra sesión. Actualizá la lista antes de reemplazarla.');
+  }
+  const guestList = { ...request.body.guestList, submittedAt: new Date().toISOString() };
+  const savedEvent: any = await Event.findOneAndUpdate(
+    { _id: event._id, deletedAt: null, status: { $nin: ['cancelled', 'lost'] }, 'resourcePlanSnapshot.guestList.submittedAt': expectedSubmittedAt },
+    { $set: { 'resourcePlanSnapshot.guestList': guestList, updatedBy: request.user!.id } },
+    { new: true }
+  );
+  if (!savedEvent) throw new ApiError(409, 'EVENT_CHANGED', 'El evento cambió mientras guardabas. Actualizá la página y volvé a intentar.');
+  await writeAuditLog(request, 'EVENT_GUEST_LIST_UPDATE', 'Event', event._id.toString(), { guestCount: guestList.guests.length, tableCount: guestList.tables.length });
+  return sendSuccess(response, { guestList: savedEvent.resourcePlanSnapshot.guestList });
+}));
+
 router.post('/:id/create-contract', requirePermission(Permission.CONTRACTS_CREATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const event = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
@@ -1390,8 +1414,10 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   if (Object.prototype.hasOwnProperty.call(updateBody, 'resourcePlanSnapshot')) {
     if (!updateBody.resourcePlanSnapshot || typeof updateBody.resourcePlanSnapshot !== 'object' || Array.isArray(updateBody.resourcePlanSnapshot)) throw new ApiError(422, 'EVENT_RESOURCE_PLAN_INVALID');
     updateBody.resourcePlanSnapshot = {
+      ...(event.resourcePlanSnapshot ?? {}),
       ...updateBody.resourcePlanSnapshot,
       supplierAssignments: event.resourcePlanSnapshot?.supplierAssignments ?? [],
+      guestList: event.resourcePlanSnapshot?.guestList,
     };
   }
   const currentReservationDay = eventDay(event.eventDate);
@@ -1443,9 +1469,20 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   }
   const contractSensitiveFields =['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'estimatedAmount', 'finalAmount', 'commercialSnapshot', 'menuSnapshot', 'servicesSnapshot', 'paymentSnapshot', 'paymentPlanSnapshot'];
   const hasSensitiveChanges = contractSensitiveFields.some((field) => Object.prototype.hasOwnProperty.call(updateBody, field) && JSON.stringify(event[field]) !== JSON.stringify(updateBody[field]));
+  const resourcePlanUpdate = updateBody.resourcePlanSnapshot as Record<string, unknown> | undefined;
+  delete updateBody.resourcePlanSnapshot;
   Object.assign(event, updateBody, { updatedBy: request.user!.id });
+  if (resourcePlanUpdate) {
+    // Mixed se guarda por subruta para que un guardado operativo concurrente no
+    // reemplace la lista recién enviada por el cliente.
+    for (const [key, value] of Object.entries(resourcePlanUpdate)) {
+      if (key === 'guestList' || key === 'supplierAssignments') continue;
+      if (typeof event.set === 'function') event.set(`resourcePlanSnapshot.${key}`, value);
+      else event.resourcePlanSnapshot = { ...(event.resourcePlanSnapshot ?? {}), [key]: value };
+    }
+  }
   await event.save();
-  if (Object.prototype.hasOwnProperty.call(updateBody, 'resourcePlanSnapshot')) {
+  if (resourcePlanUpdate) {
     await syncEventAlertCalendarItems(event, event.resourcePlanSnapshot?.alerts, request.user!.id);
   }
   if (nextReservationDay && nextReservationDay !== currentReservationDay) await EventTablewareAllocation.updateMany({ eventId: event._id, releasedAt: null }, { $set: { eventDay: nextReservationDay, updatedBy: request.user!.id } });
