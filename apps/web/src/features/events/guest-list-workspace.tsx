@@ -366,8 +366,9 @@ function GuestListWorkspaceContent({ event, plan, saving, onSaveGuestList, onSer
   const selectedTableGuests = selectedTable ? guests.filter((guest) => guest.tableId === selectedTable.id && guest.fullName.trim()) : [];
   if (staleDraft) return <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm sm:p-7" role="alert">
     <h2 className="text-lg font-semibold">Hay un borrador anterior en este navegador</h2>
-    <p className="mt-2 text-sm">El enlace del cliente ya guardó una versión más reciente. No aplicamos el borrador antiguo ni lo borramos: por eso podía parecer que la lista anterior seguía vigente al recargar la página.</p>
+    <p className="mt-2 text-sm">La lista guardada en el servidor tiene una versión más reciente. No aplicamos ni borramos el borrador anterior de este navegador.</p>
     <p className="mt-3 text-sm font-medium">Versión del servidor: {validGuests.length} invitados. Borrador local: {(staleDraft.guestList.guests ?? []).filter((guest) => guest.fullName.trim()).length} invitados.</p>
+    <details className="mt-4 rounded-xl border border-amber-200 bg-white p-4 text-sm"><summary className="cursor-pointer font-semibold">Ver invitados de la lista actual</summary><ul className="mt-3 max-h-64 list-disc space-y-1 overflow-y-auto pl-5">{validGuests.map((guest, index) => <li key={guest.id ?? index}>{guest.fullName}</li>)}</ul></details>
     <details className="mt-4 rounded-xl border border-amber-200 bg-white p-4 text-sm">
       <summary className="cursor-pointer font-semibold">Revisar el contenido del borrador local antes de descartarlo</summary>
       <p className="mt-3">Mesas: {(staleDraft.guestList.tables ?? []).map((table) => table.name).join(' · ') || 'ninguna'}</p>
