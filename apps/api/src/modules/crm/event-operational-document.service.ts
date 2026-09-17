@@ -255,17 +255,90 @@ function timelineItemRows(event: any): any[] {
   return Array.isArray(event.resourcePlanSnapshot?.timelineItems) ? event.resourcePlanSnapshot.timelineItems.filter((item: any) => item?.title || item?.notes) : [];
 }
 
-function timelineStaffNotes(event: any, items: any[]): Array<{ reference: string; meta: string; note: string }> {
-  const generalStaffNotes = Array.isArray(event.resourcePlanSnapshot?.staffNotes) ? event.resourcePlanSnapshot.staffNotes.filter((item: any) => text(item?.notes, '') !== '') : [];
-  return [
-    ...generalStaffNotes.map((item: any) => ({ reference: text(item.title, 'Nota general para staff'), meta: 'Indicación general', note: text(item.notes, '') })),
-    ...items.filter((item: any) => text(item.notes, '') !== '').map((item: any) => ({ reference: [text(item.time, 'Sin horario'), text(item.title, 'Momento sin título')].join(' · '), meta: '', note: text(item.notes, '') }))
-  ];
+function generalStaffNotes(event: any): Array<{ reference: string; meta: string; note: string }> {
+  const notes = Array.isArray(event.resourcePlanSnapshot?.staffNotes) ? event.resourcePlanSnapshot.staffNotes : [];
+  return notes
+    .filter((item: any) => text(item?.notes, '') !== '')
+    .map((item: any) => ({ reference: text(item.title, 'Nota general para staff'), meta: 'Indicación general', note: text(item.notes, '') }));
 }
 
 function timelineHasContent(event: any): boolean {
   const items = timelineItemRows(event);
-  return items.length > 0 || timelineStaffNotes(event, items).length > 0;
+  return items.length > 0 || generalStaffNotes(event).length > 0;
+}
+
+type CompactTimelineRow = { index: number; time: string; title: string; note: string; height: number; titleHeight: number };
+type CompactTimelineLayout = { columns: [CompactTimelineRow[], CompactTimelineRow[]]; columnWidth: number; timeWidth: number; contentWidth: number; height: number };
+
+/**
+ * Antes de dividir Momentos en dos hojas, el cronograma integral prueba una
+ * composición de dos columnas. Conserva cada nota completa y el orden horario
+ * (se lee de arriba hacia abajo y luego continúa en la segunda columna), pero
+ * aprovecha el espacio lateral que una tabla de una sola columna deja libre.
+ */
+function compactTimelineLayout(document: PDFKit.PDFDocument, items: any[]): CompactTimelineLayout | undefined {
+  if (items.length < 2) return undefined;
+  const gap = 10;
+  const columnWidth = (page.right - page.left - gap) / 2;
+  const timeWidth = 42;
+  const contentWidth = columnWidth - timeWidth - 12;
+  const rows = items.map((item: any, index: number): CompactTimelineRow => {
+    const time = text(item.time, '—');
+    const title = text(item.title);
+    const note = text(item.notes, '');
+    const timeHeight = document.font('Helvetica-Bold').fontSize(7.1).heightOfString(time, { width: timeWidth, lineGap: 1 });
+    const titleHeight = document.font('Helvetica-Bold').fontSize(7.2).heightOfString(title, { width: contentWidth, lineGap: 1 });
+    const noteHeight = note ? document.font('Helvetica').fontSize(6.7).heightOfString(note, { width: contentWidth, lineGap: 1 }) : 0;
+    const contentHeight = titleHeight + (note ? noteHeight + 8 : 0);
+    return { index, time, title, note, titleHeight, height: Math.max(timeHeight, contentHeight) + 11 };
+  });
+  const columnHeight = (column: CompactTimelineRow[]) => 16 + column.reduce((total, row) => total + row.height + 3, 0);
+  let best: CompactTimelineLayout | undefined;
+  for (let split = 1; split < rows.length; split += 1) {
+    const columns: [CompactTimelineRow[], CompactTimelineRow[]] = [rows.slice(0, split), rows.slice(split)];
+    const height = Math.max(columnHeight(columns[0]), columnHeight(columns[1]));
+    if (!best || height < best.height) best = { columns, columnWidth, timeWidth, contentWidth, height };
+  }
+  return best;
+}
+
+function timelineRowsHeight(document: PDFKit.PDFDocument, items: any[]): number {
+  const columns = layoutColumns([['Hora', 66], ['Momento', 420]]);
+  return 27 + items.reduce((total: number, item: any) => {
+    const note = text(item.notes, '');
+    const values = [text(item.time, '—'), text(item.title)];
+    const mainContentHeight = Math.max(...columns.map((column, columnIndex) => document
+      .font(columnIndex === 1 ? 'Helvetica-Bold' : 'Helvetica')
+      .fontSize(8.2)
+      .heightOfString(values[columnIndex], { width: column.width, lineGap: 2 })));
+    const noteHeight = note ? document.font('Helvetica').fontSize(8).heightOfString(note, { width: page.right - columns[1].x - 12, lineGap: 2 }) : 0;
+    return total + Math.max(30, 9 + mainContentHeight + (note ? 21 + noteHeight : 8)) + 5;
+  }, 0);
+}
+
+function compactTimeline(document: PDFKit.PDFDocument, layout: CompactTimelineLayout): void {
+  const startY = document.y;
+  const columnX = [page.left, page.left + layout.columnWidth + 10];
+  layout.columns.forEach((rows, columnIndex) => {
+    const x = columnX[columnIndex];
+    document.font('Helvetica-Bold').fontSize(6.1).fillColor(color.muted).text('HORA', x + 7, startY, { width: layout.timeWidth });
+    document.text('MOMENTO', x + layout.timeWidth + 7, startY, { width: layout.contentWidth });
+    document.moveTo(x, startY + 10).lineTo(x + layout.columnWidth, startY + 10).strokeColor(color.line).lineWidth(.6).stroke();
+    let y = startY + 15;
+    rows.forEach((row) => {
+      document.roundedRect(x, y, layout.columnWidth, row.height, 4).fill(row.index % 2 ? color.cream : color.card);
+      document.font('Helvetica-Bold').fontSize(7.1).fillColor(color.ink).text(row.time, x + 7, y + 5, { width: layout.timeWidth, lineGap: 1 });
+      const contentX = x + layout.timeWidth + 7;
+      document.font('Helvetica-Bold').fontSize(7.2).fillColor(color.ink).text(row.title, contentX, y + 5, { width: layout.contentWidth, lineGap: 1 });
+      if (row.note) {
+        const noteY = y + 5 + row.titleHeight + 2;
+        document.font('Helvetica-Bold').fontSize(5.7).fillColor(color.muted).text('NOTAS', contentX, noteY, { width: layout.contentWidth });
+        document.font('Helvetica').fontSize(6.7).fillColor('#344054').text(row.note, contentX, noteY + 6, { width: layout.contentWidth, lineGap: 1 });
+      }
+      y += row.height + 3;
+    });
+  });
+  document.y = startY + layout.height;
 }
 
 function timeline(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType): void {
@@ -273,6 +346,12 @@ function timeline(document: PDFKit.PDFDocument, event: any, type: OperationalDoc
   if (!items.length) {
     emptyNote(document, event, 'Todavía no hay momentos cargados en el cronograma.');
   } else {
+    const compactLayout = type === 'full' && timelineRowsHeight(document, items) > page.bottom - 30 - document.y
+      ? compactTimelineLayout(document, items)
+      : undefined;
+    if (compactLayout && compactLayout.height <= page.bottom - 30 - document.y) {
+      compactTimeline(document, compactLayout);
+    } else {
     const columns = layoutColumns([['Hora', 66], ['Momento', 420]]);
     const drawHeader = () => {
       ensure(document, event, type, 25);
@@ -307,8 +386,9 @@ function timeline(document: PDFKit.PDFDocument, event: any, type: OperationalDoc
       }
       document.y = y + contentHeight + 5;
     });
+    }
   }
-  const staffNotes = timelineStaffNotes(event, items);
+  const staffNotes = generalStaffNotes(event);
   if (!staffNotes.length) return;
   // En el cronograma integral, las notas del equipo constituyen una sección operativa
   // independiente: empiezan siempre en una hoja nueva y pueden continuar en las
@@ -980,7 +1060,7 @@ function timelineWordHtml(event: any): string {
   const table = items.length
     ? `<table><thead><tr><th>Hora</th><th>Momento</th><th>Notas</th></tr></thead><tbody>${items.map((item: any) => `<tr><td>${escapeHtml(text(item.time, '—'))}</td><td><b>${escapeHtml(text(item.title))}</b></td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`
     : '<p class="empty">Todavía no hay momentos cargados en el cronograma.</p>';
-  const staffNotes = timelineStaffNotes(event, items);
+  const staffNotes = generalStaffNotes(event);
   const staffNotesHtml = staffNotes.length ? `<h2>Notas para staff</h2><p class="staff-hint">Indicaciones clave para el equipo durante el evento.</p>${staffNotes.map((item) => `<section class="note"><h3>${escapeHtml(item.reference)}</h3><small>${escapeHtml(item.meta)}</small><p>${escapeHtml(item.note).replace(/\n/g, '<br>')}</p></section>`).join('')}` : '';
   return `${table}${staffNotesHtml}`;
 }

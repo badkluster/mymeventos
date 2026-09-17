@@ -203,6 +203,40 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(word).not.toContain('<th>Estado</th>');
   });
 
+  it('does not repeat notes already attached to moments in the staff notes section', async () => {
+    const momentNote = 'Abrir puertas y confirmar el ingreso con la familia.';
+    const event = {
+      ...minimalEvent,
+      resourcePlanSnapshot: {
+        timelineItems: [{ time: '21:00', title: 'Recepción de invitados', notes: momentNote }]
+      }
+    };
+    const pdf = await generateOperationalPdf(event, 'full');
+    const word = html(generateOperationalWord(event, 'full').buffer);
+
+    expect(pdfPageCount(pdf.buffer)).toBe(1);
+    expect(pdfContentText(pdf.buffer)).toContain(momentNote);
+    expect(pdfContentText(pdf.buffer)).not.toContain('Notas para staff');
+    expect(word).toContain(momentNote);
+    expect(word).not.toContain('<h2>Notas para staff</h2>');
+  });
+
+  it('uses a compact two-column layout when it keeps all event moments on the first page', async () => {
+    const timelineItems = Array.from({ length: 15 }, (_, index) => ({
+      time: `${String(18 + Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`,
+      title: `Momento operativo ${index + 1} con coordinación general`,
+      notes: index === 0
+        ? 'Colocar cubiertos, plato de postre y copas. Preparar vasos para chicos, bebida a mesa y barra de tragos sin alcohol antes del ingreso de invitados.'
+        : index === 14
+          ? 'Contar mantelería y vajilla, sacar la basura, dejar todo ordenado y entregar el sobrante de comida a la familia.'
+          : index % 3 === 0 ? 'Confirmar con el responsable, preparar el sector y avisar al equipo antes de avanzar.' : ''
+    }));
+    const pdf = await generateOperationalPdf({ ...minimalEvent, resourcePlanSnapshot: { timelineItems } }, 'full');
+
+    expect(pdfPageCount(pdf.buffer)).toBe(1);
+    expect(pdfContentText(pdf.buffer)).toContain('Momento operativo 15 con coordinación general');
+  });
+
   it('prints vajilla and mantelería as separate compact operational control tables in the full schedule PDF', async () => {
     const pdf = await generateOperationalPdf(fullEvent, 'full');
     const content = pdfContentText(pdf.buffer);
