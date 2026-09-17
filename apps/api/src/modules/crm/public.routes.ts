@@ -146,10 +146,13 @@ router.get('/salons', asyncHandler(async (_request, response) => {
 }));
 
 router.get('/guest-list/:token', validateRequest(publicGuestListGetSchema), asyncHandler(async (request, response) => {
-  const event: any = await Event.findOne({ guestListAccessToken: request.params.token, guestListAccessTokenRevokedAt: null, status: { $nin: ['cancelled', 'lost'] }, deletedAt: null }).select('eventName eventType eventDate guestCount resourcePlanSnapshot').lean();
+  const event: any = await Event.findOne({ guestListAccessToken: request.params.token, guestListAccessTokenRevokedAt: null, status: { $nin: ['cancelled', 'lost'] }, deletedAt: null })
+    .select('eventName eventType eventDate guestCount customerId resourcePlanSnapshot')
+    .populate('customerId', 'fullName')
+    .lean();
   if (!event) throw new ApiError(404, 'El enlace de lista de invitados no es válido o ya no está disponible.');
   const guestList = event.resourcePlanSnapshot?.guestList ?? { tables: [], guests: [], notes: '' };
-  return sendSuccess(response, { event: { eventName: event.eventName, eventType: event.eventType, eventDate: event.eventDate, guestCount: event.guestCount }, guestList, access: publicGuestListAccessPayload(publicGuestListAccess(event.eventDate)) });
+  return sendSuccess(response, { event: { eventName: event.eventName, eventType: event.eventType, eventDate: event.eventDate, guestCount: event.guestCount, customerName: event.customerId?.fullName }, guestList, access: publicGuestListAccessPayload(publicGuestListAccess(event.eventDate)) });
 }));
 
 router.patch('/guest-list/:token', validateRequest(publicGuestListUpdateSchema), asyncHandler(async (request, response) => {

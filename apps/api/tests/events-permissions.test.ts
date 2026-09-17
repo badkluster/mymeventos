@@ -78,7 +78,7 @@ function chainLean(value: unknown) {
   return { lean: vi.fn().mockResolvedValue(value) };
 }
 function queryChain(value: unknown) {
-  return { select: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
+  return { select: vi.fn().mockReturnThis(), populate: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
 }
 function populatedQuery(value: unknown) {
   return { populate: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue(value) };
@@ -144,6 +144,24 @@ describe('public guest-list persistence', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+  });
+
+  it('identifies the customer in the public guest-list context', async () => {
+    mocks.eventFindOne.mockReturnValue(queryChain({
+      _id: eventId,
+      eventName: 'Quince de Sofía',
+      eventType: 'Quince años',
+      eventDate: new Date('2028-12-05T00:00:00.000Z'),
+      guestCount: 80,
+      customerId: { fullName: 'María González' },
+      resourcePlanSnapshot: { guestList: { tables: [], guests: [] } }
+    }));
+
+    const response = await request(app).get(`/api/public/guest-list/${token}`);
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.data.event).toEqual(expect.objectContaining({ customerName: 'María González' }));
+    expect(mocks.eventFindOne).toHaveBeenCalledWith(expect.objectContaining({ guestListAccessToken: token }));
   });
 
   it('writes only the guest-list path and returns the saved version', async () => {
