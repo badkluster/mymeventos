@@ -42,6 +42,7 @@ export type Quote = {
   includedServices?: string[];
   notes?: string;
   observations?: string;
+  considerations?: string;
   validUntil?: string;
   pdfUrl?: string;
   pdfSecureUrl?: string;
@@ -62,6 +63,8 @@ export type Customer = { _id: string; fullName?: string; firstName?: string; las
 export type EventTimelineItem = { id?: string; time?: string; title: string; area?: string; owner?: string; status?: 'pending' | 'ready' | 'done' | 'cancelled' | string; notes?: string };
 export type EventProductItem = { id?: string; name: string; category?: string; productionCategory?: 'savory' | 'sweet' | 'beverages' | 'other' | string; quantity?: number; unit?: string; supplierName?: string; unitCost?: number; totalCost?: number; status?: 'planned' | 'reserved' | 'purchased' | 'used' | 'returned' | string; notes?: string };
 export type EventInventoryItem = { id?: string; name: string; category?: string; quantityRequired?: number; quantityReserved?: number; quantityReturned?: number; unit?: string; status?: 'planned' | 'reserved' | 'delivered' | 'returned' | 'missing' | 'damaged' | string; notes?: string };
+/** Registro operativo por evento: separa lo propio de lo alquilado y deja constancia del control de salida y retorno. */
+export type EventLinenItem = { id?: string; name: string; ownQuantity?: number; rentedQuantity?: number; unit?: string; startCheck?: string; endCheck?: string; notes?: string };
 export type EventSupplierAssignment = {
   id?: string;
   supplierId?: string;
@@ -120,6 +123,7 @@ export type EventResourcePlan = {
   guestList?: EventGuestList;
   productItems?: EventProductItem[];
   inventoryItems?: EventInventoryItem[];
+  linenItems?: EventLinenItem[];
   supplierAssignments?: EventSupplierAssignment[];
   tasks?: EventTaskItem[];
   alerts?: EventAlertItem[];
@@ -162,6 +166,7 @@ export type Event = {
   guestListAccessToken?: string;
   contractReadyChecklist?: Record<string, boolean>;
   notes?: string;
+  considerations?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -195,6 +200,7 @@ export type Contract = {
   paidAmount?: number;
   balanceAmount?: number;
   observations?: string;
+  considerations?: string;
   approvedAt?: string;
   approvedByUserId?: string;
   cancelledAt?: string;
@@ -304,6 +310,7 @@ export type PackageTemplate = {
   giftText?: string;
   menuSections?: { title?: string; name?: string; items: string[] }[];
   includedServices?: string[];
+  considerations?: string;
 };
 
 export type PaginationMeta = { page: number; limit: number; totalItems: number; totalPages: number; hasNextPage: boolean; hasPreviousPage: boolean };

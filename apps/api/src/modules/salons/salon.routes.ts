@@ -159,7 +159,8 @@ const ruleSchema = z.object({
     giftText: optionalText,
     menuSections: menuSectionsSchema.optional(),
     includedServices: z.array(z.string().trim().min(1)).optional(),
-    notes: optionalText
+    notes: optionalText,
+    considerations: optionalText
   }),
   params: z.object({ id: objectId, packageTemplateId: objectId }),
   query: z.object({})

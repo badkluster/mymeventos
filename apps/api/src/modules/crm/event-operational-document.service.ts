@@ -5,7 +5,6 @@ export type OperationalDocumentType = 'timeline' | 'logistics' | 'guest_list' | 
 
 const page = { width: 595.28, height: 841.89, left: 42, right: 553, bottom: 790 };
 const color = { ink: '#101827', gold: '#b8965a', cream: '#fbf8f1', card: '#f4f6f8', muted: '#667085', line: '#dfe3e8', white: '#ffffff' };
-const timelineStatuses: Record<string, string> = { pending: 'Pendiente', ready: 'Preparado', done: 'Hecho', completed: 'Hecho', cancelled: 'Cancelado' };
 const dietaryPreferenceLabels: Record<string, string> = { vegetarian: 'Vegetariano/a', vegan: 'Vegano/a', celiac: 'Celíaco/a', lactose_free: 'Sin lactosa' };
 const guestAgeGroupLabels: Record<string, string> = { child_1_4: '1 a 4 años · sin cargo', child_5_9: '5 a 9 años · media tarifa', minor_10_17: '10 a 17 años · menor' };
 const tableAudienceLabels: Record<string, string> = { children: 'Chicos', family: 'Familia', open: 'Libre' };
@@ -152,17 +151,49 @@ function emptyNote(document: PDFKit.PDFDocument, event: any, message: string): v
 /** Tarjeta con barra dorada, título, meta opcional y cuerpo de texto libre — usada por momentos, productos, proveedores y staff. */
 function card(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType, title: string, meta: string | undefined, body: string): void {
   const width = page.right - page.left - 32;
-  const bodyHeight = body ? document.heightOfString(body, { width, lineGap: 3 }) : 0;
-  const height = Math.max(38, 16 + (meta ? 14 : 0) + (body ? bodyHeight + 10 : 6));
+  const titleHeight = document.font('Helvetica-Bold').fontSize(9.4).heightOfString(title, { width, lineGap: 2 });
+  const metaHeight = meta ? document.font('Helvetica').fontSize(7.8).heightOfString(meta, { width, lineGap: 2 }) : 0;
+  const bodyHeight = body ? document.font('Helvetica').fontSize(8.6).heightOfString(body, { width, lineGap: 3 }) : 0;
+  const height = Math.max(38, 12 + titleHeight + (meta ? metaHeight + 5 : 0) + (body ? bodyHeight + 7 : 0) + 10);
   ensure(document, event, type, height + 8);
   const y = document.y;
   document.roundedRect(page.left, y, page.right - page.left, height, 8).fill(color.card);
   document.roundedRect(page.left, y, 4, height, 2).fill(color.gold);
-  document.font('Helvetica-Bold').fontSize(9.4).fillColor(color.ink).text(title, page.left + 16, y + 12, { width, ellipsis: true });
-  let cursor = y + 27;
-  if (meta) { document.font('Helvetica').fontSize(7.8).fillColor(color.muted).text(meta, page.left + 16, cursor, { width, ellipsis: true }); cursor += 14; }
+  let cursor = y + 12;
+  document.font('Helvetica-Bold').fontSize(9.4).fillColor(color.ink).text(title, page.left + 16, cursor, { width, lineGap: 2 });
+  cursor += titleHeight + 5;
+  if (meta) {
+    document.font('Helvetica').fontSize(7.8).fillColor(color.muted).text(meta, page.left + 16, cursor, { width, lineGap: 2 });
+    cursor += metaHeight + 5;
+  }
   if (body) document.font('Helvetica').fontSize(8.6).fillColor('#344054').text(body, page.left + 16, cursor, { width, lineGap: 3 });
   document.y = y + height + 8;
+}
+
+/**
+ * Las notas de staff pueden ser extensas y, en el cronograma integral, ocupan una
+ * sección independiente. Esta variante conserva el texto completo usando tipografía
+ * y espaciado apenas más compactos, sin recortar ni resumir la indicación operativa.
+ */
+function staffNoteCard(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType, title: string, meta: string | undefined, body: string): void {
+  const width = page.right - page.left - 28;
+  const titleHeight = document.font('Helvetica-Bold').fontSize(8.2).heightOfString(title, { width, lineGap: 1.2 });
+  const metaHeight = meta ? document.font('Helvetica').fontSize(6.9).heightOfString(meta, { width, lineGap: 1 }) : 0;
+  const bodyHeight = body ? document.font('Helvetica').fontSize(7.4).heightOfString(body, { width, lineGap: 1.7 }) : 0;
+  const height = Math.max(30, 8 + titleHeight + (meta ? metaHeight + 3 : 0) + (body ? bodyHeight + 5 : 0) + 7);
+  ensure(document, event, type, height + 5);
+  const y = document.y;
+  document.roundedRect(page.left, y, page.right - page.left, height, 6).fill(color.card);
+  document.roundedRect(page.left, y, 3, height, 2).fill(color.gold);
+  let cursor = y + 8;
+  document.font('Helvetica-Bold').fontSize(8.2).fillColor(color.ink).text(title, page.left + 14, cursor, { width, lineGap: 1.2 });
+  cursor += titleHeight + 3;
+  if (meta) {
+    document.font('Helvetica').fontSize(6.9).fillColor(color.muted).text(meta, page.left + 14, cursor, { width, lineGap: 1 });
+    cursor += metaHeight + 3;
+  }
+  if (body) document.font('Helvetica').fontSize(7.4).fillColor('#344054').text(body, page.left + 14, cursor, { width, lineGap: 1.7 });
+  document.y = y + height + 5;
 }
 
 type TableColumn = { label: string; x: number; width: number };
@@ -228,7 +259,7 @@ function timelineStaffNotes(event: any, items: any[]): Array<{ reference: string
   const generalStaffNotes = Array.isArray(event.resourcePlanSnapshot?.staffNotes) ? event.resourcePlanSnapshot.staffNotes.filter((item: any) => text(item?.notes, '') !== '') : [];
   return [
     ...generalStaffNotes.map((item: any) => ({ reference: text(item.title, 'Nota general para staff'), meta: 'Indicación general', note: text(item.notes, '') })),
-    ...items.filter((item: any) => text(item.notes, '') !== '').map((item: any) => ({ reference: [text(item.time, 'Sin horario'), text(item.title, 'Momento sin título')].join(' · '), meta: [text(item.area, ''), text(item.owner, '')].filter(Boolean).join(' · '), note: text(item.notes, '') }))
+    ...items.filter((item: any) => text(item.notes, '') !== '').map((item: any) => ({ reference: [text(item.time, 'Sin horario'), text(item.title, 'Momento sin título')].join(' · '), meta: '', note: text(item.notes, '') }))
   ];
 }
 
@@ -242,7 +273,7 @@ function timeline(document: PDFKit.PDFDocument, event: any, type: OperationalDoc
   if (!items.length) {
     emptyNote(document, event, 'Todavía no hay momentos cargados en el cronograma.');
   } else {
-    const columns = layoutColumns([['Hora', 54], ['Momento', 163], ['Área', 78], ['Responsable', 93], ['Estado', 65]]);
+    const columns = layoutColumns([['Hora', 66], ['Momento', 420]]);
     const drawHeader = () => {
       ensure(document, event, type, 25);
       const y = document.y;
@@ -253,23 +284,38 @@ function timeline(document: PDFKit.PDFDocument, event: any, type: OperationalDoc
     drawHeader();
     items.forEach((item: any, index: number) => {
       const note = text(item.notes, '');
-      const contentHeight = Math.max(30, note ? document.heightOfString(note, { width: 473, lineGap: 2 }) + 39 : 30);
+      const values = [text(item.time, '—'), text(item.title)];
+      const mainContentHeight = Math.max(...columns.map((column, columnIndex) => document
+        .font(columnIndex === 1 ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(8.2)
+        .heightOfString(values[columnIndex], { width: column.width, lineGap: 2 })));
+      const noteWidth = page.right - columns[1].x - 12;
+      const noteHeight = note ? document.font('Helvetica').fontSize(8).heightOfString(note, { width: noteWidth, lineGap: 2 }) : 0;
+      const contentHeight = Math.max(30, 9 + mainContentHeight + (note ? 21 + noteHeight : 8));
       if (document.y + contentHeight > page.bottom - 30) { newPage(document, event, type); drawHeader(); }
       const y = document.y;
       document.roundedRect(page.left, y, page.right - page.left, contentHeight, 5).fill(index % 2 ? color.cream : color.card);
-      const values = [text(item.time, '—'), text(item.title), text(item.area), text(item.owner), statusLabel(item.status, timelineStatuses, 'Pendiente')];
-      columns.forEach((column, columnIndex) => document.font(columnIndex === 1 ? 'Helvetica-Bold' : 'Helvetica').fontSize(8.2).fillColor(color.ink).text(values[columnIndex], column.x, y + 10, { width: column.width, height: 16, ellipsis: true }));
+      columns.forEach((column, columnIndex) => document
+        .font(columnIndex === 1 ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(8.2)
+        .fillColor(color.ink)
+        .text(values[columnIndex], column.x, y + 9, { width: column.width, lineGap: 2 }));
       if (note) {
-        document.font('Helvetica-Bold').fontSize(6.8).fillColor(color.muted).text('NOTAS', page.left + 75, y + 27);
-        document.font('Helvetica').fontSize(8).fillColor('#344054').text(note, page.left + 75, y + 36, { width: 426, lineGap: 2 });
+        const noteLabelY = y + 9 + mainContentHeight + 4;
+        document.font('Helvetica-Bold').fontSize(6.8).fillColor(color.muted).text('NOTAS', columns[1].x, noteLabelY);
+        document.font('Helvetica').fontSize(8).fillColor('#344054').text(note, columns[1].x, noteLabelY + 9, { width: noteWidth, lineGap: 2 });
       }
       document.y = y + contentHeight + 5;
     });
   }
   const staffNotes = timelineStaffNotes(event, items);
   if (!staffNotes.length) return;
+  // En el cronograma integral, las notas del equipo constituyen una sección operativa
+  // independiente: empiezan siempre en una hoja nueva y pueden continuar en las
+  // siguientes según su extensión. El cronograma simple conserva su presentación compacta.
+  if (type === 'full') newPage(document, event, type);
   section(document, event, type, 'Notas para staff', 'Indicaciones clave para el equipo');
-  staffNotes.forEach((item) => card(document, event, type, item.reference, item.meta || undefined, item.note));
+  staffNotes.forEach((item) => staffNoteCard(document, event, type, item.reference, item.meta || undefined, item.note));
 }
 
 function guestListData(event: any): { tables: any[]; guests: any[] } {
@@ -279,21 +325,96 @@ function guestListData(event: any): { tables: any[]; guests: any[] } {
   return { tables, guests };
 }
 
+/** La lista de mesas sólo expone datos útiles para identificar al invitado, no indicaciones internas de operación. */
+function guestListDetail(guest: any): string {
+  return [
+    guestAgeGroupLabels[guest.ageGroup] ?? '',
+    guest.dietaryPreference && guest.dietaryPreference !== 'none' ? dietaryPreferenceLabels[guest.dietaryPreference] ?? text(guest.dietaryPreference) : ''
+  ].filter(Boolean).join(' · ');
+}
+
 /** `heading = null` omite el título propio — usado desde `full`, donde el área ya dibujó su propio encabezado numerado. */
+function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
+  const { tables, guests } = guestListData(event);
+  const entries = [
+    ...tables.map((table: any) => ({ title: text(table.name), audience: tableAudienceLabels[table.audience] ?? '', capacity: table.capacity, guests: guests.filter((guest: any) => guest.tableId === table.id), notes: text(table.notes, '') })),
+    ...(guests.some((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) ? [{ title: 'Sin mesa asignada', audience: '', capacity: undefined, guests: guests.filter((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)), notes: '' }] : [])
+  ];
+  const gap = 5;
+  const tableWidth = (page.right - page.left - gap * 2) / 3;
+  const numberWidth = 13;
+  const detailWidth = 47;
+  const nameWidth = tableWidth - numberWidth - detailWidth - 14;
+  const groups = Array.from({ length: Math.ceil(entries.length / 3) }, (_, index) => entries.slice(index * 3, index * 3 + 3));
+  const detailFor = guestListDetail;
+
+  groups.forEach((group) => {
+    const entryMetrics = group.map((entry: any) => {
+      const slots = Math.max(entry.guests.length, Number(entry.capacity) || 0);
+      const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience.toUpperCase()}` : ''} · ${entry.guests.length}${entry.capacity ? `/${entry.capacity}` : ''}`;
+      const headingHeight = Math.max(13, document.font('Helvetica-Bold').fontSize(6.4).heightOfString(heading, { width: tableWidth - 10, lineGap: .5 }) + 5);
+      const rowHeights = Array.from({ length: slots }, (_, index) => {
+        const guest = entry.guests[index];
+        if (!guest) return 9.5;
+        const nameHeight = document.font('Helvetica-Bold').fontSize(6.4).heightOfString(text(guest.fullName), { width: nameWidth, lineGap: .6 });
+        const detail = detailFor(guest);
+        const detailHeight = detail ? document.font('Helvetica').fontSize(5.6).heightOfString(detail, { width: detailWidth, lineGap: .6 }) : 0;
+        return Math.max(9.5, Math.max(nameHeight, detailHeight) + 2);
+      });
+      return { entry, heading, headingHeight, slots, rowHeights };
+    });
+    const maxSlots = Math.max(...entryMetrics.map((metric) => metric.slots), 0);
+    const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? 9.5)));
+    const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 10));
+    const groupHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 4;
+    if (document.y + groupHeight > page.bottom - 30) newPage(document, event, 'full');
+    const y = document.y;
+
+    entryMetrics.forEach((metric, entryIndex) => {
+      const x = page.left + entryIndex * (tableWidth + gap);
+      const tableHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0);
+      document.roundedRect(x, y, tableWidth, tableHeight, 4).fill(color.card);
+      document.roundedRect(x, y, tableWidth, metric.headingHeight, 4).fill(color.ink);
+      document.font('Helvetica-Bold').fontSize(6.4).fillColor(color.white).text(metric.heading, x + 5, y + 3, { width: tableWidth - 10, lineGap: .5 });
+      const labelsY = y + metric.headingHeight + 3;
+      document.font('Helvetica-Bold').fontSize(5.1).fillColor(color.muted).text('N°', x + 4, labelsY, { width: numberWidth - 2 });
+      document.font('Helvetica-Bold').fontSize(5.1).fillColor(color.muted).text('APELLIDO Y NOMBRE', x + numberWidth + 5, labelsY, { width: nameWidth });
+      document.font('Helvetica-Bold').fontSize(5.1).fillColor(color.muted).text('DETALLE', x + numberWidth + nameWidth + 7, labelsY, { width: detailWidth - 4 });
+      let rowY = y + headerHeight;
+      rowHeights.forEach((rowHeight, rowIndex) => {
+        const guest = metric.entry.guests[rowIndex];
+        document.moveTo(x + 1, rowY).lineTo(x + tableWidth - 1, rowY).strokeColor(color.line).lineWidth(.35).stroke();
+        document.font('Helvetica-Bold').fontSize(5.7).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + 2, { width: numberWidth - 2, align: 'right' });
+        if (guest) {
+          document.font('Helvetica-Bold').fontSize(6.4).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + 2, { width: nameWidth, lineGap: .6 });
+          const detail = detailFor(guest);
+          if (detail) document.font('Helvetica').fontSize(5.6).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + 2, { width: detailWidth - 4, lineGap: .6 });
+        }
+        rowY += rowHeight;
+      });
+    });
+    document.y = y + groupHeight;
+  });
+}
+
 function guestList(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType, heading: string | null = 'Invitados y mesas'): void {
   const { tables, guests } = guestListData(event);
   if (!tables.length && !guests.length) return;
   if (heading) section(document, event, type, heading, `${guests.length} invitado${guests.length === 1 ? '' : 's'} cargado${guests.length === 1 ? '' : 's'}`);
+  if (type === 'full') {
+    compactFullGuestList(document, event);
+    return;
+  }
   const entries = [
     ...tables.map((table: any) => ({ title: table.name, audience: tableAudienceLabels[table.audience] ?? '', capacity: table.capacity, guests: guests.filter((guest: any) => guest.tableId === table.id), notes: text(table.notes, '') })),
     ...(guests.some((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) ? [{ title: 'Sin mesa asignada', capacity: undefined, guests: guests.filter((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)), notes: '' }] : [])
   ];
   entries.forEach((entry: any) => {
     const rows = entry.guests.map((guest: any) => {
-      const detail = [guestAgeGroupLabels[guest.ageGroup] ?? '', text(guest.meal, ''), guest.dietaryPreference && guest.dietaryPreference !== 'none' ? guest.dietaryPreference : '', text(guest.notes, '')].filter(Boolean).join(' · ');
+      const detail = guestListDetail(guest);
       return { name: text(guest.fullName), detail };
     });
-    const height = Math.max(49, 31 + (entry.notes ? 14 : 0) + rows.reduce((sum: number, row: { name: string; detail: string }) => sum + Math.max(14, document.heightOfString(`${row.name}${row.detail ? ` · ${row.detail}` : ''}`, { width: page.right - page.left - 42 }) + 3), 0));
+    const height = Math.max(49, 31 + rows.reduce((sum: number, row: { name: string; detail: string }) => sum + Math.max(14, document.heightOfString(`${row.name}${row.detail ? ` · ${row.detail}` : ''}`, { width: page.right - page.left - 42 }) + 3), 0));
     ensure(document, event, type, height + 8);
     const y = document.y;
     document.roundedRect(page.left, y, page.right - page.left, height, 8).fill(color.card);
@@ -301,7 +422,6 @@ function guestList(document: PDFKit.PDFDocument, event: any, type: OperationalDo
     const entryHeading = `${entry.title}${entry.audience ? ` · ${entry.audience}` : ''}${entry.capacity ? ` · ${entry.guests.length}/${entry.capacity}` : ` · ${entry.guests.length}`}`;
     document.font('Helvetica-Bold').fontSize(9.4).fillColor(color.ink).text(entryHeading, page.left + 16, y + 12, { width: 460, ellipsis: true });
     let cursor = y + 27;
-    if (entry.notes) { document.font('Helvetica').fontSize(7.8).fillColor(color.muted).text(entry.notes, page.left + 16, cursor, { width: 460, ellipsis: true }); cursor += 13; }
     if (!rows.length) document.font('Helvetica').fontSize(8).fillColor(color.muted).text('Sin invitados asignados.', page.left + 16, cursor);
     rows.forEach((row: { name: string; detail: string }) => { document.font('Helvetica-Bold').fontSize(8.1).fillColor(color.ink).text(row.name, page.left + 16, cursor, { width: 180, ellipsis: true }); if (row.detail) document.font('Helvetica').fontSize(7.8).fillColor(color.muted).text(row.detail, page.left + 202, cursor + 1, { width: 295, ellipsis: true }); cursor += 14; });
     document.y = y + height + 8;
@@ -630,6 +750,65 @@ function tablewareRows(event: any): { salonRows: any[]; externalRows: any[] } {
   return { salonRows: allocations.filter((item: any) => item.source === 'salon_stock'), externalRows: allocations.filter((item: any) => item.source === 'external') };
 }
 
+type OperationalCheckRow = { product: string; quantity: string; origin?: string; start?: string; end?: string; notes?: string };
+
+/** Tabla de control para imprimir: nunca acorta productos ni notas y deja Inicio/Fin listos para el conteo manual. */
+function operationalCheckTable(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType, rows: OperationalCheckRow[], includeOrigin: boolean): void {
+  const columns = includeOrigin
+    ? layoutColumns([['Producto', 190], ['Cantidad', 77], ['Origen', 94], ['Inicio', 55], ['Fin', 55]])
+    : layoutColumns([['Producto', 222], ['Cantidad', 148], ['Inicio', 58], ['Fin', 58]]);
+  const drawHeader = () => {
+    ensure(document, event, type, 25);
+    const y = document.y;
+    document.roundedRect(page.left, y, page.right - page.left, 22, 5).fill(color.ink);
+    columns.forEach((column) => document.font('Helvetica-Bold').fontSize(6.6).fillColor(color.white).text(column.label.toUpperCase(), column.x, y + 8, { width: column.width }));
+    document.y = y + 27;
+  };
+  const productColumn = columns[0];
+  const quantityColumn = columns[1];
+  const originColumn = includeOrigin ? columns[2] : undefined;
+  const startColumn = includeOrigin ? columns[3] : columns[2];
+  const endColumn = includeOrigin ? columns[4] : columns[3];
+  drawHeader();
+  rows.forEach((row, index) => {
+    const productHeight = document.font('Helvetica-Bold').fontSize(7.8).heightOfString(row.product, { width: productColumn.width - 8, lineGap: 1 });
+    const notesHeight = row.notes ? document.font('Helvetica').fontSize(6.4).heightOfString(row.notes, { width: productColumn.width - 8, lineGap: .8 }) + 3 : 0;
+    const quantityHeight = document.font('Helvetica').fontSize(7.2).heightOfString(row.quantity, { width: quantityColumn.width - 8, lineGap: 1 });
+    const originHeight = originColumn ? document.font('Helvetica').fontSize(6.9).heightOfString(row.origin || '—', { width: originColumn.width - 8, lineGap: 1 }) : 0;
+    const startHeight = row.start ? document.font('Helvetica').fontSize(7.1).heightOfString(row.start, { width: startColumn.width - 8, lineGap: 1 }) : 0;
+    const endHeight = row.end ? document.font('Helvetica').fontSize(7.1).heightOfString(row.end, { width: endColumn.width - 8, lineGap: 1 }) : 0;
+    const height = Math.max(24, Math.max(productHeight + notesHeight, quantityHeight, originHeight, startHeight, endHeight) + 12);
+    if (document.y + height > page.bottom - 30) { newPage(document, event, type); drawHeader(); }
+    const y = document.y;
+    document.roundedRect(page.left, y, page.right - page.left, height, 4).fill(index % 2 ? color.cream : color.card);
+    document.font('Helvetica-Bold').fontSize(7.8).fillColor(color.ink).text(row.product, productColumn.x + 4, y + 6, { width: productColumn.width - 8, lineGap: 1 });
+    if (row.notes) document.font('Helvetica').fontSize(6.4).fillColor(color.muted).text(row.notes, productColumn.x + 4, y + 7 + productHeight, { width: productColumn.width - 8, lineGap: .8 });
+    document.font('Helvetica').fontSize(7.2).fillColor(color.ink).text(row.quantity, quantityColumn.x + 4, y + 6, { width: quantityColumn.width - 8, lineGap: 1 });
+    if (originColumn) document.font('Helvetica').fontSize(6.9).fillColor(color.ink).text(row.origin || '—', originColumn.x + 4, y + 6, { width: originColumn.width - 8, lineGap: 1 });
+    const writeCheck = (column: TableColumn, value?: string) => {
+      if (value) document.font('Helvetica').fontSize(7.1).fillColor(color.ink).text(value, column.x + 4, y + 6, { width: column.width - 8, lineGap: 1 });
+      else document.moveTo(column.x + 5, y + height - 8).lineTo(column.x + column.width - 5, y + height - 8).strokeColor(color.muted).lineWidth(.45).stroke();
+    };
+    writeCheck(startColumn, row.start);
+    writeCheck(endColumn, row.end);
+    document.y = y + height + 4;
+  });
+}
+
+function tablewareControlRows(event: any): OperationalCheckRow[] {
+  const { salonRows, externalRows } = tablewareRows(event);
+  return [
+    ...salonRows.map((item: any) => ({ product: text(item.itemName), quantity: `${item.quantity ?? '—'} ${text(item.unit, 'unidad')}`, origin: 'Stock propio del salón', notes: text(item.notes, '') })),
+    ...externalRows.map((item: any) => ({ product: text(item.itemName), quantity: `${item.quantity ?? '—'} ${text(item.unit, 'unidad')}`, origin: 'Alquilada / externa', notes: text(item.notes, '') }))
+  ];
+}
+
+function tablewareControl(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType): void {
+  const rows = tablewareControlRows(event);
+  if (!rows.length) return;
+  operationalCheckTable(document, event, type, rows, true);
+}
+
 function tableware(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType): void {
   const { salonRows, externalRows } = tablewareRows(event);
   const columns = layoutColumns(tablewareColumnDefs);
@@ -648,10 +827,39 @@ function inventoryRows(event: any): any[] {
   return Array.isArray(event.resourcePlanSnapshot?.inventoryItems) ? event.resourcePlanSnapshot.inventoryItems.filter((item: any) => text(item?.name, '') !== '') : [];
 }
 
-function inventoryTable(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType): void {
-  const rows = inventoryRows(event);
+function supportingInventoryRows(event: any): any[] {
+  return inventoryRows(event).filter((item: any) => {
+    const category = String(item.category ?? '').toLocaleLowerCase();
+    return !category.includes('vajilla') && !category.includes('manteler');
+  });
+}
+
+function linenRows(event: any): any[] {
+  return Array.isArray(event.resourcePlanSnapshot?.linenItems) ? event.resourcePlanSnapshot.linenItems.filter((item: any) => text(item?.name, '') !== '') : [];
+}
+
+function linenQuantity(item: any): string {
+  const own = Number(item.ownQuantity);
+  const rented = Number(item.rentedQuantity);
+  const parts = [
+    own > 0 ? `${own} propio${own === 1 ? '' : 's'}` : '',
+    rented > 0 ? `${rented} alquilado${rented === 1 ? '' : 's'}` : ''
+  ].filter(Boolean);
+  const value = parts.join(' / ') || 'Cantidad a confirmar';
+  const unit = text(item.unit, 'unidad');
+  return unit === 'unidad' ? value : `${value} (${unit})`;
+}
+
+function linenRegister(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType): void {
+  const rows = linenRows(event).map((item: any) => ({ product: text(item.name), quantity: linenQuantity(item), start: text(item.startCheck, ''), end: text(item.endCheck, ''), notes: text(item.notes, '') }));
   if (!rows.length) return;
-  section(document, event, type, 'Mantelería, mobiliario y equipos', `${rows.length} recurso${rows.length === 1 ? '' : 's'}`);
+  operationalCheckTable(document, event, type, rows, false);
+}
+
+function inventoryTable(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType): void {
+  const rows = supportingInventoryRows(event);
+  if (!rows.length) return;
+  section(document, event, type, 'Mobiliario y equipos', `${rows.length} recurso${rows.length === 1 ? '' : 's'}`);
   renderTable(document, event, type, layoutColumns(inventoryColumnDefs), rows.map((item: any) => [text(item.name), text(item.category, '—'), item.quantityRequired != null ? String(item.quantityRequired) : '—', text(item.unit, '—'), statusLabel(item.status, resourceStatusLabels, 'Planificado'), text(item.notes, '—')]));
 }
 
@@ -710,23 +918,26 @@ function staffRoster(document: PDFKit.PDFDocument, event: any, type: Operational
 }
 
 /**
- * "Cronograma integral": una página por área (momentos, invitados, logística, vajilla y stock,
- * productos, proveedores, staff), en ese orden, saltando por completo cualquier área sin datos
- * cargados. Reutiliza los mismos renderers que los documentos individuales, sólo con `type: 'full'`
- * para que encabezado/pie/paginación permanezcan consistentes en todo el documento.
+ * "Cronograma integral": cada sección operativa arranca en una hoja propia. Vajilla y
+ * mantelería son registros distintos porque sus controles y responsables de devolución no
+ * necesariamente coinciden. Se omiten secciones vacías, pero ninguna fila cargada se trunca.
  */
 function fullReport(document: PDFKit.PDFDocument, event: any): void {
   eventDetails(document, event, 'full', null);
   const { tables, guests } = guestListData(event);
-  const { salonRows, externalRows } = tablewareRows(event);
+  const tableware = tablewareControlRows(event);
+  const linen = linenRows(event);
+  const inventory = supportingInventoryRows(event);
   const areas: Array<{ title: string; hint?: string; hasContent: boolean; render: () => void }> = [
-    { title: '1. Momentos del evento', hint: 'Cronograma horario, responsables y notas para el staff', hasContent: timelineHasContent(event), render: () => timeline(document, event, 'full') },
+    { title: '1. Momentos del evento', hint: 'Cronograma horario y notas para el staff', hasContent: timelineHasContent(event), render: () => timeline(document, event, 'full') },
     { title: '2. Invitados y mesas', hint: (tables.length || guests.length) ? `${guests.length} invitado${guests.length === 1 ? '' : 's'} cargado${guests.length === 1 ? '' : 's'}` : undefined, hasContent: tables.length > 0 || guests.length > 0, render: () => guestList(document, event, 'full', null) },
     { title: '3. Logística y coordinación', hasContent: logisticsActiveSections(event).length > 0, render: () => logistics(document, event, 'full') },
-    { title: '4. Vajilla y stock', hasContent: salonRows.length > 0 || externalRows.length > 0 || inventoryRows(event).length > 0, render: () => { tableware(document, event, 'full'); inventoryTable(document, event, 'full'); } },
-    { title: '5. Productos e insumos', hasContent: productItemRows(event).length > 0, render: () => products(document, event, 'full') },
-    { title: '6. Proveedores', hasContent: supplierAssignmentRows(event).length > 0, render: () => suppliers(document, event, 'full') },
-    { title: '7. Staff asignado y roles', hasContent: staffAssignmentRows(event).length > 0, render: () => staffRoster(document, event, 'full') }
+    { title: '4. Inventario de vajilla', hint: 'Control de salida y retorno', hasContent: tableware.length > 0, render: () => tablewareControl(document, event, 'full') },
+    { title: '5. Registro operativo de mantelería', hint: 'Propios, alquilados y control', hasContent: linen.length > 0, render: () => linenRegister(document, event, 'full') },
+    { title: '6. Mobiliario y equipos', hasContent: inventory.length > 0, render: () => inventoryTable(document, event, 'full') },
+    { title: '7. Productos e insumos', hasContent: productItemRows(event).length > 0, render: () => products(document, event, 'full') },
+    { title: '8. Proveedores', hasContent: supplierAssignmentRows(event).length > 0, render: () => suppliers(document, event, 'full') },
+    { title: '9. Staff asignado y roles', hasContent: staffAssignmentRows(event).length > 0, render: () => staffRoster(document, event, 'full') }
   ];
   const visible = areas.filter((area) => area.hasContent);
   if (!visible.length) {
@@ -767,7 +978,7 @@ function escapeHtml(value: unknown): string {
 function timelineWordHtml(event: any): string {
   const items = timelineItemRows(event);
   const table = items.length
-    ? `<table><thead><tr><th>Hora</th><th>Momento</th><th>Área</th><th>Responsable</th><th>Estado</th><th>Notas</th></tr></thead><tbody>${items.map((item: any) => `<tr><td>${escapeHtml(text(item.time, '—'))}</td><td><b>${escapeHtml(text(item.title))}</b></td><td>${escapeHtml(text(item.area, '—'))}</td><td>${escapeHtml(text(item.owner, '—'))}</td><td>${escapeHtml(statusLabel(item.status, timelineStatuses, 'Pendiente'))}</td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`
+    ? `<table><thead><tr><th>Hora</th><th>Momento</th><th>Notas</th></tr></thead><tbody>${items.map((item: any) => `<tr><td>${escapeHtml(text(item.time, '—'))}</td><td><b>${escapeHtml(text(item.title))}</b></td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`
     : '<p class="empty">Todavía no hay momentos cargados en el cronograma.</p>';
   const staffNotes = timelineStaffNotes(event, items);
   const staffNotesHtml = staffNotes.length ? `<h2>Notas para staff</h2><p class="staff-hint">Indicaciones clave para el equipo durante el evento.</p>${staffNotes.map((item) => `<section class="note"><h3>${escapeHtml(item.reference)}</h3><small>${escapeHtml(item.meta)}</small><p>${escapeHtml(item.note).replace(/\n/g, '<br>')}</p></section>`).join('')}` : '';
@@ -782,7 +993,7 @@ function guestListWordHtml(event: any, includeHeading = true): string {
     ...(guests.some((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) ? [{ title: 'Sin mesa asignada', capacity: undefined, notes: '', guests: guests.filter((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) }] : [])
   ];
   const heading = includeHeading ? `<h2>Invitados y mesas</h2><p class="staff-hint">${guests.length} invitado${guests.length === 1 ? '' : 's'} cargado${guests.length === 1 ? '' : 's'} para la operación.</p>` : '';
-  return `${heading}${entries.map((entry: any) => `<section class="note"><h3>${escapeHtml(`${entry.title}${entry.audience ? ` · ${entry.audience}` : ''}${entry.capacity ? ` · ${entry.guests.length}/${entry.capacity}` : ` · ${entry.guests.length}`}`)}</h3>${entry.notes ? `<small>${escapeHtml(entry.notes)}</small>` : ''}${entry.guests.length ? `<ul class="guest-items">${entry.guests.map((guest: any) => { const detail = [guestAgeGroupLabels[guest.ageGroup] ?? '', text(guest.meal, ''), dietaryPreferenceLabels[guest.dietaryPreference] ?? '', text(guest.notes, '')].filter(Boolean).join(' · '); return `<li><b>${escapeHtml(guest.fullName)}</b>${detail ? ` <span>· ${escapeHtml(detail)}</span>` : ''}</li>`; }).join('')}</ul>` : '<p>Sin invitados asignados.</p>'}</section>`).join('')}`;
+  return `${heading}${entries.map((entry: any) => `<section class="note"><h3>${escapeHtml(`${entry.title}${entry.audience ? ` · ${entry.audience}` : ''}${entry.capacity ? ` · ${entry.guests.length}/${entry.capacity}` : ` · ${entry.guests.length}`}`)}</h3>${entry.guests.length ? `<ul class="guest-items">${entry.guests.map((guest: any) => { const detail = guestListDetail(guest); return `<li><b>${escapeHtml(guest.fullName)}</b>${detail ? ` <span>· ${escapeHtml(detail)}</span>` : ''}</li>`; }).join('')}</ul>` : '<p>Sin invitados asignados.</p>'}</section>`).join('')}`;
 }
 
 function tablewareRowsWordHtml(rows: any[], emptyText: string): string {
@@ -795,10 +1006,22 @@ function tablewareWordHtml(event: any): string {
   return `<h2>Vajilla del salón</h2>${tablewareRowsWordHtml(salonRows, 'No se reservó vajilla del stock propio del salón para este evento.')}<h2>Vajilla adicional / externa</h2>${tablewareRowsWordHtml(externalRows, 'No se cargó vajilla adicional o externa para este evento.')}`;
 }
 
-function inventoryWordHtml(event: any): string {
-  const rows = inventoryRows(event);
+function tablewareControlWordHtml(event: any): string {
+  const rows = tablewareControlRows(event);
   if (!rows.length) return '';
-  return `<h2>Mantelería, mobiliario y equipos</h2><table><thead><tr><th>Recurso</th><th>Categoría</th><th>Necesaria</th><th>Unidad</th><th>Estado</th><th>Notas</th></tr></thead><tbody>${rows.map((item: any) => `<tr><td><b>${escapeHtml(text(item.name))}</b></td><td>${escapeHtml(text(item.category, '—'))}</td><td>${escapeHtml(item.quantityRequired != null ? String(item.quantityRequired) : '—')}</td><td>${escapeHtml(text(item.unit, '—'))}</td><td>${escapeHtml(statusLabel(item.status, resourceStatusLabels, 'Planificado'))}</td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`;
+  return `<table><thead><tr><th>Producto</th><th>Cantidad</th><th>Origen</th><th>Inicio</th><th>Fin</th></tr></thead><tbody>${rows.map((row) => `<tr><td><b>${escapeHtml(row.product)}</b>${row.notes ? `<br><small>${escapeHtml(row.notes)}</small>` : ''}</td><td>${escapeHtml(row.quantity)}</td><td>${escapeHtml(row.origin || '—')}</td><td>${escapeHtml(row.start || '')}</td><td>${escapeHtml(row.end || '')}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function linenRegisterWordHtml(event: any): string {
+  const rows = linenRows(event);
+  if (!rows.length) return '';
+  return `<table><thead><tr><th>Producto</th><th>Cantidad</th><th>Inicio</th><th>Fin</th></tr></thead><tbody>${rows.map((item: any) => `<tr><td><b>${escapeHtml(text(item.name))}</b>${item.notes ? `<br><small>${escapeHtml(item.notes)}</small>` : ''}</td><td>${escapeHtml(linenQuantity(item))}</td><td>${escapeHtml(text(item.startCheck, ''))}</td><td>${escapeHtml(text(item.endCheck, ''))}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function inventoryWordHtml(event: any): string {
+  const rows = supportingInventoryRows(event);
+  if (!rows.length) return '';
+  return `<table><thead><tr><th>Recurso</th><th>Categoría</th><th>Necesaria</th><th>Unidad</th><th>Estado</th><th>Notas</th></tr></thead><tbody>${rows.map((item: any) => `<tr><td><b>${escapeHtml(text(item.name))}</b></td><td>${escapeHtml(text(item.category, '—'))}</td><td>${escapeHtml(item.quantityRequired != null ? String(item.quantityRequired) : '—')}</td><td>${escapeHtml(text(item.unit, '—'))}</td><td>${escapeHtml(statusLabel(item.status, resourceStatusLabels, 'Planificado'))}</td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function logisticsWordHtml(event: any): string {
@@ -848,15 +1071,19 @@ function guestEntryControlWordHtml(event: any): string {
 /** Espejo en HTML de `fullReport()`: mismo orden de áreas, mismo criterio de "sin contenido no aparece", con salto de página forzado por área para que Word respete un área por página igual que el PDF. */
 function fullReportWordHtml(event: any): string {
   const { tables, guests } = guestListData(event);
-  const { salonRows, externalRows } = tablewareRows(event);
+  const tableware = tablewareControlRows(event);
+  const linen = linenRows(event);
+  const inventory = supportingInventoryRows(event);
   const areas: Array<{ title: string; hasContent: boolean; html: () => string }> = [
     { title: '1. Momentos del evento', hasContent: timelineHasContent(event), html: () => timelineWordHtml(event) },
     { title: '2. Invitados y mesas', hasContent: tables.length > 0 || guests.length > 0, html: () => guestListWordHtml(event, false) },
     { title: '3. Logística y coordinación', hasContent: logisticsActiveSections(event).length > 0, html: () => logisticsWordHtml(event) },
-    { title: '4. Vajilla y stock', hasContent: salonRows.length > 0 || externalRows.length > 0 || inventoryRows(event).length > 0, html: () => `${tablewareWordHtml(event)}${inventoryWordHtml(event)}` },
-    { title: '5. Productos e insumos', hasContent: productItemRows(event).length > 0, html: () => productsWordHtml(event) },
-    { title: '6. Proveedores', hasContent: supplierAssignmentRows(event).length > 0, html: () => suppliersWordHtml(event) },
-    { title: '7. Staff asignado y roles', hasContent: staffAssignmentRows(event).length > 0, html: () => staffWordHtml(event) }
+    { title: '4. Inventario de vajilla', hasContent: tableware.length > 0, html: () => tablewareControlWordHtml(event) },
+    { title: '5. Registro operativo de mantelería', hasContent: linen.length > 0, html: () => linenRegisterWordHtml(event) },
+    { title: '6. Mobiliario y equipos', hasContent: inventory.length > 0, html: () => inventoryWordHtml(event) },
+    { title: '7. Productos e insumos', hasContent: productItemRows(event).length > 0, html: () => productsWordHtml(event) },
+    { title: '8. Proveedores', hasContent: supplierAssignmentRows(event).length > 0, html: () => suppliersWordHtml(event) },
+    { title: '9. Staff asignado y roles', hasContent: staffAssignmentRows(event).length > 0, html: () => staffWordHtml(event) }
   ];
   const visible = areas.filter((area) => area.hasContent);
   if (!visible.length) return '<p class="empty">Todavía no se cargó contenido operativo para este evento. Completá momentos, invitados, logística, vajilla, productos, proveedores o staff para generar el cronograma integral.</p>';

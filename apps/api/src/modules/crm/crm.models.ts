@@ -91,6 +91,7 @@ const packageTemplateSchema = new Schema({
   fixedPrice: Number, finalFixedPrice: Number,
   depositAmount: { type: Number, default: 0 }, paymentTerms: String, promotionText: String, giftText: String,
   menuSections: { type: [menuSectionSchema], default: [] }, includedServices: { type: [String], default: [] }, notes: String,
+  considerations: String,
   publicTitle: String,
   publicDescription: String,
   publicHighlights: { type: [String], default: [] },
@@ -111,7 +112,7 @@ const venuePackageRuleSchema = new Schema({
   pricingMode: { type: String, enum: ['per_person', 'fixed'] },
   pricePerPerson: Number, discountPercentage: Number, finalPricePerPerson: Number, depositAmount: Number,
   fixedPrice: Number, finalFixedPrice: Number,
-  paymentTerms: String, promotionText: String, giftText: String, notes: String,
+  paymentTerms: String, promotionText: String, giftText: String, notes: String, considerations: String,
   menuSections: { type: [menuSectionSchema], default: undefined }, includedServices: { type: [String], default: undefined },
   ...base
 }, { timestamps: true });
@@ -138,6 +139,8 @@ const quoteSchema = new Schema({
   // Texto libre propio del presupuesto. No se hereda de la plantilla y se
   // conserva al convertir el presupuesto en evento.
   observations: String,
+  // Consideraciones comerciales copiadas del paquete o ingresadas a medida.
+  considerations: String,
   validUntil: Date, sentAt: Date, acceptedAt: Date, rejectedAt: Date,
   totalGuests: Number,
   adultsCount: Number,
@@ -179,7 +182,7 @@ const eventSchema = new Schema({
   guestListAccessToken: { type: String, unique: true, sparse: true, index: true }, guestListAccessTokenCreatedAt: Date,
   guestListAccessTokenRevokedAt: Date, guestListAccessTokenRevokedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   customCalculationSnapshot: Schema.Types.Mixed,
-  estimatedAmount: Number, finalAmount: Number, notes: String,
+  estimatedAmount: Number, finalAmount: Number, notes: String, considerations: String,
   commercialSnapshot: Schema.Types.Mixed,
   packageSnapshot: Schema.Types.Mixed,
   menuSnapshot: Schema.Types.Mixed,
@@ -314,6 +317,7 @@ const contractSchema = new Schema({
   // already sends. Defaults on; toggle off per contract from the same place as "Contacto de cobro".
   clientReminderOptIn: { type: Boolean, default: true },
   observations: String,
+  considerations: String,
   approvedAt: Date,
   approvedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
   cancelledAt: Date,

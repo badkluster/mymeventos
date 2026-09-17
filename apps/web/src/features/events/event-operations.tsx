@@ -6,13 +6,12 @@ import { Button, Input, Modal, NumberField, Select, Textarea } from '@/component
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
 import { displayLabel, supplierCategoryLabels } from '@/lib/display-labels';
-import type { Event, EventAlertItem, EventGuestList, EventInventoryItem, EventProductItem, EventResourcePlan, EventStaffNote, EventSupplierAssignment, EventTaskItem, EventTimelineItem, SupplierOption } from '@/features/quotes/types';
+import type { Event, EventAlertItem, EventGuestList, EventInventoryItem, EventLinenItem, EventProductItem, EventResourcePlan, EventStaffNote, EventSupplierAssignment, EventTaskItem, EventTimelineItem, SupplierOption } from '@/features/quotes/types';
 import { GuestListWorkspace } from '@/features/events/guest-list-workspace';
 
 type SaveEvent = (payload: Record<string, unknown>) => void;
 type SavePlan = (plan: EventResourcePlan) => Promise<boolean>;
 
-const timelineStatusLabels: Record<string, string> = { pending: 'Pendiente', ready: 'Preparado', done: 'Hecho', cancelled: 'Cancelado' };
 const resourceStatusLabels: Record<string, string> = { planned: 'Planificado', reserved: 'Reservado', purchased: 'Comprado', used: 'Usado', delivered: 'Entregado', returned: 'Devuelto', missing: 'Faltante', damaged: 'Roto' };
 const productionCategoryLabels: Record<string, string> = { savory: 'Salados', sweet: 'Dulces', beverages: 'Bebidas', other: 'Otros' };
 const supplierStatusLabels: Record<string, string> = { pending: 'Pendiente', confirmed: 'Confirmado', paid: 'Pagado', cancelled: 'Cancelado' };
@@ -175,6 +174,7 @@ export function normalizeResourcePlan(plan?: EventResourcePlan): EventResourcePl
     guestList: { ...emptyGuestList, ...(plan?.guestList ?? {}), tables: Array.isArray(plan?.guestList?.tables) ? plan.guestList.tables : [], guests: Array.isArray(plan?.guestList?.guests) ? plan.guestList.guests : [] },
     productItems: Array.isArray(plan?.productItems) ? plan.productItems : [],
     inventoryItems: Array.isArray(plan?.inventoryItems) ? plan.inventoryItems : [],
+    linenItems: Array.isArray(plan?.linenItems) ? plan.linenItems : [],
     supplierAssignments: Array.isArray(plan?.supplierAssignments) ? plan.supplierAssignments : [],
     tasks: Array.isArray(plan?.tasks) ? plan.tasks : [],
     alerts: Array.isArray(plan?.alerts) ? plan.alerts : [],
@@ -191,6 +191,7 @@ export function createDefaultResourcePlan(): EventResourcePlan {
     guestList: { ...emptyGuestList },
     productItems: [],
     inventoryItems: defaultInventoryItems.map((item) => ({ ...item })),
+    linenItems: [],
     supplierAssignments: [],
     tasks: defaultTasks.map((item) => ({ ...item })),
     alerts: [],
@@ -207,7 +208,7 @@ export function eventOperationalSummary(plan?: EventResourcePlan) {
   return {
     timelineCount: value.timelineItems?.length ?? 0,
     productCount: value.productItems?.length ?? 0,
-    inventoryCount: value.inventoryItems?.length ?? 0,
+    inventoryCount: (value.inventoryItems?.length ?? 0) + (value.linenItems?.length ?? 0),
     supplierCount: value.supplierAssignments?.length ?? 0,
     taskCount: value.tasks?.length ?? 0,
     alertCount: value.alerts?.length ?? 0,
@@ -371,7 +372,8 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
     celiacCount: event.celiacCount?.toString() ?? '',
     lactoseIntolerantCount: event.lactoseIntolerantCount?.toString() ?? '',
     tableLinenColor: event.tableLinenColor ?? '',
-    notes: event.notes ?? ''
+    notes: event.notes ?? '',
+    considerations: event.considerations ?? ''
   });
   const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const complete = Boolean(form.eventType.trim() && form.eventDate && form.startTime && form.endTime && numeric(form.guestCount));
@@ -393,7 +395,8 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
     celiacCount: numeric(form.celiacCount),
     lactoseIntolerantCount: numeric(form.lactoseIntolerantCount),
     tableLinenColor: form.tableLinenColor,
-    notes: form.notes
+    notes: form.notes,
+    considerations: form.considerations
     });
   };
   return <SectionCard title="Ficha del evento">
@@ -410,6 +413,7 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
       <Field label="Celíacos"><Input type="number" min={0} value={form.celiacCount} onChange={(event) => set('celiacCount', event.target.value)} /></Field>
       <Field label="Sin lactosa"><Input type="number" min={0} value={form.lactoseIntolerantCount} onChange={(event) => set('lactoseIntolerantCount', event.target.value)} /></Field>
       <Field label="Mantelería" className="md:col-span-2"><Input value={form.tableLinenColor} onChange={(event) => set('tableLinenColor', event.target.value)} placeholder="Color, textura, servilletas..." /></Field>
+      <Field label="Consideraciones" className="md:col-span-2 xl:col-span-4"><Textarea value={form.considerations} onChange={(event) => set('considerations', event.target.value)} /><span className="text-xs text-zinc-500">Se trasladan al contrato y se muestran completas en el PDF.</span></Field>
       <Field label="Notas internas" className="md:col-span-2 xl:col-span-4"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
     </div>
     <SaveBar saving={saving} disabled={!complete} onSave={save} text="Guardar ficha" />
@@ -464,25 +468,22 @@ export function EventTimelineEditor({ plan, saving, onSave }: { plan?: EventReso
   const [staffNotes, setStaffNotes] = useState<EventStaffNote[]>(basePlan.staffNotes ?? []);
   const update = (index: number, changes: Partial<EventTimelineItem>) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
   const updateStaffNote = (index: number, changes: Partial<EventStaffNote>) => setStaffNotes((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
-  const add = () => setItems((current) => [...current, { id: makeId(), time: '', title: '', area: '', owner: '', status: 'pending', notes: '' }]);
+  const add = () => setItems((current) => [...current, { id: makeId(), time: '', title: '', notes: '' }]);
   const addStaffNote = () => setStaffNotes((current) => [...current, { id: makeId(), title: '', notes: '' }]);
-  const clean = items.filter((item) => item.title.trim() || item.notes?.trim()).map((item) => ({ ...item, title: item.title.trim(), status: item.status || 'pending' }));
+  const clean = items.filter((item) => item.title.trim() || item.notes?.trim()).map((item) => ({ ...item, title: item.title.trim() }));
   const cleanStaffNotes = staffNotes.filter((item) => item.notes.trim()).map((item) => ({ ...item, title: item.title?.trim() }));
   const timelineNotes = items.filter((item) => item.notes?.trim());
   return <SectionCard title="Momentos del cronograma" icon={<CalendarClock className="h-4 w-4" />} action={<Button variant="secondary" onClick={add}><Plus className="mr-2 h-4 w-4" />Agregar momento</Button>}>
-    {items.length ? <div className="space-y-3">{items.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 lg:grid-cols-[110px_minmax(180px,1fr)_150px_150px_150px_44px]">
+    {items.length ? <div className="space-y-3">{items.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 lg:grid-cols-[110px_minmax(180px,1fr)_44px]">
       <Input aria-label="Horario" placeholder="21:00" value={item.time ?? ''} onChange={(event) => update(index, { time: event.target.value })} />
       <Input aria-label="Actividad" placeholder="Ingreso, recepción, cena, vals..." value={item.title} onChange={(event) => update(index, { title: event.target.value })} />
-      <Input aria-label="Área" placeholder="Área" value={item.area ?? ''} onChange={(event) => update(index, { area: event.target.value })} />
-      <Input aria-label="Responsable" placeholder="Responsable" value={item.owner ?? ''} onChange={(event) => update(index, { owner: event.target.value })} />
-      <Select aria-label="Estado" value={item.status ?? 'pending'} onChange={(event) => update(index, { status: event.target.value })}>{Object.entries(timelineStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
       <IconButton label="Quitar momento" disabled={saving} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
-      <Textarea aria-label="Notas" className="lg:col-span-6" placeholder="Notas operativas, señales, música, observaciones..." value={item.notes ?? ''} onChange={(event) => update(index, { notes: event.target.value })} />
+      <Textarea aria-label="Notas" className="lg:col-span-3" placeholder="Notas operativas, señales, música, observaciones..." value={item.notes ?? ''} onChange={(event) => update(index, { notes: event.target.value })} />
     </div>)}</div> : <EmptyRows text="Todavía no hay cronograma cargado para este evento." />}
     <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-amber-950">Notas para el staff</h3><p className="mt-1 text-sm text-amber-800">Indicaciones generales para el equipo. También se incluyen en el PDF y Word.</p></div><Button type="button" variant="secondary" onClick={addStaffNote}><Plus className="mr-2 h-4 w-4" />Agregar nota</Button></div>
       {staffNotes.length ? <div className="mt-4 space-y-3">{staffNotes.map((item, index) => <div key={item.id ?? index} className="grid gap-3 rounded-xl border border-amber-100 bg-white/80 p-3 md:grid-cols-[minmax(180px,1fr)_44px]"><div className="space-y-3"><Input aria-label="Título de nota para staff" value={item.title ?? ''} onChange={(event) => updateStaffNote(index, { title: event.target.value })} placeholder="Título o referencia (opcional)" /><Textarea aria-label="Nota para staff" value={item.notes} onChange={(event) => updateStaffNote(index, { notes: event.target.value })} placeholder="Ej.: Antes del vals, coordinación avisa a DJ y foto; despejar la pista." /></div><IconButton label="Quitar nota para staff" disabled={saving} onClick={() => setStaffNotes((current) => current.filter((_, itemIndex) => itemIndex !== index))} /></div>)}</div> : <p className="mt-4 rounded-lg border border-dashed border-amber-200 bg-white/60 px-3 py-3 text-sm text-amber-800">Usá “Agregar nota” para cargar indicaciones generales que deba conocer todo el staff.</p>}
-      {timelineNotes.length ? <div className="mt-4 border-t border-amber-200 pt-4"><p className="text-xs font-semibold uppercase tracking-wide text-amber-900">Notas vinculadas a momentos</p><ol className="mt-2 space-y-2">{timelineNotes.map((item, index) => <li key={item.id ?? index} className="rounded-lg border border-amber-100 bg-white/60 px-3 py-2.5 text-sm text-zinc-700"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="font-semibold text-zinc-950">{item.time || 'Sin horario'} · {item.title || 'Momento sin título'}</span>{item.area ? <span className="text-xs text-zinc-500">{item.area}</span> : null}{item.owner ? <span className="text-xs text-zinc-500">· {item.owner}</span> : null}</div><p className="mt-1 whitespace-pre-wrap leading-5">{item.notes}</p></li>)}</ol></div> : null}
+      {timelineNotes.length ? <div className="mt-4 border-t border-amber-200 pt-4"><p className="text-xs font-semibold uppercase tracking-wide text-amber-900">Notas vinculadas a momentos</p><ol className="mt-2 space-y-2">{timelineNotes.map((item, index) => <li key={item.id ?? index} className="rounded-lg border border-amber-100 bg-white/60 px-3 py-2.5 text-sm text-zinc-700"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="font-semibold text-zinc-950">{item.time || 'Sin horario'} · {item.title || 'Momento sin título'}</span></div><p className="mt-1 whitespace-pre-wrap leading-5">{item.notes}</p></li>)}</ol></div> : null}
     </div>
     <SaveBar saving={saving} onSave={() => onSave({ ...basePlan, timelineItems: clean, staffNotes: cleanStaffNotes })} />
   </SectionCard>;
@@ -499,11 +500,11 @@ const operationalViews = [
 export function EventOperationsWorkspace({ event, plan, saving, onSave, onSaveGuestList, onServerGuestList, onSyncSummary, onNotice }: { event: Event; plan?: EventResourcePlan; saving: boolean; onSave: SavePlan; onSaveGuestList: (guestList: EventGuestList) => Promise<EventGuestList | undefined>; onServerGuestList: (guestList: EventGuestList) => void; onSyncSummary: (payload: Record<string, unknown>) => void; onNotice?: (message: string, variant?: 'success' | 'error') => void }) {
   const [view, setView] = useState<(typeof operationalViews)[number][0]>('moments');
   return <div className="space-y-5"><div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm"><div className="flex gap-2 overflow-x-auto"><div className="flex min-w-max gap-2">{operationalViews.map(([value, label]) => <button key={value} type="button" onClick={() => setView(value)} className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${view === value ? 'bg-zinc-950 text-white shadow-sm' : 'bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'}`}>{label}</button>)}</div></div></div>
-    <SectionCard title="Documentos operativos" icon={<FileText className="h-4 w-4" />}><p className="text-sm text-zinc-500">El cronograma reúne todas las vistas del evento. Desde aquí podés generar cada planilla por separado, sin depender de la pestaña que estés consultando.</p><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Cronograma integral</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Momentos, invitados, logística, vajilla y stock, productos, proveedores y staff asignado: una página por área, solo las que tengan contenido cargado.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="full" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Control de ingreso por mesa</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Lista para recepción con casillas de ingreso, menú y observaciones. Incluye una versión A4 apaisada de una sola hoja.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="guest_list" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Logística y coordinación</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Armado, cocina, barra, ambientación, accesos y riesgos.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="logistics" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Reserva de vajilla</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Vajilla propia del salón y adicional/externa asignada al evento.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="tableware" disabled={saving} onNotice={onNotice} /></div></div></div></SectionCard>
+    <SectionCard title="Documentos operativos" icon={<FileText className="h-4 w-4" />}><p className="text-sm text-zinc-500">El cronograma reúne todas las vistas del evento. Desde aquí podés generar cada planilla por separado, sin depender de la pestaña que estés consultando.</p><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Cronograma integral</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Momentos, invitados, logística, vajilla, mantelería, productos, proveedores y staff asignado: una página por sección, solo las que tengan contenido cargado.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="full" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Control de ingreso por mesa</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Lista para recepción con casillas de ingreso, menú y observaciones. Incluye una versión A4 apaisada de una sola hoja.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="guest_list" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Logística y coordinación</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Armado, cocina, barra, ambientación, accesos y riesgos.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="logistics" disabled={saving} onNotice={onNotice} /></div></div><div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4"><h3 className="font-semibold text-zinc-950">Reserva de vajilla</h3><p className="mt-1 min-h-10 text-sm text-zinc-500">Vajilla propia del salón y adicional/externa asignada al evento.</p><div className="mt-4"><EventOperationalDocumentActions event={event} type="tableware" disabled={saving} onNotice={onNotice} /></div></div></div></SectionCard>
     {view === 'moments' && <EventTimelineEditor plan={plan} saving={saving} onSave={onSave} />}
     {view === 'guests' && <EventGuestListEditor event={event} plan={plan} saving={saving} onSaveGuestList={onSaveGuestList} onServerGuestList={onServerGuestList} onSyncSummary={onSyncSummary} onNotice={onNotice} />}
     {view === 'logistics' && <EventLogisticsEditor plan={plan} saving={saving} onSave={onSave} />}
-    {view === 'linen' && <EventTablewareEditor event={event} saving={saving} onNotice={onNotice} />}
+    {view === 'linen' && <div className="space-y-5"><EventTablewareEditor event={event} saving={saving} onNotice={onNotice} /><EventLinenRegisterEditor plan={plan} saving={saving} onSave={onSave} /></div>}
     {view === 'products' && <EventResourcesEditor plan={plan} saving={saving} onSave={onSave} section="products" />}
   </div>;
 }
@@ -588,6 +589,48 @@ export function EventTablewareEditor({ event, saving, onNotice }: { event: Event
       {external.length ? <div className="mt-4 space-y-3">{external.map((item) => <div key={item.id} className="grid gap-3 rounded-xl bg-zinc-50 p-3 md:grid-cols-[minmax(180px,1fr)_150px_100px_100px_44px]"><Input aria-label="Vajilla adicional" placeholder="Ej.: Copas alquiladas" value={item.name} onChange={(input) => updateExternal(item.id, { name: input.target.value })} /><Input aria-label="Categoría adicional" value={item.category} onChange={(input) => updateExternal(item.id, { category: input.target.value })} /><NumberField label="Cantidad adicional" min={1} value={item.quantity ?? ''} onChange={(input) => updateExternal(item.id, { quantity: numeric(input.target.value) })} /><Input aria-label="Unidad adicional" value={item.unit} onChange={(input) => updateExternal(item.id, { unit: input.target.value })} /><IconButton label="Quitar vajilla adicional" onClick={() => setExternal((current) => current.filter((other) => other.id !== item.id))} /></div>)}</div> : null}
     </div>
     <SaveBar saving={saving || submitting} onSave={() => void save()} />
+  </SectionCard>;
+}
+
+/**
+ * La mantelería se registra por evento porque puede combinar elementos propios y
+ * alquilados. A diferencia del stock de vajilla, Inicio y Fin son campos libres:
+ * permiten dejar una marca, una cantidad controlada o las iniciales de quien hizo
+ * cada conteo, y se trasladan tal cual a la planilla del cronograma integral.
+ */
+export function EventLinenRegisterEditor({ plan, saving, onSave }: { plan?: EventResourcePlan; saving: boolean; onSave: SavePlan }) {
+  const basePlan = useMemo(() => normalizeResourcePlan(plan), [plan]);
+  const [items, setItems] = useState<EventLinenItem[]>(basePlan.linenItems ?? []);
+  const update = (index: number, patch: Partial<EventLinenItem>) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+  const add = () => setItems((current) => [...current, { id: makeId(), name: '', ownQuantity: undefined, rentedQuantity: undefined, unit: 'unidad', startCheck: '', endCheck: '', notes: '' }]);
+  const clean = items
+    .filter((item) => item.name.trim())
+    .map((item) => ({
+      ...item,
+      name: item.name.trim(),
+      ownQuantity: Number(item.ownQuantity) > 0 ? Number(item.ownQuantity) : undefined,
+      rentedQuantity: Number(item.rentedQuantity) > 0 ? Number(item.rentedQuantity) : undefined,
+      unit: item.unit?.trim() || 'unidad',
+      startCheck: item.startCheck?.trim() || undefined,
+      endCheck: item.endCheck?.trim() || undefined,
+      notes: item.notes?.trim() || undefined
+    }));
+
+  return <SectionCard title="Registro operativo de mantelería" icon={<ClipboardCheck className="h-4 w-4" />} action={<Button type="button" variant="secondary" onClick={add}><Plus className="mr-2 h-4 w-4" />Agregar artículo</Button>}>
+    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">Cargá cada artículo del evento separando lo propio de lo alquilado. Inicio y Fin quedan disponibles para el conteo o la firma operativa y aparecen como columnas en el cronograma integral.</p>
+    {items.length ? <div className="mt-5 space-y-3">{items.map((item, index) => <article key={item.id ?? index} className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+      <div className="grid items-end gap-3 lg:grid-cols-[minmax(190px,1.3fr)_115px_125px_100px_115px_115px_44px]">
+        <Field label="Producto"><Input aria-label="Producto de mantelería" className="font-medium" placeholder="Mantel redondo blanco, camino, servilleta..." value={item.name} onChange={(event) => update(index, { name: event.target.value })} /></Field>
+        <NumberField label="Propios" min={0} value={item.ownQuantity ?? ''} onChange={(event) => update(index, { ownQuantity: numeric(event.target.value) })} />
+        <NumberField label="Alquilados" min={0} value={item.rentedQuantity ?? ''} onChange={(event) => update(index, { rentedQuantity: numeric(event.target.value) })} />
+        <Field label="Unidad"><Input aria-label="Unidad de mantelería" value={item.unit ?? 'unidad'} onChange={(event) => update(index, { unit: event.target.value })} /></Field>
+        <Field label="Inicio"><Input aria-label="Control inicial de mantelería" placeholder="Cantidad o iniciales" value={item.startCheck ?? ''} onChange={(event) => update(index, { startCheck: event.target.value })} /></Field>
+        <Field label="Fin"><Input aria-label="Control final de mantelería" placeholder="Cantidad o iniciales" value={item.endCheck ?? ''} onChange={(event) => update(index, { endCheck: event.target.value })} /></Field>
+        <IconButton label="Quitar artículo de mantelería" disabled={saving} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))} />
+      </div>
+      <Field className="mt-3" label="Notas"><Textarea aria-label="Notas de mantelería" placeholder="Color, estado, procedencia, observaciones para devolución..." value={item.notes ?? ''} onChange={(event) => update(index, { notes: event.target.value })} /></Field>
+    </article>)}</div> : <EmptyRows text="Todavía no hay mantelería registrada para este evento." />}
+    <SaveBar saving={saving} onSave={() => onSave({ ...basePlan, linenItems: clean })} text="Guardar registro de mantelería" />
   </SectionCard>;
 }
 

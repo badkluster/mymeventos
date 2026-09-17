@@ -169,6 +169,7 @@ export type PackageRule = {
   includedServices?: string[];
   menuSections?: MenuSection[];
   notes?: string;
+  considerations?: string;
 };
 
 export const eventTypeLabels: Record<EventType, string> = sharedEventTypeLabels;

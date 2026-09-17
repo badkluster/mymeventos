@@ -35,6 +35,7 @@ type RuleForm = {
   includedServices: string[];
   menuSections: MenuSectionValue[];
   notes: string;
+  considerations: string;
 };
 type TemplateForm = {
   name: string;
@@ -52,6 +53,7 @@ type TemplateForm = {
   includedServices: string[];
   menuSections: MenuSectionValue[];
   notes: string;
+  considerations: string;
 };
 type StockItemForm = {
   name: string;
@@ -74,7 +76,7 @@ const tabs: { id: Tab; label: string }[] = [
 const tabIds = tabs.map((item) => item.id);
 
 const emptyExtra: SalonExtra = { name: '', description: '', basePrice: 0, active: true, includedByDefault: false, publicVisible: false };
-const emptyTemplate: TemplateForm = { name: '', durationHours: 8, startTime: '21:00', endTime: '05:00', pricingMode: 'per_person', pricePerPerson: 0, fixedPrice: 0, discountPercentage: 0, depositAmount: 0, paymentTerms: '', promotionText: '', giftText: '', includedServices: [], menuSections: [], notes: '' };
+const emptyTemplate: TemplateForm = { name: '', durationHours: 8, startTime: '21:00', endTime: '05:00', pricingMode: 'per_person', pricePerPerson: 0, fixedPrice: 0, discountPercentage: 0, depositAmount: 0, paymentTerms: '', promotionText: '', giftText: '', includedServices: [], menuSections: [], notes: '', considerations: '' };
 const emptyStockItem: StockItemForm = { name: '', category: 'MISCELLANEOUS', currentQuantity: 0, unitOfMeasure: 'unidad', active: true, notes: '' };
 const emptyAttendanceLocation: AttendanceLocationRule = { allowedRadiusMeters: 150, requireLocation: false, outsideAreaPolicy: 'allow' };
 const packageFilterButtonClass = (selected: boolean) => `rounded-lg px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-zinc-950/20 ${selected ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'}`;
@@ -117,7 +119,8 @@ function ruleToForm(rule: PackageRule): RuleForm {
     giftText: rule.giftText ?? '',
     includedServices: rule.includedServices ?? [],
     menuSections: (rule.menuSections ?? []).map((section) => ({ title: section.title ?? section.name ?? 'Menú', items: section.items ?? [] })),
-    notes: rule.notes ?? ''
+    notes: rule.notes ?? '',
+    considerations: rule.considerations ?? ''
   };
 }
 
@@ -528,7 +531,8 @@ export default function SalonDetailPage() {
         giftText: ruleForm.giftText,
         includedServices: cleanStringList(ruleForm.includedServices),
         menuSections: cleanMenuSections(ruleForm.menuSections),
-        notes: ruleForm.notes
+        notes: ruleForm.notes,
+        considerations: ruleForm.considerations
       });
       setEditingRule(undefined);
       setRuleForm(undefined);
@@ -569,7 +573,8 @@ export default function SalonDetailPage() {
         giftText: templateForm.giftText,
         includedServices: cleanStringList(templateForm.includedServices),
         menuSections: cleanMenuSections(templateForm.menuSections),
-        notes: templateForm.notes
+        notes: templateForm.notes,
+        considerations: templateForm.considerations
       });
       setTemplateOpen(false);
       setTemplateForm(emptyTemplate);
@@ -757,7 +762,7 @@ export default function SalonDetailPage() {
         <Field label={ruleForm.pricingMode === 'fixed' ? 'Precio total final' : 'Final por persona'}><Input disabled value={Math.round((ruleForm.pricingMode === 'fixed' ? ruleForm.fixedPrice : ruleForm.pricePerPerson) * (1 - ruleForm.discountPercentage / 100))} /></Field><Field label="Seña"><Input type="number" min={0} value={ruleForm.depositAmount} onChange={(event) => setRuleForm((current) => current && { ...current, depositAmount: Number(event.target.value) })} /></Field>
         <Field label="Promoción" className="sm:col-span-2"><Textarea value={ruleForm.promotionText} onChange={(event) => setRuleForm((current) => current && { ...current, promotionText: event.target.value })} /></Field><Field label="Regalo" className="sm:col-span-2"><Textarea value={ruleForm.giftText} onChange={(event) => setRuleForm((current) => current && { ...current, giftText: event.target.value })} /></Field>
         <Field label="Condiciones de pago" className="sm:col-span-2"><Textarea value={ruleForm.paymentTerms} onChange={(event) => setRuleForm((current) => current && { ...current, paymentTerms: event.target.value })} /></Field><div className="sm:col-span-2"><MenuSectionsEditor value={ruleForm.menuSections} onChange={(menuSections) => setRuleForm((current) => current && { ...current, menuSections })} /></div>
-        <div className="sm:col-span-2"><StringListEditor label="Servicios incluidos" values={ruleForm.includedServices} onChange={(includedServices) => setRuleForm((current) => current && { ...current, includedServices })} /></div><Field label="Notas" className="sm:col-span-2"><Textarea value={ruleForm.notes} onChange={(event) => setRuleForm((current) => current && { ...current, notes: event.target.value })} /></Field>
+        <div className="sm:col-span-2"><StringListEditor label="Servicios incluidos" values={ruleForm.includedServices} onChange={(includedServices) => setRuleForm((current) => current && { ...current, includedServices })} /></div><Field label="Consideraciones" className="sm:col-span-2"><Textarea value={ruleForm.considerations} onChange={(event) => setRuleForm((current) => current && { ...current, considerations: event.target.value })} /><span className="mt-1 block text-xs text-zinc-500">Se copia al presupuesto, evento y contrato que se creen desde este paquete.</span></Field><Field label="Notas" className="sm:col-span-2"><Textarea value={ruleForm.notes} onChange={(event) => setRuleForm((current) => current && { ...current, notes: event.target.value })} /></Field>
         <footer className="flex justify-end gap-3 sm:col-span-2"><Button type="button" variant="secondary" onClick={() => { setEditingRule(undefined); setRuleForm(undefined); }}>Cancelar</Button><Button disabled={saving}><Check className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar regla'}</Button></footer>
       </form>}
     </Modal>
@@ -776,6 +781,7 @@ export default function SalonDetailPage() {
         <Field label="Condiciones de pago" className="sm:col-span-2"><Textarea value={templateForm.paymentTerms} onChange={(event) => setTemplateForm((current) => ({ ...current, paymentTerms: event.target.value }))} /></Field>
         <div className="sm:col-span-2"><MenuSectionsEditor value={templateForm.menuSections} onChange={(menuSections) => setTemplateForm((current) => ({ ...current, menuSections }))} /></div>
         <div className="sm:col-span-2"><StringListEditor label="Servicios incluidos" values={templateForm.includedServices} onChange={(includedServices) => setTemplateForm((current) => ({ ...current, includedServices }))} /></div>
+        <Field label="Consideraciones" className="sm:col-span-2"><Textarea value={templateForm.considerations} onChange={(event) => setTemplateForm((current) => ({ ...current, considerations: event.target.value }))} /><span className="mt-1 block text-xs text-zinc-500">Podrás particularizarlas luego para cada salón.</span></Field>
         <Field label="Notas internas" className="sm:col-span-2"><Textarea value={templateForm.notes} onChange={(event) => setTemplateForm((current) => ({ ...current, notes: event.target.value }))} /></Field>
         <footer className="flex justify-end gap-3 sm:col-span-2"><Button type="button" variant="secondary" onClick={() => setTemplateOpen(false)}>Cancelar</Button><Button disabled={saving}>{saving ? 'Creando…' : templateScope === 'global' ? 'Crear paquete global' : 'Crear paquete para este salón'}</Button></footer>
       </form>

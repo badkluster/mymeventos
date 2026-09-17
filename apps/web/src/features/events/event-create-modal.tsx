@@ -41,6 +41,7 @@ const emptyForm = {
   depositAmount: '',
   paymentTerms: '',
   notes: '',
+  considerations: '',
   createContract: false
 };
 
@@ -156,7 +157,8 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
       pricePerPerson: pricePerPerson === undefined ? '' : String(pricePerPerson),
       finalAmount: fixedPrice === undefined ? '' : String(fixedPrice),
       depositAmount: selected.depositAmount === undefined ? '' : String(selected.depositAmount),
-      paymentTerms: selected.paymentTerms ?? current.paymentTerms
+      paymentTerms: selected.paymentTerms ?? current.paymentTerms,
+      considerations: selected.considerations ?? current.considerations
     }));
     setMenuSections((selected.menuSections ?? []).map((section) => ({ title: section.title ?? section.name ?? 'Menú', items: section.items ?? [] })));
     setServices(selected.includedServices ?? []);
@@ -207,6 +209,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         finalAmount: directTotalAmount,
         depositAmount: numberOrUndefined(form.depositAmount),
         paymentTerms: form.paymentTerms || undefined,
+        considerations: form.considerations || undefined,
         menuSnapshot: cleanMenuSections(menuSections),
         servicesSnapshot: cleanStringList(services),
         resourcePlanSnapshot: plan,
@@ -302,6 +305,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         <StringListEditor label="Servicios incluidos" values={services} onChange={setServices} />
       </section>}
 
+      <Field label="Consideraciones"><Textarea value={form.considerations} onChange={(event) => set('considerations', event.target.value)} /><span className="mt-1 block text-xs text-zinc-500">Se incluyen completas en el contrato y su PDF.</span></Field>
       <Field label="Notas internas"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
       <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700"><input type="checkbox" className="mt-1" checked={form.createContract} onChange={(event) => set('createContract', event.target.checked)} /><span>Crear contrato al guardar si el evento tiene los datos mínimos. Si falta información, el evento se guarda y el contrato queda pendiente.</span></label>
       <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={saving || !canSubmit} onClick={() => void submit()}>{saving ? 'Creando...' : 'Crear evento'}</Button></div>

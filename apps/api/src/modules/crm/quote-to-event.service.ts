@@ -163,6 +163,7 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     estimatedAmount: quote.totalAmount,
     finalAmount: quote.totalAmount,
     notes: [input.notes, quoteObservations(quote)].filter(Boolean).join('\n\n'),
+    considerations: quote.considerations,
     commercialSnapshot,
     menuSnapshot: quote.menuSections ?? [],
     servicesSnapshot: quote.includedServices ?? [],

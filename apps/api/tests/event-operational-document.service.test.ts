@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { inflateSync } from 'node:zlib';
 import { generateGuestListSinglePagePdf, generateOperationalPdf, generateOperationalWord } from '../src/modules/crm/event-operational-document.service';
 
 function html(buffer: Buffer): string {
@@ -7,6 +8,21 @@ function html(buffer: Buffer): string {
 
 function countOccurrences(source: string, needle: string): number {
   return source.split(needle).length - 1;
+}
+
+/** Extrae los textos codificados en hexadecimal de los streams comprimidos de PDFKit. */
+function pdfContentText(buffer: Buffer): string {
+  const streams = Array.from(buffer.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g));
+  const content = streams.map((stream) => {
+    try { return inflateSync(Buffer.from(stream[1], 'latin1')).toString('latin1'); }
+    catch { return stream[1]; }
+  }).join('\n');
+  const encodedText = Array.from(content.matchAll(/<([0-9A-Fa-f]+)>/g)).map((match) => Buffer.from(match[1], 'hex'));
+  return Buffer.concat(encodedText).toString('latin1');
+}
+
+function pdfPageCount(buffer: Buffer): number {
+  return buffer.toString('latin1').match(/\/Type\s*\/Page\b/g)?.length ?? 0;
 }
 
 const minimalEvent: any = { _id: 'evt-empty', eventName: 'Evento vacío' };
@@ -27,6 +43,7 @@ const fullEvent: any = {
     guestList: { tables: [{ id: 'mesa1', name: 'Mesa 1 Principal', capacity: 10, audience: 'family' }], guests: [{ fullName: 'Ana Pérez', tableId: 'mesa1', meal: 'Pollo' }] },
     logistics: { eventSetupNotes: 'Llegar a las 18hs y armar el salón con mantelería blanca.' },
     inventoryItems: [{ id: 'inv1', name: 'Mantel blanco cajón', category: 'Mantelería', quantityRequired: 1, unit: 'unidad', status: 'reserved' }],
+    linenItems: [{ id: 'linen1', name: 'Mantel blanco cajón', ownQuantity: 1, rentedQuantity: 0, unit: 'unidad', notes: 'Mesa principal.' }],
     productItems: [
       { id: 'p1', name: 'Empanadas de carne', productionCategory: 'savory', quantity: 14, unit: 'u.', supplierName: 'Catering XYZ', totalCost: 14000, status: 'planned' },
       { id: 'p2', name: 'Brownie con helado', productionCategory: 'sweet', quantity: 65, unit: 'u.', status: 'planned' }
@@ -66,15 +83,16 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(body).toContain('Ana Pérez');
     expect(countOccurrences(body, 'class="area"')).toBe(2);
 
-    // Sin logística, vajilla/stock, productos, proveedores ni staff cargados, esas áreas no deben aparecer.
+    // Sin logística, vajilla, mantelería, productos, proveedores ni staff cargados, esas áreas no deben aparecer.
     expect(body).not.toContain('3. Logística y coordinación');
-    expect(body).not.toContain('4. Vajilla y stock');
-    expect(body).not.toContain('5. Productos e insumos');
-    expect(body).not.toContain('6. Proveedores');
-    expect(body).not.toContain('7. Staff asignado y roles');
+    expect(body).not.toContain('4. Inventario de vajilla');
+    expect(body).not.toContain('5. Registro operativo de mantelería');
+    expect(body).not.toContain('7. Productos e insumos');
+    expect(body).not.toContain('8. Proveedores');
+    expect(body).not.toContain('9. Staff asignado y roles');
   });
 
-  it('renders all seven areas with their real data when everything is loaded, without duplicating the "Invitados y mesas" heading', () => {
+  it('renders all loaded areas with separate vajilla and mantelería controls, without duplicating the "Invitados y mesas" heading', () => {
     const body = html(generateOperationalWord(fullEvent, 'full').buffer);
 
     expect(body).toContain('1. Momentos del evento');
@@ -83,22 +101,28 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(body).toContain('Ana Pérez');
     expect(body).toContain('3. Logística y coordinación');
     expect(body).toContain('Llegar a las 18hs');
-    expect(body).toContain('4. Vajilla y stock');
+    expect(body).toContain('4. Inventario de vajilla');
     expect(body).toContain('Plato playo');
     expect(body).toContain('Copa de champagne extra');
+    expect(body).toContain('Stock propio del salón');
+    expect(body).toContain('Alquilada / externa');
+    expect(body).toContain('Inicio');
+    expect(body).toContain('Fin');
+    expect(body).toContain('5. Registro operativo de mantelería');
     expect(body).toContain('Mantel blanco cajón');
-    expect(body).toContain('5. Productos e insumos');
+    expect(body).toContain('1 propio');
+    expect(body).toContain('7. Productos e insumos');
     expect(body).toContain('Salados');
     expect(body).toContain('Dulces');
     expect(body).toContain('Empanadas de carne');
-    expect(body).toContain('6. Proveedores');
+    expect(body).toContain('8. Proveedores');
     expect(body).toContain('DJ Martín');
-    expect(body).toContain('7. Staff asignado y roles');
+    expect(body).toContain('9. Staff asignado y roles');
     expect(body).toContain('Lucía Gómez');
     expect(body).toContain('Metre');
     expect(body).toContain('Confirmado');
 
-    expect(countOccurrences(body, 'class="area"')).toBe(7);
+    expect(countOccurrences(body, 'class="area"')).toBe(8);
     // El área 2 ya trae su propio título numerado ("2. Invitados y mesas"); el heading interno de
     // guestListWordHtml debe quedar suprimido para no repetirlo pegado.
     expect(countOccurrences(body, 'Invitados y mesas')).toBe(1);
@@ -118,8 +142,7 @@ describe('event-operational-document.service — cronograma integral (type "full
     };
     const body = html(generateOperationalWord(eventWithLegacyStatuses, 'full').buffer);
 
-    expect(body).toContain('Hecho');
-    expect(countOccurrences(body, 'Completado')).toBeGreaterThanOrEqual(4);
+    expect(countOccurrences(body, 'Completado')).toBeGreaterThanOrEqual(3);
     expect(body).not.toContain('Completed');
     expect(body).toContain('.area:first-of-type{break-before:auto;page-break-before:auto}');
   });
@@ -132,6 +155,128 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(full.buffer.subarray(0, 4).toString()).toBe('%PDF');
     expect(full.fileName).toBe('cronograma-integral-cumpleanos-de-camila.pdf');
     expect(full.buffer.length).toBeGreaterThan(empty.buffer.length);
+  });
+
+  it('prints complete multi-line text for long moment titles in the full schedule PDF', async () => {
+    const longTitle = 'Postre / Video cronológico / Cintitas de colores / saludo especial de la familia';
+    const longArea = 'Salón principal - sector de proyección y mesa dulce';
+    const longOwner = 'Coordinación general junto al DJ y al responsable de catering';
+    const pdf = await generateOperationalPdf({
+      ...minimalEvent,
+      resourcePlanSnapshot: {
+        timelineItems: [{ time: '01:00', title: longTitle, area: longArea, owner: longOwner, status: 'pending' }]
+      }
+    }, 'full');
+
+    const content = pdfContentText(pdf.buffer);
+    expect(content).toContain(longTitle);
+    expect(content).not.toContain(longArea);
+    expect(content).not.toContain(longOwner);
+  });
+
+  it('shows only time, moment and notes in the timeline PDF and Word, omitting area, owner and status', async () => {
+    const area = 'Área interna que no debe imprimirse';
+    const owner = 'Responsable interno que no debe imprimirse';
+    const pdf = await generateOperationalPdf({
+      ...minimalEvent,
+      resourcePlanSnapshot: {
+        timelineItems: [{ time: '21:00', title: 'Ingreso de invitados', area, owner, status: 'done', notes: 'Abrir las puertas a horario.' }]
+      }
+    }, 'full');
+    const word = html(generateOperationalWord({
+      ...minimalEvent,
+      resourcePlanSnapshot: {
+        timelineItems: [{ time: '21:00', title: 'Ingreso de invitados', area, owner, status: 'done', notes: 'Abrir las puertas a horario.' }]
+      }
+    }, 'full').buffer);
+    const content = pdfContentText(pdf.buffer);
+
+    expect(content).toContain('Ingreso de invitados');
+    expect(content).toContain('Abrir las puertas a horario.');
+    expect(content).not.toContain(area);
+    expect(content).not.toContain(owner);
+    expect(content).not.toContain('ÁREA');
+    expect(content).not.toContain('RESPONSABLE');
+    expect(content).not.toContain('ESTADO');
+    expect(word).not.toContain('<th>Área</th>');
+    expect(word).not.toContain('<th>Responsable</th>');
+    expect(word).not.toContain('<th>Estado</th>');
+  });
+
+  it('prints vajilla and mantelería as separate compact operational control tables in the full schedule PDF', async () => {
+    const pdf = await generateOperationalPdf(fullEvent, 'full');
+    const content = pdfContentText(pdf.buffer);
+
+    expect(content).toContain('Inventario de vajilla');
+    expect(content).toContain('Plato playo');
+    expect(content).toContain('Stock propio del salón');
+    expect(content).toContain('Registro operativo de mantelería');
+    expect(content).toContain('Mantel blanco cajón');
+    expect(content).toContain('1 propio');
+    expect(content).toContain('INICIO');
+    expect(content).toContain('FIN');
+  });
+
+  it('starts staff notes on their own page in the full schedule and lets them continue onto later pages', async () => {
+    const staffNotes = Array.from({ length: 16 }, (_, index) => ({
+      title: `Indicación operativa ${index + 1}`,
+      notes: 'Confirmar responsable, horario, elementos necesarios y comunicación con coordinación antes de avanzar al próximo momento.'
+    }));
+    const eventWithNotes = {
+      ...minimalEvent,
+      resourcePlanSnapshot: {
+        timelineItems: [{ time: '21:00', title: 'Recepción de invitados', area: 'Salón', owner: 'Coordinación', status: 'pending' }],
+        staffNotes
+      }
+    };
+    const oneNotePdf = await generateOperationalPdf({
+      ...eventWithNotes,
+      resourcePlanSnapshot: { ...eventWithNotes.resourcePlanSnapshot, staffNotes: staffNotes.slice(0, 1) }
+    }, 'full');
+    const pdf = await generateOperationalPdf(eventWithNotes, 'full');
+
+    // Una sola nota todavía debe empezar en la hoja 2; no puede quedar debajo de Momentos.
+    expect(pdfPageCount(oneNotePdf.buffer)).toBe(2);
+    // Hoja 1: Momentos. Hoja 2 en adelante: Notas para staff.
+    expect(pdfPageCount(pdf.buffer)).toBeGreaterThanOrEqual(3);
+    expect(pdfContentText(pdf.buffer)).toContain('Notas para staff');
+    expect(pdfContentText(pdf.buffer)).toContain('Indicación operativa 16');
+  });
+
+  it('fits 10 guest tables on one portrait page in the full schedule', async () => {
+    const tables = Array.from({ length: 10 }, (_, index) => ({ id: `mesa${index + 1}`, name: `Mesa ${index + 1}`, capacity: 10, audience: index < 3 ? 'family' : 'open' }));
+    const guests = Array.from({ length: 100 }, (_, index) => ({ fullName: `Invitado ${String(index + 1).padStart(2, '0')} Apellido`, tableId: tables[Math.floor(index / 10)].id }));
+    const pdf = await generateOperationalPdf({
+      ...minimalEvent,
+      resourcePlanSnapshot: { guestList: { tables, guests } }
+    }, 'full');
+
+    expect(pdfPageCount(pdf.buffer)).toBe(1);
+    expect(pdfContentText(pdf.buffer)).toContain('MESA 10');
+    expect(pdfContentText(pdf.buffer)).toContain('Invitado 100 Apellido');
+  });
+
+  it('limits the guest table detail to age group and dietary restrictions, excluding operational menu and notes', async () => {
+    const meal = 'Menú interno que no debe imprimirse';
+    const operationalNote = 'Observación operativa que no debe imprimirse';
+    const tableNote = 'Nota de mesa interna que no debe imprimirse';
+    const pdf = await generateOperationalPdf({
+      ...minimalEvent,
+      resourcePlanSnapshot: {
+        guestList: {
+          tables: [{ id: 'mesa1', name: 'Mesa familia', capacity: 2, audience: 'family', notes: tableNote }],
+          guests: [{ fullName: 'Pérez, Martina', tableId: 'mesa1', ageGroup: 'minor_10_17', dietaryPreference: 'lactose_free', meal, notes: operationalNote }]
+        }
+      }
+    }, 'full');
+    const content = pdfContentText(pdf.buffer);
+
+    expect(content).toContain('Pérez, Martina');
+    expect(content).toContain('Sin lactosa');
+    expect(content).toContain('10 a 17 años');
+    expect(content).not.toContain(meal);
+    expect(content).not.toContain(operationalNote);
+    expect(content).not.toContain(tableNote);
   });
 });
 

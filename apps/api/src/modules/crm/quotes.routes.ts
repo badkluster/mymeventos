@@ -28,9 +28,9 @@ const packageFields = z.object({
   durationHours: z.coerce.number().positive().optional(), startTime: z.string().trim().optional(), endTime: z.string().trim().optional(),
   pricingMode: z.enum(pricingModes).optional(), pricePerPerson: z.coerce.number().min(0).optional(), fixedPrice: z.coerce.number().min(0).optional(), discountPercentage: z.coerce.number().min(0).max(100).optional(), finalPricePerPerson: z.coerce.number().min(0).optional(), finalFixedPrice: z.coerce.number().min(0).optional(),
   depositAmount: z.coerce.number().min(0).optional(), paymentTerms: z.string().trim().optional(), promotionText: z.string().trim().optional(), giftText: z.string().trim().optional(),
-  menuSections: menuSectionsSchema.optional(), includedServices: z.array(z.string().trim().min(1)).optional(), notes: z.string().trim().optional()
+  menuSections: menuSectionsSchema.optional(), includedServices: z.array(z.string().trim().min(1)).optional(), notes: z.string().trim().optional(), considerations: z.string().trim().optional()
 });
-const ruleFields = packageFields.pick({ active: true, pricingMode: true, pricePerPerson: true, fixedPrice: true, discountPercentage: true, finalPricePerPerson: true, finalFixedPrice: true, depositAmount: true, paymentTerms: true, promotionText: true, giftText: true, menuSections: true, includedServices: true, notes: true }).partial();
+const ruleFields = packageFields.pick({ active: true, pricingMode: true, pricePerPerson: true, fixedPrice: true, discountPercentage: true, finalPricePerPerson: true, finalFixedPrice: true, depositAmount: true, paymentTerms: true, promotionText: true, giftText: true, menuSections: true, includedServices: true, notes: true, considerations: true }).partial();
 const quoteFields = z.object({
   leadId: objectId.optional(), customerId: objectId.optional(), salonId: objectId.optional(), salonIds: z.array(objectId).min(1).optional(), packageTemplateId: objectId.optional(),
   manualMode: z.boolean().optional(),
@@ -40,7 +40,7 @@ const quoteFields = z.object({
   honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional(),
   packageName: z.string().trim().min(1).optional(), durationHours: z.coerce.number().positive().optional(), startTime: z.string().trim().optional(), endTime: z.string().trim().optional(),
   pricingMode: z.enum(pricingModes).optional(), pricePerPerson: z.coerce.number().min(0).optional(), fixedPrice: z.coerce.number().min(0).optional(), discountPercentage: z.coerce.number().min(0).max(100).optional(), finalPricePerPerson: z.coerce.number().min(0).optional(), finalFixedPrice: z.coerce.number().min(0).optional(), depositAmount: z.coerce.number().min(0).optional(),
-  paymentTerms: z.string().trim().optional(), promotionText: z.string().trim().optional(), giftText: z.string().trim().optional(), menuSections: menuSectionsSchema.optional(), includedServices: z.array(z.string().trim().min(1)).optional(), notes: z.string().trim().optional(), observations: z.string().trim().optional(), validUntil: z.coerce.date().optional()
+  paymentTerms: z.string().trim().optional(), promotionText: z.string().trim().optional(), giftText: z.string().trim().optional(), menuSections: menuSectionsSchema.optional(), includedServices: z.array(z.string().trim().min(1)).optional(), notes: z.string().trim().optional(), observations: z.string().trim().optional(), considerations: z.string().trim().optional(), validUntil: z.coerce.date().optional()
 });
 function addRequiredQuoteIssues(body: z.infer<typeof quoteFields>, context: z.RefinementCtx): void {
   if (!body.contactName && !(body.firstName && body.lastName)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['contactName'], message: 'Debe indicar el nombre de la persona.' });
@@ -110,7 +110,8 @@ const fromCustomCalculationSchema = z.object({
     depositAmount: true,
     paymentTerms: true,
     notes: true,
-    observations: true
+    observations: true,
+    considerations: true
   }).extend(customCalculationSchema.shape.body.shape).refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.').superRefine((body, context) => {
     if (!body.leadId && !body.customerId) {
       for (const field of ['phone', 'eventType', 'guestCount'] as const) if (body[field] === undefined) context.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Campo obligatorio para una persona nueva.' });
@@ -184,7 +185,7 @@ async function getApplicableTemplate(templateId: string, salonId: string): Promi
   if (!template || (!template.isGlobal && !(template.salonIds ?? []).some((id: { toString(): string }) => id.toString() === salonId))) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
   const rule: any = await VenuePackageRule.findOne({ packageTemplateId: templateId, salonId, deletedAt: null }).lean();
   if (rule && !rule.active) throw new ApiError(404, 'PACKAGE_TEMPLATE_NOT_AVAILABLE');
-  const overrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
+  const overrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes', 'considerations'];
   return { ...template, ...(rule ? pickDefined(rule, overrideKeys) : {}), ruleConfigured: Boolean(rule) };
 }
 async function createRevision(quote: any, request: Request, changeReason: string): Promise<void> {
@@ -353,6 +354,7 @@ router.post('/from-custom-calculation', requirePermission(Permission.QUOTES_CREA
       paymentTerms: request.body.paymentTerms,
       notes: request.body.notes,
       observations: request.body.observations,
+      considerations: request.body.considerations,
       validUntil: await quoteValidUntil(salonId),
       createdBy: request.user!.id,
       updatedBy: request.user!.id

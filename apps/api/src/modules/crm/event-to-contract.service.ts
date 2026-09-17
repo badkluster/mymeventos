@@ -191,6 +191,7 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
     paidAmount,
     balanceAmount,
     observations: event.notes,
+    considerations: event.considerations ?? quote?.considerations,
     createdBy: input.userId,
     updatedBy: input.userId
   };

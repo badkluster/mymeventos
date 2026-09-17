@@ -22,6 +22,31 @@ function ensure(document: PDFKit.PDFDocument, contract: any, height: number) { i
 function title(document: PDFKit.PDFDocument, contract: any, label: string) { ensure(document, contract, 38); const y = document.y; document.font('Helvetica-Bold').fontSize(11).fillColor(color.ink).text(label, page.left, y); document.moveTo(page.left, y + 19).lineTo(page.right, y + 19).strokeColor(color.gold).stroke(); document.y = y + 28; }
 function pair(document: PDFKit.PDFDocument, label: string, value: unknown, x: number, y: number, width: number) { document.font('Helvetica-Bold').fontSize(7).fillColor(color.muted).text(label.toUpperCase(), x, y, { width }); document.font('Helvetica').fontSize(8.7).fillColor(color.ink).text(text(value), x, y + 10, { width, height: 23, ellipsis: true }); }
 function paragraph(document: PDFKit.PDFDocument, contract: any, value: string) { const height = document.heightOfString(value, { width: page.right - page.left, lineGap: 3 }); ensure(document, contract, height + 8); document.font('Helvetica').fontSize(9.2).fillColor('#273449').text(value, page.left, document.y, { width: page.right - page.left, lineGap: 3 }); document.moveDown(.8); }
+function contentThatFits(document: PDFKit.PDFDocument, content: string, width: number, maxHeight: number): [string, string] {
+  document.font('Helvetica').fontSize(9.2);
+  if (document.heightOfString(content, { width, lineGap: 3 }) <= maxHeight) return [content, ''];
+  let lastBreak = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    if (/\s/.test(content[index])) lastBreak = index + 1;
+    if (document.heightOfString(content.slice(0, index + 1), { width, lineGap: 3 }) > maxHeight) {
+      const splitAt = Math.max(1, lastBreak || index);
+      return [content.slice(0, splitAt).trimEnd(), content.slice(splitAt).trimStart()];
+    }
+  }
+  return [content, ''];
+}
+function flowingParagraph(document: PDFKit.PDFDocument, contract: any, value: string): void {
+  let remaining = value.trim();
+  while (remaining) {
+    ensure(document, contract, 24);
+    const width = page.right - page.left;
+    const available = Math.max(14, page.bottom - 35 - document.y);
+    const [chunk, next] = contentThatFits(document, remaining, width, available);
+    document.font('Helvetica').fontSize(9.2).fillColor('#273449').text(chunk, page.left, document.y, { width, lineGap: 3 });
+    document.moveDown(.8);
+    remaining = next;
+  }
+}
 
 export async function buildContractPdfBuffer(contract: any): Promise<Buffer> {
   const document = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true, info: { Title: `Contrato ${contract.contractNumber}`, Author: 'M&M Eventos', Subject: 'Contrato de prestación de servicios' } });
@@ -34,6 +59,7 @@ export async function buildContractPdfBuffer(contract: any): Promise<Buffer> {
   const installments = Array.isArray(contract.paymentPlanSnapshot) ? contract.paymentPlanSnapshot : []; if (installments.length) { title(document, contract, 'Cuotas programadas'); installments.forEach((item: any, index: number) => { ensure(document, contract, 24); const y = document.y; document.font('Helvetica-Bold').fontSize(8.5).fillColor(color.ink).text(item.label || `Cuota ${index + 1}`, page.left, y, { width: 190 }); document.font('Helvetica').fontSize(8.5).fillColor(color.muted).text(`${date(item.paymentWindowStart)} al ${date(item.paymentWindowEnd ?? item.dueDate)}`, page.left + 195, y, { width: 180 }); document.font('Helvetica-Bold').fontSize(8.5).fillColor(color.ink).text(money(item.amount), page.left + 390, y, { width: 113, align: 'right' }); document.y = y + 18; }); document.moveDown(.5); }
   if (contract.servicesSnapshot?.length) { title(document, contract, 'Servicios incluidos'); contract.servicesSnapshot.forEach((item: string) => paragraph(document, contract, `• ${item}`)); }
   if (contract.menuSnapshot?.length) { title(document, contract, 'Menú contratado'); contract.menuSnapshot.forEach((section: any) => { ensure(document, contract, 35); document.font('Helvetica-Bold').fontSize(9.5).fillColor(color.ink).text(section.title || 'Menú', page.left, document.y); (section.items ?? []).forEach((item: string) => paragraph(document, contract, `• ${item}`)); }); }
+  if (text(contract.considerations, '') !== '') { title(document, contract, 'Consideraciones'); flowingParagraph(document, contract, text(contract.considerations, '')); }
   title(document, contract, 'Cláusulas y condiciones'); const clauses = contract.legalTermsSnapshot?.clauses ?? []; if (clauses.length) clauses.forEach((clause: any, index: number) => { ensure(document, contract, 35); document.font('Helvetica-Bold').fontSize(9.5).fillColor(color.ink).text(`${index + 1}. ${text(clause.title, 'Cláusula')}`, page.left, document.y); paragraph(document, contract, text(clause.text, '')); }); else paragraph(document, contract, 'Las partes aceptan las condiciones comerciales y operativas detalladas en este contrato.'); if (text(contract.legalTermsSnapshot?.providerText, '') !== '') { ensure(document, contract, 35); document.font('Helvetica-Bold').fontSize(9.5).fillColor(color.ink).text('Condiciones particulares del salón', page.left, document.y); paragraph(document, contract, text(contract.legalTermsSnapshot?.providerText)); }
   title(document, contract, 'Conformidad'); paragraph(document, contract, 'En prueba de conformidad, las partes firman dos ejemplares de un mismo tenor y a un solo efecto.'); ensure(document, contract, 72); const signY = document.y + 25; document.moveTo(page.left + 28, signY).lineTo(page.left + 215, signY).strokeColor(color.muted).stroke(); document.moveTo(page.left + 287, signY).lineTo(page.right - 28, signY).strokeColor(color.muted).stroke(); document.font('Helvetica').fontSize(8).fillColor(color.muted).text('M&M Eventos · Prestadora', page.left + 28, signY + 8, { width: 187, align: 'center' }); document.text(text(client.fullName, 'Cliente'), page.left + 287, signY + 8, { width: 187, align: 'center' });
   const range = document.bufferedPageRange(); for (let index = 0; index < range.count; index += 1) { document.switchToPage(index); footer(document, index + 1, range.count); }

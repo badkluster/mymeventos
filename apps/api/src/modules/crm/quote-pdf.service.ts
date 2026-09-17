@@ -161,9 +161,10 @@ export async function generateAndUploadQuotePdf(quote: any): Promise<{ pdfSecure
   }
 
   const observations = value(quote.observations, '');
+  const considerations = value(quote.considerations, '');
   const legacyNotes = value(quote.notes, '');
   const showLegacyNotes = Boolean(legacyNotes && legacyNotes !== observations);
-  const hasSecondPage = Boolean(quote.menuSections?.some((item: any) => item.items?.length) || quote.includedServices?.length || quote.promotionText || quote.giftText || observations || legacyNotes || quote.lineItems?.length);
+  const hasSecondPage = Boolean(quote.menuSections?.some((item: any) => item.items?.length) || quote.includedServices?.length || quote.promotionText || quote.giftText || considerations || observations || legacyNotes || quote.lineItems?.length);
   if (hasSecondPage) {
     document.addPage(); miniHeader(document, quote); document.y = 91;
     const menu = (quote.menuSections ?? []).filter((item: any) => item.items?.length);
@@ -186,6 +187,10 @@ export async function generateAndUploadQuotePdf(quote: any): Promise<{ pdfSecure
     }
     const benefits = [['Promoción', quote.promotionText], ['Beneficio especial', quote.giftText]].filter((item) => value(item[1], '') !== '');
     if (benefits.length) { section(document, quote, 'Beneficios especiales'); for (const [label, content] of benefits) flowingLabeledCards(document, quote, label, String(content)); }
+    if (considerations) {
+      section(document, quote, 'Consideraciones');
+      flowingLabeledCards(document, quote, 'Consideraciones', considerations);
+    }
     if (showLegacyNotes || observations) {
       section(document, quote, 'Observaciones');
       if (showLegacyNotes) flowingLabeledCards(document, quote, observations ? 'Notas de la propuesta' : 'Observaciones', legacyNotes);

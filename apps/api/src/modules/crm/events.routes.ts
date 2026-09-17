@@ -101,7 +101,8 @@ const createEventSchema = z.object({
     menuSnapshot: menuSectionsSchema.optional(),
     servicesSnapshot: z.array(z.string().trim().min(1)).optional(),
     resourcePlanSnapshot: z.unknown().optional(),
-    notes: z.string().trim().optional()
+    notes: z.string().trim().optional(),
+    considerations: z.string().trim().optional()
   }).superRefine((body, context) => {
     if (!body.quoteId && !body.eventDate) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDate'], message: 'Debe indicar la fecha del evento.' });
     if (body.quoteId) return;
@@ -147,6 +148,7 @@ const updateSchema = z.object({
     estimatedAmount: z.coerce.number().min(0).optional(),
     finalAmount: z.coerce.number().min(0).optional(),
     notes: z.string().trim().optional(),
+    considerations: z.string().trim().optional(),
     commercialSnapshot: z.unknown().optional(),
     menuSnapshot: z.unknown().optional(),
     servicesSnapshot: z.unknown().optional(),
@@ -495,8 +497,8 @@ function commercialSnapshotFromBody(body: any): Record<string, unknown> {
   };
 }
 
-const packageOverrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes'];
-const packageEventOverrideKeys = ['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'packageName', 'pricingMode', 'pricePerPerson', 'finalPricePerPerson', 'fixedPrice', 'finalFixedPrice', 'estimatedAmount', 'finalAmount', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSnapshot', 'servicesSnapshot', 'resourcePlanSnapshot', 'notes'];
+const packageOverrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes', 'considerations'];
+const packageEventOverrideKeys = ['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'packageName', 'pricingMode', 'pricePerPerson', 'finalPricePerPerson', 'fixedPrice', 'finalFixedPrice', 'estimatedAmount', 'finalAmount', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSnapshot', 'servicesSnapshot', 'resourcePlanSnapshot', 'notes', 'considerations'];
 
 async function getApplicablePackageForEvent(templateId: string, salonId: string): Promise<Record<string, any>> {
   const template: any = await PackageTemplate.findOne({ _id: templateId, active: true, deletedAt: null }).lean();
@@ -527,7 +529,8 @@ function applyPackageToEventBody(body: any, packageSnapshot: Record<string, any>
     giftText: packageSnapshot.giftText,
     menuSnapshot: packageSnapshot.menuSections,
     servicesSnapshot: packageSnapshot.includedServices,
-    notes: packageSnapshot.notes
+    notes: packageSnapshot.notes,
+    considerations: packageSnapshot.considerations
   };
   return { ...body, ...packageDefaults, ...pickDefined(body, packageEventOverrideKeys) };
 }
@@ -548,7 +551,8 @@ function eventPatchFromCreateBody(body: any): Record<string, unknown> {
     'tableLinenColor',
     'estimatedAmount',
     'finalAmount',
-    'notes'
+    'notes',
+    'considerations'
   ]);
 }
 
@@ -578,7 +582,8 @@ function packageProposalForEvent(event: any, packageSnapshot: Record<string, any
       balanceAmount: Math.max(0, totalAmount - depositAmount),
       paymentTerms: packageSnapshot.paymentTerms,
       promotionText: packageSnapshot.promotionText,
-      giftText: packageSnapshot.giftText
+      giftText: packageSnapshot.giftText,
+      considerations: packageSnapshot.considerations
     },
     schedule: { startTime: packageSnapshot.startTime, endTime: packageSnapshot.endTime, durationHours: packageSnapshot.durationHours },
     menu: packageSnapshot.menuSections ?? [],
@@ -597,7 +602,8 @@ function packageChangeRows(event: any, proposal: ReturnType<typeof packagePropos
     finalFixedPrice: event.commercialSnapshot?.finalFixedPrice,
     totalAmount: event.finalAmount ?? event.estimatedAmount ?? event.commercialSnapshot?.totalAmount,
     depositAmount: event.commercialSnapshot?.depositAmount,
-    paymentTerms: event.commercialSnapshot?.paymentTerms
+    paymentTerms: event.commercialSnapshot?.paymentTerms,
+    considerations: event.considerations
   };
   const proposedCommercial = {
     packageName: proposal.commercial.packageName,
@@ -608,7 +614,8 @@ function packageChangeRows(event: any, proposal: ReturnType<typeof packagePropos
     finalFixedPrice: proposal.commercial.finalFixedPrice,
     totalAmount: proposal.totalAmount,
     depositAmount: proposal.commercial.depositAmount,
-    paymentTerms: proposal.commercial.paymentTerms
+    paymentTerms: proposal.commercial.paymentTerms,
+    considerations: proposal.commercial.considerations
   };
   const rows = [
     { key: 'commercial', label: 'Precio y condiciones', current: currentCommercial, proposed: proposedCommercial },
@@ -625,6 +632,7 @@ function syncContractSnapshot(contract: any, event: any, userId: string) {
   contract.commercialSnapshot = { ...(contract.commercialSnapshot ?? {}), ...(event.commercialSnapshot ?? {}), totalAmount: baseAmount };
   contract.menuSnapshot = event.menuSnapshot ?? contract.menuSnapshot;
   contract.servicesSnapshot = event.servicesSnapshot ?? contract.servicesSnapshot;
+  if (event.considerations !== undefined) contract.considerations = event.considerations;
   contract.paymentPlanSnapshot = event.paymentPlanSnapshot ?? event.paymentSnapshot?.paymentPlan ?? contract.paymentPlanSnapshot;
   contract.paymentAgreementSnapshot = { ...(contract.paymentAgreementSnapshot ?? {}), paymentTerms: event.commercialSnapshot?.paymentTerms, depositAmount: event.commercialSnapshot?.depositAmount, balanceAmount: Math.max(0, baseAmount - Number(contract.paidAmount ?? 0)) };
   contract.baseAmount = baseAmount;
@@ -1262,6 +1270,7 @@ router.post('/:id/package-change', requirePermission(Permission.EVENTS_UPDATE), 
   if (request.body.mode === 'apply') {
     if (selectedSections.has('commercial')) {
       event.commercialSnapshot = preview.proposal.commercial;
+      event.considerations = packageSnapshot.considerations;
       event.estimatedAmount = preview.proposal.totalAmount;
       event.finalAmount = preview.proposal.totalAmount;
       event.paymentSnapshot = {
@@ -1467,7 +1476,7 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
       });
     }
   }
-  const contractSensitiveFields =['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'estimatedAmount', 'finalAmount', 'commercialSnapshot', 'menuSnapshot', 'servicesSnapshot', 'paymentSnapshot', 'paymentPlanSnapshot'];
+  const contractSensitiveFields =['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'estimatedAmount', 'finalAmount', 'considerations', 'commercialSnapshot', 'menuSnapshot', 'servicesSnapshot', 'paymentSnapshot', 'paymentPlanSnapshot'];
   const hasSensitiveChanges = contractSensitiveFields.some((field) => Object.prototype.hasOwnProperty.call(updateBody, field) && JSON.stringify(event[field]) !== JSON.stringify(updateBody[field]));
   const resourcePlanUpdate = updateBody.resourcePlanSnapshot as Record<string, unknown> | undefined;
   delete updateBody.resourcePlanSnapshot;

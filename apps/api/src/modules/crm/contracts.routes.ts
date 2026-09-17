@@ -33,7 +33,8 @@ const updateSchema = z.object({
     securityDepositSnapshot: z.unknown().optional(),
     discountsAmount: z.coerce.number().min(0).optional(),
     paidAmount: z.coerce.number().min(0).optional(),
-    observations: z.string().trim().optional()
+    observations: z.string().trim().optional(),
+    considerations: z.string().trim().optional()
   }).refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo.'),
   params: z.object({ id: objectId }),
   query: z.object({})

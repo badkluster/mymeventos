@@ -83,7 +83,7 @@ describe('quote package templates', () => {
     const customerId = '507f1f77bcf86cd799439016';
     const quote = { _id: '507f1f77bcf86cd799439017', salonId, quoteNumber: 'P-2026-00001', save: vi.fn().mockResolvedValue(undefined) };
     mocks.customerFindOne.mockResolvedValue({ _id: customerId, fullName: 'Ana Pérez', salonIds: [] });
-    mocks.packageFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: packageId, name: 'Alquiler de salón', active: true, isGlobal: true, pricingMode: 'per_person', pricePerPerson: 100000, finalPricePerPerson: 100000, depositAmount: 100000, startTime: '21:00', endTime: '05:00' }) });
+    mocks.packageFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: packageId, name: 'Alquiler de salón', active: true, isGlobal: true, pricingMode: 'per_person', pricePerPerson: 100000, finalPricePerPerson: 100000, depositAmount: 100000, startTime: '21:00', endTime: '05:00', considerations: 'El ingreso de proveedores se coordina previamente.' }) });
     mocks.ruleFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
     mocks.quoteCreate.mockResolvedValue(quote);
 
@@ -93,6 +93,23 @@ describe('quote package templates', () => {
       .send({ customerId, salonId, packageTemplateId: packageId, contactName: 'Ana Pérez', phone: '1112345678', eventType: 'Cumpleaños', eventDate: '2026-12-05', startTime: '21:00', endTime: '05:00', guestCount: 40, observations: 'La familia necesita acceso anticipado para proveedores.' });
 
     expect(response.status).toBe(201);
-    expect(mocks.quoteCreate).toHaveBeenCalledWith(expect.objectContaining({ packageName: 'Alquiler de salón', packageTemplateId: packageId, totalAmount: 4000000, observations: 'La familia necesita acceso anticipado para proveedores.' }));
+    expect(mocks.quoteCreate).toHaveBeenCalledWith(expect.objectContaining({ packageName: 'Alquiler de salón', packageTemplateId: packageId, totalAmount: 4000000, observations: 'La familia necesita acceso anticipado para proveedores.', considerations: 'El ingreso de proveedores se coordina previamente.' }));
+  });
+
+  it('copies the salon-specific considerations instead of the template default', async () => {
+    const customerId = '507f1f77bcf86cd799439016';
+    const quote = { _id: '507f1f77bcf86cd799439017', salonId, quoteNumber: 'P-2026-00002', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.customerFindOne.mockResolvedValue({ _id: customerId, fullName: 'Ana Pérez', salonIds: [] });
+    mocks.packageFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: packageId, name: 'Alquiler de salón', active: true, isGlobal: true, pricingMode: 'fixed', fixedPrice: 4000000, finalFixedPrice: 4000000, depositAmount: 100000, startTime: '21:00', endTime: '05:00', considerations: 'Consideración general.' }) });
+    mocks.ruleFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ packageTemplateId: packageId, salonId, active: true, considerations: 'Consideración exclusiva de este salón.' }) });
+    mocks.quoteCreate.mockResolvedValue(quote);
+
+    const response = await request(app)
+      .post('/api/quotes')
+      .set('Cookie', adminCookie)
+      .send({ customerId, salonId, packageTemplateId: packageId, contactName: 'Ana Pérez', phone: '1112345678', eventType: 'Cumpleaños', eventDate: '2026-12-05', startTime: '21:00', endTime: '05:00', guestCount: 40 });
+
+    expect(response.status).toBe(201);
+    expect(mocks.quoteCreate).toHaveBeenCalledWith(expect.objectContaining({ considerations: 'Consideración exclusiva de este salón.' }));
   });
 });

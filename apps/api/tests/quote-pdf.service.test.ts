@@ -18,20 +18,20 @@ function pdfText(buffer: Buffer): string {
   }).map((stream) => [...stream.matchAll(/<([0-9a-fA-F]+)>/g)].map((match) => Buffer.from(match[1], 'hex').toString('latin1')).join('')).join('\n');
 }
 
-describe('quote PDF observations', () => {
+describe('quote PDF considerations', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.uploadBuffer.mockResolvedValue({ secureUrl: 'https://example.test/quote.pdf', url: 'http://example.test/quote.pdf', publicId: 'quote-pdf' });
   });
 
-  it('renders long observations across pages without truncating their ending', async () => {
-    const finalMarker = 'OBSERVACION-COMPLETA-SIN-RECORTAR';
-    const observations = `${Array.from({ length: 120 }, (_, index) => `Párrafo ${index + 1}: esta observación debe conservarse íntegra en el presupuesto generado.`).join('\n\n')}\n\n${finalMarker}`;
+  it('renders long considerations across pages without truncating their ending', async () => {
+    const finalMarker = 'CONSIDERACION-COMPLETA-SIN-RECORTAR';
+    const considerations = `${Array.from({ length: 120 }, (_, index) => `Párrafo ${index + 1}: esta consideración debe conservarse íntegra en el presupuesto generado.`).join('\n\n')}\n\n${finalMarker}`;
 
     await generateAndUploadQuotePdf({
       _id: 'quote-id', quoteNumber: 'P-2026-00001', contactName: 'Ana Pérez', eventType: 'Cumpleaños', eventDate: '2026-12-05', guestCount: 80,
       pricingMode: 'fixed', totalAmount: 1500000, depositAmount: 300000, balanceAmount: 1200000, fixedPrice: 1500000, finalFixedPrice: 1500000,
-      startTime: '21:00', endTime: '05:00', packageName: 'Noche especial', validUntil: '2026-10-01', observations
+      startTime: '21:00', endTime: '05:00', packageName: 'Noche especial', validUntil: '2026-10-01', considerations
     });
 
     const uploadedPdf = mocks.uploadBuffer.mock.calls[0][0] as Buffer;
