@@ -35,10 +35,18 @@ describe('package-performance report', () => {
     const result = await getReport(adminRequest({ from: '2026-01-01', to: '2026-12-31' }), 'package-performance');
     const gala = result.rows.find((row: any) => row.package === 'Gala y Gourmet');
 
-    expect(mocks.contractFind).toHaveBeenCalledWith(expect.objectContaining({ status: 'approved' }));
-    expect(gala).toMatchObject({ salon: 'La Plata', contractCount: 2, contractedAmount: 800000, averageTicket: 400000, rankInSalon: 1, salonShare: 66.66666666666666 });
+    expect(mocks.contractFind).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'approved',
+      approvedAt: expect.objectContaining({ $lte: expect.any(Date) }),
+    }));
+    expect(gala).toMatchObject({
+      salon: 'La Plata', contractCount: 2, contractedAmount: 800000, averageTicket: 400000, rankInSalon: 1,
+      contractShare: 66.66666666666666, revenueShare: 76.19047619047619,
+    });
     expect(result.summary.find((item: any) => item.id === 'contracts')?.value).toBe(4);
     expect(result.summary.find((item: any) => item.id === 'amount')?.value).toBe(1450000);
     expect(result.meta.attribution).toBe('approvedAt');
+    expect(result.columns.map((column: any) => column.key)).toContain('contractShare');
+    expect(result.columns.map((column: any) => column.key)).toContain('revenueShare');
   });
 });

@@ -54,6 +54,14 @@ function initialFilters(reportKey?: string): Filters {
   return { ...period, from: reportKey === 'package-performance' ? trailingYearStart(period.to) : period.from, salonId: '', status: '', search: '', sortBy: '', sortOrder: 'desc', page: 1, limit: 25 };
 }
 
+function normalizePackagePerformancePeriod(filters: Filters, reportKey: string): Filters {
+  if (reportKey !== 'package-performance') return filters;
+  const today = todayPeriod().to;
+  const to = filters.to > today ? today : filters.to;
+  const from = filters.from > to ? to : filters.from;
+  return { ...filters, from, to };
+}
+
 const statusMaps: Record<string, Record<string, string>> = {
   leads: leadStatusLabels, quotes: quoteStatusLabels, events: eventStatusLabels, contracts: contractStatusLabels, payments: paymentStatusLabels,
 };
@@ -106,8 +114,9 @@ export function ReportWorkspace({ reportKey }: { reportKey: string }) {
       if (key === 'page' || key === 'limit') (next[key] as number) = Number(value);
       else (next[key] as string) = value;
     }
-    setFilters(next);
-    setSearchInput(next.search);
+    const normalized = normalizePackagePerformancePeriod(next, reportKey);
+    setFilters(normalized);
+    setSearchInput(normalized.search);
   }, [reportKey]);
 
   useEffect(() => {
@@ -138,7 +147,7 @@ export function ReportWorkspace({ reportKey }: { reportKey: string }) {
   }, [reportKey, queryString]);
   useEffect(() => { void load(); }, [load]);
 
-  const update = (patch: Partial<Filters>) => setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
+  const update = (patch: Partial<Filters>) => setFilters((current) => normalizePackagePerformancePeriod({ ...current, ...patch, page: patch.page ?? 1 }, reportKey));
   const reset = () => { const next = initialFilters(reportKey); setFilters(next); setSearchInput(''); };
   const savedKey = `mym.report-view.${reportKey}`;
   const saveView = () => {
@@ -183,7 +192,7 @@ export function ReportWorkspace({ reportKey }: { reportKey: string }) {
     <div className="print:hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[150px_150px_190px_170px_minmax(220px,1fr)_auto]">
         <label className="text-xs font-medium text-zinc-600">Desde<Input type="date" value={filters.from} max={filters.to} onChange={(event) => update({ from: event.target.value })} className="mt-1.5" /></label>
-        <label className="text-xs font-medium text-zinc-600">Hasta<Input type="date" value={filters.to} min={filters.from} onChange={(event) => update({ to: event.target.value })} className="mt-1.5" /></label>
+        <label className="text-xs font-medium text-zinc-600">Hasta<Input type="date" value={filters.to} min={filters.from} max={reportKey === 'package-performance' ? todayPeriod().to : undefined} onChange={(event) => update({ to: event.target.value })} className="mt-1.5" /></label>
         <label className="text-xs font-medium text-zinc-600">Salón<Select value={filters.salonId} onChange={(event) => update({ salonId: event.target.value })} className="mt-1.5"><option value="">Todo mi alcance</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></label>
         {showStatusFilter ? <label className="text-xs font-medium text-zinc-600">Estado<Select value={filters.status} onChange={(event) => update({ status: event.target.value })} className="mt-1.5"><option value="">Todos</option>{Object.entries(statusOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label> : <div className="hidden xl:block" />}
         <label className="text-xs font-medium text-zinc-600">Buscar<span className="relative mt-1.5 block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') update({ search: searchInput.trim() }); }} className="pl-9" placeholder={searchPlaceholder} /></span></label>

@@ -67,7 +67,8 @@ export const reportDefinitions: ReportDefinition[] = [
     columns: [
       { key: 'rankInSalon', label: 'Puesto en salón', format: 'number' }, { key: 'package', label: 'Paquete' }, { key: 'salon', label: 'Salón' },
       { key: 'contractCount', label: 'Contratos aprobados', format: 'number' }, { key: 'contractedAmount', label: 'Importe contratado', format: 'currency' },
-      { key: 'averageTicket', label: 'Ticket promedio', format: 'currency' }, { key: 'salonShare', label: 'Participación en salón', format: 'percentage' },
+      { key: 'averageTicket', label: 'Ticket promedio', format: 'currency' }, { key: 'contractShare', label: 'Participación por contratos', format: 'percentage' },
+      { key: 'revenueShare', label: 'Participación del importe', format: 'percentage' },
     ],
   },
   {
@@ -321,7 +322,15 @@ async function contractsReport(request: Request, definition: ReportDefinition, e
   };
 }
 
-type PackagePerformanceGroup = { salon: string; package: string; contractCount: number; contractedAmount: number; rankInSalon: number; salonShare: number };
+type PackagePerformanceGroup = {
+  salon: string;
+  package: string;
+  contractCount: number;
+  contractedAmount: number;
+  rankInSalon: number;
+  contractShare: number;
+  revenueShare: number;
+};
 
 function packageNameFromContract(contract: any): string {
   const packageName = contract.commercialSnapshot?.packageName;
@@ -336,6 +345,10 @@ async function packagePerformanceReport(request: Request, definition: ReportDefi
   const { page, limit, skip } = pagination(request, exportAll);
   const search = String(request.query.search || '').trim();
   const query: any = { deletedAt: null, status: 'approved', ...scope.match(), ...periodMatch(period, 'approvedAt') };
+  // Un contrato no puede contar como aprobado antes de que esa aprobación exista.
+  // Esta guarda también evita que una fecha de aprobación futura cargada por error
+  // altere el ranking si se invoca el endpoint fuera de la interfaz.
+  query.approvedAt = { ...query.approvedAt, $lte: new Date() };
   if (search) query['commercialSnapshot.packageName'] = new RegExp(escapeRegex(search), 'i');
 
   const contracts: any[] = await Contract.find(query)
@@ -344,16 +357,20 @@ async function packagePerformanceReport(request: Request, definition: ReportDefi
     .lean();
   const groups = new Map<string, PackagePerformanceGroup>();
   const contractsBySalon = new Map<string, number>();
+  const contractedAmountBySalon = new Map<string, number>();
 
   for (const contract of contracts) {
     const salon = entityName(contract.salonId, 'Sin salón');
     const packageName = packageNameFromContract(contract);
     const key = `${contract.salonId?._id?.toString?.() ?? salon}\u0000${packageName}`;
-    const group = groups.get(key) ?? { salon, package: packageName, contractCount: 0, contractedAmount: 0, rankInSalon: 0, salonShare: 0 };
+    const group = groups.get(key) ?? {
+      salon, package: packageName, contractCount: 0, contractedAmount: 0, rankInSalon: 0, contractShare: 0, revenueShare: 0,
+    };
     group.contractCount += 1;
     group.contractedAmount += Number(contract.totalAmount ?? 0);
     groups.set(key, group);
     contractsBySalon.set(salon, (contractsBySalon.get(salon) ?? 0) + 1);
+    contractedAmountBySalon.set(salon, (contractedAmountBySalon.get(salon) ?? 0) + Number(contract.totalAmount ?? 0));
   }
 
   const rows = [...groups.values()];
@@ -363,11 +380,12 @@ async function packagePerformanceReport(request: Request, definition: ReportDefi
     salonRows.sort((left, right) => right.contractCount - left.contractCount || right.contractedAmount - left.contractedAmount || left.package.localeCompare(right.package, 'es'));
     salonRows.forEach((row, index) => {
       row.rankInSalon = index + 1;
-      row.salonShare = row.contractCount / (contractsBySalon.get(salon) ?? 1) * 100;
+      row.contractShare = row.contractCount / (contractsBySalon.get(salon) ?? 1) * 100;
+      row.revenueShare = row.contractedAmount / (contractedAmountBySalon.get(salon) ?? 1) * 100;
     });
   });
 
-  const sortableColumns = ['rankInSalon', 'package', 'salon', 'contractCount', 'contractedAmount', 'averageTicket', 'salonShare'];
+  const sortableColumns = ['rankInSalon', 'package', 'salon', 'contractCount', 'contractedAmount', 'averageTicket', 'contractShare', 'revenueShare'];
   const sortBy = sortableColumns.includes(String(request.query.sortBy)) ? String(request.query.sortBy) : 'contractCount';
   const sortOrder = request.query.sortOrder === 'asc' ? 1 : -1;
   const sortedRows = rows.map((row) => ({
