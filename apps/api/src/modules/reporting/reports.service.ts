@@ -12,7 +12,7 @@ import { ProductionPlan } from '../production/production.models';
 // hora de Argentina. 'civilDate' = fecha civil sin hora (eventDate, dueDate/paymentWindow*,
 // Expense.date), normalizada a medianoche UTC por `civilDateInput` — se muestra en UTC, nunca en
 // un huso horario real, o la medianoche corre al día anterior en husos negativos como Argentina.
-type Column = { key: string; label: string; format?: 'date' | 'civilDate' | 'currency' | 'number' | 'status'; linkKey?: string };
+type Column = { key: string; label: string; format?: 'date' | 'civilDate' | 'currency' | 'number' | 'percentage' | 'status'; linkKey?: string };
 type ReportDefinition = {
   key: string;
   group: string;
@@ -60,6 +60,14 @@ export const reportDefinitions: ReportDefinition[] = [
       { key: 'paidAmount', label: 'Cobrado', format: 'currency' }, { key: 'balanceAmount', label: 'Saldo', format: 'currency' },
       { key: 'overdueAmount', label: 'Vencido', format: 'currency' }, { key: 'installments', label: 'Cuotas', format: 'number' },
       { key: 'nextDueDate', label: 'Próximo vencimiento', format: 'civilDate' },
+    ],
+  },
+  {
+    key: 'package-performance', group: 'Salones', title: 'Rendimiento de paquetes', description: 'Qué paquetes convierten más contratos y qué importe contratado aportan en cada salón. Cuenta contratos aprobados por fecha de aprobación.', permission: Permission.REPORTS_CONTRACTS_READ,
+    columns: [
+      { key: 'rankInSalon', label: 'Puesto en salón', format: 'number' }, { key: 'package', label: 'Paquete' }, { key: 'salon', label: 'Salón' },
+      { key: 'contractCount', label: 'Contratos aprobados', format: 'number' }, { key: 'contractedAmount', label: 'Importe contratado', format: 'currency' },
+      { key: 'averageTicket', label: 'Ticket promedio', format: 'currency' }, { key: 'salonShare', label: 'Participación en salón', format: 'percentage' },
     ],
   },
   {
@@ -313,6 +321,88 @@ async function contractsReport(request: Request, definition: ReportDefinition, e
   };
 }
 
+type PackagePerformanceGroup = { salon: string; package: string; contractCount: number; contractedAmount: number; rankInSalon: number; salonShare: number };
+
+function packageNameFromContract(contract: any): string {
+  const packageName = contract.commercialSnapshot?.packageName;
+  if (typeof packageName === 'string' && packageName.trim()) return packageName.trim().replace(/\s+/g, ' ');
+  return contract.contractMode === 'CUSTOM' ? 'Personalizado' : 'Sin paquete informado';
+}
+
+/** Agrupa ventas cerradas por paquete y salón. La fecha de atribución es `approvedAt`, para que un borrador no altere el ranking comercial. */
+async function packagePerformanceReport(request: Request, definition: ReportDefinition, exportAll: boolean) {
+  const period = parseReportPeriod(request.query);
+  const scope = resolveReportScope(request);
+  const { page, limit, skip } = pagination(request, exportAll);
+  const search = String(request.query.search || '').trim();
+  const query: any = { deletedAt: null, status: 'approved', ...scope.match(), ...periodMatch(period, 'approvedAt') };
+  if (search) query['commercialSnapshot.packageName'] = new RegExp(escapeRegex(search), 'i');
+
+  const contracts: any[] = await Contract.find(query)
+    .select('salonId contractMode commercialSnapshot totalAmount')
+    .populate('salonId', 'name')
+    .lean();
+  const groups = new Map<string, PackagePerformanceGroup>();
+  const contractsBySalon = new Map<string, number>();
+
+  for (const contract of contracts) {
+    const salon = entityName(contract.salonId, 'Sin salón');
+    const packageName = packageNameFromContract(contract);
+    const key = `${contract.salonId?._id?.toString?.() ?? salon}\u0000${packageName}`;
+    const group = groups.get(key) ?? { salon, package: packageName, contractCount: 0, contractedAmount: 0, rankInSalon: 0, salonShare: 0 };
+    group.contractCount += 1;
+    group.contractedAmount += Number(contract.totalAmount ?? 0);
+    groups.set(key, group);
+    contractsBySalon.set(salon, (contractsBySalon.get(salon) ?? 0) + 1);
+  }
+
+  const rows = [...groups.values()];
+  const rowsBySalon = new Map<string, PackagePerformanceGroup[]>();
+  rows.forEach((row) => rowsBySalon.set(row.salon, [...(rowsBySalon.get(row.salon) ?? []), row]));
+  rowsBySalon.forEach((salonRows, salon) => {
+    salonRows.sort((left, right) => right.contractCount - left.contractCount || right.contractedAmount - left.contractedAmount || left.package.localeCompare(right.package, 'es'));
+    salonRows.forEach((row, index) => {
+      row.rankInSalon = index + 1;
+      row.salonShare = row.contractCount / (contractsBySalon.get(salon) ?? 1) * 100;
+    });
+  });
+
+  const sortableColumns = ['rankInSalon', 'package', 'salon', 'contractCount', 'contractedAmount', 'averageTicket', 'salonShare'];
+  const sortBy = sortableColumns.includes(String(request.query.sortBy)) ? String(request.query.sortBy) : 'contractCount';
+  const sortOrder = request.query.sortOrder === 'asc' ? 1 : -1;
+  const sortedRows = rows.map((row) => ({
+    id: `${row.salon}\u0000${row.package}`, ...row,
+    averageTicket: row.contractCount ? row.contractedAmount / row.contractCount : 0,
+  })).sort((left, right) => {
+    const leftValue = left[sortBy as keyof typeof left];
+    const rightValue = right[sortBy as keyof typeof right];
+    const primary = typeof leftValue === 'string' && typeof rightValue === 'string'
+      ? leftValue.localeCompare(rightValue, 'es') * sortOrder
+      : (Number(leftValue ?? 0) - Number(rightValue ?? 0)) * sortOrder;
+    if (primary) return primary;
+    // El ranking inicial privilegia volumen y luego valor. Los desempates dejan el
+    // orden estable, para que el primer vistazo siempre muestre el paquete más rentable.
+    if (sortBy !== 'contractCount' && left.contractCount !== right.contractCount) return right.contractCount - left.contractCount;
+    if (sortBy !== 'contractedAmount' && left.contractedAmount !== right.contractedAmount) return right.contractedAmount - left.contractedAmount;
+    return left.salon.localeCompare(right.salon, 'es') || left.package.localeCompare(right.package, 'es');
+  });
+  const totalItems = sortedRows.length;
+  const visibleRows = exportAll ? sortedRows : sortedRows.slice(skip, skip + limit);
+  const contractedAmount = rows.reduce((sum, row) => sum + row.contractedAmount, 0);
+  return {
+    columns: definition.columns,
+    rows: visibleRows,
+    summary: [
+      { id: 'contracts', label: 'Contratos aprobados', value: contracts.length, format: 'number' },
+      { id: 'amount', label: 'Importe contratado', value: contractedAmount, format: 'currency' },
+      { id: 'packages', label: 'Paquetes vendidos', value: new Set(rows.map((row) => row.package)).size, format: 'number' },
+      { id: 'salons', label: 'Salones con ventas', value: rowsBySalon.size, format: 'number' },
+    ],
+    breakdowns: {},
+    meta: commonMeta(definition, request, totalItems, page, limit, 'approvedAt'),
+  };
+}
+
 async function paymentsReport(request: Request, definition: ReportDefinition, exportAll: boolean) {
   const period = parseReportPeriod(request.query);
   const scope = resolveReportScope(request);
@@ -475,6 +565,7 @@ export async function getReport(request: Request, key: string, exportAll = false
   if (key === 'quotes') return quotesReport(request, definition, exportAll);
   if (key === 'events') return eventsReport(request, definition, exportAll);
   if (key === 'contracts') return contractsReport(request, definition, exportAll);
+  if (key === 'package-performance') return packagePerformanceReport(request, definition, exportAll);
   if (key === 'payments') return paymentsReport(request, definition, exportAll);
   if (key === 'payment-control') return paymentControlReport(request, definition, exportAll);
   if (key === 'expenses') return expensesReport(request, definition, exportAll);

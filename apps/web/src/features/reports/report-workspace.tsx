@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/toast-provider';
 // 'date' = instante real (createdAt, sentAt, approvedAt, paidAt) en hora de Argentina.
 // 'civilDate' = fecha civil sin hora (eventDate, dueDate/paymentWindow*, gasto), en UTC — el
 // backend ya la normalizó a medianoche UTC, y formatearla en un huso real la corre un día.
-type Column = { key: string; label: string; format?: 'date' | 'civilDate' | 'currency' | 'number' | 'status'; linkKey?: string };
+type Column = { key: string; label: string; format?: 'date' | 'civilDate' | 'currency' | 'number' | 'percentage' | 'status'; linkKey?: string };
 type SummaryItem = { id: string; label: string; value: number; format: 'number' | 'currency' | 'percentage'; partial?: boolean };
 type ReportResponse = {
   columns: Column[];
@@ -43,9 +43,15 @@ function todayPeriod() {
   return { from: `${values.year}-${values.month}-01`, to: `${values.year}-${values.month}-${values.day}` };
 }
 
-function initialFilters(): Filters {
+function trailingYearStart(value: string) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 364);
+  return date.toISOString().slice(0, 10);
+}
+
+function initialFilters(reportKey?: string): Filters {
   const period = todayPeriod();
-  return { ...period, salonId: '', status: '', search: '', sortBy: '', sortOrder: 'desc', page: 1, limit: 25 };
+  return { ...period, from: reportKey === 'package-performance' ? trailingYearStart(period.to) : period.from, salonId: '', status: '', search: '', sortBy: '', sortOrder: 'desc', page: 1, limit: 25 };
 }
 
 const statusMaps: Record<string, Record<string, string>> = {
@@ -70,6 +76,7 @@ function valueLabel(value: unknown, column: Column) {
   }
   if (column.format === 'currency') return money.format(Number(value));
   if (column.format === 'number') return number.format(Number(value));
+  if (column.format === 'percentage') return `${number.format(Number(value))} %`;
   if (column.format === 'status') return displayLabel(generalLabels, String(value));
   return String(value);
 }
@@ -82,7 +89,7 @@ function summaryLabel(item: SummaryItem) {
 
 export function ReportWorkspace({ reportKey }: { reportKey: string }) {
   const { showToast } = useToast();
-  const [filters, setFilters] = useState<Filters>(initialFilters);
+  const [filters, setFilters] = useState<Filters>(() => initialFilters(reportKey));
   const [searchInput, setSearchInput] = useState('');
   const [salons, setSalons] = useState<Salon[]>([]);
   const [report, setReport] = useState<ReportResponse | null>(null);
@@ -92,7 +99,7 @@ export function ReportWorkspace({ reportKey }: { reportKey: string }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const next = initialFilters();
+    const next = initialFilters(reportKey);
     for (const key of Object.keys(next) as Array<keyof Filters>) {
       const value = params.get(key);
       if (!value) continue;
@@ -132,7 +139,7 @@ export function ReportWorkspace({ reportKey }: { reportKey: string }) {
   useEffect(() => { void load(); }, [load]);
 
   const update = (patch: Partial<Filters>) => setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
-  const reset = () => { const next = initialFilters(); setFilters(next); setSearchInput(''); };
+  const reset = () => { const next = initialFilters(reportKey); setFilters(next); setSearchInput(''); };
   const savedKey = `mym.report-view.${reportKey}`;
   const saveView = () => {
     localStorage.setItem(savedKey, JSON.stringify(filters));
@@ -166,6 +173,8 @@ export function ReportWorkspace({ reportKey }: { reportKey: string }) {
     }
   };
   const statusOptions = statusMaps[reportKey] ?? {};
+  const showStatusFilter = Object.keys(statusOptions).length > 0;
+  const searchPlaceholder = reportKey === 'package-performance' ? 'Buscar paquete…' : 'Nombre, número o referencia…';
 
   return <section className="space-y-5">
     <div className="print:hidden"><Link href="/admin/reports" className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-950"><ArrowLeft className="h-4 w-4" />Volver al centro de reportes</Link></div>
@@ -176,8 +185,8 @@ export function ReportWorkspace({ reportKey }: { reportKey: string }) {
         <label className="text-xs font-medium text-zinc-600">Desde<Input type="date" value={filters.from} max={filters.to} onChange={(event) => update({ from: event.target.value })} className="mt-1.5" /></label>
         <label className="text-xs font-medium text-zinc-600">Hasta<Input type="date" value={filters.to} min={filters.from} onChange={(event) => update({ to: event.target.value })} className="mt-1.5" /></label>
         <label className="text-xs font-medium text-zinc-600">Salón<Select value={filters.salonId} onChange={(event) => update({ salonId: event.target.value })} className="mt-1.5"><option value="">Todo mi alcance</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></label>
-        <label className="text-xs font-medium text-zinc-600">Estado<Select value={filters.status} onChange={(event) => update({ status: event.target.value })} className="mt-1.5"><option value="">Todos</option>{Object.entries(statusOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
-        <label className="text-xs font-medium text-zinc-600">Buscar<span className="relative mt-1.5 block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') update({ search: searchInput.trim() }); }} className="pl-9" placeholder="Nombre, número o referencia…" /></span></label>
+        {showStatusFilter ? <label className="text-xs font-medium text-zinc-600">Estado<Select value={filters.status} onChange={(event) => update({ status: event.target.value })} className="mt-1.5"><option value="">Todos</option>{Object.entries(statusOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label> : <div className="hidden xl:block" />}
+        <label className="text-xs font-medium text-zinc-600">Buscar<span className="relative mt-1.5 block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') update({ search: searchInput.trim() }); }} className="pl-9" placeholder={searchPlaceholder} /></span></label>
         <Button className="self-end" onClick={() => update({ search: searchInput.trim() })}>Aplicar</Button>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3">
@@ -200,7 +209,7 @@ export function ReportWorkspace({ reportKey }: { reportKey: string }) {
     <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
       {loading && !report ? <div className="grid min-h-72 place-items-center text-sm text-zinc-500"><span className="inline-flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" />Cargando reporte…</span></div> : null}
       {report ? <div className="overflow-x-auto"><table className="w-full min-w-max text-sm"><thead className="border-b border-zinc-200 bg-zinc-50/80"><tr>{report.columns.map((column) => <th key={column.key} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500"><button className="inline-flex items-center gap-1 hover:text-zinc-950" onClick={() => update({ sortBy: column.key, sortOrder: filters.sortBy === column.key && filters.sortOrder === 'asc' ? 'desc' : 'asc' })}>{column.label}{filters.sortBy === column.key ? filters.sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" /> : null}</button></th>)}</tr></thead>
-        <tbody className="divide-y divide-zinc-100">{report.rows.map((row) => <tr key={row.id} className="hover:bg-zinc-50">{report.columns.map((column) => <td key={column.key} className={`whitespace-nowrap px-4 py-3 text-zinc-700 ${column.format === 'currency' || column.format === 'number' ? 'text-right tabular-nums' : ''}`}>{column.linkKey && row[column.linkKey] ? <Link href={String(row[column.linkKey])} className="font-semibold text-zinc-950 underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-950">{valueLabel(row[column.key], column)}</Link> : valueLabel(row[column.key], column)}</td>)}</tr>)}</tbody></table>
+        <tbody className="divide-y divide-zinc-100">{report.rows.map((row) => <tr key={row.id} className="hover:bg-zinc-50">{report.columns.map((column) => <td key={column.key} className={`whitespace-nowrap px-4 py-3 text-zinc-700 ${column.format === 'currency' || column.format === 'number' || column.format === 'percentage' ? 'text-right tabular-nums' : ''}`}>{column.linkKey && row[column.linkKey] ? <Link href={String(row[column.linkKey])} className="font-semibold text-zinc-950 underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-950">{valueLabel(row[column.key], column)}</Link> : valueLabel(row[column.key], column)}</td>)}</tr>)}</tbody></table>
         {!report.rows.length ? <div className="grid min-h-48 place-items-center text-sm text-zinc-500">No hay registros para los filtros seleccionados.</div> : null}</div> : null}
       {report ? <footer className="print:hidden flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 px-4 py-3 text-sm text-zinc-500"><span>Mostrando {report.rows.length} de {report.meta.totalItems} · Generado {date.format(new Date(report.meta.generatedAt))}</span><div className="flex items-center gap-2"><Select value={filters.limit} onChange={(event) => update({ limit: Number(event.target.value) })} className="w-28 py-2">{[25, 50, 100].map((value) => <option key={value} value={value}>{value} filas</option>)}</Select><Button variant="secondary" className="px-2.5" disabled={!report.meta.hasPreviousPage || loading} onClick={() => update({ page: filters.page - 1 })}><ChevronLeft className="h-4 w-4" /></Button><span>Página {report.meta.page} de {report.meta.totalPages}</span><Button variant="secondary" className="px-2.5" disabled={!report.meta.hasNextPage || loading} onClick={() => update({ page: filters.page + 1 })}><ChevronRight className="h-4 w-4" /></Button></div></footer> : null}
     </article>
