@@ -11,6 +11,8 @@ import type { BackofficeNotification, NotificationsResponse } from '@/features/n
 import { api } from '@/lib/api';
 import { useToast } from '@/components/ui/toast-provider';
 
+const notificationPollingIntervalMs = 180_000;
+
 function formatNotificationDate(value: string): string {
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
@@ -39,7 +41,7 @@ export function NotificationBell() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await api.get<NotificationsResponse>('/notifications');
+      const result = await api.get<NotificationsResponse>('/notifications/summary');
       setNotifications(result.notifications);
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudieron cargar las notificaciones.', variant: 'error' });
@@ -49,9 +51,34 @@ export function NotificationBell() {
   }, [showToast]);
 
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), 60000);
-    return () => window.clearInterval(timer);
+    let disposed = false;
+    let requestInFlight = false;
+
+    const refresh = async () => {
+      if (disposed || requestInFlight || document.visibilityState !== 'visible') return;
+      requestInFlight = true;
+      try {
+        await load();
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+
+    void refresh();
+    const timer = window.setInterval(refreshWhenVisible, notificationPollingIntervalMs);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [load]);
 
   async function markAsRead(notification: BackofficeNotification) {
