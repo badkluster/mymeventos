@@ -147,7 +147,7 @@ async function createRevision(quote: any, request: Request): Promise<void> {
   const latest: any = await QuoteRevision.findOne({ quoteId: quote._id }).sort({ version: -1 }).lean();
   await QuoteRevision.create({ quoteId: quote._id, version: (latest?.version ?? 0) + 1, snapshot: quote.toObject ? quote.toObject() : quote, changeReason: 'Presupuesto creado desde solicitud', createdBy: request.user!.id });
 }
-function buildQuery(request: Request, forcedStatus?: typeof statuses[number]): Record<string, unknown> {
+function buildQuery(request: Request, forcedStatus?: (typeof statuses)[number]): Record<string, unknown> {
   const conditions: Record<string, unknown>[] = [{ deletedAt: null }];
   conditions.push(...salonScopeForRequests(request));
   const status = forcedStatus ?? queryValue(request.query.status); if (status && statuses.includes(status as any)) conditions.push({ status });
