@@ -125,6 +125,14 @@ function activeNowQuery() {
   return { active: true, deletedAt: null, $and: [{ $or: [{ startsAt: { $exists: false } }, { startsAt: null }, { startsAt: { $lte: now } }] }, { $or: [{ endsAt: { $exists: false } }, { endsAt: null }, { endsAt: { $gte: now } }] }] };
 }
 
+router.get('/branding', asyncHandler(async (_request, response) => {
+  const settings = await LandingSettings.findOne({ key: 'default', active: true, deletedAt: null })
+    .select('logoOnDarkUrl logoOnLightUrl faviconUrl')
+    .lean();
+  response.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+  return sendSuccess(response, { settings });
+}));
+
 router.get('/landing', asyncHandler(async (_request, response) => {
   const [settings, salons, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes, storySteps] = await Promise.all([
     LandingSettings.findOne({ key: 'default', active: true, deletedAt: null }).lean(),
@@ -138,6 +146,7 @@ router.get('/landing', asyncHandler(async (_request, response) => {
     LandingStoryStep.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
   ]);
   const packages = salons.flatMap((salon: any) => (salon.packages ?? []).map((item: any) => ({ ...item, salonId: salon._id, salonName: salon.publicTitle || salon.name })));
+  response.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
   return sendSuccess(response, { settings, salons, packages, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes, storySteps });
 }));
 
