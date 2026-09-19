@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   salonExists: vi.fn(),
   createQuoteRequest: vi.fn(),
   quoteRequestFindOne: vi.fn(),
+  quoteRequestCount: vi.fn(),
+  quoteRequestFind: vi.fn(),
   writeAuditLog: vi.fn()
 }));
 
@@ -19,7 +21,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   Lead: {},
   LeadActivity: { create: vi.fn() },
   Customer: {},
-  QuoteRequest: { findOne: mocks.quoteRequestFindOne, countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
+  QuoteRequest: { findOne: mocks.quoteRequestFindOne, countDocuments: mocks.quoteRequestCount, find: mocks.quoteRequestFind, create: vi.fn() },
   PackageTemplate: { find: vi.fn() },
   VenuePackageRule: { find: vi.fn() },
   Quote: {},
@@ -75,6 +77,20 @@ describe('quote requests API', () => {
     expect(response.body.data).toMatchObject({ leadId, quoteRequestId });
     expect(response.body.message).toContain('Recibimos tu solicitud');
     expect(mocks.createQuoteRequest).toHaveBeenCalledWith(expect.objectContaining({ source: 'quick_quote', contactName: 'Ana Perez', interestedSalonIds: [salonId] }));
+  });
+
+  it('returns the new quote request count without loading quote request rows', async () => {
+    mocks.quoteRequestCount.mockResolvedValue(7);
+
+    const response = await request(app)
+      .get('/api/quote-requests/new-count')
+      .set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ count: 7 });
+    expect(mocks.quoteRequestCount).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mocks.quoteRequestCount.mock.calls[0]?.[0])).toContain('"status":"new"');
+    expect(mocks.quoteRequestFind).not.toHaveBeenCalled();
   });
 
   it('lets an operator take a quote request', async () => {
