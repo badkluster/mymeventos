@@ -6,10 +6,12 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Bell, CheckCheck, ExternalLink, Inbox } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { BackofficeNotification, NotificationsResponse } from '@/features/notifications/types';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/ui/toast-provider';
+
+const notificationPollingIntervalMs = 180_000;
 
 function formatNotificationDate(value: string): string {
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
@@ -32,15 +34,16 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<BackofficeNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const unreadCount = useMemo(() => notifications.filter((notification) => !notification.readAt).length, [notifications]);
   const recentNotifications = notifications.slice(0, 5);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await api.get<NotificationsResponse>('/notifications');
+      const result = await api.get<NotificationsResponse>('/notifications/summary');
       setNotifications(result.notifications);
+      setUnreadCount(result.unreadCount);
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudieron cargar las notificaciones.', variant: 'error' });
     } finally {
@@ -49,15 +52,41 @@ export function NotificationBell() {
   }, [showToast]);
 
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), 60000);
-    return () => window.clearInterval(timer);
+    let disposed = false;
+    let requestInFlight = false;
+
+    const refresh = async () => {
+      if (disposed || requestInFlight || document.visibilityState !== 'visible') return;
+      requestInFlight = true;
+      try {
+        await load();
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+
+    void refresh();
+    const timer = window.setInterval(refreshWhenVisible, notificationPollingIntervalMs);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [load]);
 
   async function markAsRead(notification: BackofficeNotification) {
     if (notification.readAt) return;
     await api.patch(`/notifications/${notification._id}/read`, {});
     setNotifications((current) => current.map((item) => (item._id === notification._id ? { ...item, readAt: new Date().toISOString() } : item)));
+    setUnreadCount((current) => Math.max(0, current - 1));
   }
 
   async function openNotification(notification: BackofficeNotification) {
@@ -76,6 +105,7 @@ export function NotificationBell() {
       await api.patch('/notifications/read-all', {});
       const readAt = new Date().toISOString();
       setNotifications((current) => current.map((notification) => ({ ...notification, readAt: notification.readAt ?? readAt })));
+      setUnreadCount(0);
       showToast({ message: 'Notificaciones marcadas como leídas.', variant: 'success' });
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudieron actualizar las notificaciones.', variant: 'error' });
