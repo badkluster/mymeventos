@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  calendarFind: vi.fn(),
   calendarFindOneAndUpdate: vi.fn(),
   calendarUpdateMany: vi.fn(),
   calendarUpdateOne: vi.fn(),
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../src/modules/crm/crm.models', () => ({
   CalendarItem: {
+    find: mocks.calendarFind,
     findOneAndUpdate: mocks.calendarFindOneAndUpdate,
     updateMany: mocks.calendarUpdateMany,
     updateOne: mocks.calendarUpdateOne
@@ -53,6 +55,7 @@ function upsertCalls() {
 describe('financial reminders service', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.calendarFind.mockReturnValue(leanQuery([]));
     mocks.contractFind.mockReturnValue(leanQuery([]));
     mocks.contractFindOne.mockReturnValue(leanQuery(undefined));
     mocks.eventFind.mockReturnValue(leanQuery([]));
@@ -289,5 +292,142 @@ describe('financial reminders service', () => {
     expect(mocks.notificationBulkWrite).toHaveBeenCalledTimes(1);
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
     expect(mocks.calendarUpdateOne).toHaveBeenCalledTimes(1);
+  });
+
+  // Phase 4 (2026-09-23 Fluid Active CPU audit): the obligation loop now prefetches existing
+  // CalendarItems by automationKey and issues at most one targeted write per item instead of two
+  // unconditional ones. These tests drive the same 7-day-installment fixture as the first test
+  // above through processFinancialReminderTick, varying what the prefetch reports already exists,
+  // and assert on the resulting CalendarItem.findOneAndUpdate/updateOne calls — the same style the
+  // pre-existing tests already use — rather than on internal counters, which only ever surface in
+  // a conditional console.warn this suite doesn't need to depend on.
+  describe('prefetch + diff write model', () => {
+    function sevenDayInstallmentFixture() {
+      const installment = { id: 'installment-1', label: 'Segunda cuota', amount: 50000, paidAmount: 10000, status: 'pending', dueDate: '2026-06-08' };
+      const contract = { _id: 'contract-1', eventId: 'event-1', customerId: 'customer-1', balanceAmount: 0, paymentPlanSnapshot: [] };
+      const event = { _id: 'event-1', customerId: 'customer-1', eventName: 'Cumple de Ana', status: 'confirmed', paymentPlanSnapshot: [installment] };
+      mocks.contractFind.mockReturnValue(leanQuery([contract]));
+      mocks.eventFind.mockReturnValue(leanQuery([event]));
+      mocks.userFind.mockReturnValue(leanQuery([{ _id: 'financial-user', email: 'finance@example.com' }]));
+      return { installment, contract, event };
+    }
+
+    it('skips the write entirely once the existing item already matches the desired state (unchanged desired state → no unnecessary write)', async () => {
+      sevenDayInstallmentFixture();
+
+      const firstTick = await processFinancialReminderTick(new Date('2026-06-01T15:00:00.000Z'));
+      expect(firstTick).toMatchObject({ synced: 6 });
+      const created = upsertCalls();
+      expect(created).toHaveLength(6);
+
+      // Reuse exactly what tick 1 just wrote as tick 2's prefetch snapshot — ten minutes later,
+      // nothing about the installment changed, so nothing should be written again.
+      const existingDocs = created.map(([filter, update]: any[]) => ({
+        automationKey: filter.automationKey,
+        ...update.$set,
+        status: update.$setOnInsert.status,
+        notification: update.$setOnInsert.notification
+      }));
+      mocks.calendarFind.mockReturnValue(leanQuery(existingDocs));
+      mocks.calendarFindOneAndUpdate.mockClear();
+      mocks.calendarUpdateOne.mockClear();
+
+      const secondTick = await processFinancialReminderTick(new Date('2026-06-01T15:10:00.000Z'));
+
+      expect(secondTick).toMatchObject({ synced: 6 });
+      expect(upsertCalls()).toHaveLength(0);
+      expect(mocks.calendarUpdateOne).not.toHaveBeenCalled();
+    });
+
+    it('reactivates a cancelled-and-unsent item in one guarded write, not two, and does not create it again', async () => {
+      sevenDayInstallmentFixture();
+      const automationKey = 'financial:installment:event-1:installment-1:due_7_days:2026-06-08';
+      mocks.calendarFind.mockReturnValue(leanQuery([{
+        automationKey,
+        status: 'cancelled',
+        notification: { status: 'cancelled', channels: ['system', 'email'] },
+        title: 'stale title',
+        metadata: { rule: 'due_7_days', obligationKey: 'financial:installment:event-1:installment-1', dueDateKey: '2026-06-08' }
+      }]));
+
+      await processFinancialReminderTick(new Date('2026-06-01T15:00:00.000Z'));
+
+      expect(upsertCalls().map(([filter]) => filter.automationKey)).not.toContain(automationKey);
+      expect(mocks.calendarUpdateOne).toHaveBeenCalledWith(
+        { automationKey, 'notification.status': 'cancelled' },
+        expect.objectContaining({
+          $set: expect.objectContaining({
+            status: 'scheduled',
+            'notification.enabled': true,
+            'notification.status': 'scheduled',
+            'notification.sendAt': expect.any(Date),
+            title: 'Pago por vencer en 7 días'
+          }),
+          $unset: {
+            'notification.lockedAt': 1,
+            'notification.lockExpiresAt': 1,
+            'notification.nextRetryAt': 1,
+            'notification.lastError': 1
+          }
+        })
+      );
+    });
+
+    it('refreshes content on an already-sent item without reactivating or touching its delivery status', async () => {
+      sevenDayInstallmentFixture();
+      const automationKey = 'financial:installment:event-1:installment-1:due_7_days:2026-06-08';
+      mocks.calendarFind.mockReturnValue(leanQuery([{
+        automationKey,
+        status: 'scheduled',
+        notification: { status: 'sent', lastSentAt: new Date('2026-05-30T00:00:00.000Z') },
+        title: 'outdated title, content drifted',
+        description: 'outdated description',
+        startAt: new Date('2026-06-01T03:00:00.000Z'),
+        priority: 'normal',
+        metadata: { rule: 'due_7_days', obligationKey: 'financial:installment:event-1:installment-1', dueDateKey: '2026-06-08', remainingAmount: 999, recipientMode: 'normal', recipientUserIds: ['someone-else'] }
+      }]));
+
+      await processFinancialReminderTick(new Date('2026-06-01T15:00:00.000Z'));
+
+      expect(upsertCalls().map(([filter]) => filter.automationKey)).not.toContain(automationKey);
+      const contentUpdateCall = mocks.calendarUpdateOne.mock.calls.find(([filter]: any[]) => filter.automationKey === automationKey);
+      expect(contentUpdateCall).toBeDefined();
+      const [filter, update] = contentUpdateCall as any[];
+      // No status guard on the content-only path (matches the original single unconditional
+      // $set call) and no status/notification fields in the payload — 'sent' stays immutable.
+      expect(filter).toEqual({ automationKey });
+      expect(update.$set.title).toBe('Pago por vencer en 7 días');
+      expect(update.$set).not.toHaveProperty('status');
+      expect(update.$set).not.toHaveProperty('notification.status');
+      expect(update).not.toHaveProperty('$unset');
+    });
+
+    it('collapses two installments that generate the same automationKey into a single write (duplicate automationKey generation → handled)', async () => {
+      const sharedInstallment = { id: 'installment-1', label: 'Cuota', amount: 50000, paidAmount: 0, status: 'pending', dueDate: '2026-06-08' };
+      const contract = { _id: 'contract-1', eventId: 'event-1', customerId: 'customer-1', balanceAmount: 0, paymentPlanSnapshot: [] };
+      const event = {
+        _id: 'event-1',
+        customerId: 'customer-1',
+        eventName: 'Cumple de Ana',
+        status: 'confirmed',
+        // Two plan rows sharing the same id/dueDate is a data anomaly, not something the sync
+        // loop is expected to prevent — this documents that the write side still collapses it
+        // to one Mongo write per automationKey instead of writing the same key twice.
+        paymentPlanSnapshot: [sharedInstallment, { ...sharedInstallment }]
+      };
+      mocks.contractFind.mockReturnValue(leanQuery([contract]));
+      mocks.eventFind.mockReturnValue(leanQuery([event]));
+      mocks.userFind.mockReturnValue(leanQuery([{ _id: 'financial-user', email: 'finance@example.com' }]));
+
+      const result = await processFinancialReminderTick(new Date('2026-06-01T15:00:00.000Z'));
+
+      // `synced` counts generated contexts (unchanged public semantics) — 2 installments x 6
+      // rule-stages each.
+      expect(result).toMatchObject({ synced: 12 });
+      // But only 6 unique automationKeys ever reach Mongo.
+      const keys = upsertCalls().map(([filter]) => filter.automationKey);
+      expect(keys).toHaveLength(6);
+      expect(new Set(keys).size).toBe(6);
+    });
   });
 });

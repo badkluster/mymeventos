@@ -253,7 +253,18 @@ async function cancelObligationItems(obligationKey: string, extraFilter: Record<
   await cancelStaleObligationItems(obligationKey, [], extraFilter);
 }
 
-async function upsertFinancialCalendarItem(context: ReminderContext, recipientCache: RecipientCache): Promise<void> {
+type DesiredCalendarItem = {
+  automationKey: string;
+  contentFields: Record<string, unknown>;
+  insertDefaults: { status: string; notification: Record<string, unknown> };
+  sendAt: Date;
+};
+
+// Phase 4 (2026-09-23 Fluid Active CPU audit): pure computation, no Mongo call. Splits what used
+// to be the first half of upsertFinancialCalendarItem (still resolves recipients through the same
+// cache) from the actual writes, so every desired item for the whole tick can be diffed against a
+// single batched read instead of two unconditional writes each.
+async function buildDesiredCalendarItem(context: ReminderContext, recipientCache: RecipientCache): Promise<DesiredCalendarItem> {
   const recipients = await resolveFinancialRecipients(context.event, context.recipientMode, recipientCache);
   const eventId = idOf(context.event?._id);
   const contractId = idOf(context.contract?._id);
@@ -262,60 +273,165 @@ async function upsertFinancialCalendarItem(context: ReminderContext, recipientCa
   const customerId = idOf(context.event?.customerId) ?? idOf(context.contract?.customerId);
   const recipientUserIds = recipients.userIds;
   const metadata = calendarMetadata(context, recipients);
-
-  const filter = { automationKey: context.automationKey };
-  // A payment plan can be corrected after a prior cancellation. Re-arm only a
-  // system-cancelled, unsent stage; already sent stages remain immutable.
-  await CalendarItem.updateOne({ ...filter, 'notification.status': 'cancelled' }, {
-    $set: {
-      status: 'scheduled',
-      'notification.enabled': true,
-      'notification.status': 'scheduled',
-      'notification.sendAt': argentinaMidnight(context.sendAtKey)
+  const sendAt = argentinaMidnight(context.sendAtKey);
+  return {
+    automationKey: context.automationKey,
+    sendAt,
+    contentFields: {
+      type: 'payment_window',
+      title: context.title,
+      description: context.description,
+      // The calendar represents when the reminder needs attention. The actual
+      // payment due date stays in metadata/description for context.
+      startAt: sendAt,
+      allDay: true,
+      priority: context.priority,
+      visibility: 'shared',
+      salonId,
+      assignedToUserId: recipients.primaryUserId ?? recipientUserIds[0],
+      customerId,
+      eventId,
+      contractId,
+      paymentId,
+      source: 'system',
+      metadata
     },
-    $unset: { 'notification.lockedAt': 1, 'notification.lockExpiresAt': 1, 'notification.nextRetryAt': 1, 'notification.lastError': 1 }
-  });
-  const update = {
-      $set: {
-        type: 'payment_window',
-        title: context.title,
-        description: context.description,
-        // The calendar represents when the reminder needs attention. The actual
-        // payment due date stays in metadata/description for context.
-        startAt: argentinaMidnight(context.sendAtKey),
-        allDay: true,
-        priority: context.priority,
-        visibility: 'shared',
-        salonId,
-        assignedToUserId: recipients.primaryUserId ?? recipientUserIds[0],
-        customerId,
-        eventId,
-        contractId,
-        paymentId,
-        source: 'system',
-        metadata
-      },
-      $setOnInsert: {
+    insertDefaults: {
+      status: 'scheduled',
+      notification: {
+        enabled: true,
+        channels: ['system', 'email'],
+        offsetValue: 0,
+        offsetUnit: 'days',
+        sendAt,
         status: 'scheduled',
-        notification: {
-          enabled: true,
-          channels: ['system', 'email'],
-          offsetValue: 0,
-          offsetUnit: 'days',
-          sendAt: argentinaMidnight(context.sendAtKey),
-          status: 'scheduled',
-          attemptCount: 0
-        }
+        attemptCount: 0
       }
-    };
-  try {
-    await CalendarItem.findOneAndUpdate(filter, update, { upsert: true, new: true, setDefaultsOnInsert: true });
-  } catch (error: any) {
-    // A unique key race can occur when GitHub Actions and the Vercel fallback
-    // overlap. The winner inserted the item, so a normal update is sufficient.
-    if (error?.code !== 11000) throw error;
-    await CalendarItem.findOneAndUpdate(filter, { $set: update.$set }, { new: true });
+    }
+  };
+}
+
+function normalizeRelationId(value: unknown): string | null {
+  return value == null ? null : idOf(value) ?? null;
+}
+
+// Explicit field-by-field, never a blanket JSON.stringify (key order / ObjectId-vs-string would
+// make that unsafe). Any field this doesn't know how to compare confidently should be added
+// here, not assumed equal — a false "unchanged" silently skips a needed write; a false "changed"
+// only costs one harmless extra write, so every comparison below is biased toward the safe side.
+function calendarContentEquals(existing: any, desired: DesiredCalendarItem): boolean {
+  if (!existing) return false;
+  const fields = desired.contentFields as Record<string, any>;
+  if (existing.title !== fields.title) return false;
+  if (existing.description !== fields.description) return false;
+  if (!existing.startAt || new Date(existing.startAt).getTime() !== (fields.startAt as Date).getTime()) return false;
+  if (existing.priority !== fields.priority) return false;
+  if (normalizeRelationId(existing.salonId) !== normalizeRelationId(fields.salonId)) return false;
+  if (normalizeRelationId(existing.assignedToUserId) !== normalizeRelationId(fields.assignedToUserId)) return false;
+  if (normalizeRelationId(existing.customerId) !== normalizeRelationId(fields.customerId)) return false;
+  if (normalizeRelationId(existing.eventId) !== normalizeRelationId(fields.eventId)) return false;
+  if (normalizeRelationId(existing.contractId) !== normalizeRelationId(fields.contractId)) return false;
+  if (normalizeRelationId(existing.paymentId) !== normalizeRelationId(fields.paymentId)) return false;
+  const existingMetadata = existing.metadata ?? {};
+  const desiredMetadata = fields.metadata as Record<string, unknown>;
+  if (existingMetadata.rule !== desiredMetadata.rule) return false;
+  if (existingMetadata.obligationKey !== desiredMetadata.obligationKey) return false;
+  if (existingMetadata.dueDateKey !== desiredMetadata.dueDateKey) return false;
+  if ((existingMetadata.planInstallmentId ?? undefined) !== (desiredMetadata.planInstallmentId ?? undefined)) return false;
+  if (Number(existingMetadata.remainingAmount ?? 0) !== Number(desiredMetadata.remainingAmount ?? 0)) return false;
+  if (existingMetadata.recipientMode !== desiredMetadata.recipientMode) return false;
+  const existingRecipients = uniqueIds((existingMetadata.recipientUserIds ?? []) as unknown[]);
+  const desiredRecipients = uniqueIds((desiredMetadata.recipientUserIds ?? []) as unknown[]);
+  if (existingRecipients.length !== desiredRecipients.length) return false;
+  for (let index = 0; index < existingRecipients.length; index += 1) {
+    if (existingRecipients[index] !== desiredRecipients[index]) return false;
   }
+  return true;
+}
+
+type CalendarWriteStats = {
+  generatedItemCount: number;
+  uniqueAutomationKeyCount: number;
+  existingItemCount: number;
+  createdCount: number;
+  updatedCount: number;
+  reactivatedCount: number;
+  unchangedCount: number;
+};
+
+// Phase 4: one batched read (`CalendarItem.find({automationKey:{$in:[...]}})`, the automationKey
+// unique index makes this a cheap indexed $in) replaces what used to be two unconditional writes
+// per desired item. The decision below is made in Node from that snapshot, then exactly one
+// targeted Mongo write is issued per item — zero when nothing actually changed. Every write stays
+// guarded (or upsert-with-11000-fallback) so a stale snapshot can only ever cause a write to match
+// nothing and no-op, never to clobber a state that moved on concurrently; the next tick's fresh
+// snapshot reconciles it. Content-field writes are deliberately NOT guarded on notification.status
+// (matching the original code's second call, which never checked it either) — only the
+// cancelled→reactivation flip is guarded, exactly as it always was.
+async function applyDesiredCalendarItems(items: DesiredCalendarItem[]): Promise<CalendarWriteStats> {
+  const generatedItemCount = items.length;
+  const byKey = new Map<string, DesiredCalendarItem>();
+  for (const item of items) byKey.set(item.automationKey, item);
+  const dedupedItems = [...byKey.values()];
+  const uniqueAutomationKeyCount = dedupedItems.length;
+
+  const existingDocs: any[] = dedupedItems.length
+    ? await CalendarItem.find({ automationKey: { $in: dedupedItems.map((item) => item.automationKey) } })
+        .select('automationKey status notification title description startAt priority salonId assignedToUserId customerId eventId contractId paymentId metadata')
+        .lean()
+    : [];
+  const existingByKey = new Map(existingDocs.map((doc: any) => [doc.automationKey, doc]));
+
+  let createdCount = 0;
+  let updatedCount = 0;
+  let reactivatedCount = 0;
+  let unchangedCount = 0;
+
+  for (const item of dedupedItems) {
+    const filter = { automationKey: item.automationKey };
+    const existing: any = existingByKey.get(item.automationKey);
+
+    if (!existing) {
+      createdCount += 1;
+      try {
+        await CalendarItem.findOneAndUpdate(filter, { $set: item.contentFields, $setOnInsert: item.insertDefaults }, { upsert: true, new: true, setDefaultsOnInsert: true });
+      } catch (error: any) {
+        // A unique key race can occur when GitHub Actions and the Vercel fallback overlap.
+        // The winner inserted the item, so a normal update is sufficient.
+        if (error?.code !== 11000) throw error;
+        await CalendarItem.findOneAndUpdate(filter, { $set: item.contentFields }, { new: true });
+      }
+      continue;
+    }
+
+    if (existing.notification?.status === 'cancelled') {
+      // A payment plan can be corrected after a prior cancellation. Re-arm only a
+      // system-cancelled, unsent stage; already sent stages remain immutable. Folded into one
+      // write (was two): same guarded filter, same end state.
+      reactivatedCount += 1;
+      await CalendarItem.updateOne({ ...filter, 'notification.status': 'cancelled' }, {
+        $set: {
+          ...item.contentFields,
+          status: 'scheduled',
+          'notification.enabled': true,
+          'notification.status': 'scheduled',
+          'notification.sendAt': item.sendAt
+        },
+        $unset: { 'notification.lockedAt': 1, 'notification.lockExpiresAt': 1, 'notification.nextRetryAt': 1, 'notification.lastError': 1 }
+      });
+      continue;
+    }
+
+    if (calendarContentEquals(existing, item)) {
+      unchangedCount += 1;
+      continue;
+    }
+
+    updatedCount += 1;
+    await CalendarItem.updateOne(filter, { $set: item.contentFields });
+  }
+
+  return { generatedItemCount, uniqueAutomationKeyCount, existingItemCount: existingDocs.length, createdCount, updatedCount, reactivatedCount, unchangedCount };
 }
 
 export function planFor(event: any, contract: any): any[] {
@@ -428,6 +544,10 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
   await cancelFinancialItems({ eventId: { $nin: events.map((event: any) => event._id) } });
   let synced = 0;
   const recipientCache: RecipientCache = new Map();
+  // Phase 4: contexts are collected here instead of written immediately — every write for the
+  // whole tick (installment, balance, and payment contexts alike) happens in one batched pass
+  // after both loops below, against one prefetch of existing CalendarItems.
+  const pendingContexts: ReminderContext[] = [];
   const obligationLoopStartedAt = Date.now();
   // Phase 2 (2026-09-23): plain counters, no query/logic change — answers "how much of the
   // Contract.find({status:'approved'}) universe is actually dormant this tick" without
@@ -455,7 +575,7 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
       activeInstallmentObligationKeys.push(obligationKey);
       const contexts = pendingRulesForDueDate(dueKey, todayKey)
         .map(({ rule, sendAtKey }) => installmentContext(event, contract, installment, rule, sendAtKey, dueKey));
-      for (const context of contexts) await upsertFinancialCalendarItem(context, recipientCache);
+      pendingContexts.push(...contexts);
       await cancelStaleObligationItems(obligationKey, contexts.map((context) => context.automationKey), { eventId: event._id });
       synced += contexts.length;
     }
@@ -481,7 +601,7 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     contractsWithBalance += 1;
     const scheduledBalanceKey = addDaysToDateKey(eventDateKey, -15);
     const context = balanceContext(event, contract, scheduledBalanceKey < todayKey ? todayKey : scheduledBalanceKey, eventDateKey);
-    await upsertFinancialCalendarItem(context, recipientCache);
+    pendingContexts.push(context);
     await cancelStaleObligationItems(balanceObligationKey, [context.automationKey], { contractId: contract._id });
     await cancelFinancialItems({
       eventId: event._id,
@@ -522,7 +642,7 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     const activePaymentObligationKeys = activePaymentObligationKeysByEvent.get(paymentEventId!) ?? [];
     activePaymentObligationKeys.push(obligationKey);
     activePaymentObligationKeysByEvent.set(paymentEventId!, activePaymentObligationKeys);
-    for (const context of contexts) await upsertFinancialCalendarItem(context, recipientCache);
+    pendingContexts.push(...contexts);
     await cancelStaleObligationItems(obligationKey, contexts.map((context) => context.automationKey), { paymentId: payment._id });
     synced += contexts.length;
   }
@@ -535,6 +655,11 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     });
   }
   const paymentsLoopMs = Date.now() - paymentsLoopStartedAt;
+
+  const calendarWriteStartedAt = Date.now();
+  const desiredItems = await Promise.all(pendingContexts.map((context) => buildDesiredCalendarItem(context, recipientCache)));
+  const writeStats = await applyDesiredCalendarItems(desiredItems);
+  const calendarWriteMs = Date.now() - calendarWriteStartedAt;
 
   const elapsedMs = Date.now() - tickStartedAt;
   if (elapsedMs >= 500) {
@@ -550,7 +675,8 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
       installmentCount,
       openInstallmentCount,
       synced,
-      stages: { contractsQueryMs, eventsQueryMs, obligationLoopMs, paymentsQueryMs, paymentsLoopMs }
+      ...writeStats,
+      stages: { contractsQueryMs, eventsQueryMs, obligationLoopMs, paymentsQueryMs, paymentsLoopMs, calendarWriteMs }
     }));
   }
 
