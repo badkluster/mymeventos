@@ -12,6 +12,19 @@ const notificationIdSchema = z.object({ body: z.unknown().optional(), params: id
 
 router.use(requireAuth);
 
+router.get('/summary', asyncHandler(async (request, response) => {
+  const visibleNotifications = { userId: request.user!.id, deletedAt: null, type: { $ne: 'daily_digest' } };
+  const [notifications, unreadCount] = await Promise.all([
+    Notification.find(visibleNotifications)
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select('type title message actionUrl readAt createdAt updatedAt')
+      .lean(),
+    Notification.countDocuments({ ...visibleNotifications, readAt: null }),
+  ]);
+  return sendSuccess(response, { notifications, unreadCount });
+}));
+
 router.get('/', asyncHandler(async (request, response) => {
   const visibleNotifications = { userId: request.user!.id, deletedAt: null, type: { $ne: 'daily_digest' } };
   const [notifications, unreadCount] = await Promise.all([

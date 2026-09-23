@@ -147,10 +147,10 @@ async function createRevision(quote: any, request: Request): Promise<void> {
   const latest: any = await QuoteRevision.findOne({ quoteId: quote._id }).sort({ version: -1 }).lean();
   await QuoteRevision.create({ quoteId: quote._id, version: (latest?.version ?? 0) + 1, snapshot: quote.toObject ? quote.toObject() : quote, changeReason: 'Presupuesto creado desde solicitud', createdBy: request.user!.id });
 }
-function buildQuery(request: Request): Record<string, unknown> {
+function buildQuery(request: Request, forcedStatus?: (typeof statuses)[number]): Record<string, unknown> {
   const conditions: Record<string, unknown>[] = [{ deletedAt: null }];
   conditions.push(...salonScopeForRequests(request));
-  const status = queryValue(request.query.status); if (status && statuses.includes(status as any)) conditions.push({ status });
+  const status = forcedStatus ?? queryValue(request.query.status); if (status && statuses.includes(status as any)) conditions.push({ status });
   else conditions.push({ status: { $in: ['new', 'in_review'] } });
   const source = queryValue(request.query.source); if (source && sources.includes(source as any)) conditions.push({ source });
   const salonId = queryValue(request.query.salonId); if (salonId && objectId.safeParse(salonId).success) conditions.push({ interestedSalonIds: salonId });
@@ -164,6 +164,11 @@ function buildQuery(request: Request): Record<string, unknown> {
 }
 
 router.use(requireAuth);
+
+router.get('/new-count', requirePermission(Permission.QUOTES_READ), asyncHandler(async (request, response) => {
+  const count = await QuoteRequest.countDocuments(buildQuery(request, 'new'));
+  return sendSuccess(response, { count });
+}));
 
 router.get('/', requirePermission(Permission.QUOTES_READ), asyncHandler(async (request, response) => {
   const page = Math.max(1, Number(queryValue(request.query.page)) || 1);

@@ -19,6 +19,7 @@ import { Permission } from '@mym/shared';
 const sidebarPreferenceKey = 'mym.admin.sidebar-collapsed';
 const sidebarPreferenceEvent = 'mym:sidebar-preference';
 const compactSidebarMediaQuery = '(max-width: 1023px)';
+const adminPollingIntervalMs = 180_000;
 
 function subscribeToSidebarPreference(onStoreChange: () => void) {
   const mediaQuery = window.matchMedia(compactSidebarMediaQuery);
@@ -205,19 +206,47 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
 
   useEffect(() => {
-    if (!canSeeQuotes) return;
+    if (!canSeeQuotes) {
+      setNewQuoteRequests(0);
+      return;
+    }
+
     let mounted = true;
-    const loadCount = () => api.get<{ meta?: { totalItems?: number } }>('/quote-requests?status=new&page=1&limit=1')
-      .then((response) => { if (mounted) setNewQuoteRequests(Number(response.meta?.totalItems ?? 0)); })
-      .catch(() => { if (mounted) setNewQuoteRequests(0); });
+    let requestInFlight = false;
+
+    const loadCount = async () => {
+      if (!mounted || requestInFlight || document.visibilityState !== 'visible') return;
+      requestInFlight = true;
+      try {
+        const response = await api.get<{ count?: number }>('/quote-requests/new-count');
+        if (mounted) setNewQuoteRequests(Number(response.count ?? 0));
+      } catch {
+        if (mounted) setNewQuoteRequests(0);
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void loadCount();
+    };
+
     void loadCount();
-    const interval = window.setInterval(() => void loadCount(), 30000);
-    return () => { mounted = false; window.clearInterval(interval); };
+    const interval = window.setInterval(refreshWhenVisible, adminPollingIntervalMs);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [canSeeQuotes]);
 
   useEffect(() => {
     let mounted = true;
-    void api.get<{ settings?: PublicLandingSettings }>('/public/landing')
+    void api.get<{ settings?: PublicLandingSettings }>('/public/branding')
       .then((response) => { if (mounted) setBranding(response.settings); })
       .catch(() => undefined);
     return () => { mounted = false; };
