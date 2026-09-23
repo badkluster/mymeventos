@@ -63,6 +63,11 @@ type ReminderContext = {
 };
 
 type RecipientResolution = { userIds: string[]; primaryUserId?: string };
+// One tick can evaluate the same (event, recipientMode) pair many times — every pending
+// rule stage of every open installment on the same event calls this with identical inputs.
+// The cache is scoped to a single processFinancialReminderTick() call (never shared across
+// ticks), so a stale resolution can only ever be as stale as recipients already are mid-tick.
+type RecipientCache = Map<string, Promise<RecipientResolution>>;
 
 type FinancialTickResult = {
   synced: number;
@@ -162,7 +167,15 @@ async function fallbackFinancialUsers(): Promise<any[]> {
   }).select('_id roles notificationPreferences email').lean();
 }
 
-async function resolveFinancialRecipients(event: any, mode: RecipientMode): Promise<RecipientResolution> {
+async function resolveFinancialRecipients(event: any, mode: RecipientMode, cache?: RecipientCache): Promise<RecipientResolution> {
+  const cacheKey = cache ? `${idOf(event?._id) ?? 'none'}:${mode}` : undefined;
+  if (cacheKey && cache!.has(cacheKey)) return cache!.get(cacheKey)!;
+  const resolution = resolveFinancialRecipientsUncached(event, mode);
+  if (cacheKey) cache!.set(cacheKey, resolution);
+  return resolution;
+}
+
+async function resolveFinancialRecipientsUncached(event: any, mode: RecipientMode): Promise<RecipientResolution> {
   const leadId = idOf(event?.leadId) ?? idOf(event?.sourceLeadId);
   const salonId = idOf(event?.salonId);
   const [lead, salon] = await Promise.all([
@@ -223,19 +236,25 @@ async function cancelFinancialItems(filter: Record<string, unknown>): Promise<vo
   });
 }
 
-async function cancelStaleObligationItems(obligationKey: string, activeKeys: string[]): Promise<void> {
+// `extraFilter` should carry whichever indexed field (eventId/paymentId/contractId) the
+// caller already has in scope. `metadata.obligationKey` alone is a Mixed-field equality
+// with no index of its own, so without this the query falls back to scanning every
+// system-sourced CalendarItem ever created by this automation to find one match — and
+// this runs once per installment/payment/balance obligation, every tick.
+async function cancelStaleObligationItems(obligationKey: string, activeKeys: string[], extraFilter: Record<string, unknown> = {}): Promise<void> {
   await cancelFinancialItems({
+    ...extraFilter,
     'metadata.obligationKey': obligationKey,
     automationKey: { $nin: activeKeys }
   });
 }
 
-async function cancelObligationItems(obligationKey: string): Promise<void> {
-  await cancelStaleObligationItems(obligationKey, []);
+async function cancelObligationItems(obligationKey: string, extraFilter: Record<string, unknown> = {}): Promise<void> {
+  await cancelStaleObligationItems(obligationKey, [], extraFilter);
 }
 
-async function upsertFinancialCalendarItem(context: ReminderContext): Promise<void> {
-  const recipients = await resolveFinancialRecipients(context.event, context.recipientMode);
+async function upsertFinancialCalendarItem(context: ReminderContext, recipientCache: RecipientCache): Promise<void> {
+  const recipients = await resolveFinancialRecipients(context.event, context.recipientMode, recipientCache);
   const eventId = idOf(context.event?._id);
   const contractId = idOf(context.contract?._id);
   const paymentId = idOf(context.payment?._id);
@@ -372,13 +391,23 @@ function balanceContext(event: any, contract: any, sendAtKey: string, eventDateK
 }
 
 async function syncFinancialCalendarItems(now: Date): Promise<number> {
+  // Temporary/conditional timing breakdown for the Vercel Fluid Active CPU audit
+  // (2026-09-23). Logs only past the threshold, JSON-structured, no PII — safe to
+  // remove once the fix is confirmed in production or to keep as a standing guard.
+  const tickStartedAt = Date.now();
   const todayKey = argentinaDateKey(now);
+  const contractsStartedAt = Date.now();
   const contracts: any[] = await Contract.find({ deletedAt: null, status: 'approved' })
     .select('_id eventId customerId salonId balanceAmount paymentPlanSnapshot versionNumber createdAt')
     .sort({ eventId: 1, versionNumber: -1, createdAt: -1 })
     .lean();
+  const contractsQueryMs = Date.now() - contractsStartedAt;
   if (!contracts.length) {
     await cancelFinancialItems({});
+    const elapsedMs = Date.now() - tickStartedAt;
+    if (elapsedMs >= 500) {
+      console.warn(JSON.stringify({ event: 'financial_tick_timing', elapsedMs, candidateCount: 0, stages: { contractsQueryMs } }));
+    }
     return 0;
   }
 
@@ -388,34 +417,49 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     if (eventId && !contractByEvent.has(eventId)) contractByEvent.set(eventId, contract);
   }
   const eventIds = [...contractByEvent.keys()];
+  const eventsStartedAt = Date.now();
   const events: any[] = eventIds.length ? await Event.find({
     _id: { $in: eventIds },
     deletedAt: null,
     status: { $nin: [...EVENT_TERMINAL_STATUSES] }
   }).select('_id customerId salonId leadId sourceLeadId eventName eventType eventDate paymentPlanSnapshot status').lean() : [];
+  const eventsQueryMs = Date.now() - eventsStartedAt;
   const eventById = new Map(events.map((event: any) => [idOf(event._id)!, event]));
   await cancelFinancialItems({ eventId: { $nin: events.map((event: any) => event._id) } });
   let synced = 0;
+  const recipientCache: RecipientCache = new Map();
+  const obligationLoopStartedAt = Date.now();
+  // Phase 2 (2026-09-23): plain counters, no query/logic change — answers "how much of the
+  // Contract.find({status:'approved'}) universe is actually dormant this tick" without
+  // guessing. Read alongside financial_tick_timing below.
+  let installmentCount = 0;
+  let openInstallmentCount = 0;
+  let contractsWithOpenInstallments = 0;
+  let contractsWithBalance = 0;
+  let contractsSkipped = 0;
 
   for (const event of events) {
     const contract = contractByEvent.get(idOf(event._id)!);
     if (!contract) continue;
     const installments = planFor(event, contract);
+    installmentCount += installments.length;
     const activeInstallmentObligationKeys: string[] = [];
     for (const installment of installments) {
       const dueKey = installmentDueDateKey(installment);
       const obligationKey = `financial:installment:${idOf(event._id)}:${String(installment?.id ?? dueKey ?? '')}`;
       if (!dueKey || !isOpenInstallment(installment)) {
-        await cancelObligationItems(obligationKey);
+        await cancelObligationItems(obligationKey, { eventId: event._id });
         continue;
       }
+      openInstallmentCount += 1;
       activeInstallmentObligationKeys.push(obligationKey);
       const contexts = pendingRulesForDueDate(dueKey, todayKey)
         .map(({ rule, sendAtKey }) => installmentContext(event, contract, installment, rule, sendAtKey, dueKey));
-      for (const context of contexts) await upsertFinancialCalendarItem(context);
-      await cancelStaleObligationItems(obligationKey, contexts.map((context) => context.automationKey));
+      for (const context of contexts) await upsertFinancialCalendarItem(context, recipientCache);
+      await cancelStaleObligationItems(obligationKey, contexts.map((context) => context.automationKey), { eventId: event._id });
       synced += contexts.length;
     }
+    if (activeInstallmentObligationKeys.length) contractsWithOpenInstallments += 1;
     await cancelFinancialItems({
       eventId: event._id,
       'metadata.source': 'installment',
@@ -426,17 +470,19 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     const balance = Number(contract.balanceAmount ?? 0);
     const balanceObligationKey = `financial:balance:${idOf(contract._id)}`;
     if (!eventDateKey || balance <= 0 || eventDateKey < todayKey) {
-      await cancelObligationItems(balanceObligationKey);
+      await cancelObligationItems(balanceObligationKey, { contractId: contract._id });
       await cancelFinancialItems({
         eventId: event._id,
         'metadata.source': 'balance'
       });
+      if (!activeInstallmentObligationKeys.length) contractsSkipped += 1;
       continue;
     }
+    contractsWithBalance += 1;
     const scheduledBalanceKey = addDaysToDateKey(eventDateKey, -15);
     const context = balanceContext(event, contract, scheduledBalanceKey < todayKey ? todayKey : scheduledBalanceKey, eventDateKey);
-    await upsertFinancialCalendarItem(context);
-    await cancelStaleObligationItems(balanceObligationKey, [context.automationKey]);
+    await upsertFinancialCalendarItem(context, recipientCache);
+    await cancelStaleObligationItems(balanceObligationKey, [context.automationKey], { contractId: contract._id });
     await cancelFinancialItems({
       eventId: event._id,
       'metadata.source': 'balance',
@@ -445,6 +491,9 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     synced += 1;
   }
 
+  const obligationLoopMs = Date.now() - obligationLoopStartedAt;
+
+  const paymentsStartedAt = Date.now();
   const pendingPayments: any[] = await Payment.find({
     deletedAt: null,
     // `null` includes ledger rows created before the source field existed;
@@ -453,6 +502,8 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     status: 'pending',
     dueDate: { $ne: null }
   }).select('_id paymentNumber eventId contractId salonId customerId planInstallmentId amount dueDate status').lean();
+  const paymentsQueryMs = Date.now() - paymentsStartedAt;
+  const paymentsLoopStartedAt = Date.now();
   const activePaymentObligationKeysByEvent = new Map<string, string[]>();
   for (const payment of pendingPayments) {
     const paymentEventId = idOf(payment.eventId);
@@ -463,7 +514,7 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     const currentPlan = event && contract ? planFor(event, contract) : [];
     const alreadyRepresentedByPlan = Boolean(payment.planInstallmentId && currentPlan.some((item: any) => String(item?.id) === String(payment.planInstallmentId)));
     if (!event || !contract || !dueKey || PAYMENT_TERMINAL_STATUSES.has(String(payment.status)) || alreadyRepresentedByPlan) {
-      await cancelObligationItems(obligationKey);
+      await cancelObligationItems(obligationKey, { paymentId: payment._id });
       continue;
     }
     const contexts = pendingRulesForDueDate(dueKey, todayKey)
@@ -471,8 +522,8 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     const activePaymentObligationKeys = activePaymentObligationKeysByEvent.get(paymentEventId!) ?? [];
     activePaymentObligationKeys.push(obligationKey);
     activePaymentObligationKeysByEvent.set(paymentEventId!, activePaymentObligationKeys);
-    for (const context of contexts) await upsertFinancialCalendarItem(context);
-    await cancelStaleObligationItems(obligationKey, contexts.map((context) => context.automationKey));
+    for (const context of contexts) await upsertFinancialCalendarItem(context, recipientCache);
+    await cancelStaleObligationItems(obligationKey, contexts.map((context) => context.automationKey), { paymentId: payment._id });
     synced += contexts.length;
   }
   for (const event of events) {
@@ -482,6 +533,25 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
       'metadata.source': 'payment',
       'metadata.obligationKey': { $nin: activePaymentObligationKeysByEvent.get(eventId) ?? [] }
     });
+  }
+  const paymentsLoopMs = Date.now() - paymentsLoopStartedAt;
+
+  const elapsedMs = Date.now() - tickStartedAt;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({
+      event: 'financial_tick_timing',
+      elapsedMs,
+      candidateCount: contracts.length,
+      eventCount: events.length,
+      paymentCount: pendingPayments.length,
+      contractsWithOpenInstallments,
+      contractsWithBalance,
+      contractsSkipped,
+      installmentCount,
+      openInstallmentCount,
+      synced,
+      stages: { contractsQueryMs, eventsQueryMs, obligationLoopMs, paymentsQueryMs, paymentsLoopMs }
+    }));
   }
 
   return synced;

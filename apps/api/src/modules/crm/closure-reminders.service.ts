@@ -3,7 +3,7 @@ import { CalendarItem } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { findEventsWithPendingClosure } from '../event-closure/pending-closures';
-import { idOf, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
+import { idOf, uniqueIds, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
 
 const REMINDER_STAGES = [1, 7];
 
@@ -14,12 +14,25 @@ async function fallbackRecipients(): Promise<string[]> {
 
 async function syncClosurePendingReminders(now: Date): Promise<number> {
   let synced = 0;
+  // D+7 candidates are always a subset of D+1's (same `!closed` filter, just an earlier eventDate
+  // cutoff) — fetch once at the loosest stage and derive the stricter stage in memory instead of
+  // hitting Event+EventClosure again for the same underlying data.
+  const loosestStage = Math.min(...REMINDER_STAGES);
+  const loosestPending = await findEventsWithPendingClosure(now, loosestStage);
+  // Same batching as above, for the per-event `Salon.findOne` this loop used to run once per
+  // candidate — one salon covers every event at that venue across both stages.
+  const salonIds = uniqueIds(loosestPending.map((event: any) => event.salonId));
+  const salons = salonIds.length
+    ? await Salon.find({ _id: { $in: salonIds }, deletedAt: null }).select('managerUserId').lean()
+    : [];
+  const managerUserIdBySalon = new Map(salons.map((salon: any) => [idOf(salon._id)!, idOf(salon.managerUserId)]));
   for (const olderThanDays of REMINDER_STAGES) {
-    const events = await findEventsWithPendingClosure(now, olderThanDays);
+    const cutoff = new Date(now.getTime() - olderThanDays * 86_400_000);
+    const events = olderThanDays === loosestStage
+      ? loosestPending
+      : loosestPending.filter((event: any) => new Date(event.eventDate).getTime() <= cutoff.getTime());
     for (const event of events as any[]) {
-      const salon: any = event.salonId
-        ? await Salon.findOne({ _id: event.salonId, deletedAt: null }).select('managerUserId').lean()
-        : undefined;
+      const managerUserId = event.salonId ? managerUserIdBySalon.get(idOf(event.salonId)!) : undefined;
       await CalendarItem.findOneAndUpdate(
         { automationKey: `closure_pending:${event._id}:d${olderThanDays}` },
         {
@@ -35,7 +48,7 @@ async function syncClosurePendingReminders(now: Date): Promise<number> {
             visibility: 'private',
             eventId: event._id,
             salonId: event.salonId,
-            assignedToUserId: idOf(salon?.managerUserId),
+            assignedToUserId: managerUserId,
             metadata: { closurePending: true, olderThanDays }
           },
           $setOnInsert: {

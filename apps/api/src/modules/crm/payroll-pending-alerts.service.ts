@@ -27,9 +27,15 @@ async function fallbackRecipients(): Promise<string[]> {
 async function syncPayrollPendingAlerts(now: Date): Promise<number> {
   const userIds: string[] = (await WorkSession.distinct('userId', pendingSessionsQuery())).map((id: any) => String(id));
 
+  // Batch the per-employee name lookup instead of one `User.findOne` per pending userId.
+  const employees = userIds.length
+    ? await User.find({ _id: { $in: userIds }, deletedAt: null }).select('fullName firstName lastName').lean()
+    : [];
+  const employeeById = new Map(employees.map((employee: any) => [String(employee._id), employee]));
+
   let synced = 0;
   for (const userId of userIds) {
-    const employee: any = await User.findOne({ _id: userId, deletedAt: null }).select('fullName firstName lastName').lean();
+    const employee: any = employeeById.get(userId);
     const name = employee?.fullName || [employee?.firstName, employee?.lastName].filter(Boolean).join(' ') || 'un empleado';
     await CalendarItem.findOneAndUpdate(
       { automationKey: `payroll_pending:${userId}` },

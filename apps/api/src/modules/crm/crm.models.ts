@@ -263,6 +263,12 @@ calendarItemSchema.index({ startAt: 1, endAt: 1, deletedAt: 1 });
 calendarItemSchema.index({ salonId: 1, startAt: 1, deletedAt: 1 });
 calendarItemSchema.index({ visibility: 1, createdBy: 1, startAt: 1, deletedAt: 1 });
 calendarItemSchema.index({ 'notification.status': 1, 'notification.sendAt': 1, deletedAt: 1 });
+// payroll-pending-alerts.service.ts's cleanup `updateMany` filters on `metadata.payrollPending` +
+// `metadata.employeeId` every tick, unconditionally (no early return when there's nothing pending),
+// with no other indexed field on those CalendarItems (no eventId/contractId/paymentId is set on
+// them) to narrow the scan the way financial-reminders.service.ts's obligation-cancel filters do.
+// Sparse because only this one domain's items ever set `metadata.payrollPending`.
+calendarItemSchema.index({ 'metadata.payrollPending': 1, deletedAt: 1 }, { sparse: true });
 
 const securityDepositSchema = new Schema({
   amount: { type: Number, default: 0 },

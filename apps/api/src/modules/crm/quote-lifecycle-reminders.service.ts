@@ -66,6 +66,22 @@ async function syncQuoteLifecycleReminders(now: Date): Promise<number> {
   const quotes: any[] = await Quote.find({ deletedAt: null, status: 'sent' })
     .select('_id customerId leadId email validUntil sentAt createdBy quoteNumber').lean();
 
+  // Batch the lead-assignee lookup instead of one `Lead.findOne` per eligible quote inside
+  // the loop below (small N+1, same class of issue fixed in financial-reminders.service.ts).
+  const followUpEligibleLeadIds = new Set<string>();
+  for (const quote of quotes) {
+    if (!quote.sentAt || !quote.leadId) continue;
+    const sentAgeDays = (now.getTime() - new Date(quote.sentAt).getTime()) / 86_400_000;
+    if (sentAgeDays >= INTERNAL_FOLLOW_UP_AFTER_DAYS) {
+      const leadId = idOf(quote.leadId);
+      if (leadId) followUpEligibleLeadIds.add(leadId);
+    }
+  }
+  const followUpLeads = followUpEligibleLeadIds.size
+    ? await Lead.find({ _id: { $in: [...followUpEligibleLeadIds] }, deletedAt: null }).select('_id assignedUserId').lean()
+    : [];
+  const leadAssigneeById = new Map(followUpLeads.map((lead: any) => [idOf(lead._id)!, idOf(lead.assignedUserId)]));
+
   let synced = 0;
   for (const quote of quotes) {
     const validUntilKey = dueDateKey(quote.validUntil);
@@ -87,10 +103,8 @@ async function syncQuoteLifecycleReminders(now: Date): Promise<number> {
     if (quote.sentAt) {
       const sentAgeDays = (now.getTime() - new Date(quote.sentAt).getTime()) / 86_400_000;
       if (sentAgeDays >= INTERNAL_FOLLOW_UP_AFTER_DAYS) {
-        const leadAssignee: any = quote.leadId
-          ? await Lead.findOne({ _id: quote.leadId, deletedAt: null }).select('assignedUserId').lean()
-          : undefined;
-        const recipientUserId = idOf(leadAssignee?.assignedUserId) ?? idOf(quote.createdBy);
+        const leadId = idOf(quote.leadId);
+        const recipientUserId = (leadId ? leadAssigneeById.get(leadId) : undefined) ?? idOf(quote.createdBy);
         if (recipientUserId) {
           await upsertQuoteReminder({
             automationKey: `quote_internal_followup:${quote._id}`,
@@ -152,5 +166,15 @@ const options: GenericReminderOptions = {
 };
 
 export async function processQuoteLifecycleTick(now = new Date()): Promise<GenericTickResult> {
-  return runGenericReminderTick(now, syncQuoteLifecycleReminders, options);
+  // Conditional timing for the Fluid Active CPU audit, Phase 2 (2026-09-23). No PII (counts
+  // only) — helps confirm whether the ~2000ms spike tracks `delivered` (real SMTP send time)
+  // rather than wasted sync work, since the sync side has no N+1-per-rule-stage or unindexed
+  // metadata-scan pattern like financial-reminders.service.ts had.
+  const startedAt = Date.now();
+  const result = await runGenericReminderTick(now, syncQuoteLifecycleReminders, options);
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({ event: 'quote_lifecycle_tick_timing', elapsedMs, ...result }));
+  }
+  return result;
 }
