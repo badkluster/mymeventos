@@ -144,7 +144,7 @@ describe('event-operational-document.service — cronograma integral (type "full
 
     expect(countOccurrences(body, 'Completado')).toBeGreaterThanOrEqual(3);
     expect(body).not.toContain('Completed');
-    expect(body).toContain('.area:first-of-type{break-before:auto;page-break-before:auto}');
+    expect(body).toContain('.area{margin-top:18px;break-inside:auto;page-break-inside:auto}');
   });
 
   it('produces a valid, non-trivial PDF buffer for the full report and a bigger one when there is more content', async () => {
@@ -251,7 +251,7 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(content).toContain('FIN');
   });
 
-  it('starts staff notes on their own page in the full schedule and lets them continue onto later pages', async () => {
+  it('uses the available page for staff notes and only continues when the content needs it', async () => {
     const staffNotes = Array.from({ length: 16 }, (_, index) => ({
       title: `Indicación operativa ${index + 1}`,
       notes: 'Confirmar responsable, horario, elementos necesarios y comunicación con coordinación antes de avanzar al próximo momento.'
@@ -269,10 +269,10 @@ describe('event-operational-document.service — cronograma integral (type "full
     }, 'full');
     const pdf = await generateOperationalPdf(eventWithNotes, 'full');
 
-    // Una sola nota todavía debe empezar en la hoja 2; no puede quedar debajo de Momentos.
-    expect(pdfPageCount(oneNotePdf.buffer)).toBe(2);
-    // Hoja 1: Momentos. Hoja 2 en adelante: Notas para staff.
-    expect(pdfPageCount(pdf.buffer)).toBeGreaterThanOrEqual(3);
+    // Una nota breve comparte la primera hoja con Momentos.
+    expect(pdfPageCount(oneNotePdf.buffer)).toBe(1);
+    // El conjunto extenso continúa sólo cuando ya no queda lugar suficiente.
+    expect(pdfPageCount(pdf.buffer)).toBeGreaterThanOrEqual(2);
     expect(pdfContentText(pdf.buffer)).toContain('Notas para staff');
     expect(pdfContentText(pdf.buffer)).toContain('Indicación operativa 16');
   });

@@ -27,6 +27,7 @@ import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
 import { displayLabel, leadSourceLabels, leadStatusLabels } from '@/lib/display-labels';
+import { isInteractiveTableRowTarget } from '@/lib/table-row-navigation';
 
 type Lead = {
   _id: string;
@@ -485,7 +486,7 @@ export default function LeadsPage() {
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {items.map((lead) => (
-                <tr key={lead._id} className="transition-colors hover:bg-amber-50/35">
+                <tr key={lead._id} tabIndex={0} role="link" aria-label={`Ver lead ${lead.fullName}`} onClick={(clickEvent) => { if (!isInteractiveTableRowTarget(clickEvent.target)) router.push(`/admin/leads/${lead._id}`); }} onKeyDown={(keyEvent) => { if ((keyEvent.key === 'Enter' || keyEvent.key === ' ') && !isInteractiveTableRowTarget(keyEvent.target)) { keyEvent.preventDefault(); router.push(`/admin/leads/${lead._id}`); } }} className="cursor-pointer transition-colors hover:bg-amber-50/35 focus-visible:bg-amber-50/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500">
                   <td className="px-5 py-4 font-semibold text-zinc-900">{lead.fullName}</td>
                   <td className="px-5 py-4 text-zinc-700">{lead.phone}</td>
                   <td className="px-5 py-4 text-zinc-600">{lead.email || '—'}</td>

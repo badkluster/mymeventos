@@ -171,29 +171,29 @@ function card(document: PDFKit.PDFDocument, event: any, type: OperationalDocumen
 }
 
 /**
- * Las notas de staff pueden ser extensas y, en el cronograma integral, ocupan una
- * sección independiente. Esta variante conserva el texto completo usando tipografía
- * y espaciado apenas más compactos, sin recortar ni resumir la indicación operativa.
+ * Las notas de staff pueden ser extensas. Se conservan completas y con una escala
+ * de lectura operativa; el salto de página queda a cargo de `ensure()` sólo cuando
+ * la próxima tarjeta ya no entra en el espacio disponible.
  */
 function staffNoteCard(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType, title: string, meta: string | undefined, body: string): void {
   const width = page.right - page.left - 28;
-  const titleHeight = document.font('Helvetica-Bold').fontSize(8.2).heightOfString(title, { width, lineGap: 1.2 });
-  const metaHeight = meta ? document.font('Helvetica').fontSize(6.9).heightOfString(meta, { width, lineGap: 1 }) : 0;
-  const bodyHeight = body ? document.font('Helvetica').fontSize(7.4).heightOfString(body, { width, lineGap: 1.7 }) : 0;
-  const height = Math.max(30, 8 + titleHeight + (meta ? metaHeight + 3 : 0) + (body ? bodyHeight + 5 : 0) + 7);
-  ensure(document, event, type, height + 5);
+  const titleHeight = document.font('Helvetica-Bold').fontSize(9.2).heightOfString(title, { width, lineGap: 1.5 });
+  const metaHeight = meta ? document.font('Helvetica').fontSize(7.7).heightOfString(meta, { width, lineGap: 1.2 }) : 0;
+  const bodyHeight = body ? document.font('Helvetica').fontSize(8.5).heightOfString(body, { width, lineGap: 2 }) : 0;
+  const height = Math.max(38, 10 + titleHeight + (meta ? metaHeight + 4 : 0) + (body ? bodyHeight + 7 : 0) + 9);
+  ensure(document, event, type, height + 6);
   const y = document.y;
   document.roundedRect(page.left, y, page.right - page.left, height, 6).fill(color.card);
   document.roundedRect(page.left, y, 3, height, 2).fill(color.gold);
-  let cursor = y + 8;
-  document.font('Helvetica-Bold').fontSize(8.2).fillColor(color.ink).text(title, page.left + 14, cursor, { width, lineGap: 1.2 });
-  cursor += titleHeight + 3;
+  let cursor = y + 10;
+  document.font('Helvetica-Bold').fontSize(9.2).fillColor(color.ink).text(title, page.left + 14, cursor, { width, lineGap: 1.5 });
+  cursor += titleHeight + 4;
   if (meta) {
-    document.font('Helvetica').fontSize(6.9).fillColor(color.muted).text(meta, page.left + 14, cursor, { width, lineGap: 1 });
-    cursor += metaHeight + 3;
+    document.font('Helvetica').fontSize(7.7).fillColor(color.muted).text(meta, page.left + 14, cursor, { width, lineGap: 1.2 });
+    cursor += metaHeight + 4;
   }
-  if (body) document.font('Helvetica').fontSize(7.4).fillColor('#344054').text(body, page.left + 14, cursor, { width, lineGap: 1.7 });
-  document.y = y + height + 5;
+  if (body) document.font('Helvetica').fontSize(8.5).fillColor('#344054').text(body, page.left + 14, cursor, { width, lineGap: 2 });
+  document.y = y + height + 6;
 }
 
 type TableColumn = { label: string; x: number; width: number };
@@ -273,24 +273,24 @@ type CompactTimelineLayout = { columns: [CompactTimelineRow[], CompactTimelineRo
 /**
  * Antes de dividir Momentos en dos hojas, el cronograma integral prueba una
  * composición de dos columnas. Conserva cada nota completa y el orden horario
- * (se lee de arriba hacia abajo y luego continúa en la segunda columna), pero
- * aprovecha el espacio lateral que una tabla de una sola columna deja libre.
+ * (se lee de arriba hacia abajo y luego continúa en la segunda columna), usando
+ * una escala cómoda para imprimir en lugar de reducir el texto en exceso.
  */
 function compactTimelineLayout(document: PDFKit.PDFDocument, items: any[]): CompactTimelineLayout | undefined {
   if (items.length < 2) return undefined;
   const gap = 10;
   const columnWidth = (page.right - page.left - gap) / 2;
-  const timeWidth = 42;
+  const timeWidth = 45;
   const contentWidth = columnWidth - timeWidth - 12;
   const rows = items.map((item: any, index: number): CompactTimelineRow => {
     const time = text(item.time, '—');
     const title = text(item.title);
     const note = text(item.notes, '');
-    const timeHeight = document.font('Helvetica-Bold').fontSize(7.1).heightOfString(time, { width: timeWidth, lineGap: 1 });
-    const titleHeight = document.font('Helvetica-Bold').fontSize(7.2).heightOfString(title, { width: contentWidth, lineGap: 1 });
-    const noteHeight = note ? document.font('Helvetica').fontSize(6.7).heightOfString(note, { width: contentWidth, lineGap: 1 }) : 0;
-    const contentHeight = titleHeight + (note ? noteHeight + 8 : 0);
-    return { index, time, title, note, titleHeight, height: Math.max(timeHeight, contentHeight) + 11 };
+    const timeHeight = document.font('Helvetica-Bold').fontSize(8.1).heightOfString(time, { width: timeWidth, lineGap: 1.2 });
+    const titleHeight = document.font('Helvetica-Bold').fontSize(8.3).heightOfString(title, { width: contentWidth, lineGap: 1.2 });
+    const noteHeight = note ? document.font('Helvetica').fontSize(7.7).heightOfString(note, { width: contentWidth, lineGap: 1.5 }) : 0;
+    const contentHeight = titleHeight + (note ? noteHeight + 10 : 0);
+    return { index, time, title, note, titleHeight, height: Math.max(timeHeight, contentHeight) + 13 };
   });
   const columnHeight = (column: CompactTimelineRow[]) => 16 + column.reduce((total, row) => total + row.height + 3, 0);
   let best: CompactTimelineLayout | undefined;
@@ -321,19 +321,19 @@ function compactTimeline(document: PDFKit.PDFDocument, layout: CompactTimelineLa
   const columnX = [page.left, page.left + layout.columnWidth + 10];
   layout.columns.forEach((rows, columnIndex) => {
     const x = columnX[columnIndex];
-    document.font('Helvetica-Bold').fontSize(6.1).fillColor(color.muted).text('HORA', x + 7, startY, { width: layout.timeWidth });
+    document.font('Helvetica-Bold').fontSize(6.8).fillColor(color.muted).text('HORA', x + 7, startY, { width: layout.timeWidth });
     document.text('MOMENTO', x + layout.timeWidth + 7, startY, { width: layout.contentWidth });
     document.moveTo(x, startY + 10).lineTo(x + layout.columnWidth, startY + 10).strokeColor(color.line).lineWidth(.6).stroke();
     let y = startY + 15;
     rows.forEach((row) => {
       document.roundedRect(x, y, layout.columnWidth, row.height, 4).fill(row.index % 2 ? color.cream : color.card);
-      document.font('Helvetica-Bold').fontSize(7.1).fillColor(color.ink).text(row.time, x + 7, y + 5, { width: layout.timeWidth, lineGap: 1 });
+      document.font('Helvetica-Bold').fontSize(8.1).fillColor(color.ink).text(row.time, x + 7, y + 6, { width: layout.timeWidth, lineGap: 1.2 });
       const contentX = x + layout.timeWidth + 7;
-      document.font('Helvetica-Bold').fontSize(7.2).fillColor(color.ink).text(row.title, contentX, y + 5, { width: layout.contentWidth, lineGap: 1 });
+      document.font('Helvetica-Bold').fontSize(8.3).fillColor(color.ink).text(row.title, contentX, y + 6, { width: layout.contentWidth, lineGap: 1.2 });
       if (row.note) {
-        const noteY = y + 5 + row.titleHeight + 2;
-        document.font('Helvetica-Bold').fontSize(5.7).fillColor(color.muted).text('NOTAS', contentX, noteY, { width: layout.contentWidth });
-        document.font('Helvetica').fontSize(6.7).fillColor('#344054').text(row.note, contentX, noteY + 6, { width: layout.contentWidth, lineGap: 1 });
+        const noteY = y + 6 + row.titleHeight + 3;
+        document.font('Helvetica-Bold').fontSize(6.3).fillColor(color.muted).text('NOTAS', contentX, noteY, { width: layout.contentWidth });
+        document.font('Helvetica').fontSize(7.7).fillColor('#344054').text(row.note, contentX, noteY + 7, { width: layout.contentWidth, lineGap: 1.5 });
       }
       y += row.height + 3;
     });
@@ -390,10 +390,8 @@ function timeline(document: PDFKit.PDFDocument, event: any, type: OperationalDoc
   }
   const staffNotes = generalStaffNotes(event);
   if (!staffNotes.length) return;
-  // En el cronograma integral, las notas del equipo constituyen una sección operativa
-  // independiente: empiezan siempre en una hoja nueva y pueden continuar en las
-  // siguientes según su extensión. El cronograma simple conserva su presentación compacta.
-  if (type === 'full') newPage(document, event, type);
+  // Las notas aprovechan el espacio libre tras Momentos. Si una tarjeta no entra,
+  // `ensure()` la mueve completa a la hoja siguiente sin forzar un salto prematuro.
   section(document, event, type, 'Notas para staff', 'Indicaciones clave para el equipo');
   staffNotes.forEach((item) => staffNoteCard(document, event, type, item.reference, item.meta || undefined, item.note));
 }
@@ -423,7 +421,7 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
   const gap = 5;
   const tableWidth = (page.right - page.left - gap * 2) / 3;
   const numberWidth = 13;
-  const detailWidth = 47;
+  const detailWidth = 48;
   const nameWidth = tableWidth - numberWidth - detailWidth - 14;
   const groups = Array.from({ length: Math.ceil(entries.length / 3) }, (_, index) => entries.slice(index * 3, index * 3 + 3));
   const detailFor = guestListDetail;
@@ -432,21 +430,21 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
     const entryMetrics = group.map((entry: any) => {
       const slots = Math.max(entry.guests.length, Number(entry.capacity) || 0);
       const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience.toUpperCase()}` : ''} · ${entry.guests.length}${entry.capacity ? `/${entry.capacity}` : ''}`;
-      const headingHeight = Math.max(13, document.font('Helvetica-Bold').fontSize(6.4).heightOfString(heading, { width: tableWidth - 10, lineGap: .5 }) + 5);
+      const headingHeight = Math.max(13, document.font('Helvetica-Bold').fontSize(7.1).heightOfString(heading, { width: tableWidth - 10, lineGap: .7 }) + 4);
       const rowHeights = Array.from({ length: slots }, (_, index) => {
         const guest = entry.guests[index];
-        if (!guest) return 9.5;
-        const nameHeight = document.font('Helvetica-Bold').fontSize(6.4).heightOfString(text(guest.fullName), { width: nameWidth, lineGap: .6 });
+        if (!guest) return 10;
+        const nameHeight = document.font('Helvetica-Bold').fontSize(7.1).heightOfString(text(guest.fullName), { width: nameWidth, lineGap: .7 });
         const detail = detailFor(guest);
-        const detailHeight = detail ? document.font('Helvetica').fontSize(5.6).heightOfString(detail, { width: detailWidth, lineGap: .6 }) : 0;
-        return Math.max(9.5, Math.max(nameHeight, detailHeight) + 2);
+        const detailHeight = detail ? document.font('Helvetica').fontSize(6.2).heightOfString(detail, { width: detailWidth, lineGap: .7 }) : 0;
+        return Math.max(10, Math.max(nameHeight, detailHeight) + 1.6);
       });
       return { entry, heading, headingHeight, slots, rowHeights };
     });
     const maxSlots = Math.max(...entryMetrics.map((metric) => metric.slots), 0);
-    const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? 9.5)));
-    const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 10));
-    const groupHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 4;
+    const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? 10)));
+    const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 7));
+    const groupHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 2;
     if (document.y + groupHeight > page.bottom - 30) newPage(document, event, 'full');
     const y = document.y;
 
@@ -455,20 +453,20 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
       const tableHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0);
       document.roundedRect(x, y, tableWidth, tableHeight, 4).fill(color.card);
       document.roundedRect(x, y, tableWidth, metric.headingHeight, 4).fill(color.ink);
-      document.font('Helvetica-Bold').fontSize(6.4).fillColor(color.white).text(metric.heading, x + 5, y + 3, { width: tableWidth - 10, lineGap: .5 });
-      const labelsY = y + metric.headingHeight + 3;
-      document.font('Helvetica-Bold').fontSize(5.1).fillColor(color.muted).text('N°', x + 4, labelsY, { width: numberWidth - 2 });
-      document.font('Helvetica-Bold').fontSize(5.1).fillColor(color.muted).text('APELLIDO Y NOMBRE', x + numberWidth + 5, labelsY, { width: nameWidth });
-      document.font('Helvetica-Bold').fontSize(5.1).fillColor(color.muted).text('DETALLE', x + numberWidth + nameWidth + 7, labelsY, { width: detailWidth - 4 });
+      document.font('Helvetica-Bold').fontSize(7.1).fillColor(color.white).text(metric.heading, x + 5, y + 3, { width: tableWidth - 10, lineGap: .7 });
+      const labelsY = y + metric.headingHeight + 1;
+      document.font('Helvetica-Bold').fontSize(5.6).fillColor(color.muted).text('N°', x + 4, labelsY, { width: numberWidth - 2 });
+      document.font('Helvetica-Bold').fontSize(5.6).fillColor(color.muted).text('APELLIDO Y NOMBRE', x + numberWidth + 5, labelsY, { width: nameWidth });
+      document.font('Helvetica-Bold').fontSize(5.6).fillColor(color.muted).text('DETALLE', x + numberWidth + nameWidth + 7, labelsY, { width: detailWidth - 4 });
       let rowY = y + headerHeight;
       rowHeights.forEach((rowHeight, rowIndex) => {
         const guest = metric.entry.guests[rowIndex];
         document.moveTo(x + 1, rowY).lineTo(x + tableWidth - 1, rowY).strokeColor(color.line).lineWidth(.35).stroke();
-        document.font('Helvetica-Bold').fontSize(5.7).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + 2, { width: numberWidth - 2, align: 'right' });
+        document.font('Helvetica-Bold').fontSize(6.2).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + 2, { width: numberWidth - 2, align: 'right' });
         if (guest) {
-          document.font('Helvetica-Bold').fontSize(6.4).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + 2, { width: nameWidth, lineGap: .6 });
+          document.font('Helvetica-Bold').fontSize(7.1).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + 2, { width: nameWidth, lineGap: .7 });
           const detail = detailFor(guest);
-          if (detail) document.font('Helvetica').fontSize(5.6).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + 2, { width: detailWidth - 4, lineGap: .6 });
+          if (detail) document.font('Helvetica').fontSize(6.2).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + 2, { width: detailWidth - 4, lineGap: .7 });
         }
         rowY += rowHeight;
       });
@@ -998,9 +996,9 @@ function staffRoster(document: PDFKit.PDFDocument, event: any, type: Operational
 }
 
 /**
- * "Cronograma integral": cada sección operativa arranca en una hoja propia. Vajilla y
- * mantelería son registros distintos porque sus controles y responsables de devolución no
- * necesariamente coinciden. Se omiten secciones vacías, pero ninguna fila cargada se trunca.
+ * Vajilla y mantelería son registros distintos porque sus controles y responsables de
+ * devolución no necesariamente coinciden. Las áreas aprovechan la hoja actual y sólo
+ * continúan en otra cuando el siguiente bloque no entra completo.
  */
 function fullReport(document: PDFKit.PDFDocument, event: any): void {
   eventDetails(document, event, 'full', null);
@@ -1024,11 +1022,9 @@ function fullReport(document: PDFKit.PDFDocument, event: any): void {
     emptyNote(document, event, 'Todavía no se cargó contenido operativo para este evento. Completá momentos, invitados, logística, vajilla, productos, proveedores o staff para generar el cronograma integral.');
     return;
   }
-  visible.forEach((area, index) => {
-    // La ficha del evento deja espacio suficiente para iniciar el primer bloque. Evitar
-    // este salto conserva la portada como una página de trabajo y elimina el vacío que
-    // antes quedaba entre los datos principales y “Momentos del evento”.
-    if (index > 0) newPage(document, event, 'full');
+  visible.forEach((area) => {
+    // Cada renderer comprueba su alto antes de dibujar. De ese modo la hoja se usa
+    // hasta donde corresponde, sin saltos prematuros entre secciones.
     section(document, event, 'full', area.title, area.hint);
     area.render();
   });
@@ -1148,7 +1144,8 @@ function guestEntryControlWordHtml(event: any): string {
   return `<section class="control-legend">${legend}<div><b>Control</b><span>Números visibles en cada fila</span></div></section>${entries.map((entry: any) => { const rows = Array.from({ length: guestControlSlots(entry) }, (_, index) => { const guest = entry.guests[index]; const detail = guest ? guestControlDetail(guest) : ''; return `<tr><td class="number">${index + 1}</td><td class="guest-name">${guest ? `<b>${escapeHtml(guest.fullName)}</b>` : '................................................................................................'}</td><td class="guest-detail">${escapeHtml(detail)}</td></tr>`; }).join(''); const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience}` : ''} · ${entry.guests.length} lugar${entry.guests.length === 1 ? '' : 'es'}`; return `<section class="mesa-sheet"><h3>${escapeHtml(heading)}</h3>${entry.notes ? `<small>${escapeHtml(entry.notes)}</small>` : ''}<table class="mesa-list"><tbody>${rows}</tbody></table></section>`; }).join('')}`;
 }
 
-/** Espejo en HTML de `fullReport()`: mismo orden de áreas, mismo criterio de "sin contenido no aparece", con salto de página forzado por área para que Word respete un área por página igual que el PDF. */
+/** Espejo en HTML de `fullReport()`: mismo orden de áreas y mismo criterio de
+ * contenido. Las secciones fluyen para aprovechar la hoja actual también en Word. */
 function fullReportWordHtml(event: any): string {
   const { tables, guests } = guestListData(event);
   const tableware = tablewareControlRows(event);
@@ -1189,6 +1186,6 @@ export function generateOperationalWord(event: any, type: OperationalDocumentTyp
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Control de mesas</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#1f1f1f;font-size:10pt}.guest-header{text-align:center;border-bottom:2px solid #b8965a;padding:4px 0 13px;margin-bottom:15px}.guest-header .brand{color:#a68244;font-size:8pt;font-weight:bold;letter-spacing:1px}.guest-header h1{font-size:18pt;letter-spacing:.6px;margin:7px 0 5px}.guest-header p{color:#7a7368;margin:0;font-size:9.5pt}.control-legend{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #d8ccaf;margin:0 0 13px}.control-legend div{padding:8px 10px;border-right:1px solid #d8ccaf;min-height:31px}.control-legend div:last-child{border-right:0}.control-legend b{display:block;font-size:8pt;color:#1f1f1f}.control-legend span{display:block;color:#7a7368;font-size:7.5pt;margin-top:3px}.mesa-sheet{border:1px solid #d8ccaf;margin:0 0 10px;break-inside:avoid}.mesa-sheet h3{background:#fbf8f1;margin:0;padding:7px 10px;border-bottom:1px solid #d8ccaf;font-size:9.5pt}.mesa-sheet small{display:block;padding:5px 10px 0;color:#7a7368}.mesa-list{border-collapse:collapse;width:100%;font-size:9pt}.mesa-list td{padding:5px 8px;border-bottom:1px solid #eee8dc;vertical-align:top}.mesa-list tr:last-child td{border-bottom:0}.mesa-list .number{width:28px;text-align:right;color:#7a7368;font-weight:bold}.mesa-list .guest-name{width:57%}.mesa-list .guest-detail{color:#7a7368;font-size:8pt}.empty{color:#7a7368;background:#fbf8f1;padding:14px}</style></head><body><header class="guest-header"><div class="brand">M&M EVENTOS</div><h1>CONTROL DE MESAS</h1><p>${escapeHtml(subtitle)}</p></header>${content}</body></html>`;
     return { buffer: Buffer.from(html, 'utf8'), fileName: `${fileStem(event, type)}.doc` };
   }
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(documentTitle(type))}</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#101827;font-size:10pt}.header{background:#101827;color:white;padding:18px 22px;margin:-18mm -18mm 18px}.brand{color:#ddc99f;letter-spacing:1px;font-size:9pt}.header h1{margin:6px 0 0;font-size:20pt}.subtitle{color:#dfe3e8;margin-top:5px}.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f4f6f8;padding:14px 16px;border-radius:8px}.detail b{display:block;color:#667085;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}.detail span{display:block;margin-top:3px}h2{font-size:12pt;margin:22px 0 8px;border-bottom:2px solid #b8965a;padding-bottom:6px}.area{break-before:page;page-break-before:always}.area:first-of-type{break-before:auto;page-break-before:auto}.area-title{font-size:14pt;margin-top:22px}table{border-collapse:collapse;width:100%;font-size:8.5pt}th{background:#101827;color:white;text-align:left;padding:8px}td{vertical-align:top;padding:8px;border-bottom:1px solid #dfe3e8}tr:nth-child(even){background:#fbf8f1}.note{background:#f4f6f8;border-left:4px solid #b8965a;padding:10px 14px;margin:10px 0}.note h2,.note h3{margin:0 0 7px;border:0;padding:0;font-size:10.5pt}.note small{display:block;color:#667085;margin:-3px 0 7px}.note p{margin:0;line-height:1.45}.guest-items{margin:7px 0 0;padding-left:18px}.guest-items li{margin:3px 0}.guest-items span{color:#667085}.entry-table{break-inside:avoid}.entry-control{margin-top:8px}.entry-control .number{width:26px;font-weight:bold;text-align:center}.entry-control .check{width:46px;font-weight:bold;white-space:nowrap}.staff-hint{color:#667085;margin:-2px 0 10px}.empty{color:#667085;background:#fbf8f1;padding:14px}</style></head><body><header class="header"><div class="brand">M&M EVENTOS · DOCUMENTO OPERATIVO</div><h1>${escapeHtml(documentTitle(type))}</h1><div class="subtitle">${escapeHtml(text(event.eventName || event.eventType, 'Evento'))}</div></header><div class="details">${detailsHtml}</div>${type === 'full' ? '' : `<h2>${escapeHtml(documentTitle(type))}</h2>`}${content}</body></html>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(documentTitle(type))}</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#101827;font-size:10pt}.header{background:#101827;color:white;padding:18px 22px;margin:-18mm -18mm 18px}.brand{color:#ddc99f;letter-spacing:1px;font-size:9pt}.header h1{margin:6px 0 0;font-size:20pt}.subtitle{color:#dfe3e8;margin-top:5px}.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f4f6f8;padding:14px 16px;border-radius:8px}.detail b{display:block;color:#667085;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}.detail span{display:block;margin-top:3px}h2{font-size:12pt;margin:22px 0 8px;border-bottom:2px solid #b8965a;padding-bottom:6px}.area{margin-top:18px;break-inside:auto;page-break-inside:auto}.area:first-of-type{margin-top:0}.area-title{font-size:14pt;margin-top:22px}table{border-collapse:collapse;width:100%;font-size:8.5pt}th{background:#101827;color:white;text-align:left;padding:8px}td{vertical-align:top;padding:8px;border-bottom:1px solid #dfe3e8}tr:nth-child(even){background:#fbf8f1}.note{background:#f4f6f8;border-left:4px solid #b8965a;padding:10px 14px;margin:10px 0}.note h2,.note h3{margin:0 0 7px;border:0;padding:0;font-size:10.5pt}.note small{display:block;color:#667085;margin:-3px 0 7px}.note p{margin:0;line-height:1.45}.guest-items{margin:7px 0 0;padding-left:18px}.guest-items li{margin:3px 0}.guest-items span{color:#667085}.entry-table{break-inside:avoid}.entry-control{margin-top:8px}.entry-control .number{width:26px;font-weight:bold;text-align:center}.entry-control .check{width:46px;font-weight:bold;white-space:nowrap}.staff-hint{color:#667085;margin:-2px 0 10px}.empty{color:#667085;background:#fbf8f1;padding:14px}</style></head><body><header class="header"><div class="brand">M&M EVENTOS · DOCUMENTO OPERATIVO</div><h1>${escapeHtml(documentTitle(type))}</h1><div class="subtitle">${escapeHtml(text(event.eventName || event.eventType, 'Evento'))}</div></header><div class="details">${detailsHtml}</div>${type === 'full' ? '' : `<h2>${escapeHtml(documentTitle(type))}</h2>`}${content}</body></html>`;
   return { buffer: Buffer.from(html, 'utf8'), fileName: `${fileStem(event, type)}.doc` };
 }

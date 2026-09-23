@@ -15,8 +15,8 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.mymsalones.com.
 export async function generateMetadata(): Promise<Metadata> {
   const landing = await getPublicLanding();
   const settings = landing?.settings;
-  const title = settings?.seoTitle || 'M&M Eventos | Salones de eventos en La Plata con catering';
-  const description = settings?.seoDescription || 'Salones para fiestas, 15 años, casamientos, cumpleaños, egresados y eventos empresariales en La Plata. Catering, DJ, ambientación, barra y organización integral.';
+  const title = settings?.seoTitle || 'Salones de Fiestas en La Plata | M&M Eventos';
+  const description = settings?.seoDescription || 'Salones de fiestas en La Plata para cumpleaños, 15 años y casamientos, con catering, bebidas, DJ, iluminación y servicio completo.';
   const favicon = settings?.faviconUrl || brandAssets.favicon;
   const shareImage = settings?.openGraphImageUrl || brandAssets.openGraphImage;
 

@@ -17,8 +17,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const landing = await getPublicLanding();
   const salon = findSalonForSeoSlug(landing, page.slug);
   const image = imageForPublicSalon(salon, page.heroImage) || page.heroImage || defaultOgImage();
-  const description = salon?.publicDescription || salon?.publicShortDescription || page.metaDescription;
-  const title = salon ? `${titleForPublicSalon(salon)} | M&M Eventos` : page.metaTitle;
+  const description = page.metaDescription;
+  const title = page.metaTitle;
   const path = `/salones/${page.slug}`;
   return {
     title: { absolute: title },

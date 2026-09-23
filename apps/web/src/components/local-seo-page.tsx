@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Check, MapPin, MessageCircle, PackageCheck, Sparkles } from 'lucide-react';
-import { absoluteUrl, localSeoPages, salonSeoPages, siteUrl, type LocalSeoPage } from '@/lib/local-seo';
+import { absoluteUrl, localSeoPages, salonSeoPages, serializeJsonLd, siteUrl, type LocalSeoPage } from '@/lib/local-seo';
 import { brandAssets } from '@/lib/brand-assets';
 import { capacityForPublicSalon, imageForPublicSalon, locationForPublicSalon, titleForPublicSalon, type PublicLanding, type PublicPackage, type PublicSalon } from '@/lib/public-landing';
 
@@ -10,7 +10,14 @@ function jsonLdForPage(page: LocalSeoPage, path: string, salonMode: boolean, sal
   const image = imageForPublicSalon(salon, page.heroImage) || page.heroImage;
   const openGraphImage = landing?.settings?.openGraphImageUrl || brandAssets.openGraphImage;
   const phone = salon?.phone || landing?.settings?.contactPhone;
-  const address = salon?.address || page.address || locationForPublicSalon(salon) || page.location;
+  const streetAddress = salon?.address || page.address;
+  const address = streetAddress ? {
+    '@type': 'PostalAddress',
+    streetAddress,
+    addressLocality: salon?.locality || salon?.city || page.location,
+    addressRegion: salon?.province || 'Buenos Aires',
+    addressCountry: 'AR'
+  } : undefined;
   const faqs = landing?.faqs?.filter((faq) => faq.question && faq.answer).slice(0, 4).map((faq) => ({ question: faq.question!, answer: faq.answer! })) ?? page.faqs;
   return [
     {
@@ -20,16 +27,9 @@ function jsonLdForPage(page: LocalSeoPage, path: string, salonMode: boolean, sal
       url,
       image,
       description: salonMode && salon ? salon.publicDescription || salon.publicShortDescription || page.metaDescription : page.metaDescription,
-      address: {
-        '@type': 'PostalAddress',
-        streetAddress: address,
-        addressLocality: salon?.locality || salon?.city || page.location,
-        addressRegion: salon?.province || 'Buenos Aires',
-        addressCountry: 'AR'
-      },
+      ...(address ? { address } : {}),
       amenityFeature: page.services.map((service) => ({ '@type': 'LocationFeatureSpecification', name: service, value: true })),
-      ...(phone ? { telephone: phone } : {}),
-      priceRange: '$$'
+      ...(phone ? { telephone: phone } : {})
     },
     {
       '@context': 'https://schema.org',
@@ -71,6 +71,7 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
   const related = page.relatedSlugs.map((slug) => relatedPage(slug, salonMode)).filter(Boolean) as { href: string; label: string }[];
   const crossLinks = salonMode ? localSeoPages.slice(0, 4).map((item) => ({ href: `/${item.slug}`, label: item.title })) : salonSeoPages.map((item) => ({ href: `/salones/${item.slug}`, label: item.title }));
   const heroImage = imageForPublicSalon(salon, page.heroImage) || page.heroImage;
+  const heroAlt = salon?.mediaGallery?.[0]?.altText || (salon ? `${titleForPublicSalon(salon)}, salón de eventos` : 'Salón de eventos preparado para una celebración');
   const heading = salonMode && salon ? `${titleForPublicSalon(salon)}: ${page.h1.split(':').pop()?.trim() ?? page.title}` : page.h1;
   const intro = salonMode && salon ? salon.publicDescription || salon.publicShortDescription || page.intro : page.intro;
   const location = locationForPublicSalon(salon) || page.location;
@@ -88,13 +89,13 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
   const logoOnDark = landing?.settings?.logoOnDarkUrl || brandAssets.logoLightOnDark;
 
   return <main className="min-h-screen overflow-x-hidden bg-zinc-950 text-white">
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdForPage(page, path, salonMode, salon, packages, landing)) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLdForPage(page, path, salonMode, salon, packages, landing)) }} />
     <section className="relative isolate min-h-[620px] overflow-hidden">
-      <Image src={heroImage} alt={heading} fill priority sizes="100vw" className="object-cover" />
+      <Image src={heroImage} alt={heroAlt} fill priority sizes="100vw" className="object-cover" />
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/72 to-black/20" />
       <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-5 md:px-8 md:py-6">
         <Link href="/" aria-label="Ir a M&M Eventos"><img src={logoOnDark} alt="M&M Eventos" className="h-11 w-auto max-w-[150px] object-contain md:h-14 md:max-w-none" /></Link>
-        <Link href="/#contacto" className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold transition hover:bg-white hover:text-black">Consultar</Link>
+        <Link href="/whatsapp" className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold transition hover:bg-white hover:text-black">Consultar por WhatsApp</Link>
       </header>
       <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-16 pt-14 md:px-8 lg:grid-cols-[1fr_360px] lg:pt-24">
         <div className="min-w-0 max-w-3xl">
@@ -102,7 +103,7 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
           <h1 className="mt-5 max-w-full text-balance break-words text-4xl font-semibold leading-tight md:text-6xl">{heading}</h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-200">{intro}</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/#contacto" className="inline-flex items-center gap-2 rounded-lg bg-[#25d366] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#35e176]"><MessageCircle className="h-4 w-4" />Pedir presupuesto</Link>
+            <Link href="/whatsapp" className="inline-flex items-center gap-2 rounded-lg bg-[#25d366] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#35e176]"><MessageCircle className="h-4 w-4" />Consultar por WhatsApp</Link>
             <Link href="/#paquetes" className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-5 py-3 text-sm font-semibold transition hover:bg-white hover:text-black">Ver paquetes <ArrowRight className="h-4 w-4" /></Link>
           </div>
           <div className="mt-8 flex flex-wrap gap-2 text-sm text-zinc-300">
@@ -131,6 +132,17 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
         </article>)}
       </div>
     </section>
+
+    {page.contentSections?.length ? <section className="border-y border-white/10 bg-white/[0.03]">
+      <div className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+        <div className="grid gap-4 md:grid-cols-2">
+          {page.contentSections.map((section) => <article key={section.heading} className="border border-white/10 bg-black/20 p-5 md:p-6">
+            <h2 className="text-2xl font-semibold">{section.heading}</h2>
+            <p className="mt-3 leading-7 text-zinc-400">{section.body}</p>
+          </article>)}
+        </div>
+      </div>
+    </section> : null}
 
     <section className="border-y border-white/10 bg-white/[0.03]">
       <div className="mx-auto max-w-7xl px-5 py-16 md:px-8">
@@ -173,7 +185,7 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
           </div>
         </div>
         <div className="border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="font-semibold">{salonMode ? 'Búsquedas relacionadas' : 'Nuestros salones'}</h2>
+          <h2 className="font-semibold">{salonMode ? 'Búsquedas relacionadas' : 'Conocé nuestros tres salones'}</h2>
           <div className="mt-4 grid gap-2">
             {crossLinks.map((item) => <Link key={item.href} href={item.href} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10 hover:text-white">{item.label}<ArrowRight className="h-4 w-4" /></Link>)}
           </div>

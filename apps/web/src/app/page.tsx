@@ -1,21 +1,21 @@
 import type { Metadata } from 'next';
 import { PublicLandingWithGoogleReviews } from '@/components/public-landing-with-google-reviews';
-import { absoluteUrl, defaultOgImage, siteUrl } from '@/lib/local-seo';
+import { absoluteUrl, defaultOgImage, serializeJsonLd, siteUrl } from '@/lib/local-seo';
 import { getPublicLanding, imageForPublicSalon, titleForPublicSalon, type PublicLanding } from '@/lib/public-landing';
 import { brandAssets } from '@/lib/brand-assets';
 
 export const revalidate = 300;
 
-const fallbackTitle = 'M&M Eventos | Salones de eventos en La Plata con catering';
-const fallbackDescription = 'Salones para fiestas, 15 años, casamientos, cumpleaños, egresados y eventos empresariales en La Plata. Catering, DJ, ambientación, barra y organización integral.';
+const fallbackTitle = 'M&M Eventos | Salones y Eventos en La Plata';
+const fallbackDescription = 'Salones de fiestas en La Plata para cumpleaños, 15 años y casamientos, con catering, bebidas, DJ, iluminación y servicio completo.';
 
 export async function generateMetadata(): Promise<Metadata> {
   const landing = await getPublicLanding();
-  const title = landing?.settings?.seoTitle || fallbackTitle;
-  const description = landing?.settings?.seoDescription || fallbackDescription;
+  const title = fallbackTitle;
+  const description = fallbackDescription;
   const image = landing?.settings?.openGraphImageUrl || defaultOgImage();
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical: '/' },
     openGraph: {
@@ -55,25 +55,21 @@ function structuredData(landing: PublicLanding | null) {
       description: 'Salones de eventos en La Plata con catering, DJ, ambientación y organización integral.',
       url: siteUrl,
       image: imageForPublicSalon(salons[0], defaultOgImage()),
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: 'La Plata',
-        addressRegion: 'Buenos Aires',
-        addressCountry: 'AR'
-      },
       areaServed: ['La Plata', 'San Carlos', 'Villa Elisa', 'Berisso', 'Ensenada'],
       department: salons.map((salon) => ({
         '@type': 'EventVenue',
         name: titleForPublicSalon(salon),
-        address: {
-          '@type': 'PostalAddress',
-          streetAddress: salon.address || salon.locationText,
-          addressLocality: salon.locality || salon.city,
-          addressRegion: salon.province || 'Buenos Aires',
-          addressCountry: 'AR'
-        },
+        ...(salon.address || salon.locationText ? {
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: salon.address || salon.locationText,
+            addressLocality: salon.locality || salon.city,
+            addressRegion: salon.province || 'Buenos Aires',
+            addressCountry: 'AR'
+          }
+        } : {}),
         image: imageForPublicSalon(salon, defaultOgImage()),
-        telephone: salon.phone || salon.whatsapp
+        ...(salon.phone || salon.whatsapp ? { telephone: salon.phone || salon.whatsapp } : {})
       }))
     },
     faqs.length ? {
@@ -91,7 +87,7 @@ function structuredData(landing: PublicLanding | null) {
 export default async function HomePage() {
   const landing = await getPublicLanding();
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData(landing)) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData(landing)) }} />
     <PublicLandingWithGoogleReviews initialLanding={landing} />
   </>;
 }

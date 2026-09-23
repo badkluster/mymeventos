@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   CalendarDays,
@@ -22,6 +23,7 @@ import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
 import { formatCivilDate } from '@/lib/dates';
+import { isInteractiveTableRowTarget } from '@/lib/table-row-navigation';
 import type { Customer, PaginationMeta, Salon } from '@/features/quotes/types';
 
 type ListResponse = { items?: Customer[]; meta?: Partial<PaginationMeta> };
@@ -63,6 +65,7 @@ function MetricCard({ label, value, icon: Icon, detail }: { label: string; value
 }
 
 export default function CustomersPage() {
+  const router = useRouter();
   const { showToast } = useToast();
   const [items, setItems] = useState<Customer[]>([]);
   const [salons, setSalons] = useState<Salon[]>([]);
@@ -284,7 +287,7 @@ export default function CustomersPage() {
       </div>
     </div>
     <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm">
-      <div className="overflow-x-auto"><table className="min-w-[980px] w-full text-sm"><thead className="border-b border-zinc-200 bg-zinc-50/80 text-zinc-500"><tr>{['Cliente', 'Teléfono', 'Email', 'Eventos', 'Presupuestos', 'Última actividad', 'Estado'].map((label) => <th key={label} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide">{label}</th>)}<th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide">Acciones</th></tr></thead><tbody className="divide-y divide-zinc-100">{items.map((customer) => <tr key={customer._id} className="transition-colors hover:bg-amber-50/35"><td className="px-5 py-4 font-medium text-zinc-900">{customerName(customer)}</td><td className="px-5 py-4 text-zinc-700">{customer.phone || 'No informado'}</td><td className="px-5 py-4 text-zinc-700">{customer.email || 'No informado'}</td><td className="px-5 py-4 text-zinc-700">{customer.eventCount ?? 0}</td><td className="px-5 py-4 text-zinc-700">{customer.quoteCount ?? 0}</td><td className="px-5 py-4 text-zinc-700">{formatDate(customer.lastEvent?.eventDate ?? customer.createdAt)}</td><td className="px-5 py-4"><span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Activo</span></td><td className="px-5 py-4"><div className="flex justify-end gap-0.5"><Link href={`/admin/customers/${customer._id}`}><TableActionButton icon={Eye} label="Ver cliente" /></Link><TableActionButton icon={MessageCircle} label="WhatsApp" onClick={() => openWhatsApp(customer)} />{customer.email ? <a href={`mailto:${customer.email}`}><TableActionButton icon={Mail} label="Email" /></a> : null}<Link href={`/admin/quotes?customerId=${customer._id}`}><TableActionButton icon={ReceiptText} label="Crear presupuesto" /></Link></div></td></tr>)}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="min-w-[980px] w-full text-sm"><thead className="border-b border-zinc-200 bg-zinc-50/80 text-zinc-500"><tr>{['Cliente', 'Teléfono', 'Email', 'Eventos', 'Presupuestos', 'Última actividad', 'Estado'].map((label) => <th key={label} className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide">{label}</th>)}<th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide">Acciones</th></tr></thead><tbody className="divide-y divide-zinc-100">{items.map((customer) => <tr key={customer._id} tabIndex={0} role="link" aria-label={`Ver cliente ${customerName(customer)}`} onClick={(clickEvent) => { if (!isInteractiveTableRowTarget(clickEvent.target)) router.push(`/admin/customers/${customer._id}`); }} onKeyDown={(keyEvent) => { if ((keyEvent.key === 'Enter' || keyEvent.key === ' ') && !isInteractiveTableRowTarget(keyEvent.target)) { keyEvent.preventDefault(); router.push(`/admin/customers/${customer._id}`); } }} className="cursor-pointer transition-colors hover:bg-amber-50/35 focus-visible:bg-amber-50/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500"><td className="px-5 py-4 font-medium text-zinc-900">{customerName(customer)}</td><td className="px-5 py-4 text-zinc-700">{customer.phone || 'No informado'}</td><td className="px-5 py-4 text-zinc-700">{customer.email || 'No informado'}</td><td className="px-5 py-4 text-zinc-700">{customer.eventCount ?? 0}</td><td className="px-5 py-4 text-zinc-700">{customer.quoteCount ?? 0}</td><td className="px-5 py-4 text-zinc-700">{formatDate(customer.lastEvent?.eventDate ?? customer.createdAt)}</td><td className="px-5 py-4"><span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Activo</span></td><td className="px-5 py-4"><div className="flex justify-end gap-0.5"><Link href={`/admin/customers/${customer._id}`}><TableActionButton icon={Eye} label="Ver cliente" /></Link><TableActionButton icon={MessageCircle} label="WhatsApp" onClick={() => openWhatsApp(customer)} />{customer.email ? <a href={`mailto:${customer.email}`}><TableActionButton icon={Mail} label="Email" /></a> : null}<Link href={`/admin/quotes?customerId=${customer._id}`}><TableActionButton icon={ReceiptText} label="Crear presupuesto" /></Link></div></td></tr>)}</tbody></table></div>
       {loading && <div className="px-6 py-12 text-center text-sm text-zinc-500">Cargando clientes...</div>}
       {!loading && items.length === 0 && <div className="grid place-items-center px-6 py-16 text-center"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-100 text-zinc-500"><UserRound className="h-6 w-6" /></span><h2 className="mt-4 font-semibold text-zinc-900">No hay clientes</h2><p className="mt-1 max-w-sm text-sm text-zinc-500">Los clientes aparecerán al convertir presupuestos o crearlos manualmente.</p></div>}
     </div>
