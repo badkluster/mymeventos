@@ -85,6 +85,13 @@ async function cancelClientReminderItems(filter: Record<string, unknown>): Promi
 }
 
 async function syncClientPaymentReminders(now: Date): Promise<number> {
+  // Measurement only (Fluid Active CPU audit, Phase 3, 2026-09-23) — no logic change. Shares
+  // financial-reminders.service.ts's exact "no safe way to bound this query further" conclusion
+  // (see that file's Priority 1 notes): `balanceAmount<=0` is proven unsafe, and
+  // `EventClosure.financial.status==='closed'` inherits the same weakness underneath and would
+  // be an observable behavior change. This log exists to help decide that question later, from
+  // two domains' real numbers instead of one.
+  const startedAt = Date.now();
   const todayKey = argentinaDateKey(now);
   const contracts: any[] = await Contract.find({ deletedAt: null, status: 'approved', clientReminderOptIn: { $ne: false } })
     .select('_id eventId customerId salonId balanceAmount paymentPlanSnapshot versionNumber createdAt')
@@ -154,6 +161,16 @@ async function syncClientPaymentReminders(now: Date): Promise<number> {
     await cancelClientReminderItems({ eventId: event._id, automationKey: { $nin: activeKeys } });
   }
 
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({
+      event: 'client_payment_reminder_tick_timing',
+      elapsedMs,
+      candidateCount: contracts.length,
+      eventCount: events.length,
+      synced
+    }));
+  }
   return synced;
 }
 

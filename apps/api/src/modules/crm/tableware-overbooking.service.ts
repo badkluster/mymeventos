@@ -5,7 +5,7 @@ import { SalonStockItem } from '../salons/salonStockItem.model';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { argentinaDateKey } from '../../utils/argentina-date';
-import { idOf, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
+import { idOf, uniqueIds, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
 
 async function fallbackRecipients(): Promise<string[]> {
   const users = await User.find({ active: true, deletedAt: null, roles: { $in: [Role.ADMIN, Role.MANAGER] } }).select('_id').lean();
@@ -17,6 +17,13 @@ async function fallbackRecipients(): Promise<string[]> {
 // /:id/tableware. This just widens that same check into a standing alert instead of only
 // blocking at the moment a specific event tries to reserve more.
 async function findOverbookedGroups(todayKey: string): Promise<Array<{ salonId: string; eventDay: string; salonStockItemId: string; total: number }>> {
+  // NOTE (found during the 2026-09-23 Fluid CPU audit, not fixed here): unlike
+  // events.routes.ts#tablewareAvailability (the check this function's own comment says it
+  // mirrors), this filter has no `releasedAt: null` — a released/freed allocation with a future
+  // `eventDay` still counts toward the total, which can produce a false-positive overbooking
+  // alert. Left unchanged because fixing it changes which alerts fire (a behavioral change,
+  // out of scope for a performance-only pass) — flagged for a follow-up, not a product decision
+  // this audit should make silently.
   const allocations: any[] = await EventTablewareAllocation.find({ source: 'salon_stock', eventDay: { $gte: todayKey } })
     .select('salonId eventDay salonStockItemId quantity').lean();
   if (!allocations.length) return [];
@@ -48,15 +55,26 @@ async function findOverbookedGroups(todayKey: string): Promise<Array<{ salonId: 
 }
 
 async function syncTablewareOverbookingAlerts(now: Date): Promise<number> {
+  const startedAt = Date.now();
   const todayKey = argentinaDateKey(now);
   const overbooked = await findOverbookedGroups(todayKey);
+
+  // Batch the per-group `Salon.findOne`/`SalonStockItem.findOne` this loop used to run twice
+  // per overbooked group.
+  const salonIds = uniqueIds(overbooked.map((group) => group.salonId));
+  const stockItemIds = uniqueIds(overbooked.map((group) => group.salonStockItemId));
+  const [salons, stockItems] = await Promise.all([
+    salonIds.length ? Salon.find({ _id: { $in: salonIds }, deletedAt: null }).select('managerUserId name').lean() : Promise.resolve([]),
+    stockItemIds.length ? SalonStockItem.find({ _id: { $in: stockItemIds }, deletedAt: null }).select('name currentQuantity').lean() : Promise.resolve([])
+  ]);
+  const salonById = new Map(salons.map((salon: any) => [String(salon._id), salon]));
+  const stockItemById = new Map(stockItems.map((item: any) => [String(item._id), item]));
+
   let synced = 0;
   for (const group of overbooked) {
-    const [salon, item] = await Promise.all([
-      Salon.findOne({ _id: group.salonId, deletedAt: null }).select('managerUserId name').lean(),
-      SalonStockItem.findOne({ _id: group.salonStockItemId, deletedAt: null }).select('name currentQuantity').lean()
-    ]);
-    const itemName = (item as any)?.name ?? 'un ítem de stock';
+    const salon: any = salonById.get(group.salonId);
+    const item: any = stockItemById.get(group.salonStockItemId);
+    const itemName = item?.name ?? 'un ítem de stock';
     const automationKey = `tableware_overbooking:${group.salonId}:${group.eventDay}:${group.salonStockItemId}`;
     await CalendarItem.findOneAndUpdate(
       { automationKey },
@@ -82,6 +100,16 @@ async function syncTablewareOverbookingAlerts(now: Date): Promise<number> {
       { upsert: true, setDefaultsOnInsert: true }
     );
     synced += 1;
+  }
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({
+      event: 'tableware_overbooking_tick_timing',
+      elapsedMs,
+      candidateCount: overbooked.length,
+      salonCount: salonIds.length,
+      synced
+    }));
   }
   return synced;
 }

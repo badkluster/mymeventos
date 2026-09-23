@@ -18,19 +18,33 @@ function argentinaParts(now: Date): { year: number; month: number; day: number }
  * per day, containing exactly the customers whose birthday is today.
  */
 export async function processBirthdayCampaignTick(now = new Date()): Promise<{ matched: number; campaignCreated: boolean; hasMore: boolean }> {
+  const startedAt = Date.now();
   const { year, month, day } = argentinaParts(now);
-  const candidates: any[] = await Customer.find({
+  // The month/day match used to happen in Node (`getUTCMonth`/`getUTCDate` over every customer
+  // who hasn't gotten this year's greeting yet — on most days of the year, that's nearly the
+  // whole customer base with a birthDate, since only today's actual match gets excluded).
+  // `$expr` pushes the identical comparison ($month/$dayOfMonth on a Date default to UTC, same
+  // as getUTCMonth/getUTCDate) into MongoDB, so only today's real matches (typically 0) ever
+  // cross into Node instead of the full not-yet-sent-this-year candidate set. No derived
+  // birthMonth/birthDay field added — not needed for this, and $expr can't use a standard index
+  // either way, so there was no index-based alternative to weigh against it.
+  const todays: any[] = await Customer.find({
     deletedAt: null,
     birthDate: { $ne: null },
     email: { $nin: [null, ''] },
-    $or: [{ birthdayGreetingSentYear: { $ne: year } }, { birthdayGreetingSentYear: { $exists: false } }]
+    $or: [{ birthdayGreetingSentYear: { $ne: year } }, { birthdayGreetingSentYear: { $exists: false } }],
+    $expr: {
+      $and: [
+        { $eq: [{ $month: '$birthDate' }, month] },
+        { $eq: [{ $dayOfMonth: '$birthDate' }, day] }
+      ]
+    }
   }).select('_id email firstName lastName fullName birthDate').lean();
-
-  const todays = candidates.filter((customer) => {
-    const birth = new Date(customer.birthDate);
-    return birth.getUTCMonth() + 1 === month && birth.getUTCDate() === day;
-  });
-  if (!todays.length) return { matched: 0, campaignCreated: false, hasMore: false };
+  if (!todays.length) {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs >= 500) console.warn(JSON.stringify({ event: 'birthday_campaign_tick_timing', elapsedMs, matched: 0 }));
+    return { matched: 0, campaignCreated: false, hasMore: false };
+  }
 
   const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   const audience = await MarketingAudience.create({
@@ -71,5 +85,9 @@ export async function processBirthdayCampaignTick(now = new Date()): Promise<{ m
     { $set: { birthdayGreetingSentYear: year } }
   );
 
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({ event: 'birthday_campaign_tick_timing', elapsedMs, matched: todays.length, campaignCreated: true }));
+  }
   return { matched: todays.length, campaignCreated: true, hasMore: false };
 }

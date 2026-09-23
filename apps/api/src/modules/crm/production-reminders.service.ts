@@ -4,7 +4,7 @@ import { ProductionPlan } from '../production/production.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { dueDateKey } from '../../utils/argentina-date';
-import { idOf, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
+import { idOf, uniqueIds, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
 
 const EVENT_TERMINAL_STATUSES = ['cancelled', 'lost'];
 // Narrower than GET /production/candidates's 120-day browsing window (production.routes.ts) —
@@ -17,6 +17,7 @@ async function fallbackRecipients(): Promise<string[]> {
 }
 
 async function syncMissingProductionReminders(now: Date): Promise<number> {
+  const startedAt = Date.now();
   const until = new Date(now.getTime() + WINDOW_DAYS * 86_400_000);
   const plans: any[] = await ProductionPlan.find({ deletedAt: null, isCurrent: true }).select('eventId').lean();
   const events: any[] = await Event.find({
@@ -26,11 +27,16 @@ async function syncMissingProductionReminders(now: Date): Promise<number> {
     _id: { $nin: plans.map((plan: any) => plan.eventId) }
   }).select('_id eventName salonId eventDate').lean();
 
+  // Batch the per-event `Salon.findOne` this loop used to run once per candidate.
+  const salonIds = uniqueIds(events.map((event: any) => event.salonId));
+  const salons = salonIds.length
+    ? await Salon.find({ _id: { $in: salonIds }, deletedAt: null }).select('managerUserId').lean()
+    : [];
+  const managerUserIdBySalon = new Map(salons.map((salon: any) => [idOf(salon._id)!, idOf(salon.managerUserId)]));
+
   let synced = 0;
   for (const event of events) {
-    const salon: any = event.salonId
-      ? await Salon.findOne({ _id: event.salonId, deletedAt: null }).select('managerUserId').lean()
-      : undefined;
+    const managerUserId = event.salonId ? managerUserIdBySalon.get(idOf(event.salonId)!) : undefined;
     await CalendarItem.findOneAndUpdate(
       { automationKey: `production_missing:${event._id}` },
       {
@@ -46,7 +52,7 @@ async function syncMissingProductionReminders(now: Date): Promise<number> {
           visibility: 'private',
           eventId: event._id,
           salonId: event.salonId,
-          assignedToUserId: idOf(salon?.managerUserId),
+          assignedToUserId: managerUserId,
           metadata: { productionMissing: true }
         },
         $setOnInsert: {
@@ -56,6 +62,17 @@ async function syncMissingProductionReminders(now: Date): Promise<number> {
       { upsert: true, setDefaultsOnInsert: true }
     );
     synced += 1;
+  }
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({
+      event: 'production_missing_tick_timing',
+      elapsedMs,
+      candidateCount: events.length,
+      planCount: plans.length,
+      salonCount: salonIds.length,
+      synced
+    }));
   }
   return synced;
 }

@@ -3,7 +3,7 @@ import { CalendarItem } from './crm.models';
 import { WorkSession } from '../attendance/attendance.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
-import { idOf, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
+import { idOf, uniqueIds, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
 
 const OPEN_SESSION_HOURS = 8;
 
@@ -13,14 +13,21 @@ async function fallbackRecipients(): Promise<string[]> {
 }
 
 async function syncOpenSessionAlerts(now: Date): Promise<number> {
+  const startedTiming = Date.now();
   const cutoff = new Date(now.getTime() - OPEN_SESSION_HOURS * 3_600_000);
   const sessions: any[] = await WorkSession.find({ status: WorkSessionStatus.ACTIVE, startedAt: { $lte: cutoff } })
     .select('_id userId salonId startedAt').lean();
+
+  // Batch the per-session `Salon.findOne` this loop used to run once per candidate.
+  const salonIds = uniqueIds(sessions.map((session: any) => session.salonId));
+  const salons = salonIds.length
+    ? await Salon.find({ _id: { $in: salonIds }, deletedAt: null }).select('managerUserId').lean()
+    : [];
+  const managerUserIdBySalon = new Map(salons.map((salon: any) => [idOf(salon._id)!, idOf(salon.managerUserId)]));
+
   let synced = 0;
   for (const session of sessions) {
-    const salon: any = session.salonId
-      ? await Salon.findOne({ _id: session.salonId, deletedAt: null }).select('managerUserId').lean()
-      : undefined;
+    const managerUserId = session.salonId ? managerUserIdBySalon.get(idOf(session.salonId)!) : undefined;
     await CalendarItem.findOneAndUpdate(
       { automationKey: `open_session:${session._id}` },
       {
@@ -35,7 +42,7 @@ async function syncOpenSessionAlerts(now: Date): Promise<number> {
           priority: 'high',
           visibility: 'private',
           salonId: session.salonId,
-          assignedToUserId: idOf(salon?.managerUserId),
+          assignedToUserId: managerUserId,
           metadata: { openWorkSession: true, workSessionId: String(session._id) }
         },
         $setOnInsert: {
@@ -45,6 +52,16 @@ async function syncOpenSessionAlerts(now: Date): Promise<number> {
       { upsert: true, setDefaultsOnInsert: true }
     );
     synced += 1;
+  }
+  const elapsedMs = Date.now() - startedTiming;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({
+      event: 'open_work_session_tick_timing',
+      elapsedMs,
+      candidateCount: sessions.length,
+      salonCount: salonIds.length,
+      synced
+    }));
   }
   return synced;
 }

@@ -4,7 +4,7 @@ import { ProductionPlan } from '../production/production.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { dueDateKey } from '../../utils/argentina-date';
-import { idOf, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
+import { idOf, uniqueIds, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
 
 // Symmetric to production-reminders.service.ts (which nudges "no hay plan generado" before the
 // event). This one nudges the other end of the same gap: the event already happened and someone
@@ -27,16 +27,28 @@ async function findPendingClosePlans(now: Date, olderThanDays: number): Promise<
 }
 
 async function syncProductionPendingCloseReminders(now: Date): Promise<number> {
+  const startedAt = Date.now();
   let synced = 0;
+  // D+3 candidates are always a subset of D+1's (same status/isCurrent filter, just an earlier
+  // eventDate threshold) — fetch once at the loosest stage and derive the stricter one in memory,
+  // same pattern applied to closure-reminders.service.ts.
+  const loosestStage = Math.min(...REMINDER_STAGES);
+  const loosestPlans = await findPendingClosePlans(now, loosestStage);
+  const salonIds = uniqueIds(loosestPlans.map((plan: any) => plan.salonId));
+  const salons = salonIds.length
+    ? await Salon.find({ _id: { $in: salonIds }, deletedAt: null }).select('managerUserId').lean()
+    : [];
+  const managerUserIdBySalon = new Map(salons.map((salon: any) => [idOf(salon._id)!, idOf(salon.managerUserId)]));
   for (const olderThanDays of REMINDER_STAGES) {
-    const plans = await findPendingClosePlans(now, olderThanDays);
+    const threshold = new Date(now.getTime() - olderThanDays * 86_400_000);
+    const plans = olderThanDays === loosestStage
+      ? loosestPlans
+      : loosestPlans.filter((plan: any) => new Date(plan.eventDate).getTime() <= threshold.getTime());
     for (const plan of plans as any[]) {
       // Belt-and-suspenders: events.routes.ts now cancels the plan when the event is
       // cancelled/lost, but this guards plans left over from before that fix shipped.
       if (!plan.eventId || ['cancelled', 'lost'].includes(plan.eventId.status)) continue;
-      const salon: any = plan.salonId
-        ? await Salon.findOne({ _id: plan.salonId, deletedAt: null }).select('managerUserId').lean()
-        : undefined;
+      const managerUserId = plan.salonId ? managerUserIdBySalon.get(idOf(plan.salonId)!) : undefined;
       await CalendarItem.findOneAndUpdate(
         { automationKey: `production_pending_close:${plan._id}:d${olderThanDays}` },
         {
@@ -52,7 +64,7 @@ async function syncProductionPendingCloseReminders(now: Date): Promise<number> {
             visibility: 'private',
             eventId: plan.eventId._id,
             salonId: plan.salonId,
-            assignedToUserId: idOf(salon?.managerUserId),
+            assignedToUserId: managerUserId,
             metadata: { productionPendingClose: true, olderThanDays, productionPlanId: plan._id }
           },
           $setOnInsert: {
@@ -63,6 +75,16 @@ async function syncProductionPendingCloseReminders(now: Date): Promise<number> {
       );
       synced += 1;
     }
+  }
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({
+      event: 'production_pending_close_tick_timing',
+      elapsedMs,
+      candidateCount: loosestPlans.length,
+      salonCount: salonIds.length,
+      synced
+    }));
   }
   return synced;
 }

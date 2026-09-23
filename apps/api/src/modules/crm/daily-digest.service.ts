@@ -316,27 +316,50 @@ async function deliverDigestToUser(user: any, summary: DigestSummary, scopeLabel
 
 export async function processDailyDigestTick(now = new Date()): Promise<{ delivered: number; skipped: number; failed: number; hasMore: boolean }> {
   if (argentinaHour(now) < DIGEST_START_HOUR) return { delivered: 0, skipped: 0, failed: 0, hasMore: false };
+  // `dailyDigestLastSentDateKey` already gates delivery (the atomic claim in
+  // deliverDigestToUser), but it used to only be checked *after* rebuilding the full digest
+  // (Event/CalendarItem/EventClosure queries + populates) for every recipient, every tick, all
+  // day — the digest is sent once per user per day, typically on the first tick past 8am, so
+  // every later tick that day was doing that work only to discover the claim was already taken.
+  // Pre-filtering on the same field, before building anything, skips straight to "nothing to do"
+  // once everyone already got today's digest. Same final `skipped` count either way — a
+  // pre-filtered user was already being counted as `skipped` via the claim failing.
+  const todayKey = argentinaDateKey(now);
+  const startedAt = Date.now();
   let delivered = 0;
   let skipped = 0;
   let failed = 0;
+  let digestsBuilt = 0;
   try {
-    const globalSummary = await buildDailyDigest(now);
     const globalUsers = await User.find({ active: true, deletedAt: null, roles: { $in: [Role.ADMIN, Role.MANAGER] } })
-      .select('_id email notificationPreferences').lean();
-    for (const user of globalUsers) {
-      if (await deliverDigestToUser(user, globalSummary, 'Administración')) delivered += 1; else skipped += 1;
+      .select('_id email notificationPreferences dailyDigestLastSentDateKey').lean();
+    const pendingGlobalUsers = globalUsers.filter((user: any) => user.dailyDigestLastSentDateKey !== todayKey);
+    skipped += globalUsers.length - pendingGlobalUsers.length;
+    if (pendingGlobalUsers.length) {
+      const globalSummary = await buildDailyDigest(now);
+      digestsBuilt += 1;
+      for (const user of pendingGlobalUsers) {
+        if (await deliverDigestToUser(user, globalSummary, 'Administración')) delivered += 1; else skipped += 1;
+      }
     }
 
     const salonManagers = await User.find({ active: true, deletedAt: null, roles: Role.SALON_MANAGER, managedSalonIds: { $exists: true, $ne: [] } })
-      .select('_id email notificationPreferences managedSalonIds').lean();
-    for (const manager of salonManagers) {
+      .select('_id email notificationPreferences managedSalonIds dailyDigestLastSentDateKey').lean();
+    const pendingManagers = salonManagers.filter((manager: any) => manager.dailyDigestLastSentDateKey !== todayKey);
+    skipped += salonManagers.length - pendingManagers.length;
+    for (const manager of pendingManagers) {
       const salonIds = (manager.managedSalonIds ?? []).map((id: any) => String(id));
       const summary = await buildDailyDigest(now, salonIds);
+      digestsBuilt += 1;
       if (await deliverDigestToUser(manager, summary, 'tu salón')) delivered += 1; else skipped += 1;
     }
   } catch (error) {
     failed += 1;
     console.error('Daily digest tick failed:', error);
+  }
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 500) {
+    console.warn(JSON.stringify({ event: 'daily_digest_tick_timing', elapsedMs, digestsBuilt, delivered, skipped, failed }));
   }
   return { delivered, skipped, failed, hasMore: false };
 }
