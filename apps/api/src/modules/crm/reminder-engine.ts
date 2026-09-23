@@ -43,7 +43,53 @@ export type GenericReminderOptions = {
   resolveRecipients: (item: any) => Promise<GenericReminderRecipients> | GenericReminderRecipients;
   buildContent: (item: any) => GenericReminderContent;
   actionUrl?: (item: any) => string | undefined;
+  // Optional, deliberately count-only hook for a domain that needs to distinguish delivery
+  // failures in production without putting recipient data or provider error text in logs.
+  onFailure?: (reason: GenericReminderFailureReason) => void;
 };
+
+// These names map to real delivery steps below. They are intentionally generic so every domain
+// using the engine can opt in without exposing a CalendarItem, recipient, or provider response.
+export type GenericReminderFailureReason =
+  | 'still_applies_error'
+  | 'recipient_resolution_error'
+  | 'content_build_error'
+  | 'action_url_error'
+  | 'missing_external_recipient'
+  | 'no_active_internal_recipients'
+  | 'external_send_error'
+  | 'internal_notification_write_error'
+  | 'mark_sent_error'
+  | 'failure_state_write_error'
+  | 'unknown';
+
+class GenericReminderDeliveryError extends Error {
+  constructor(
+    readonly reason: GenericReminderFailureReason,
+    readonly underlyingError: unknown
+  ) {
+    super(`Generic reminder delivery failed during ${reason}.`);
+    this.name = 'GenericReminderDeliveryError';
+  }
+}
+
+async function deliveryStep<T>(reason: GenericReminderFailureReason, operation: () => Promise<T> | T): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    // Keep the first, most-specific stage if a wrapped operation is ever composed.
+    if (error instanceof GenericReminderDeliveryError) throw error;
+    throw new GenericReminderDeliveryError(reason, error);
+  }
+}
+
+function failureReason(error: unknown): GenericReminderFailureReason {
+  return error instanceof GenericReminderDeliveryError ? error.reason : 'unknown';
+}
+
+function underlyingFailure(error: unknown): unknown {
+  return error instanceof GenericReminderDeliveryError ? error.underlyingError : error;
+}
 
 function canReceiveSystemReminder(user: any): boolean {
   const preferences = user.notificationPreferences ?? {};
@@ -97,7 +143,7 @@ export async function markGenericReminderFailure(item: any, error: unknown, now:
 }
 
 export async function deliverGenericReminder(item: any, now: Date, options: GenericReminderOptions): Promise<'delivered' | 'skipped'> {
-  if (!(await options.stillApplies(item))) {
+  if (!(await deliveryStep('still_applies_error', () => options.stillApplies(item)))) {
     await CalendarItem.updateOne({ _id: item._id, 'notification.status': 'processing' }, {
       $set: { status: 'cancelled', 'notification.status': 'cancelled' },
       $unset: { 'notification.lockedAt': 1, 'notification.lockExpiresAt': 1, 'notification.nextRetryAt': 1 }
@@ -105,43 +151,49 @@ export async function deliverGenericReminder(item: any, now: Date, options: Gene
     return 'skipped';
   }
 
-  const recipients = await options.resolveRecipients(item);
-  const content = options.buildContent(item);
+  const recipients = await deliveryStep('recipient_resolution_error', () => options.resolveRecipients(item));
+  const content = await deliveryStep('content_build_error', () => options.buildContent(item));
   const automationKey = String(item.automationKey ?? item._id);
-  const actionUrl = options.actionUrl?.(item);
+  const actionUrl = await deliveryStep('action_url_error', () => options.actionUrl?.(item));
 
   if (recipients.kind === 'external') {
     if (!recipients.to) {
-      await markGenericReminderFailure(item, new Error('No hay un email de destino para este recordatorio.'), now);
-      throw new Error('No hay un email de destino para este recordatorio.');
+      const error = new Error('No hay un email de destino para este recordatorio.');
+      // Preserve the existing immediate state transition, including the outer catch's second
+      // idempotent mark below; only the error wrapper adds an observable category.
+      await deliveryStep('failure_state_write_error', () => markGenericReminderFailure(item, error, now));
+      throw new GenericReminderDeliveryError('missing_external_recipient', error);
     }
-    await sendEmail({ to: recipients.to, subject: content.subject, text: content.text, html: content.html, attachments: content.attachments });
+    await deliveryStep('external_send_error', () => sendEmail({ to: recipients.to, subject: content.subject, text: content.text, html: content.html, attachments: content.attachments }));
   } else {
-    const activeRecipients = await activeUsersById(recipients.userIds);
+    const activeRecipients = await deliveryStep('recipient_resolution_error', () => activeUsersById(recipients.userIds));
     if (!activeRecipients.length) {
-      const message = 'No hay responsables activos para recibir el recordatorio.';
-      await markGenericReminderFailure(item, new Error(message), now);
-      throw new Error(message);
+      const error = new Error('No hay responsables activos para recibir el recordatorio.');
+      await deliveryStep('failure_state_write_error', () => markGenericReminderFailure(item, error, now));
+      throw new GenericReminderDeliveryError('no_active_internal_recipients', error);
     }
     const systemRecipients = activeRecipients.filter(canReceiveSystemReminder);
     if (systemRecipients.length) {
-      await Notification.bulkWrite(systemRecipients.map((user: any) => ({
-        updateOne: {
-          filter: { userId: user._id, automationKey },
-          update: {
-            $setOnInsert: {
-              userId: user._id,
-              automationKey,
-              type: options.notificationType,
-              title: content.subject,
-              message: content.text,
-              actionUrl,
-              metadata: { ...(item.metadata ?? {}), calendarItemId: item._id }
-            }
-          },
-          upsert: true
-        }
-      })));
+      await deliveryStep(
+        'internal_notification_write_error',
+        () => Notification.bulkWrite(systemRecipients.map((user: any) => ({
+          updateOne: {
+            filter: { userId: user._id, automationKey },
+            update: {
+              $setOnInsert: {
+                userId: user._id,
+                automationKey,
+                type: options.notificationType,
+                title: content.subject,
+                message: content.text,
+                actionUrl,
+                metadata: { ...(item.metadata ?? {}), calendarItemId: item._id }
+              }
+            },
+            upsert: true
+          }
+        })))
+      );
     }
     await Promise.allSettled(activeRecipients.filter(canReceiveEmailReminder).map((user: any) => sendEmail({
       to: user.email,
@@ -152,10 +204,10 @@ export async function deliverGenericReminder(item: any, now: Date, options: Gene
     })));
   }
 
-  await CalendarItem.updateOne({ _id: item._id, 'notification.status': 'processing' }, {
+  await deliveryStep('mark_sent_error', () => CalendarItem.updateOne({ _id: item._id, 'notification.status': 'processing' }, {
     $set: { 'notification.status': 'sent', 'notification.lastSentAt': now },
     $unset: { 'notification.lockedAt': 1, 'notification.lockExpiresAt': 1, 'notification.nextRetryAt': 1, 'notification.lastError': 1 }
-  });
+  }));
   return 'delivered';
 }
 
@@ -185,7 +237,8 @@ export async function runGenericReminderTick(
       else skipped += 1;
     } catch (error) {
       failed += 1;
-      await markGenericReminderFailure(item, error, now);
+      options.onFailure?.(failureReason(error));
+      await markGenericReminderFailure(item, underlyingFailure(error), now);
     }
   }
   return { synced, delivered, skipped, failed, hasMore: processed >= maxPerTick };

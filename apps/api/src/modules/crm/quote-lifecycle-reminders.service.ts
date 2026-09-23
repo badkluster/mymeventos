@@ -1,7 +1,7 @@
 import { CalendarItem, Customer, Lead, Quote } from './crm.models';
 import { renderBrandedEmail } from '../email/email-template.util';
 import { addDaysToDateKey, argentinaDateKey, argentinaMidnight, dueDateKey } from '../../utils/argentina-date';
-import { idOf, runGenericReminderTick, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
+import { idOf, runGenericReminderTick, type GenericReminderFailureReason, type GenericReminderOptions, type GenericReminderRecipients, type GenericTickResult } from './reminder-engine';
 
 const CLIENT_NOTICE_DAYS_BEFORE = 3;
 const INTERNAL_FOLLOW_UP_AFTER_DAYS = 5;
@@ -166,13 +166,38 @@ const options: GenericReminderOptions = {
 };
 
 export async function processQuoteLifecycleTick(now = new Date()): Promise<GenericTickResult> {
-  // Conditional timing for the Fluid Active CPU audit, Phase 2 (2026-09-23). No PII (counts
-  // only) — helps confirm whether the ~2000ms spike tracks `delivered` (real SMTP send time)
-  // rather than wasted sync work, since the sync side has no N+1-per-rule-stage or unindexed
-  // metadata-scan pattern like financial-reminders.service.ts had.
+  // All telemetry below is count-only. In particular, no CalendarItem id, quote id, recipient,
+  // address, or provider error text reaches runtime logs.
   const startedAt = Date.now();
-  const result = await runGenericReminderTick(now, syncQuoteLifecycleReminders, options);
+  const failureReasons: Record<GenericReminderFailureReason, number> = {
+    still_applies_error: 0,
+    recipient_resolution_error: 0,
+    content_build_error: 0,
+    action_url_error: 0,
+    missing_external_recipient: 0,
+    no_active_internal_recipients: 0,
+    external_send_error: 0,
+    internal_notification_write_error: 0,
+    mark_sent_error: 0,
+    failure_state_write_error: 0,
+    unknown: 0
+  };
+  const result = await runGenericReminderTick(
+    now,
+    syncQuoteLifecycleReminders,
+    {
+      ...options,
+      onFailure: (reason) => { failureReasons[reason] += 1; }
+    }
+  );
   const elapsedMs = Date.now() - startedAt;
+  if (result.failed) {
+    console.warn(JSON.stringify({
+      event: 'quote_lifecycle_failure_summary',
+      failed: result.failed,
+      failureReasons
+    }));
+  }
   if (elapsedMs >= 500) {
     console.warn(JSON.stringify({ event: 'quote_lifecycle_tick_timing', elapsedMs, ...result }));
   }
