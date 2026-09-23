@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'crypto';
-import { Router, type Request } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { env } from '../../config/env';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendError, sendSuccess } from '../../utils/api';
@@ -31,10 +31,34 @@ async function processTicks(input: unknown) {
   return results;
 }
 
+async function processRequest(input: unknown, response: Response) {
+  const startedAt = Date.now();
+  const ticks = await processTicks(input);
+  const elapsedMs = Date.now() - startedAt;
+  const expiredReservations = ticks.reduce((total, tick) => total + tick.expiredReservations, 0);
+  const lifecycleRetried = ticks.reduce((total, tick) => total + tick.lifecycleRetried, 0);
+  const ticketEmailsRetried = ticks.reduce((total, tick) => total + tick.ticketEmailsRetried, 0);
+  const remindersQueued = ticks.reduce((total, tick) => total + tick.remindersQueued, 0);
+  if (elapsedMs >= 750 || expiredReservations || lifecycleRetried || ticketEmailsRetried || remindersQueued) {
+    console.warn(JSON.stringify({
+      event: 'ticket_automation_timing',
+      route: '/api/tickets/process',
+      elapsedMs,
+      requestedMaxTicks: Math.min(5, Math.max(1, Number(input) || 1)),
+      processedTicks: ticks.length,
+      expiredReservations,
+      lifecycleRetried,
+      ticketEmailsRetried,
+      remindersQueued,
+    }));
+  }
+  return sendSuccess(response, { ticks });
+}
+
 for (const method of ['get', 'post'] as const) {
   router[method]('/process', asyncHandler(async (request, response) => {
     if (!authorized(request)) return sendError(response, 403, 'TICKET_AUTOMATION_CRON_FORBIDDEN', 'No autorizado.');
-    return sendSuccess(response, { ticks: await processTicks(method === 'get' ? request.query.maxTicks : request.body?.maxTicks) });
+    return processRequest(method === 'get' ? request.query.maxTicks : request.body?.maxTicks, response);
   }));
 }
 

@@ -804,7 +804,17 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
   const gallery: LandingItem[] = landing.gallery.length ? landing.gallery.map((item) => ({ ...item, imageUrl: item.imageUrl ? cloudinaryImageUrl(item.imageUrl) : item.imageUrl })) : fallbackGallery.map((imageUrl, index) => ({ title: `Momento M&M ${index + 1}`, imageUrl, category: 'Momentos' }));
   const manualTestimonials = landing.testimonials.length ? landing.testimonials : [{ quote: 'El mejor salón, todo salió perfecto.', customerName: 'Valentina S.', eventType: '15 años', rating: 5 }, { quote: 'Increíble la calidad del servicio y la ambientación.', customerName: 'María & Juan', eventType: 'Casamiento', rating: 5 }, { quote: 'Profesionales, atentos y súper organizados.', customerName: 'Luciano R.', eventType: 'Empresarial', rating: 5 }];
   const googleReviews = landing.googleReviews;
-  const packages = useMemo(() => landing.packages.length ? landing.packages : salons.flatMap((salon) => (salon.packages ?? []).map((item) => ({ ...item, salonName: titleForSalon(salon) }))), [landing.packages, salons]);
+  // The public API keeps packages nested in their salon. Accept the former flat field
+  // as a fallback for an already-cached response, but do not require the duplicated
+  // payload on new requests.
+  const packages = useMemo(() => {
+    const packagesFromSalons = salons.flatMap((salon) => (salon.packages ?? []).map((item) => ({
+      ...item,
+      salonId: item.salonId ?? salon._id,
+      salonName: item.salonName ?? titleForSalon(salon),
+    })));
+    return packagesFromSalons.length ? packagesFromSalons : landing.packages;
+  }, [landing.packages, salons]);
   const displaySalons = useMemo(() => salons.length ? salons : [...new Map(packages.map((item, index) => [String(item.salonName || `M&M Eventos ${index + 1}`), { _id: String(item.salonId || item._id || index), name: String(item.salonName || 'M&M Eventos'), publicTitle: String(item.salonName || 'M&M Eventos'), publicShortDescription: 'Un espacio M&M preparado para celebrar con servicio integral.', locationText: 'La Plata', minCapacity: 60, maxCapacity: 250, heroImageUrl: fallbackGallery[index % fallbackGallery.length] } as Salon])).values()], [salons, packages]);
   const selectedPackageSalon = useMemo(() => displaySalons.find((salon) => salon._id === selectedPackageSalonId) ?? displaySalons[0], [displaySalons, selectedPackageSalonId]);
   const selectedPackageCards = useMemo(() => {

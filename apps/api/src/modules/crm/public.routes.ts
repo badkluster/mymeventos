@@ -134,6 +134,7 @@ router.get('/branding', asyncHandler(async (_request, response) => {
 }));
 
 router.get('/landing', asyncHandler(async (_request, response) => {
+  const startedAt = Date.now();
   const [settings, salons, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes, storySteps] = await Promise.all([
     LandingSettings.findOne({ key: 'default', active: true, deletedAt: null }).lean(),
     publicSalons(),
@@ -145,9 +146,22 @@ router.get('/landing', asyncHandler(async (_request, response) => {
     LandingEventType.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
     LandingStoryStep.find({ active: true, deletedAt: null }).sort({ displayOrder: 1, createdAt: -1 }).limit(12).lean(),
   ]);
-  const packages = salons.flatMap((salon: any) => (salon.packages ?? []).map((item: any) => ({ ...item, salonId: salon._id, salonName: salon.publicTitle || salon.name })));
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 750) {
+    console.warn(JSON.stringify({
+      event: 'public_landing_slow_query',
+      route: '/api/public/landing',
+      elapsedMs,
+      salons: salons.length,
+      embeddedPackages: salons.reduce((total: number, salon: any) => total + (salon.packages?.length ?? 0), 0),
+      promotions: promotions.length,
+      gallery: gallery.length,
+    }));
+  }
   response.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-  return sendSuccess(response, { settings, salons, packages, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes, storySteps });
+  // Packages are already nested in each salon. Returning a second flattened copy made
+  // this public response materially larger without adding any information.
+  return sendSuccess(response, { settings, salons, promotions, gallery, testimonials, faqs, serviceBlocks, eventTypes, storySteps });
 }));
 
 router.get('/salons', asyncHandler(async (_request, response) => {

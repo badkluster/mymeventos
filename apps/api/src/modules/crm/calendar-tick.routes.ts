@@ -44,16 +44,31 @@ const domainTicks: Array<{ key: string; run: (now?: Date) => Promise<{ hasMore: 
 ];
 
 async function runRound(): Promise<{ round: Record<string, unknown>; hasMore: boolean }> {
+  const startedAt = Date.now();
   const round: Record<string, unknown> = {};
+  const domainTimings: Array<{ key: string; elapsedMs: number }> = [];
   let hasMore = false;
   for (const domain of domainTicks) {
+    const domainStartedAt = Date.now();
     try {
       const result = await domain.run();
       round[domain.key] = result;
       if (result.hasMore) hasMore = true;
     } catch (error) {
       round[domain.key] = { error: error instanceof Error ? error.message : 'Unknown error' };
+    } finally {
+      domainTimings.push({ key: domain.key, elapsedMs: Date.now() - domainStartedAt });
     }
+  }
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= 750) {
+    console.warn(JSON.stringify({
+      event: 'calendar_tick_slow_round',
+      route: '/api/internal/calendar-tick',
+      elapsedMs,
+      hasMore,
+      slowDomains: domainTimings.filter((item) => item.elapsedMs >= 250),
+    }));
   }
   return { round, hasMore };
 }

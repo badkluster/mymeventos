@@ -39,16 +39,37 @@ async function runProcessTicks(maxTicksInput: unknown) {
   return ticks;
 }
 
+function logMarketingProcess(input: unknown, ticks: Awaited<ReturnType<typeof runProcessTicks>>, elapsedMs: number): void {
+  const processed = ticks.filter((tick) => tick.processedCampaignId);
+  const sent = ticks.reduce((total, tick) => total + tick.sent, 0);
+  const failed = ticks.reduce((total, tick) => total + tick.failed, 0);
+  if (elapsedMs < 750 && processed.length === 0) return;
+  console.warn(JSON.stringify({
+    event: 'marketing_process_timing',
+    route: '/api/marketing/process',
+    elapsedMs,
+    requestedMaxTicks: Math.min(20, Math.max(1, Number(input) || 5)),
+    processedTicks: processed.length,
+    sent,
+    failed,
+  }));
+}
+
+async function processRequest(input: unknown, response: Parameters<typeof sendSuccess>[0]) {
+  const startedAt = Date.now();
+  const ticks = await runProcessTicks(input);
+  logMarketingProcess(input, ticks, Date.now() - startedAt);
+  return sendSuccess(response, { ticks });
+}
+
 router.get('/process', asyncHandler(async (request, response) => {
   if (!isAuthorizedCronCall(request)) return sendError(response, 403, 'MARKETING_CRON_FORBIDDEN', 'No autorizado.');
-  const ticks = await runProcessTicks(request.query.maxTicks);
-  return sendSuccess(response, { ticks });
+  return processRequest(request.query.maxTicks, response);
 }));
 
 router.post('/process', asyncHandler(async (request, response) => {
   if (!isAuthorizedCronCall(request)) return sendError(response, 403, 'MARKETING_CRON_FORBIDDEN', 'No autorizado.');
-  const ticks = await runProcessTicks(request.body?.maxTicks);
-  return sendSuccess(response, { ticks });
+  return processRequest(request.body?.maxTicks, response);
 }));
 
 router.post('/webhooks/:provider', asyncHandler(async (request, response) => {
