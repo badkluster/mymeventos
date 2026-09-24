@@ -6,16 +6,21 @@ type InitialResourcePlanInput = {
 export function buildInitialResourcePlan(input: InitialResourcePlanInput = {}): Record<string, unknown> {
   return {
     timelineItems: [
-      { id: 'setup', time: '', title: 'Armado del salon', area: 'Salon', owner: 'Coordinacion', status: 'pending', notes: '' },
-      { id: 'supplier-arrival', time: '', title: 'Recepcion de proveedores', area: 'Logistica', owner: 'Coordinacion', status: 'pending', notes: '' },
-      { id: 'guest-reception', time: '', title: 'Recepcion de invitados', area: 'Recepcion', owner: 'Staff', status: 'pending', notes: '' },
-      { id: 'reception-service', time: '', title: 'Servicio de recepcion', area: 'Catering', owner: 'Cocina', status: 'pending', notes: '' },
-      { id: 'honoree-entry', time: '', title: 'Ingreso principal / homenajeado', area: 'Salon', owner: 'Coordinacion', status: 'pending', notes: '' },
-      { id: 'main-menu', time: '', title: 'Servicio de menu principal', area: 'Catering', owner: 'Cocina', status: 'pending', notes: '' },
-      { id: 'toast-cake', time: '', title: 'Brindis, torta o momento especial', area: 'Salon', owner: 'Coordinacion', status: 'pending', notes: '' },
-      { id: 'sweet-table', time: '', title: 'Mesa dulce / postre', area: 'Catering', owner: 'Cocina', status: 'pending', notes: '' },
-      { id: 'party', time: '', title: 'Baile, DJ y animacion', area: 'Pista', owner: 'DJ', status: 'pending', notes: '' },
-      { id: 'closing', time: '', title: 'Cierre, desmontaje y devolucion', area: 'Logistica', owner: 'Coordinacion', status: 'pending', notes: '' }
+      { id: 'guest-reception-meal', time: '', title: 'Recepción de invitados y comida', area: 'Recepción', owner: 'Staff', status: 'pending', notes: '' },
+      { id: 'honoree-entry', time: '', title: 'Entrada de la cumpleañera', area: 'Salón', owner: 'Coordinación', status: 'pending', notes: '' },
+      { id: 'living-photos-meal', time: '', title: 'Fotos en living / entrada de comida a mesa', area: 'Salón', owner: 'Coordinación', status: 'pending', notes: '' },
+      { id: 'dance-1', time: '', title: 'Tanda de baile', area: 'Pista', owner: 'DJ', status: 'pending', notes: '' },
+      { id: 'main-menu', time: '', title: 'Plato principal', area: 'Catering', owner: 'Cocina', status: 'pending', notes: '' },
+      { id: 'vals-dance', time: '', title: 'Vals / tanda de baile', area: 'Pista', owner: 'DJ', status: 'pending', notes: '' },
+      { id: 'dessert', time: '', title: 'Postre', area: 'Catering', owner: 'Cocina', status: 'pending', notes: '' },
+      { id: 'dance-2', time: '', title: 'Tanda de baile', area: 'Pista', owner: 'DJ', status: 'pending', notes: '' },
+      { id: 'cake-toast', time: '', title: 'Ceremonia de torta / brindis', area: 'Salón', owner: 'Coordinación', status: 'pending', notes: '' },
+      { id: 'dance-3', time: '', title: 'Tanda de baile', area: 'Pista', owner: 'DJ', status: 'pending', notes: '' },
+      { id: 'sweet-table', time: '', title: 'Mesa dulce', area: 'Catering', owner: 'Cocina', status: 'pending', notes: '' },
+      { id: 'dance-4', time: '', title: 'Tanda de baile', area: 'Pista', owner: 'DJ', status: 'pending', notes: '' },
+      { id: 'party-end', time: '', title: 'Fin de fiesta', area: 'Salón', owner: 'Coordinación', status: 'pending', notes: '' },
+      { id: 'carnival', time: '', title: 'Carnaval carioca', area: 'Pista', owner: 'DJ', status: 'pending', notes: '' },
+      { id: 'event-end', time: '', title: 'Fin del evento', area: 'Logística', owner: 'Coordinación', status: 'pending', notes: '' }
     ],
     staffNotes: [
       { id: 'protocol', title: 'Protocolo y momentos especiales', notes: 'El/la maître confirma cada momento con el cliente, DJ, foto y coordinación antes de avanzar.' },
