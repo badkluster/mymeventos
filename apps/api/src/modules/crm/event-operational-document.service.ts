@@ -390,8 +390,9 @@ function timeline(document: PDFKit.PDFDocument, event: any, type: OperationalDoc
   }
   const staffNotes = generalStaffNotes(event);
   if (!staffNotes.length) return;
-  // Las notas aprovechan el espacio libre tras Momentos. Si una tarjeta no entra,
-  // `ensure()` la mueve completa a la hoja siguiente sin forzar un salto prematuro.
+  // En el cronograma integral, las notas son una hoja operativa independiente para
+  // poder imprimirlas y distribuirlas por separado del detalle horario.
+  if (type === 'full') newPage(document, event, type);
   section(document, event, type, 'Notas para staff', 'Indicaciones clave para el equipo');
   staffNotes.forEach((item) => staffNoteCard(document, event, type, item.reference, item.meta || undefined, item.note));
 }
@@ -997,8 +998,8 @@ function staffRoster(document: PDFKit.PDFDocument, event: any, type: Operational
 
 /**
  * Vajilla y mantelería son registros distintos porque sus controles y responsables de
- * devolución no necesariamente coinciden. Las áreas aprovechan la hoja actual y sólo
- * continúan en otra cuando el siguiente bloque no entra completo.
+ * devolución no necesariamente coinciden. Cada área comienza una hoja nueva para
+ * facilitar su impresión y distribución operativa por separado.
  */
 function fullReport(document: PDFKit.PDFDocument, event: any): void {
   eventDetails(document, event, 'full', null);
@@ -1023,8 +1024,9 @@ function fullReport(document: PDFKit.PDFDocument, event: any): void {
     return;
   }
   visible.forEach((area) => {
-    // Cada renderer comprueba su alto antes de dibujar. De ese modo la hoja se usa
-    // hasta donde corresponde, sin saltos prematuros entre secciones.
+    // La portada conserva los datos generales. Cada bloque operativo se inicia en
+    // una página propia para que pueda imprimirse la cantidad de veces necesaria.
+    newPage(document, event, 'full');
     section(document, event, 'full', area.title, area.hint);
     area.render();
   });
@@ -1051,13 +1053,14 @@ function escapeHtml(value: unknown): string {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function timelineWordHtml(event: any): string {
+function timelineWordHtml(event: any, separateStaffNotes = false): string {
   const items = timelineItemRows(event);
   const table = items.length
     ? `<table><thead><tr><th>Hora</th><th>Momento</th><th>Notas</th></tr></thead><tbody>${items.map((item: any) => `<tr><td>${escapeHtml(text(item.time, '—'))}</td><td><b>${escapeHtml(text(item.title))}</b></td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`
     : '<p class="empty">Todavía no hay momentos cargados en el cronograma.</p>';
   const staffNotes = generalStaffNotes(event);
-  const staffNotesHtml = staffNotes.length ? `<h2>Notas para staff</h2><p class="staff-hint">Indicaciones clave para el equipo durante el evento.</p>${staffNotes.map((item) => `<section class="note"><h3>${escapeHtml(item.reference)}</h3><small>${escapeHtml(item.meta)}</small><p>${escapeHtml(item.note).replace(/\n/g, '<br>')}</p></section>`).join('')}` : '';
+  const staffNotesContent = staffNotes.length ? `<h2>Notas para staff</h2><p class="staff-hint">Indicaciones clave para el equipo durante el evento.</p>${staffNotes.map((item) => `<section class="note"><h3>${escapeHtml(item.reference)}</h3><small>${escapeHtml(item.meta)}</small><p>${escapeHtml(item.note).replace(/\n/g, '<br>')}</p></section>`).join('')}` : '';
+  const staffNotesHtml = staffNotesContent && separateStaffNotes ? `<section class="staff-notes">${staffNotesContent}</section>` : staffNotesContent;
   return `${table}${staffNotesHtml}`;
 }
 
@@ -1144,15 +1147,15 @@ function guestEntryControlWordHtml(event: any): string {
   return `<section class="control-legend">${legend}<div><b>Control</b><span>Números visibles en cada fila</span></div></section>${entries.map((entry: any) => { const rows = Array.from({ length: guestControlSlots(entry) }, (_, index) => { const guest = entry.guests[index]; const detail = guest ? guestControlDetail(guest) : ''; return `<tr><td class="number">${index + 1}</td><td class="guest-name">${guest ? `<b>${escapeHtml(guest.fullName)}</b>` : '................................................................................................'}</td><td class="guest-detail">${escapeHtml(detail)}</td></tr>`; }).join(''); const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience}` : ''} · ${entry.guests.length} lugar${entry.guests.length === 1 ? '' : 'es'}`; return `<section class="mesa-sheet"><h3>${escapeHtml(heading)}</h3>${entry.notes ? `<small>${escapeHtml(entry.notes)}</small>` : ''}<table class="mesa-list"><tbody>${rows}</tbody></table></section>`; }).join('')}`;
 }
 
-/** Espejo en HTML de `fullReport()`: mismo orden de áreas y mismo criterio de
- * contenido. Las secciones fluyen para aprovechar la hoja actual también en Word. */
+/** Espejo en HTML de `fullReport()`: mismo orden de áreas y saltos de página
+ * operativos, para que cada bloque pueda imprimirse independientemente en Word. */
 function fullReportWordHtml(event: any): string {
   const { tables, guests } = guestListData(event);
   const tableware = tablewareControlRows(event);
   const linen = linenRows(event);
   const inventory = supportingInventoryRows(event);
   const areas: Array<{ title: string; hasContent: boolean; html: () => string }> = [
-    { title: '1. Momentos del evento', hasContent: timelineHasContent(event), html: () => timelineWordHtml(event) },
+    { title: '1. Momentos del evento', hasContent: timelineHasContent(event), html: () => timelineWordHtml(event, true) },
     { title: '2. Invitados y mesas', hasContent: tables.length > 0 || guests.length > 0, html: () => guestListWordHtml(event, false) },
     { title: '3. Logística y coordinación', hasContent: logisticsActiveSections(event).length > 0, html: () => logisticsWordHtml(event) },
     { title: '4. Inventario de vajilla', hasContent: tableware.length > 0, html: () => tablewareControlWordHtml(event) },
@@ -1186,6 +1189,6 @@ export function generateOperationalWord(event: any, type: OperationalDocumentTyp
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Control de mesas</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#1f1f1f;font-size:10pt}.guest-header{text-align:center;border-bottom:2px solid #b8965a;padding:4px 0 13px;margin-bottom:15px}.guest-header .brand{color:#a68244;font-size:8pt;font-weight:bold;letter-spacing:1px}.guest-header h1{font-size:18pt;letter-spacing:.6px;margin:7px 0 5px}.guest-header p{color:#7a7368;margin:0;font-size:9.5pt}.control-legend{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #d8ccaf;margin:0 0 13px}.control-legend div{padding:8px 10px;border-right:1px solid #d8ccaf;min-height:31px}.control-legend div:last-child{border-right:0}.control-legend b{display:block;font-size:8pt;color:#1f1f1f}.control-legend span{display:block;color:#7a7368;font-size:7.5pt;margin-top:3px}.mesa-sheet{border:1px solid #d8ccaf;margin:0 0 10px;break-inside:avoid}.mesa-sheet h3{background:#fbf8f1;margin:0;padding:7px 10px;border-bottom:1px solid #d8ccaf;font-size:9.5pt}.mesa-sheet small{display:block;padding:5px 10px 0;color:#7a7368}.mesa-list{border-collapse:collapse;width:100%;font-size:9pt}.mesa-list td{padding:5px 8px;border-bottom:1px solid #eee8dc;vertical-align:top}.mesa-list tr:last-child td{border-bottom:0}.mesa-list .number{width:28px;text-align:right;color:#7a7368;font-weight:bold}.mesa-list .guest-name{width:57%}.mesa-list .guest-detail{color:#7a7368;font-size:8pt}.empty{color:#7a7368;background:#fbf8f1;padding:14px}</style></head><body><header class="guest-header"><div class="brand">M&M EVENTOS</div><h1>CONTROL DE MESAS</h1><p>${escapeHtml(subtitle)}</p></header>${content}</body></html>`;
     return { buffer: Buffer.from(html, 'utf8'), fileName: `${fileStem(event, type)}.doc` };
   }
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(documentTitle(type))}</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#101827;font-size:10pt}.header{background:#101827;color:white;padding:18px 22px;margin:-18mm -18mm 18px}.brand{color:#ddc99f;letter-spacing:1px;font-size:9pt}.header h1{margin:6px 0 0;font-size:20pt}.subtitle{color:#dfe3e8;margin-top:5px}.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f4f6f8;padding:14px 16px;border-radius:8px}.detail b{display:block;color:#667085;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}.detail span{display:block;margin-top:3px}h2{font-size:12pt;margin:22px 0 8px;border-bottom:2px solid #b8965a;padding-bottom:6px}.area{margin-top:18px;break-inside:auto;page-break-inside:auto}.area:first-of-type{margin-top:0}.area-title{font-size:14pt;margin-top:22px}table{border-collapse:collapse;width:100%;font-size:8.5pt}th{background:#101827;color:white;text-align:left;padding:8px}td{vertical-align:top;padding:8px;border-bottom:1px solid #dfe3e8}tr:nth-child(even){background:#fbf8f1}.note{background:#f4f6f8;border-left:4px solid #b8965a;padding:10px 14px;margin:10px 0}.note h2,.note h3{margin:0 0 7px;border:0;padding:0;font-size:10.5pt}.note small{display:block;color:#667085;margin:-3px 0 7px}.note p{margin:0;line-height:1.45}.guest-items{margin:7px 0 0;padding-left:18px}.guest-items li{margin:3px 0}.guest-items span{color:#667085}.entry-table{break-inside:avoid}.entry-control{margin-top:8px}.entry-control .number{width:26px;font-weight:bold;text-align:center}.entry-control .check{width:46px;font-weight:bold;white-space:nowrap}.staff-hint{color:#667085;margin:-2px 0 10px}.empty{color:#667085;background:#fbf8f1;padding:14px}</style></head><body><header class="header"><div class="brand">M&M EVENTOS · DOCUMENTO OPERATIVO</div><h1>${escapeHtml(documentTitle(type))}</h1><div class="subtitle">${escapeHtml(text(event.eventName || event.eventType, 'Evento'))}</div></header><div class="details">${detailsHtml}</div>${type === 'full' ? '' : `<h2>${escapeHtml(documentTitle(type))}</h2>`}${content}</body></html>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(documentTitle(type))}</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#101827;font-size:10pt}.header{background:#101827;color:white;padding:18px 22px;margin:-18mm -18mm 18px}.brand{color:#ddc99f;letter-spacing:1px;font-size:9pt}.header h1{margin:6px 0 0;font-size:20pt}.subtitle{color:#dfe3e8;margin-top:5px}.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f4f6f8;padding:14px 16px;border-radius:8px}.detail b{display:block;color:#667085;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}.detail span{display:block;margin-top:3px}h2{font-size:12pt;margin:22px 0 8px;border-bottom:2px solid #b8965a;padding-bottom:6px}.area,.staff-notes{break-before:page;page-break-before:always}.area-title{font-size:14pt;margin-top:22px}table{border-collapse:collapse;width:100%;font-size:8.5pt}th{background:#101827;color:white;text-align:left;padding:8px}td{vertical-align:top;padding:8px;border-bottom:1px solid #dfe3e8}tr:nth-child(even){background:#fbf8f1}.note{background:#f4f6f8;border-left:4px solid #b8965a;padding:10px 14px;margin:10px 0}.note h2,.note h3{margin:0 0 7px;border:0;padding:0;font-size:10.5pt}.note small{display:block;color:#667085;margin:-3px 0 7px}.note p{margin:0;line-height:1.45}.guest-items{margin:7px 0 0;padding-left:18px}.guest-items li{margin:3px 0}.guest-items span{color:#667085}.entry-table{break-inside:avoid}.entry-control{margin-top:8px}.entry-control .number{width:26px;font-weight:bold;text-align:center}.entry-control .check{width:46px;font-weight:bold;white-space:nowrap}.staff-hint{color:#667085;margin:-2px 0 10px}.empty{color:#667085;background:#fbf8f1;padding:14px}</style></head><body><header class="header"><div class="brand">M&M EVENTOS · DOCUMENTO OPERATIVO</div><h1>${escapeHtml(documentTitle(type))}</h1><div class="subtitle">${escapeHtml(text(event.eventName || event.eventType, 'Evento'))}</div></header><div class="details">${detailsHtml}</div>${type === 'full' ? '' : `<h2>${escapeHtml(documentTitle(type))}</h2>`}${content}</body></html>`;
   return { buffer: Buffer.from(html, 'utf8'), fileName: `${fileStem(event, type)}.doc` };
 }

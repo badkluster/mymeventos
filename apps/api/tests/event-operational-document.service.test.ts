@@ -67,7 +67,7 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(body).not.toContain('class="area"');
   });
 
-  it('only renders areas that actually have content, each with its own numbered heading', () => {
+  it('only renders areas that actually have content, each on its own print page with a numbered heading', async () => {
     const partialEvent: any = {
       _id: 'evt-partial',
       eventName: 'Evento parcial',
@@ -82,6 +82,11 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(body).toContain('2. Invitados y mesas');
     expect(body).toContain('Ana Pérez');
     expect(countOccurrences(body, 'class="area"')).toBe(2);
+    expect(body).toContain('.area,.staff-notes{break-before:page;page-break-before:always}');
+
+    const pdf = await generateOperationalPdf(partialEvent, 'full');
+    // Portada, Momentos e Invitados: los tres bloques deben iniciar en hojas distintas.
+    expect(pdfPageCount(pdf.buffer)).toBe(3);
 
     // Sin logística, vajilla, mantelería, productos, proveedores ni staff cargados, esas áreas no deben aparecer.
     expect(body).not.toContain('3. Logística y coordinación');
@@ -144,7 +149,7 @@ describe('event-operational-document.service — cronograma integral (type "full
 
     expect(countOccurrences(body, 'Completado')).toBeGreaterThanOrEqual(3);
     expect(body).not.toContain('Completed');
-    expect(body).toContain('.area{margin-top:18px;break-inside:auto;page-break-inside:auto}');
+    expect(body).toContain('.area,.staff-notes{break-before:page;page-break-before:always}');
   });
 
   it('produces a valid, non-trivial PDF buffer for the full report and a bigger one when there is more content', async () => {
@@ -214,14 +219,15 @@ describe('event-operational-document.service — cronograma integral (type "full
     const pdf = await generateOperationalPdf(event, 'full');
     const word = html(generateOperationalWord(event, 'full').buffer);
 
-    expect(pdfPageCount(pdf.buffer)).toBe(1);
+    // Portada y la hoja propia de Momentos.
+    expect(pdfPageCount(pdf.buffer)).toBe(2);
     expect(pdfContentText(pdf.buffer)).toContain(momentNote);
     expect(pdfContentText(pdf.buffer)).not.toContain('Notas para staff');
     expect(word).toContain(momentNote);
     expect(word).not.toContain('<h2>Notas para staff</h2>');
   });
 
-  it('uses a compact two-column layout when it keeps all event moments on the first page', async () => {
+  it('uses a compact two-column layout when it keeps all event moments on their dedicated page', async () => {
     const timelineItems = Array.from({ length: 15 }, (_, index) => ({
       time: `${String(18 + Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`,
       title: `Momento operativo ${index + 1} con coordinación general`,
@@ -233,7 +239,7 @@ describe('event-operational-document.service — cronograma integral (type "full
     }));
     const pdf = await generateOperationalPdf({ ...minimalEvent, resourcePlanSnapshot: { timelineItems } }, 'full');
 
-    expect(pdfPageCount(pdf.buffer)).toBe(1);
+    expect(pdfPageCount(pdf.buffer)).toBe(2);
     expect(pdfContentText(pdf.buffer)).toContain('Momento operativo 15 con coordinación general');
   });
 
@@ -251,7 +257,7 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(content).toContain('FIN');
   });
 
-  it('uses the available page for staff notes and only continues when the content needs it', async () => {
+  it('starts staff notes on their own print page and continues only when the notes need it', async () => {
     const staffNotes = Array.from({ length: 16 }, (_, index) => ({
       title: `Indicación operativa ${index + 1}`,
       notes: 'Confirmar responsable, horario, elementos necesarios y comunicación con coordinación antes de avanzar al próximo momento.'
@@ -269,15 +275,15 @@ describe('event-operational-document.service — cronograma integral (type "full
     }, 'full');
     const pdf = await generateOperationalPdf(eventWithNotes, 'full');
 
-    // Una nota breve comparte la primera hoja con Momentos.
-    expect(pdfPageCount(oneNotePdf.buffer)).toBe(1);
-    // El conjunto extenso continúa sólo cuando ya no queda lugar suficiente.
-    expect(pdfPageCount(pdf.buffer)).toBeGreaterThanOrEqual(2);
+    // Portada, Momentos y una hoja independiente para la nota.
+    expect(pdfPageCount(oneNotePdf.buffer)).toBe(3);
+    // El conjunto extenso continúa luego de su propia hoja inicial.
+    expect(pdfPageCount(pdf.buffer)).toBeGreaterThanOrEqual(4);
     expect(pdfContentText(pdf.buffer)).toContain('Notas para staff');
     expect(pdfContentText(pdf.buffer)).toContain('Indicación operativa 16');
   });
 
-  it('fits 10 guest tables on one portrait page in the full schedule', async () => {
+  it('fits 10 guest tables on their own portrait page in the full schedule', async () => {
     const tables = Array.from({ length: 10 }, (_, index) => ({ id: `mesa${index + 1}`, name: `Mesa ${index + 1}`, capacity: 10, audience: index < 3 ? 'family' : 'open' }));
     const guests = Array.from({ length: 100 }, (_, index) => ({ fullName: `Invitado ${String(index + 1).padStart(2, '0')} Apellido`, tableId: tables[Math.floor(index / 10)].id }));
     const pdf = await generateOperationalPdf({
@@ -285,7 +291,7 @@ describe('event-operational-document.service — cronograma integral (type "full
       resourcePlanSnapshot: { guestList: { tables, guests } }
     }, 'full');
 
-    expect(pdfPageCount(pdf.buffer)).toBe(1);
+    expect(pdfPageCount(pdf.buffer)).toBe(2);
     expect(pdfContentText(pdf.buffer)).toContain('MESA 10');
     expect(pdfContentText(pdf.buffer)).toContain('Invitado 100 Apellido');
   });
