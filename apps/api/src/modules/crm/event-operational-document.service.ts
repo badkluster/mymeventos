@@ -431,43 +431,46 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
     const entryMetrics = group.map((entry: any) => {
       const slots = Math.max(entry.guests.length, Number(entry.capacity) || 0);
       const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience.toUpperCase()}` : ''} · ${entry.guests.length}${entry.capacity ? `/${entry.capacity}` : ''}`;
-      const headingHeight = Math.max(13, document.font('Helvetica-Bold').fontSize(7.1).heightOfString(heading, { width: tableWidth - 10, lineGap: .7 }) + 4);
+      const headingHeight = Math.max(14, document.font('Helvetica-Bold').fontSize(7.5).heightOfString(heading, { width: tableWidth - 10, lineGap: .8 }) + 4);
       const rowHeights = Array.from({ length: slots }, (_, index) => {
         const guest = entry.guests[index];
-        if (!guest) return 10;
-        const nameHeight = document.font('Helvetica-Bold').fontSize(7.1).heightOfString(text(guest.fullName), { width: nameWidth, lineGap: .7 });
+        if (!guest) return 10.8;
+        const nameHeight = document.font('Helvetica-Bold').fontSize(7.5).heightOfString(text(guest.fullName), { width: nameWidth, lineGap: .8 });
         const detail = detailFor(guest);
-        const detailHeight = detail ? document.font('Helvetica').fontSize(6.2).heightOfString(detail, { width: detailWidth, lineGap: .7 }) : 0;
-        return Math.max(10, Math.max(nameHeight, detailHeight) + 1.6);
+        const detailHeight = detail ? document.font('Helvetica').fontSize(6.6).heightOfString(detail, { width: detailWidth, lineGap: .8 }) : 0;
+        return Math.max(10.8, Math.max(nameHeight, detailHeight) + 1.8);
       });
       return { entry, heading, headingHeight, slots, rowHeights };
     });
     const maxSlots = Math.max(...entryMetrics.map((metric) => metric.slots), 0);
-    const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? 10)));
-    const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 7));
-    const groupHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 2;
+    const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? 10.8)));
+    const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 8));
+    const groupHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 3;
     if (document.y + groupHeight > page.bottom - 30) newPage(document, event, 'full');
     const y = document.y;
+    // Si la última fila no completa las tres columnas, se centra para evitar un
+    // vacío visual desbalanceado sin alterar el ancho legible de cada mesa.
+    const groupOffset = groups.length > 1 && group.length < 3 ? ((3 - group.length) * (tableWidth + gap)) / 2 : 0;
 
     entryMetrics.forEach((metric, entryIndex) => {
-      const x = page.left + entryIndex * (tableWidth + gap);
+      const x = page.left + groupOffset + entryIndex * (tableWidth + gap);
       const tableHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0);
       document.roundedRect(x, y, tableWidth, tableHeight, 4).fill(color.card);
       document.roundedRect(x, y, tableWidth, metric.headingHeight, 4).fill(color.ink);
-      document.font('Helvetica-Bold').fontSize(7.1).fillColor(color.white).text(metric.heading, x + 5, y + 3, { width: tableWidth - 10, lineGap: .7 });
+      document.font('Helvetica-Bold').fontSize(7.5).fillColor(color.white).text(metric.heading, x + 5, y + 3, { width: tableWidth - 10, lineGap: .8 });
       const labelsY = y + metric.headingHeight + 1;
-      document.font('Helvetica-Bold').fontSize(5.6).fillColor(color.muted).text('N°', x + 4, labelsY, { width: numberWidth - 2 });
-      document.font('Helvetica-Bold').fontSize(5.6).fillColor(color.muted).text('APELLIDO Y NOMBRE', x + numberWidth + 5, labelsY, { width: nameWidth });
-      document.font('Helvetica-Bold').fontSize(5.6).fillColor(color.muted).text('DETALLE', x + numberWidth + nameWidth + 7, labelsY, { width: detailWidth - 4 });
+      document.font('Helvetica-Bold').fontSize(5.9).fillColor(color.muted).text('N°', x + 4, labelsY, { width: numberWidth - 2 });
+      document.font('Helvetica-Bold').fontSize(5.9).fillColor(color.muted).text('APELLIDO Y NOMBRE', x + numberWidth + 5, labelsY, { width: nameWidth });
+      document.font('Helvetica-Bold').fontSize(5.9).fillColor(color.muted).text('DETALLE', x + numberWidth + nameWidth + 7, labelsY, { width: detailWidth - 4 });
       let rowY = y + headerHeight;
       rowHeights.forEach((rowHeight, rowIndex) => {
         const guest = metric.entry.guests[rowIndex];
         document.moveTo(x + 1, rowY).lineTo(x + tableWidth - 1, rowY).strokeColor(color.line).lineWidth(.35).stroke();
-        document.font('Helvetica-Bold').fontSize(6.2).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + 2, { width: numberWidth - 2, align: 'right' });
+        document.font('Helvetica-Bold').fontSize(6.5).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + 2, { width: numberWidth - 2, align: 'right' });
         if (guest) {
-          document.font('Helvetica-Bold').fontSize(7.1).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + 2, { width: nameWidth, lineGap: .7 });
+          document.font('Helvetica-Bold').fontSize(7.5).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + 2, { width: nameWidth, lineGap: .8 });
           const detail = detailFor(guest);
-          if (detail) document.font('Helvetica').fontSize(6.2).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + 2, { width: detailWidth - 4, lineGap: .7 });
+          if (detail) document.font('Helvetica').fontSize(6.6).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + 2, { width: detailWidth - 4, lineGap: .8 });
         }
         rowY += rowHeight;
       });
@@ -998,8 +1001,9 @@ function staffRoster(document: PDFKit.PDFDocument, event: any, type: Operational
 
 /**
  * Vajilla y mantelería son registros distintos porque sus controles y responsables de
- * devolución no necesariamente coinciden. Cada área comienza una hoja nueva para
- * facilitar su impresión y distribución operativa por separado.
+ * devolución no necesariamente coinciden. Momentos comparte la portada con el
+ * resumen; las áreas operativas restantes comienzan una hoja nueva para facilitar
+ * su impresión y distribución por separado.
  */
 function fullReport(document: PDFKit.PDFDocument, event: any): void {
   eventDetails(document, event, 'full', null);
@@ -1007,8 +1011,8 @@ function fullReport(document: PDFKit.PDFDocument, event: any): void {
   const tableware = tablewareControlRows(event);
   const linen = linenRows(event);
   const inventory = supportingInventoryRows(event);
-  const areas: Array<{ title: string; hint?: string; hasContent: boolean; render: () => void }> = [
-    { title: '1. Momentos del evento', hint: 'Cronograma horario y notas para el staff', hasContent: timelineHasContent(event), render: () => timeline(document, event, 'full') },
+  const areas: Array<{ title: string; hint?: string; hasContent: boolean; sharesSummary?: boolean; render: () => void }> = [
+    { title: '1. Momentos del evento', hint: 'Cronograma horario y notas para el staff', hasContent: timelineHasContent(event), sharesSummary: true, render: () => timeline(document, event, 'full') },
     { title: '2. Invitados y mesas', hint: (tables.length || guests.length) ? `${guests.length} invitado${guests.length === 1 ? '' : 's'} cargado${guests.length === 1 ? '' : 's'}` : undefined, hasContent: tables.length > 0 || guests.length > 0, render: () => guestList(document, event, 'full', null) },
     { title: '3. Logística y coordinación', hasContent: logisticsActiveSections(event).length > 0, render: () => logistics(document, event, 'full') },
     { title: '4. Inventario de vajilla', hint: 'Control de salida y retorno', hasContent: tableware.length > 0, render: () => tablewareControl(document, event, 'full') },
@@ -1024,9 +1028,9 @@ function fullReport(document: PDFKit.PDFDocument, event: any): void {
     return;
   }
   visible.forEach((area) => {
-    // La portada conserva los datos generales. Cada bloque operativo se inicia en
-    // una página propia para que pueda imprimirse la cantidad de veces necesaria.
-    newPage(document, event, 'full');
+    // El resumen y Momentos constituyen la primera hoja del cronograma. El resto
+    // conserva una página propia para poder reimprimirse de forma independiente.
+    if (!area.sharesSummary) newPage(document, event, 'full');
     section(document, event, 'full', area.title, area.hint);
     area.render();
   });
@@ -1147,15 +1151,15 @@ function guestEntryControlWordHtml(event: any): string {
   return `<section class="control-legend">${legend}<div><b>Control</b><span>Números visibles en cada fila</span></div></section>${entries.map((entry: any) => { const rows = Array.from({ length: guestControlSlots(entry) }, (_, index) => { const guest = entry.guests[index]; const detail = guest ? guestControlDetail(guest) : ''; return `<tr><td class="number">${index + 1}</td><td class="guest-name">${guest ? `<b>${escapeHtml(guest.fullName)}</b>` : '................................................................................................'}</td><td class="guest-detail">${escapeHtml(detail)}</td></tr>`; }).join(''); const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience}` : ''} · ${entry.guests.length} lugar${entry.guests.length === 1 ? '' : 'es'}`; return `<section class="mesa-sheet"><h3>${escapeHtml(heading)}</h3>${entry.notes ? `<small>${escapeHtml(entry.notes)}</small>` : ''}<table class="mesa-list"><tbody>${rows}</tbody></table></section>`; }).join('')}`;
 }
 
-/** Espejo en HTML de `fullReport()`: mismo orden de áreas y saltos de página
- * operativos, para que cada bloque pueda imprimirse independientemente en Word. */
+/** Espejo en HTML de `fullReport()`: el resumen y Momentos comparten portada;
+ * Notas y las demás áreas mantienen sus saltos para impresión independiente. */
 function fullReportWordHtml(event: any): string {
   const { tables, guests } = guestListData(event);
   const tableware = tablewareControlRows(event);
   const linen = linenRows(event);
   const inventory = supportingInventoryRows(event);
-  const areas: Array<{ title: string; hasContent: boolean; html: () => string }> = [
-    { title: '1. Momentos del evento', hasContent: timelineHasContent(event), html: () => timelineWordHtml(event, true) },
+  const areas: Array<{ title: string; hasContent: boolean; sharesSummary?: boolean; html: () => string }> = [
+    { title: '1. Momentos del evento', hasContent: timelineHasContent(event), sharesSummary: true, html: () => timelineWordHtml(event, true) },
     { title: '2. Invitados y mesas', hasContent: tables.length > 0 || guests.length > 0, html: () => guestListWordHtml(event, false) },
     { title: '3. Logística y coordinación', hasContent: logisticsActiveSections(event).length > 0, html: () => logisticsWordHtml(event) },
     { title: '4. Inventario de vajilla', hasContent: tableware.length > 0, html: () => tablewareControlWordHtml(event) },
@@ -1167,7 +1171,7 @@ function fullReportWordHtml(event: any): string {
   ];
   const visible = areas.filter((area) => area.hasContent);
   if (!visible.length) return '<p class="empty">Todavía no se cargó contenido operativo para este evento. Completá momentos, invitados, logística, vajilla, productos, proveedores o staff para generar el cronograma integral.</p>';
-  return visible.map((area) => `<section class="area"><h2 class="area-title">${escapeHtml(area.title)}</h2>${area.html()}</section>`).join('');
+  return visible.map((area) => `<section class="area${area.sharesSummary ? ' area-with-summary' : ''}"><h2 class="area-title">${escapeHtml(area.title)}</h2>${area.html()}</section>`).join('');
 }
 
 export function generateOperationalWord(event: any, type: OperationalDocumentType): { buffer: Buffer; fileName: string } {
@@ -1189,6 +1193,6 @@ export function generateOperationalWord(event: any, type: OperationalDocumentTyp
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Control de mesas</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#1f1f1f;font-size:10pt}.guest-header{text-align:center;border-bottom:2px solid #b8965a;padding:4px 0 13px;margin-bottom:15px}.guest-header .brand{color:#a68244;font-size:8pt;font-weight:bold;letter-spacing:1px}.guest-header h1{font-size:18pt;letter-spacing:.6px;margin:7px 0 5px}.guest-header p{color:#7a7368;margin:0;font-size:9.5pt}.control-legend{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #d8ccaf;margin:0 0 13px}.control-legend div{padding:8px 10px;border-right:1px solid #d8ccaf;min-height:31px}.control-legend div:last-child{border-right:0}.control-legend b{display:block;font-size:8pt;color:#1f1f1f}.control-legend span{display:block;color:#7a7368;font-size:7.5pt;margin-top:3px}.mesa-sheet{border:1px solid #d8ccaf;margin:0 0 10px;break-inside:avoid}.mesa-sheet h3{background:#fbf8f1;margin:0;padding:7px 10px;border-bottom:1px solid #d8ccaf;font-size:9.5pt}.mesa-sheet small{display:block;padding:5px 10px 0;color:#7a7368}.mesa-list{border-collapse:collapse;width:100%;font-size:9pt}.mesa-list td{padding:5px 8px;border-bottom:1px solid #eee8dc;vertical-align:top}.mesa-list tr:last-child td{border-bottom:0}.mesa-list .number{width:28px;text-align:right;color:#7a7368;font-weight:bold}.mesa-list .guest-name{width:57%}.mesa-list .guest-detail{color:#7a7368;font-size:8pt}.empty{color:#7a7368;background:#fbf8f1;padding:14px}</style></head><body><header class="guest-header"><div class="brand">M&M EVENTOS</div><h1>CONTROL DE MESAS</h1><p>${escapeHtml(subtitle)}</p></header>${content}</body></html>`;
     return { buffer: Buffer.from(html, 'utf8'), fileName: `${fileStem(event, type)}.doc` };
   }
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(documentTitle(type))}</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#101827;font-size:10pt}.header{background:#101827;color:white;padding:18px 22px;margin:-18mm -18mm 18px}.brand{color:#ddc99f;letter-spacing:1px;font-size:9pt}.header h1{margin:6px 0 0;font-size:20pt}.subtitle{color:#dfe3e8;margin-top:5px}.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f4f6f8;padding:14px 16px;border-radius:8px}.detail b{display:block;color:#667085;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}.detail span{display:block;margin-top:3px}h2{font-size:12pt;margin:22px 0 8px;border-bottom:2px solid #b8965a;padding-bottom:6px}.area,.staff-notes{break-before:page;page-break-before:always}.area-title{font-size:14pt;margin-top:22px}table{border-collapse:collapse;width:100%;font-size:8.5pt}th{background:#101827;color:white;text-align:left;padding:8px}td{vertical-align:top;padding:8px;border-bottom:1px solid #dfe3e8}tr:nth-child(even){background:#fbf8f1}.note{background:#f4f6f8;border-left:4px solid #b8965a;padding:10px 14px;margin:10px 0}.note h2,.note h3{margin:0 0 7px;border:0;padding:0;font-size:10.5pt}.note small{display:block;color:#667085;margin:-3px 0 7px}.note p{margin:0;line-height:1.45}.guest-items{margin:7px 0 0;padding-left:18px}.guest-items li{margin:3px 0}.guest-items span{color:#667085}.entry-table{break-inside:avoid}.entry-control{margin-top:8px}.entry-control .number{width:26px;font-weight:bold;text-align:center}.entry-control .check{width:46px;font-weight:bold;white-space:nowrap}.staff-hint{color:#667085;margin:-2px 0 10px}.empty{color:#667085;background:#fbf8f1;padding:14px}</style></head><body><header class="header"><div class="brand">M&M EVENTOS · DOCUMENTO OPERATIVO</div><h1>${escapeHtml(documentTitle(type))}</h1><div class="subtitle">${escapeHtml(text(event.eventName || event.eventType, 'Evento'))}</div></header><div class="details">${detailsHtml}</div>${type === 'full' ? '' : `<h2>${escapeHtml(documentTitle(type))}</h2>`}${content}</body></html>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(documentTitle(type))}</title><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#101827;font-size:10pt}.header{background:#101827;color:white;padding:18px 22px;margin:-18mm -18mm 18px}.brand{color:#ddc99f;letter-spacing:1px;font-size:9pt}.header h1{margin:6px 0 0;font-size:20pt}.subtitle{color:#dfe3e8;margin-top:5px}.details{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f4f6f8;padding:14px 16px;border-radius:8px}.detail b{display:block;color:#667085;font-size:7.5pt;text-transform:uppercase;letter-spacing:.4px}.detail span{display:block;margin-top:3px}h2{font-size:12pt;margin:22px 0 8px;border-bottom:2px solid #b8965a;padding-bottom:6px}.area,.staff-notes{break-before:page;page-break-before:always}.area-with-summary{break-before:auto;page-break-before:auto}.area-title{font-size:14pt;margin-top:22px}table{border-collapse:collapse;width:100%;font-size:8.5pt}th{background:#101827;color:white;text-align:left;padding:8px}td{vertical-align:top;padding:8px;border-bottom:1px solid #dfe3e8}tr:nth-child(even){background:#fbf8f1}.note{background:#f4f6f8;border-left:4px solid #b8965a;padding:10px 14px;margin:10px 0}.note h2,.note h3{margin:0 0 7px;border:0;padding:0;font-size:10.5pt}.note small{display:block;color:#667085;margin:-3px 0 7px}.note p{margin:0;line-height:1.45}.guest-items{margin:7px 0 0;padding-left:18px}.guest-items li{margin:3px 0}.guest-items span{color:#667085}.entry-table{break-inside:avoid}.entry-control{margin-top:8px}.entry-control .number{width:26px;font-weight:bold;text-align:center}.entry-control .check{width:46px;font-weight:bold;white-space:nowrap}.staff-hint{color:#667085;margin:-2px 0 10px}.empty{color:#667085;background:#fbf8f1;padding:14px}</style></head><body><header class="header"><div class="brand">M&M EVENTOS · DOCUMENTO OPERATIVO</div><h1>${escapeHtml(documentTitle(type))}</h1><div class="subtitle">${escapeHtml(text(event.eventName || event.eventType, 'Evento'))}</div></header><div class="details">${detailsHtml}</div>${type === 'full' ? '' : `<h2>${escapeHtml(documentTitle(type))}</h2>`}${content}</body></html>`;
   return { buffer: Buffer.from(html, 'utf8'), fileName: `${fileStem(event, type)}.doc` };
 }
