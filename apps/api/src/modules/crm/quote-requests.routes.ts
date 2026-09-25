@@ -71,7 +71,7 @@ const convertSchema = z.object({
     considerations: z.string().trim().optional(),
     validUntil: z.coerce.date().optional(),
     honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional()
-  }).refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.'),
+  }).refine((body) => hasExactlyOneQuoteSalon(body), 'Debe seleccionar un único salón.'),
   params: z.object({ id: objectId }),
   query: z.object({})
 });
@@ -80,6 +80,12 @@ const router = Router();
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
 function uniqueIds(ids: string[]): string[] { return [...new Set(ids.filter(Boolean))]; }
+function hasExactlyOneQuoteSalon(body: { salonId?: string; salonIds?: string[] }): boolean { return uniqueIds([...(body.salonIds ?? []), ...(body.salonId ? [body.salonId] : [])]).length === 1; }
+function selectedQuoteSalonIds(body: { salonId?: string; salonIds?: string[] }): string[] {
+  const salonIds = uniqueIds([...(body.salonIds ?? []), ...(body.salonId ? [body.salonId] : [])]);
+  if (salonIds.length !== 1) throw new ApiError(400, 'VALIDATION_ERROR');
+  return salonIds;
+}
 function quoteNumber(): string { return `P-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`; }
 function calculateQuote(values: Record<string, any>): Record<string, any> {
   return calculateCommercialQuote(values);
@@ -285,7 +291,7 @@ router.post('/:id/convert-to-quotes', requirePermission(Permission.QUOTES_CREATE
     }
   }
   if (['discarded', 'duplicated'].includes(quoteRequest.status)) throw new ApiError(422, 'QUOTE_REQUEST_NOT_CONVERTIBLE');
-  const salonIds = uniqueIds([...(request.body.salonIds ?? []), ...(request.body.salonId ? [request.body.salonId] : [])]);
+  const salonIds = selectedQuoteSalonIds(request.body);
   await ensureAccessibleSalons(request, salonIds);
   const lead: any = quoteRequest.leadId ? await Lead.findOne({ _id: quoteRequest.leadId, deletedAt: null }) : null;
   const customer: any = quoteRequest.customerId ? await Customer.findOne({ _id: quoteRequest.customerId, deletedAt: null }) : null;

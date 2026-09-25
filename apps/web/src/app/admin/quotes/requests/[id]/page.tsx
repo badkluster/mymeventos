@@ -9,7 +9,7 @@ import { activityTypeLabels, displayLabel, quoteRequestSourceLabels, quoteReques
 import { Button } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { QuoteFormModal } from '@/features/quotes/quote-form-modal';
-import type { LeadOption, PackageTemplate, Quote, QuoteRequest, Salon } from '@/features/quotes/types';
+import type { LeadOption, Quote, QuoteRequest, Salon } from '@/features/quotes/types';
 import { formatCivilDate } from '@/lib/dates';
 
 type Activity = { _id: string; type: string; title: string; description?: string; createdAt: string };
@@ -27,7 +27,6 @@ export default function QuoteRequestDetailPage({ params }: { params: Promise<{ i
   const [previousQuotes, setPreviousQuotes] = useState<Quote[]>([]);
   const [salons, setSalons] = useState<Salon[]>([]);
   const [leads, setLeads] = useState<LeadOption[]>([]);
-  const [packages, setPackages] = useState<PackageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -36,11 +35,10 @@ export default function QuoteRequestDetailPage({ params }: { params: Promise<{ i
   const load = async (requestId: string) => {
     setLoading(true);
     try {
-      const [detail, salonsResponse, leadsResponse, packagesResponse] = await Promise.all([
+      const [detail, salonsResponse, leadsResponse] = await Promise.all([
         api.get<{ quoteRequest: QuoteRequest; activities: Activity[]; previousRequests: QuoteRequest[]; previousQuotes: Quote[] }>(`/quote-requests/${requestId}`),
         api.get<{ salons?: Salon[] } | Salon[]>('/salons'),
         api.get<{ items?: LeadOption[]; leads?: LeadOption[] } | LeadOption[]>('/leads?limit=100'),
-        api.get<{ packages?: PackageTemplate[]; items?: PackageTemplate[] } | PackageTemplate[]>('/quotes/packages'),
       ]);
       setQuoteRequest(detail.quoteRequest);
       setActivities(detail.activities ?? []);
@@ -48,7 +46,6 @@ export default function QuoteRequestDetailPage({ params }: { params: Promise<{ i
       setPreviousQuotes(detail.previousQuotes ?? []);
       setSalons(Array.isArray(salonsResponse) ? salonsResponse : salonsResponse.salons ?? []);
       setLeads(Array.isArray(leadsResponse) ? leadsResponse : leadsResponse.items ?? leadsResponse.leads ?? []);
-      setPackages(Array.isArray(packagesResponse) ? packagesResponse : packagesResponse.items ?? packagesResponse.packages ?? []);
     } catch (error) {
       notice(error instanceof Error ? error.message : 'No se pudo cargar la solicitud.', 'error');
     } finally {
@@ -112,7 +109,7 @@ export default function QuoteRequestDetailPage({ params }: { params: Promise<{ i
     </div>
 
     <Panel title="Actividad del lead">{activities.length ? activities.map((activity) => <Row key={activity._id} title={`${displayLabel(activityTypeLabels, activity.type)} · ${formatDateTime(activity.createdAt)}`} description={activity.description || activity.title} />) : <Empty text="Todavía no hay actividad registrada." />}</Panel>
-    <QuoteFormModal open={formOpen} quoteRequest={quoteRequest} salons={salons} leads={leads} packages={packages} saving={saving} onClose={() => setFormOpen(false)} onSubmit={saveQuote} />
+    <QuoteFormModal open={formOpen} quoteRequest={quoteRequest} salons={salons} leads={leads} saving={saving} onClose={() => setFormOpen(false)} onSubmit={saveQuote} />
   </section>;
 }
 

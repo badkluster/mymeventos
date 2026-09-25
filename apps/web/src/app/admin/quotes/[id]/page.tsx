@@ -9,7 +9,7 @@ import { displayLabel, eventTypeLabels, quoteStatusLabels } from '@/lib/display-
 import { Button, Modal, Select } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { QuoteFormModal } from '@/features/quotes/quote-form-modal';
-import { getEntityId, getSalonName, type Event, type LeadOption, type PackageTemplate, type Quote, type Salon } from '@/features/quotes/types';
+import { getEntityId, getSalonName, type Event, type LeadOption, type Quote, type Salon } from '@/features/quotes/types';
 import { formatCivilDate } from '@/lib/dates';
 
 const money = (value?: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value ?? 0);
@@ -22,7 +22,6 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const [id, setId] = useState('');
   const [salons, setSalons] = useState<Salon[]>([]);
   const [leads, setLeads] = useState<LeadOption[]>([]);
-  const [packages, setPackages] = useState<PackageTemplate[]>([]);
   const [notice, setNoticeState] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,16 +39,14 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const load = async (quoteId: string) => {
     setLoading(true);
     try {
-      const [quoteResponse, salonsResponse, leadsResponse, packagesResponse] = await Promise.all([
+      const [quoteResponse, salonsResponse, leadsResponse] = await Promise.all([
         api.get<{ quote?: Quote } | Quote>(`/quotes/${quoteId}`),
         api.get<{ salons?: Salon[] } | Salon[]>('/salons'),
-        api.get<{ items?: LeadOption[]; leads?: LeadOption[] } | LeadOption[]>('/leads?limit=100'),
-        api.get<{ packages?: PackageTemplate[]; items?: PackageTemplate[] } | PackageTemplate[]>('/quotes/packages')
+        api.get<{ items?: LeadOption[]; leads?: LeadOption[] } | LeadOption[]>('/leads?limit=100')
       ]);
       setQuote((quoteResponse as { quote?: Quote }).quote ?? (quoteResponse as Quote));
       setSalons(Array.isArray(salonsResponse) ? salonsResponse : salonsResponse.salons ?? []);
       setLeads(Array.isArray(leadsResponse) ? leadsResponse : leadsResponse.items ?? leadsResponse.leads ?? []);
-      setPackages(Array.isArray(packagesResponse) ? packagesResponse : packagesResponse.items ?? packagesResponse.packages ?? []);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'No se pudo cargar el presupuesto.');
     } finally {
@@ -235,7 +232,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       {relatedEventId ? <Link href={`/admin/events/${relatedEventId}`}><Button className="mt-4"><CalendarCheck className="mr-2 h-4 w-4" />Ver evento</Button></Link> : <Button disabled={saving} className="mt-4" onClick={() => void convertToEvent()}><CalendarCheck className="mr-2 h-4 w-4" />{saving ? 'Creando evento...' : 'Crear evento'}</Button>}
     </div>
 
-    <QuoteFormModal open={editOpen} quote={quote} salons={salons} leads={leads} packages={packages} saving={saving} onClose={() => setEditOpen(false)} onSubmit={save} />
+    <QuoteFormModal open={editOpen} quote={quote} salons={salons} leads={leads} saving={saving} onClose={() => setEditOpen(false)} onSubmit={save} />
     <Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title={`PDF · ${quote.quoteNumber}`} description="Vista previa del documento comercial guardado."><div className="h-[72vh] min-h-[440px] bg-zinc-100">{pdfUrl ? <iframe title={`Presupuesto ${quote.quoteNumber}`} src={pdfUrl} className="h-full w-full border-0" /> : <div className="grid h-full place-items-center p-8 text-sm text-zinc-500">Todavía no hay un PDF generado para este presupuesto.</div>}</div></Modal>
     <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Eliminar presupuesto" description="Esta acción eliminará el presupuesto del listado, pero conservará el registro internamente."><div className="p-6"><footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setDeleteOpen(false)}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={() => void remove()}>{saving ? 'Eliminando...' : 'Eliminar'}</Button></footer></div></Modal>
   </section>;

@@ -54,7 +54,7 @@ function addRequiredQuoteIssues(body: z.infer<typeof quoteFields>, context: z.Re
   const price = body.pricingMode === 'fixed' ? body.finalFixedPrice ?? body.fixedPrice : body.finalPricePerPerson ?? body.pricePerPerson;
   if (!body.packageTemplateId && (!price || price <= 0)) context.addIssue({ code: z.ZodIssueCode.custom, path: [body.pricingMode === 'fixed' ? 'fixedPrice' : 'pricePerPerson'], message: 'Debe indicar un precio mayor a cero.' });
 }
-const createQuoteSchema = z.object({ body: quoteFields.refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.').superRefine((body, context) => {
+const createQuoteSchema = z.object({ body: quoteFields.refine((body) => hasExactlyOneQuoteSalon(body), 'Debe seleccionar un único salón.').superRefine((body, context) => {
   addRequiredQuoteIssues(body, context);
 }), params: z.object({}), query: z.object({}) });
 const updateQuoteSchema = z.object({ body: quoteFields.omit({ leadId: true, customerId: true, salonIds: true }).partial().refine((body) => Object.keys(body).length > 0, 'Debe enviar al menos un campo para actualizar.'), params: z.object({ id: objectId }), query: z.object({}) });
@@ -112,7 +112,7 @@ const fromCustomCalculationSchema = z.object({
     notes: true,
     observations: true,
     considerations: true
-  }).extend(customCalculationSchema.shape.body.shape).refine((body) => Boolean(body.salonId || body.salonIds?.length), 'Debe seleccionar al menos un salón.').superRefine((body, context) => {
+  }).extend(customCalculationSchema.shape.body.shape).refine((body) => hasExactlyOneQuoteSalon(body), 'Debe seleccionar un único salón.').superRefine((body, context) => {
     if (!body.leadId && !body.customerId) {
       for (const field of ['phone', 'eventType', 'guestCount'] as const) if (body[field] === undefined) context.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Campo obligatorio para una persona nueva.' });
       if (!body.contactName && !(body.firstName && body.lastName)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['contactName'], message: 'Debe indicar el nombre de la persona.' });
@@ -126,6 +126,12 @@ const lineItemsPatchSchema = z.object({ body: z.object({ lineItems: z.array(line
 const router = Router();
 
 function uniqueIds(ids: string[]): string[] { return [...new Set(ids)]; }
+function hasExactlyOneQuoteSalon(body: { salonId?: string; salonIds?: string[] }): boolean { return uniqueIds([...(body.salonIds ?? []), ...(body.salonId ? [body.salonId] : [])]).length === 1; }
+function selectedQuoteSalonIds(body: { salonId?: string; salonIds?: string[] }): string[] {
+  const salonIds = uniqueIds([...(body.salonIds ?? []), ...(body.salonId ? [body.salonId] : [])]);
+  if (salonIds.length !== 1) throw new ApiError(400, 'VALIDATION_ERROR');
+  return salonIds;
+}
 function getQueryString(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
 function getQueryIds(value: unknown): string[] {
   const values = Array.isArray(value) ? value : [value];
@@ -290,7 +296,7 @@ router.post('/custom-calculate', requirePermission(Permission.QUOTES_CREATE), va
 }));
 
 router.post('/from-custom-calculation', requirePermission(Permission.QUOTES_CREATE), validateRequest(fromCustomCalculationSchema), asyncHandler(async (request, response) => {
-  const salonIds = uniqueIds([...(request.body.salonIds ?? []), ...(request.body.salonId ? [request.body.salonId] : [])]);
+  const salonIds = selectedQuoteSalonIds(request.body);
   await ensureAccessibleSalons(request, salonIds);
   const calculation = calculateLineItems(request.body.lineItems);
   if (calculation.totalAmount <= 0) throw new ApiError(422, 'QUOTE_PRICING_REQUIRED');
@@ -367,7 +373,7 @@ router.post('/from-custom-calculation', requirePermission(Permission.QUOTES_CREA
 }));
 
 router.post('/', requirePermission(Permission.QUOTES_CREATE), validateRequest(createQuoteSchema), asyncHandler(async (request, response) => {
-  const salonIds = uniqueIds([...(request.body.salonIds ?? []), ...(request.body.salonId ? [request.body.salonId] : [])]);
+  const salonIds = selectedQuoteSalonIds(request.body);
   await ensureAccessibleSalons(request, salonIds);
   let lead: any;
   let customer: any;

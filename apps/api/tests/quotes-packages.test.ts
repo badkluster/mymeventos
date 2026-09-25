@@ -57,6 +57,28 @@ describe('quote package templates', () => {
     }));
   });
 
+  it('rejects creating more than one quote in a single request', async () => {
+    const response = await request(app)
+      .post('/api/quotes')
+      .set('Cookie', adminCookie)
+      .send({ salonIds: [salonId, '507f1f77bcf86cd799439014'], contactName: 'Ana Pérez', phone: '1112345678', eventType: 'Cumpleaños', eventDate: '2026-12-05', guestCount: 40, manualMode: true, startTime: '21:00', endTime: '05:00', pricingMode: 'fixed', fixedPrice: 4000000 });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mocks.quoteCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects converting a request into quotes for more than one salon', async () => {
+    const response = await request(app)
+      .post('/api/quote-requests/507f1f77bcf86cd799439015/convert-to-quotes')
+      .set('Cookie', adminCookie)
+      .send({ salonIds: [salonId, '507f1f77bcf86cd799439014'] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mocks.quoteCreate).not.toHaveBeenCalled();
+  });
+
   it('reports when a selected salon has no commercial rule for a template', async () => {
     mocks.salonCount.mockResolvedValue(1);
     mocks.packageFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: packageId, name: 'Magic Night', active: true, isGlobal: true }) });

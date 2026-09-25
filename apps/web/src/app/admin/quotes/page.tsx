@@ -9,7 +9,7 @@ import { Button, Input, Modal, PageHeader, Select } from '@/components/ui/primit
 import { TableActionButton } from '@/components/admin/table-action-button';
 import { useToast } from '@/components/ui/toast-provider';
 import { QuoteFormModal, type QuoteSlotDefaults } from '@/features/quotes/quote-form-modal';
-import { getLeadName, getSalonName, type Customer, type LeadOption, type PackageTemplate, type PaginationMeta, type Quote, type QuoteRequest, type Salon } from '@/features/quotes/types';
+import { getLeadName, getSalonName, type Customer, type LeadOption, type PaginationMeta, type Quote, type QuoteRequest, type Salon } from '@/features/quotes/types';
 import { formatCivilDate } from '@/lib/dates';
 import { isInteractiveTableRowTarget } from '@/lib/table-row-navigation';
 
@@ -55,7 +55,6 @@ export default function QuotesPage() {
   const [salons, setSalons] = useState<Salon[]>([]);
   const [leads, setLeads] = useState<LeadOption[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [packages, setPackages] = useState<PackageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formQuote, setFormQuote] = useState<Quote | undefined>();
@@ -81,12 +80,11 @@ export default function QuotesPage() {
       const query = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit), search: filters.query });
       if (filters.status) query.set('status', filters.status);
       if (filters.salonId) query.set('salonId', filters.salonId);
-      const [listResponse, salonsResponse, leadsResponse, customersResponse, packagesResponse] = await Promise.all([
+      const [listResponse, salonsResponse, leadsResponse, customersResponse] = await Promise.all([
         activeTab === 'requests' ? api.get<ListResponse<QuoteRequest>>(`/quote-requests?${query.toString()}`) : api.get<ListResponse<Quote>>(`/quotes?${query.toString()}`),
         api.get<{ salons?: Salon[] } | Salon[]>('/salons'),
         api.get<{ items?: LeadOption[]; leads?: LeadOption[] } | LeadOption[]>('/leads?limit=100'),
         api.get<{ items?: Customer[] } | Customer[]>('/customers?limit=100'),
-        api.get<{ packages?: PackageTemplate[]; items?: PackageTemplate[] } | PackageTemplate[]>('/quotes/packages'),
       ]);
       const list = normalizeList(listResponse as ListResponse<QuoteRequest | Quote>);
       if (activeTab === 'requests') setRequests(list.items as QuoteRequest[]);
@@ -95,7 +93,6 @@ export default function QuotesPage() {
       setSalons(Array.isArray(salonsResponse) ? salonsResponse : salonsResponse.salons ?? []);
       setLeads(Array.isArray(leadsResponse) ? leadsResponse : leadsResponse.items ?? leadsResponse.leads ?? []);
       setCustomers(Array.isArray(customersResponse) ? customersResponse : customersResponse.items ?? []);
-      setPackages(Array.isArray(packagesResponse) ? packagesResponse : packagesResponse.items ?? packagesResponse.packages ?? []);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'No se pudo cargar el módulo de presupuestos.');
     } finally {
@@ -196,7 +193,7 @@ export default function QuotesPage() {
       <span className="text-zinc-600">Mostrando <strong className="font-semibold text-zinc-950">{activeTab === 'requests' ? requests.length : quotes.length}</strong> de <strong className="font-semibold text-zinc-950">{meta.totalItems}</strong></span>
       <div className="flex items-center gap-2"><Button variant="secondary" className="px-3" disabled={!meta.hasPreviousPage} onClick={() => updateFilters({ page: meta.page - 1 })}><ChevronLeft className="h-4 w-4" /><span className="sr-only">Anterior</span></Button><span className="min-w-32 text-center text-zinc-600">Página {meta.page} de {meta.totalPages}</span><Button variant="secondary" className="px-3" disabled={!meta.hasNextPage} onClick={() => updateFilters({ page: meta.page + 1 })}><ChevronRight className="h-4 w-4" /><span className="sr-only">Siguiente</span></Button></div>
     </footer>
-    <QuoteFormModal open={isFormOpen} quote={formQuote} quoteRequest={formRequest} initialCustomerId={initialCustomerId} initialSlot={initialSlot} salons={salons} leads={leads} customers={customers} packages={packages} saving={saving} onClose={() => setIsFormOpen(false)} onSubmit={save} />
+    <QuoteFormModal open={isFormOpen} quote={formQuote} quoteRequest={formRequest} initialCustomerId={initialCustomerId} initialSlot={initialSlot} salons={salons} leads={leads} customers={customers} saving={saving} onClose={() => setIsFormOpen(false)} onSubmit={save} />
     <Modal open={Boolean(remove)} onClose={() => setRemove(undefined)} title="Eliminar presupuesto" description="Esta acción eliminará el presupuesto del listado, pero conservará el registro internamente."><div className="p-6"><footer className="flex justify-end gap-3"><Button variant="secondary" disabled={saving} onClick={() => setRemove(undefined)}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={() => void removeQuote()}>{saving ? 'Eliminando...' : 'Eliminar'}</Button></footer></div></Modal>
     <Modal open={Boolean(discard)} onClose={() => setDiscard(undefined)} title="Descartar solicitud" description="La solicitud quedará archivada como descartada."><div className="p-6"><footer className="flex justify-end gap-3"><Button variant="secondary" disabled={saving} onClick={() => setDiscard(undefined)}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={() => void discardRequest()}>{saving ? 'Descartando...' : 'Descartar'}</Button></footer></div></Modal>
   </section>;
