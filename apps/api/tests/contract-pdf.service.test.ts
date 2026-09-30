@@ -15,6 +15,23 @@ function pdfText(buffer: Buffer): string {
 }
 
 describe('contract PDF considerations', () => {
+  it('identifies M&M Eventos and its representative in the provider section', async () => {
+    const pdf = await buildContractPdfBuffer({
+      contractNumber: 'C-2026-00001',
+      customerSnapshot: { fullName: 'Ana Pérez' },
+      eventSnapshot: {},
+      commercialSnapshot: {},
+      totalAmount: 0,
+      balanceAmount: 0,
+      legalTermsSnapshot: { clauses: [] }
+    });
+
+    const content = pdfText(pdf);
+    expect(content).toContain('M&M Eventos');
+    expect(content).toContain('Natalia Argüello');
+    expect(content).toContain('DNI 35.394.779');
+  });
+
   it('renders long considerations across pages without truncating their ending', async () => {
     const finalMarker = 'CONTRATO-CONSIDERACION-COMPLETA-SIN-RECORTAR';
     const considerations = `${Array.from({ length: 140 }, (_, index) => `Párrafo ${index + 1}: esta consideración debe conservarse íntegra en el contrato generado.`).join('\n\n')}\n\n${finalMarker}`;
