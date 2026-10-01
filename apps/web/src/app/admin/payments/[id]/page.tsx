@@ -6,7 +6,7 @@ import { CheckCircle2, ChevronLeft, RotateCcw, XCircle } from 'lucide-react';
 import { Permission } from '@mym/shared';
 import { api } from '@/lib/api';
 import { displayLabel, paymentMethodLabels, paymentStatusLabels, paymentTypeLabels } from '@/lib/display-labels';
-import { Button, Modal, Select, Textarea } from '@/components/ui/primitives';
+import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { useSession } from '@/components/session-provider';
 import { userCanAccess } from '@/lib/admin-permissions';
@@ -17,6 +17,7 @@ type ConfirmAction = { path: 'cancel' | 'refund'; title: string; description: st
 
 const money = (value?: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value ?? 0);
 const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin fecha';
+const paymentDateInput = (value?: string) => value ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) : '';
 const entityId = (value: unknown) => typeof value === 'string' ? value : (value as { _id?: string } | undefined)?._id ?? '';
 const entityName = (value: unknown) => {
   if (!value || typeof value === 'string') return 'Sin datos';
@@ -34,6 +35,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
   const [saving, setSaving] = useState(false);
   const [method, setMethod] = useState('cash');
   const [notes, setNotes] = useState('');
+  const [paidAt, setPaidAt] = useState('');
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirmReason, setConfirmReason] = useState('');
   const [allowOverride, setAllowOverride] = useState(false);
@@ -46,6 +48,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
       setPayment(response.payment);
       setMethod(response.payment.method ?? 'cash');
       setNotes(response.payment.notes ?? '');
+      setPaidAt(paymentDateInput(response.payment.paidAt));
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudo cargar el pago.', variant: 'error' });
     } finally {
@@ -99,10 +102,10 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
       setSaving(false);
     }
   };
-  const saveNotes = async () => {
+  const savePaymentDetails = async () => {
     setSaving(true);
     try {
-      await api.patch(`/payments/${id}`, { notes });
+      await api.patch(`/payments/${id}`, { notes, ...(payment?.status === 'paid' && paidAt ? { paidAt } : {}) });
       await load(id);
       showToast({ message: 'Pago actualizado correctamente.', variant: 'success' });
     } catch (error) {
@@ -123,7 +126,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
     <Link href="/admin/payments" className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 transition hover:text-zinc-950"><ChevronLeft className="h-4 w-4" />Volver a Ingresos</Link>
     <header className="rounded-3xl border border-zinc-200 bg-white px-6 py-6 shadow-sm md:px-8"><div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between"><div><h1 className="text-3xl font-semibold tracking-tight text-zinc-950">{payment.paymentNumber}</h1><p className="mt-2 text-sm text-zinc-500">{displayLabel(paymentTypeLabels, payment.type)} · {displayLabel(paymentStatusLabels, payment.status)}</p></div>{isTicketOrder ? null : <div className="flex flex-wrap gap-2"><Button disabled={saving || payment.status === 'paid'} onClick={() => void action('mark-paid', 'Pago marcado como cobrado.')}><CheckCircle2 className="mr-2 h-4 w-4" />Marcar cobrado</Button><Button variant="secondary" disabled={saving || payment.status !== 'paid' || payment.type === 'refund'} onClick={() => openConfirm({ path: 'refund', title: 'Reembolsar pago', description: 'El reembolso queda registrado como un movimiento propio, sin modificar el pago original.' })}><RotateCcw className="mr-2 h-4 w-4" />Reembolsar</Button><Button variant="secondary" disabled={saving || payment.status === 'cancelled'} onClick={() => openConfirm({ path: 'cancel', title: 'Cancelar pago', description: 'El pago cancelado deja de contarse en el saldo del contrato.' })}><XCircle className="mr-2 h-4 w-4" />Cancelar</Button></div>}</div></header>
     {isTicketOrder ? <Card title="Compra de entrada digital"><Item label="Comprador" value={ticketOrder?.buyer?.name || 'Sin datos'} /><Item label="Email" value={ticketOrder?.buyer?.email || 'Sin datos'} />{ticketOrder ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/digital-tickets/orders/${ticketOrder._id}`}>Ver orden {ticketOrder.publicId}</Link> : null}<p className="text-xs text-zinc-500">Este pago se registró automáticamente al aprobarse la compra. Para reembolsarlo o modificarlo, hacelo desde la orden en Entradas digitales.</p></Card> : null}
-    <div className="grid gap-5 lg:grid-cols-3"><Card title="Pago"><Item label="Importe" value={money(payment.amount)} /><Item label="Estado" value={displayLabel(paymentStatusLabels, payment.status)} /><Item label="Tipo" value={displayLabel(paymentTypeLabels, payment.type)} /><Item label="Medio" value={payment.method ? displayLabel(paymentMethodLabels, payment.method) : 'No informado'} /><Item label="Vencimiento" value={formatDate(payment.dueDate)} /><Item label="Cobrado" value={formatDate(payment.paidAt)} /></Card>{isTicketOrder ? null : <Card title="Asociaciones"><Item label="Cliente" value={entityName(payment.customerId)} />{customerId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/customers/${customerId}`}>Ver cliente</Link> : null}<Item label="Evento" value={entityName(payment.eventId)} />{eventId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/events/${eventId}`}>Ver evento</Link> : null}<Item label="Contrato" value={entityName(payment.contractId)} />{contractId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/contracts/${contractId}?tab=pagos`}>Ver contrato</Link> : null}</Card>}{isTicketOrder ? null : <Card title="Cobro"><label className="block text-sm font-medium text-zinc-700">Medio<Select className="mt-2" value={method} onChange={(event) => setMethod(event.target.value)}>{Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Notas internas" /><Button variant="secondary" disabled={saving} onClick={() => void saveNotes()}>Guardar notas</Button></Card>}</div>
+    <div className="grid gap-5 lg:grid-cols-3"><Card title="Pago"><Item label="Importe" value={money(payment.amount)} /><Item label="Estado" value={displayLabel(paymentStatusLabels, payment.status)} /><Item label="Tipo" value={displayLabel(paymentTypeLabels, payment.type)} /><Item label="Medio" value={payment.method ? displayLabel(paymentMethodLabels, payment.method) : 'No informado'} /><Item label="Vencimiento" value={formatDate(payment.dueDate)} /><Item label="Cobrado" value={formatDate(payment.paidAt)} /></Card>{isTicketOrder ? null : <Card title="Asociaciones"><Item label="Cliente" value={entityName(payment.customerId)} />{customerId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/customers/${customerId}`}>Ver cliente</Link> : null}<Item label="Evento" value={entityName(payment.eventId)} />{eventId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/events/${eventId}`}>Ver evento</Link> : null}<Item label="Contrato" value={entityName(payment.contractId)} />{contractId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/contracts/${contractId}?tab=pagos`}>Ver contrato</Link> : null}</Card>}{isTicketOrder ? null : <Card title="Cobro"><label className="block text-sm font-medium text-zinc-700">Medio<Select className="mt-2" value={method} onChange={(event) => setMethod(event.target.value)}>{Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>{payment.status === 'paid' ? <label className="block text-sm font-medium text-zinc-700">Fecha de pago<Input className="mt-2" type="date" value={paidAt} onChange={(event) => setPaidAt(event.target.value)} /></label> : null}<Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Notas internas" />{payment.status === 'paid' ? <p className="text-xs leading-5 text-zinc-500">Al cambiar la fecha, el comprobante se regenera y reemplaza el PDF anterior.</p> : null}<Button variant="secondary" disabled={saving} onClick={() => void savePaymentDetails()}>Guardar cambios</Button></Card>}</div>
     <Card title="Referencias"><Item label="Recibo" value={payment.receiptNumber || 'No informado'} /><Item label="Referencia" value={payment.reference || 'No informado'} /><Item label="Afecta saldo contractual" value={payment.affectsContractBalance ? 'Sí' : 'No'} /></Card>
     {!isTicketOrder && payment.status === 'pending' && isOverduePaymentDate(payment.dueDate) ? <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm"><h2 className="font-semibold text-amber-950">Pago vencido</h2><p className="mt-1 text-sm text-amber-800">Prepará un recordatorio profesional y cordial para solicitar el pago.</p><div className="mt-4"><OverduePaymentContact target={{ source: 'payment', paymentId: id }} /></div></div> : null}
     <Modal open={Boolean(confirmAction)} title={confirmAction?.title ?? ''} description={confirmAction?.description} onClose={() => setConfirmAction(null)}>

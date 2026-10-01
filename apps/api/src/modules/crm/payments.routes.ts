@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
-import { Contract, Payment } from './crm.models';
+import { Contract, Customer, Event, Payment } from './crm.models';
 import { accessibleSalonIds, canAccessSalon, referenceId, requireAuth, requirePermission, userHasPermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -10,11 +10,14 @@ import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
 import { cancelPayment, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from './payments.service';
+import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
+import { argentinaMidnight, isDateKey } from '../../utils/argentina-date';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const paymentTypes = ['deposit', 'installment', 'balance', 'addendum', 'extra', 'security_deposit', 'adjustment', 'refund', 'other'] as const;
 const paymentMethods = ['cash', 'bank_transfer', 'mercado_pago', 'card', 'other'] as const;
 const paymentStatuses = ['pending', 'paid', 'cancelled', 'refunded'] as const;
+const paidAtSchema = z.preprocess((input) => typeof input === 'string' && isDateKey(input) ? argentinaMidnight(input) : input, z.coerce.date());
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const listSchema = z.object({ body: z.unknown().optional(), params: z.object({}), query: z.record(z.string(), z.unknown()) });
 const paymentBody = z.object({
@@ -28,7 +31,7 @@ const paymentBody = z.object({
   status: z.enum(paymentStatuses).optional(),
   amount: z.coerce.number().positive(),
   dueDate: z.coerce.date().optional(),
-  paidAt: z.coerce.date().optional(),
+  paidAt: paidAtSchema.optional(),
   receiptNumber: z.string().trim().optional(),
   reference: z.string().trim().optional(),
   notes: z.string().trim().optional(),
@@ -87,6 +90,18 @@ async function ensureContractAccess(request: Request, contractId: string): Promi
   if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
   const salonId = referenceId((contract as any).salonId);
   if (salonId && !canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+}
+async function regeneratePaymentReceipt(payment: any): Promise<void> {
+  const [event, customer, contract] = await Promise.all([
+    Event.findOne({ _id: payment.eventId, deletedAt: null }).lean(),
+    Customer.findOne({ _id: payment.customerId, deletedAt: null }).lean(),
+    Contract.findOne({ _id: payment.contractId, deletedAt: null }).lean()
+  ]);
+  if (!event || !customer || !contract) throw new ApiError(422, 'No se pudo regenerar el comprobante porque faltan datos asociados al pago.');
+  const receipt = await generateAndUploadPaymentReceiptPdf(payment, event, customer, contract);
+  Object.assign(payment, receipt);
+  delete payment.pdfBuffer;
+  await payment.save();
 }
 
 router.use(requireAuth);
@@ -161,11 +176,14 @@ router.get('/:id', requirePermission(Permission.PAYMENTS_READ), validateRequest(
 router.patch('/:id', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const existing: any = await Payment.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensurePaymentAccess(request, existing);
+  const previousPaidAt = existing.paidAt;
   const canOverride = userHasPermission(request.user!, Permission.PAYMENTS_APPROVE);
   if (request.body.allowOverpayment && !canOverride) throw new ApiError(403, 'PAYMENT_OVERRIDE_NOT_AUTHORIZED');
   const contractBefore = request.body.allowOverpayment ? await Contract.findOne({ _id: existing.contractId, deletedAt: null }).select('balanceAmount').lean() : null;
   const payment = await updatePayment(request.params.id, { ...request.body, allowOverpayment: request.body.allowOverpayment && canOverride }, request.user!.id);
-  await writeAuditLog(request, 'PAYMENT_UPDATE', 'Payment', payment._id.toString());
+  const paidAtChanged = request.body.paidAt !== undefined && String(previousPaidAt ?? '') !== String(payment.paidAt ?? '');
+  if (paidAtChanged && payment.status === 'paid') await regeneratePaymentReceipt(payment);
+  await writeAuditLog(request, 'PAYMENT_UPDATE', 'Payment', payment._id.toString(), { paidAtChanged, previousPaidAt, paidAt: payment.paidAt, receiptRegenerated: paidAtChanged && payment.status === 'paid' });
   if (request.body.allowOverpayment && canOverride) {
     const contractAfter: any = await Contract.findOne({ _id: payment.contractId, deletedAt: null }).select('balanceAmount').lean();
     await writeAuditLog(request, 'PAYMENT_OVERPAYMENT_OVERRIDE', 'Payment', payment._id.toString(), { contractId: payment.contractId, requestedAmount: payment.amount, previousBalance: (contractBefore as any)?.balanceAmount, resultingBalance: contractAfter?.balanceAmount, reason: request.body.overrideReason });

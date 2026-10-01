@@ -127,6 +127,24 @@ describe('payments service', () => {
     expect(mocks.contractFindOneAndUpdate).not.toHaveBeenCalled();
   });
 
+  it('allows correcting the collection date of a paid manual payment without changing its amount', async () => {
+    const originalDate = new Date('2026-09-15T03:00:00.000Z');
+    const correctedDate = new Date('2026-09-16T03:00:00.000Z');
+    const payment = {
+      _id: 'payment-1', source: 'manual', status: 'paid', amount: 20000, type: 'deposit', affectsContractBalance: true,
+      contractId: { toString: () => 'contract-1' }, paidAt: originalDate, save: vi.fn().mockResolvedValue(undefined)
+    };
+    mocks.paymentFindOne.mockResolvedValue(payment);
+    mocks.contractFindOne.mockResolvedValue(contractDoc({ totalAmount: 100000 }));
+    mocks.paymentFind.mockResolvedValue([{ status: 'paid', amount: 20000, type: 'deposit', affectsContractBalance: true }]);
+
+    await updatePayment('payment-1', { paidAt: correctedDate }, 'user-1');
+
+    expect(payment.paidAt).toEqual(correctedDate);
+    expect(payment.amount).toBe(20000);
+    expect(payment.save).toHaveBeenCalled();
+  });
+
   it('requires a reason to cancel a payment', async () => {
     await expect(cancelPayment('payment-1', 'user-1', '')).rejects.toMatchObject({ code: 'PAYMENT_CANCELLATION_REASON_REQUIRED' });
     expect(mocks.paymentFindOne).not.toHaveBeenCalled();

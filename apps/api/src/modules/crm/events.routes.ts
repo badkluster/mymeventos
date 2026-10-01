@@ -28,7 +28,7 @@ import { uploadBuffer } from '../uploads/cloudinary.service';
 import { generateGuestListSinglePagePdf, generateOperationalPdf, generateOperationalWord, type OperationalDocumentType } from './event-operational-document.service';
 import { eventExpenses, syncEventSupplierExpenses } from './event-supplier-expenses.service';
 import { syncEventAlertCalendarItems } from './event-alert-calendar-sync.service';
-import { addDaysToDateKey, argentinaDateKey, civilDateInput, daysBetweenDateKeys, dueDateKey } from '../../utils/argentina-date';
+import { addDaysToDateKey, argentinaDateKey, argentinaMidnight, civilDateInput, daysBetweenDateKeys, dueDateKey, isDateKey } from '../../utils/argentina-date';
 import { installmentDueDateKey, isOpenInstallment, planFor } from './financial-reminders.service';
 import { activeEventStatuses, cancelEvent, cancellationPreview, deleteDraftEvent, deletionPreview, reactivateEvent, terminalEventStatuses } from './event-lifecycle.service';
 import { diacriticInsensitiveRegex } from '../../utils/search';
@@ -181,7 +181,7 @@ const eventPaymentSchema = z.object({
     amount: z.coerce.number().positive(),
     method: z.enum(['cash', 'bank_transfer', 'mercado_pago', 'card', 'other']),
     type: z.enum(['deposit', 'installment', 'balance', 'extra', 'adjustment', 'other']).optional(),
-    paidAt: z.coerce.date().optional(),
+    paidAt: z.preprocess((input) => typeof input === 'string' && isDateKey(input) ? argentinaMidnight(input) : input, z.coerce.date()).optional(),
     reference: z.string().trim().optional(),
     notes: z.string().trim().optional(),
     planInstallmentId: z.string().trim().optional(),

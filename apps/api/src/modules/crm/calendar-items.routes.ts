@@ -70,6 +70,9 @@ function buildQuery(request: Request): Record<string, unknown> {
   if (type && itemTypes.includes(type as any)) terms.push({ type });
   const status = queryValue(request.query.status);
   if (status && itemStatuses.includes(status as any)) terms.push({ status });
+  // Cancelled items are retained for auditability, but they are not active
+  // agenda work.  A caller can still request status=cancelled explicitly.
+  if (!status) terms.push({ status: { $ne: 'cancelled' } });
   const salonId = queryValue(request.query.salonId);
   if (salonId && objectId.safeParse(salonId).success) terms.push({ salonId });
   const dateFrom = queryValue(request.query.dateFrom);

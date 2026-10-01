@@ -9,9 +9,13 @@ const mocks = vi.hoisted(() => ({
   paymentFind: vi.fn(),
   paymentFindOne: vi.fn(),
   contractFindOne: vi.fn(),
+  customerFindOne: vi.fn(),
+  eventFindOne: vi.fn(),
   markPaymentPaid: vi.fn(),
   cancelPayment: vi.fn(),
   createPayment: vi.fn(),
+  updatePayment: vi.fn(),
+  generateReceipt: vi.fn(),
   writeAuditLog: vi.fn()
 }));
 
@@ -20,13 +24,13 @@ vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: v
 vi.mock('../src/modules/crm/crm.models', () => ({
   Lead: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
   LeadActivity: { find: vi.fn(), create: vi.fn() },
-  Customer: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn(), aggregate: vi.fn() },
+  Customer: { findOne: mocks.customerFindOne, countDocuments: vi.fn(), find: vi.fn(), create: vi.fn(), aggregate: vi.fn() },
   ContactPerson: {},
   PackageTemplate: { find: vi.fn(), findOne: vi.fn(), exists: vi.fn() },
   VenuePackageRule: { find: vi.fn(), findOne: vi.fn(), findOneAndUpdate: vi.fn() },
   Quote: { findOne: vi.fn(), find: vi.fn(), aggregate: vi.fn() },
   QuoteRevision: { findOne: vi.fn(), create: vi.fn() },
-  Event: { findOne: vi.fn(), find: vi.fn(), aggregate: vi.fn(), countDocuments: vi.fn(), findOneAndUpdate: vi.fn() },
+  Event: { findOne: mocks.eventFindOne, find: vi.fn(), aggregate: vi.fn(), countDocuments: vi.fn(), findOneAndUpdate: vi.fn() },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
   Contract: { findOne: mocks.contractFindOne, countDocuments: vi.fn(), find: vi.fn() },
   ContractAddendum: { find: vi.fn(), findOne: vi.fn(), countDocuments: vi.fn(), create: vi.fn() },
@@ -34,10 +38,11 @@ vi.mock('../src/modules/crm/crm.models', () => ({
 }));
 vi.mock('../src/modules/crm/payments.service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/modules/crm/payments.service')>();
-  return { ...actual, markPaymentPaid: mocks.markPaymentPaid, cancelPayment: mocks.cancelPayment, createPayment: mocks.createPayment };
+  return { ...actual, markPaymentPaid: mocks.markPaymentPaid, cancelPayment: mocks.cancelPayment, createPayment: mocks.createPayment, updatePayment: mocks.updatePayment };
 });
 vi.mock('../src/modules/audit/audit.service', () => ({ writeAuditLog: mocks.writeAuditLog }));
 vi.mock('../src/modules/crm/quote-pdf.service', () => ({ generateAndUploadQuotePdf: vi.fn() }));
+vi.mock('../src/modules/crm/payment-receipt-pdf.service', () => ({ generateAndUploadPaymentReceiptPdf: mocks.generateReceipt }));
 
 import app from '../src/app';
 
@@ -97,6 +102,27 @@ describe('payments routes', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.payment.status).toBe('paid');
     expect(mocks.markPaymentPaid).toHaveBeenCalledWith(paymentId, expect.objectContaining({ method: 'cash' }), adminId);
+  });
+
+  it('corrects a paid payment date and regenerates its receipt', async () => {
+    const originalDate = new Date('2026-09-15T03:00:00.000Z');
+    const correctedDate = new Date('2026-09-16T03:00:00.000Z');
+    const existing = { _id: paymentId, salonId, status: 'paid', paidAt: originalDate, eventId: '507f1f77bcf86cd799439014', customerId: '507f1f77bcf86cd799439015', contractId: '507f1f77bcf86cd799439016' };
+    const updated = { ...existing, paidAt: correctedDate, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.paymentFindOne.mockReturnValue(chainLean(existing));
+    mocks.updatePayment.mockResolvedValue(updated);
+    mocks.eventFindOne.mockReturnValue(chainLean({ _id: existing.eventId, eventName: 'Cumpleaños de Ana' }));
+    mocks.customerFindOne.mockReturnValue(chainLean({ _id: existing.customerId, fullName: 'Ana Pérez' }));
+    mocks.contractFindOne.mockReturnValue(chainLean({ _id: existing.contractId, contractNumber: 'C-2026-00001' }));
+    mocks.generateReceipt.mockResolvedValue({ receiptPdfUrl: 'http://example.test/receipt.pdf', receiptPdfSecureUrl: 'https://example.test/receipt.pdf', receiptPdfPublicId: 'receipt-1', receiptPdfGeneratedAt: new Date(), pdfBuffer: Buffer.from('pdf') });
+
+    const response = await request(app).patch(`/api/payments/${paymentId}`).set('Cookie', adminCookie).send({ paidAt: '2026-09-16' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updatePayment).toHaveBeenCalledWith(paymentId, expect.objectContaining({ paidAt: correctedDate }), adminId);
+    expect(mocks.generateReceipt).toHaveBeenCalledWith(updated, expect.anything(), expect.anything(), expect.anything());
+    expect(updated.save).toHaveBeenCalled();
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), 'PAYMENT_UPDATE', 'Payment', paymentId, expect.objectContaining({ paidAtChanged: true, receiptRegenerated: true }));
   });
 
   it('rejects cancellation without a reason', async () => {

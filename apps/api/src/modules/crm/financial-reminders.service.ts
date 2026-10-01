@@ -118,21 +118,28 @@ export function installmentDueDateKey(installment: any): string | undefined {
 
 /**
  * We do not backfill every historical warning on the first deploy. If a tick was
- * unavailable, it catches up with the current escalation level only; future
- * stages remain scheduled normally.
+ * unavailable, it catches up with the current escalation level only.  Stages
+ * after the due date are deliberately not scheduled in advance: an
+ * escalation belongs in the agenda only when the installment is actually
+ * still unpaid at that point.
  */
 function pendingRulesForDueDate(dueKey: string, todayKey: string): Array<{ rule: ReminderRule; sendAtKey: string }> {
   const daysUntilDue = daysBetweenDateKeys(todayKey, dueKey);
-  if (daysUntilDue > 7) return paymentRules.map((rule) => ({ rule, sendAtKey: addDaysToDateKey(dueKey, -rule.daysUntilDue) }));
+  // Before the due date, show only the legitimate pre-due reminders.  The
+  // overdue/second-notice/escalation stages must not make the calendar predict
+  // that a customer will fail to pay.
+  if (daysUntilDue > 7) return paymentRules
+    .filter((rule) => rule.daysUntilDue >= 0)
+    .map((rule) => ({ rule, sendAtKey: addDaysToDateKey(dueKey, -rule.daysUntilDue) }));
   if (daysUntilDue >= 0) return paymentRules
-    .filter((rule) => rule.daysUntilDue <= daysUntilDue)
+    .filter((rule) => rule.daysUntilDue >= 0 && rule.daysUntilDue <= daysUntilDue)
     .map((rule) => ({ rule, sendAtKey: addDaysToDateKey(dueKey, -rule.daysUntilDue) }));
   if (daysUntilDue >= -2) return paymentRules
-    .filter((rule) => rule.key === 'overdue' || rule.daysUntilDue <= -3)
-    .map((rule) => ({ rule, sendAtKey: rule.key === 'overdue' ? todayKey : addDaysToDateKey(dueKey, -rule.daysUntilDue) }));
+    .filter((rule) => rule.key === 'overdue')
+    .map((rule) => ({ rule, sendAtKey: todayKey }));
   if (daysUntilDue >= -6) return paymentRules
-    .filter((rule) => rule.key === 'second_notice' || rule.key === 'escalation')
-    .map((rule) => ({ rule, sendAtKey: rule.key === 'second_notice' ? todayKey : addDaysToDateKey(dueKey, -rule.daysUntilDue) }));
+    .filter((rule) => rule.key === 'second_notice')
+    .map((rule) => ({ rule, sendAtKey: todayKey }));
   const escalation = paymentRules.find((rule) => rule.key === 'escalation')!;
   return [{ rule: escalation, sendAtKey: todayKey }];
 }

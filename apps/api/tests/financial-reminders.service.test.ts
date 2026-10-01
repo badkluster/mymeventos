@@ -72,7 +72,7 @@ describe('financial reminders service', () => {
     mocks.sendEmail.mockResolvedValue(undefined);
   });
 
-  it('creates and schedules every plan-installment stage when the due date is seven days away', async () => {
+  it('schedules only pre-due plan-installment reminders when the due date is seven days away', async () => {
     const installment = {
       id: 'installment-1',
       label: 'Segunda cuota',
@@ -101,8 +101,8 @@ describe('financial reminders service', () => {
 
     const result = await processFinancialReminderTick(new Date('2026-06-01T15:00:00.000Z'));
 
-    expect(result).toMatchObject({ synced: 6, delivered: 0, skipped: 0, failed: 0, hasMore: false });
-    expect(upsertCalls()).toHaveLength(6);
+    expect(result).toMatchObject({ synced: 3, delivered: 0, skipped: 0, failed: 0, hasMore: false });
+    expect(upsertCalls()).toHaveLength(3);
     expect(upsertCalls().map(([, update]) => ({
       rule: update.$set.metadata.rule,
       startAt: update.$set.startAt.toISOString(),
@@ -110,10 +110,7 @@ describe('financial reminders service', () => {
     }))).toEqual([
       { rule: 'due_7_days', startAt: '2026-06-01T03:00:00.000Z', sendAt: '2026-06-01T03:00:00.000Z' },
       { rule: 'due_3_days', startAt: '2026-06-05T03:00:00.000Z', sendAt: '2026-06-05T03:00:00.000Z' },
-      { rule: 'due_today', startAt: '2026-06-08T03:00:00.000Z', sendAt: '2026-06-08T03:00:00.000Z' },
-      { rule: 'overdue', startAt: '2026-06-09T03:00:00.000Z', sendAt: '2026-06-09T03:00:00.000Z' },
-      { rule: 'second_notice', startAt: '2026-06-11T03:00:00.000Z', sendAt: '2026-06-11T03:00:00.000Z' },
-      { rule: 'escalation', startAt: '2026-06-15T03:00:00.000Z', sendAt: '2026-06-15T03:00:00.000Z' }
+      { rule: 'due_today', startAt: '2026-06-08T03:00:00.000Z', sendAt: '2026-06-08T03:00:00.000Z' }
     ]);
 
     const d7Call = upsertCalls().find(([filter]) => filter.automationKey === 'financial:installment:event-1:installment-1:due_7_days:2026-06-08');
@@ -198,6 +195,27 @@ describe('financial reminders service', () => {
       }),
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ]);
+  });
+
+  it('does not schedule a second notice or escalation until the payment has actually reached those stages', async () => {
+    const contract = { _id: 'contract-1', eventId: 'event-1', customerId: 'customer-1', balanceAmount: 0, paymentPlanSnapshot: [] };
+    const event = {
+      _id: 'event-1',
+      customerId: 'customer-1',
+      eventName: 'Cumple de Ana',
+      status: 'confirmed',
+      paymentPlanSnapshot: [{ id: 'installment-1', amount: 50000, paidAmount: 0, status: 'pending', dueDate: '2026-06-08' }]
+    };
+    mocks.contractFind.mockReturnValue(leanQuery([contract]));
+    mocks.eventFind.mockReturnValue(leanQuery([event]));
+    mocks.userFind.mockReturnValue(leanQuery([{ _id: 'financial-user', email: 'finance@example.com' }]));
+
+    const result = await processFinancialReminderTick(new Date('2026-06-09T15:00:00.000Z'));
+
+    expect(result).toMatchObject({ synced: 1, delivered: 0, skipped: 0, failed: 0, hasMore: false });
+    expect(upsertCalls()).toHaveLength(1);
+    expect(upsertCalls()[0][1].$set.metadata.rule).toBe('overdue');
+    expect(upsertCalls()[0][1].$set.title).toBe('Pago vencido');
   });
 
   it('creates a balance reminder fifteen days before the event for the assigned lead and salon manager', async () => {
@@ -316,9 +334,9 @@ describe('financial reminders service', () => {
       sevenDayInstallmentFixture();
 
       const firstTick = await processFinancialReminderTick(new Date('2026-06-01T15:00:00.000Z'));
-      expect(firstTick).toMatchObject({ synced: 6 });
+      expect(firstTick).toMatchObject({ synced: 3 });
       const created = upsertCalls();
-      expect(created).toHaveLength(6);
+      expect(created).toHaveLength(3);
 
       // Reuse exactly what tick 1 just wrote as tick 2's prefetch snapshot — ten minutes later,
       // nothing about the installment changed, so nothing should be written again.
@@ -334,7 +352,7 @@ describe('financial reminders service', () => {
 
       const secondTick = await processFinancialReminderTick(new Date('2026-06-01T15:10:00.000Z'));
 
-      expect(secondTick).toMatchObject({ synced: 6 });
+      expect(secondTick).toMatchObject({ synced: 3 });
       expect(upsertCalls()).toHaveLength(0);
       expect(mocks.calendarUpdateOne).not.toHaveBeenCalled();
     });
@@ -421,13 +439,13 @@ describe('financial reminders service', () => {
 
       const result = await processFinancialReminderTick(new Date('2026-06-01T15:00:00.000Z'));
 
-      // `synced` counts generated contexts (unchanged public semantics) — 2 installments x 6
+      // `synced` counts generated contexts (unchanged public semantics) — 2 installments x 3
       // rule-stages each.
-      expect(result).toMatchObject({ synced: 12 });
-      // But only 6 unique automationKeys ever reach Mongo.
+      expect(result).toMatchObject({ synced: 6 });
+      // But only 3 unique automationKeys ever reach Mongo.
       const keys = upsertCalls().map(([filter]) => filter.automationKey);
-      expect(keys).toHaveLength(6);
-      expect(new Set(keys).size).toBe(6);
+      expect(keys).toHaveLength(3);
+      expect(new Set(keys).size).toBe(3);
     });
   });
 });
