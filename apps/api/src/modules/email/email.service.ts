@@ -6,7 +6,7 @@ import { getOrCreateMarketingSettings } from '../marketing/marketing-settings.se
 
 export type EmailAttachment = {
   filename?: string;
-  content?: Buffer | Uint8Array | string;
+  content?: Buffer | string;
   path?: string;
   contentType?: string;
   cid?: string;
@@ -61,7 +61,7 @@ function senderDomain(email: string): string {
 }
 
 async function resolveResendSender(): Promise<{ from: string; replyTo?: string }> {
-  let settings: Awaited<ReturnType<typeof getOrCreateMarketingSettings>> | undefined;
+  let settings: any;
   try {
     settings = await getOrCreateMarketingSettings();
   } catch (error) {
@@ -117,8 +117,6 @@ async function toResendAttachment(attachment: EmailAttachment, index: number): P
   let content: Buffer | undefined;
   if (Buffer.isBuffer(attachment.content)) {
     content = attachment.content;
-  } else if (attachment.content instanceof Uint8Array) {
-    content = Buffer.from(attachment.content);
   } else if (typeof attachment.content === 'string') {
     content = Buffer.from(attachment.content, 'utf8');
   } else if (path) {
@@ -193,7 +191,7 @@ async function sendWithSmtp(input: EmailInput): Promise<boolean> {
     text: input.text,
     html: input.html,
     replyTo: input.replyTo,
-    attachments: input.attachments
+    attachments: input.attachments as nodemailer.SendMailOptions['attachments']
   });
   return true;
 }
