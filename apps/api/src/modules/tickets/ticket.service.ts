@@ -13,7 +13,7 @@ import {
   TicketStockReservation,
   TicketType,
 } from "./ticket.models";
-import { sendEmail } from "../email/email.service";
+import { sendEmail, transactionalEmailProviderName } from "../email/email.service";
 import { env } from "../../config/env";
 import {
   getTicketPaymentProvider,
@@ -312,7 +312,7 @@ export async function sendOrderTicketsEmail(
         $set: {
           status: sent ? "sent" : "failed",
           destinationMasked: maskEmail(order.buyer.email),
-          provider: sent ? "smtp" : undefined,
+          provider: sent ? transactionalEmailProviderName() : undefined,
           sentAt: sent ? new Date() : undefined,
           nextRetryAt: sent ? undefined : retryAt(delivery.attemptNumber),
           errorCode: sent ? undefined : "EMAIL_NOT_CONFIGURED",
@@ -499,7 +499,7 @@ export async function sendTicketLifecycleEmail(orderId: string, channel: TicketL
         $set: {
           status: sent ? "sent" : "failed",
           destinationMasked: maskEmail(order.buyer.email),
-          provider: sent ? "smtp" : undefined,
+          provider: sent ? transactionalEmailProviderName() : undefined,
           sentAt: sent ? new Date() : undefined,
           nextRetryAt: sent ? undefined : retryAtForTicketEmail(delivery.attemptNumber),
           errorCode: sent ? undefined : "EMAIL_NOT_CONFIGURED",
