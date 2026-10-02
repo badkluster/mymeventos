@@ -398,7 +398,7 @@ async function reserveSessions(settlementId: string, sessions: any[]): Promise<v
     $or: [{ payrollSettlementId: null }, { payrollSettlementId: { $exists: false } }]
   }, { $set: { payrollSettlementId: settlementId } });
   if (Number(result.modifiedCount ?? result.nModified ?? 0) !== sessionIds.length) {
-    await WorkSession.updateMany({ payrollSettlementId: settlementId }, { $unset: { payrollSettlementId: 1 } });
+    await WorkSession.updateMany({ _id: { $in: sessionIds }, payrollSettlementId: settlementId }, { $unset: { payrollSettlementId: 1 } });
     throw new ApiError(409, 'PAYROLL_ATTENDANCE_ALREADY_SETTLED');
   }
 }
@@ -507,9 +507,18 @@ export async function recalculateSettlement(actor: PayrollActor, settlementId: s
   if (!settlement) throw new ApiError(404, 'PAYROLL_SETTLEMENT_NOT_FOUND');
   await assertSettlementScope(actor, settlement);
   if (settlement.status !== 'draft') throw new ApiError(409, 'PAYROLL_SETTLEMENT_LOCKED');
-  const sessions = await WorkSession.find({ _id: { $in: settlement.attendanceRecordIds }, payrollSettlementId: settlement._id }).sort({ startedAt: 1 }).lean();
+  const { start, endExclusive } = normalizePayrollPeriod(settlement.periodStart, settlement.periodEnd);
+  const reservedSessions = await WorkSession.find({ _id: { $in: settlement.attendanceRecordIds }, payrollSettlementId: settlement._id }).sort({ startedAt: 1 }).lean();
+  const newlyApprovedSessions = await settlementSessions(String(settlement.employeeId), start, endExclusive);
+  if (newlyApprovedSessions.length) await reserveSessions(String(settlement._id), newlyApprovedSessions);
+  const sessions = [...reservedSessions, ...newlyApprovedSessions].sort((left, right) => new Date(left.startedAt).getTime() - new Date(right.startedAt).getTime());
   const advances = await SalaryAdvance.find({ payrollSettlementId: settlement._id, status: 'deducted' }).sort({ date: 1 }).lean();
-  return persistCalculation(settlement, settlement.payrollProfileSnapshot, sessions, advances, actor.id);
+  try {
+    return await persistCalculation(settlement, settlement.payrollProfileSnapshot, sessions, advances, actor.id);
+  } catch (error) {
+    if (newlyApprovedSessions.length) await WorkSession.updateMany({ _id: { $in: newlyApprovedSessions.map((session) => session._id) }, payrollSettlementId: settlement._id }, { $unset: { payrollSettlementId: 1 } });
+    throw error;
+  }
 }
 
 export async function assertSettlementScope(actor: PayrollActor, settlement: any): Promise<void> {
