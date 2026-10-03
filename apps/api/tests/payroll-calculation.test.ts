@@ -34,10 +34,12 @@ describe('payroll calculation engine', () => {
     expect(result.baseAmountMinor).toBe(14_000);
   });
 
-  it('applies the overtime multiplier after the configured threshold', () => {
+  it('keeps every approved minute as a normal hour, even when a legacy overtime threshold exists', () => {
     const result = calculateSettlement({ profile: { ...hourly, hourlyRateMinor: 1_000, overtimeAfterMinutes: 60 }, sessions: [session('a', 120)] });
-    expect(result.baseAmountMinor).toBe(1_000);
-    expect(result.earningsAmountMinor).toBe(1_500);
+    expect(result.baseAmountMinor).toBe(2_000);
+    expect(result.earningsAmountMinor).toBe(0);
+    expect(result.items).toEqual(expect.arrayContaining([expect.objectContaining({ conceptCode: 'NORMAL_HOURS', quantity: 2 })]));
+    expect(result.items.some((item) => item.conceptCode === 'OVERTIME_HOURS')).toBe(false);
   });
 
   it('uses approved minutes after an unpaid break was deducted by attendance review', () => {

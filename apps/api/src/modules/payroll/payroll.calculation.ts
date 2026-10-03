@@ -122,9 +122,8 @@ export function calculateSettlement(input: {
 
   for (const session of input.sessions) {
     const roundedMinutes = roundMinutes(session.approvedMinutes, profile.roundingRule);
-    const overtimeThreshold = Math.max(0, (profile.overtimeAfterMinutes ?? 480) + (profile.graceMinutes ?? 0));
-    const normalMinutes = Math.min(roundedMinutes, overtimeThreshold);
-    const overtimeMinutes = Math.max(0, roundedMinutes - normalMinutes);
+    const normalMinutes = roundedMinutes;
+    const overtimeMinutes = 0;
     const multiplier = profileMultiplier(profile, session.startedAt);
     details.push({ id: session.id, approvedMinutes: session.approvedMinutes, roundedMinutes, normalMinutes, overtimeMinutes, multiplier });
 
@@ -138,12 +137,6 @@ export function calculateSettlement(input: {
       if (premiumSubtotal) {
         items.push(item({ conceptCode: multiplier > 1 ? 'SHIFT_PREMIUM' : 'NORMAL_HOURS', conceptName: 'Adicional de turno', conceptType: 'earning', source: 'attendance', sourceId: session.id, quantity: quantityHours(normalMinutes), unit: 'hour', unitAmountMinor: Math.max(0, Math.round(profile.hourlyRateMinor * (multiplier - 1))), subtotalMinor: premiumSubtotal, description: 'Adicional nocturno y/o de fin de semana según el perfil.' }));
         earningsAmountMinor += premiumSubtotal;
-      }
-      if (overtimeMinutes) {
-        const overtimeRate = profile.hourlyRateMinor * (profile.overtimeMultiplier ?? 1.5) * multiplier;
-        const overtimeSubtotal = minorForMinutes(overtimeMinutes, overtimeRate);
-        items.push(item({ conceptCode: 'OVERTIME_HOURS', conceptName: 'Horas extra', conceptType: 'earning', source: 'overtime', sourceId: session.id, quantity: quantityHours(overtimeMinutes), unit: 'hour', unitAmountMinor: Math.round(overtimeRate), subtotalMinor: overtimeSubtotal, description: 'Horas que superan el umbral diario del perfil.' }));
-        earningsAmountMinor += overtimeSubtotal;
       }
     }
 

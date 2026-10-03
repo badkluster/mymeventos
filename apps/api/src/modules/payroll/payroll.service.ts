@@ -24,7 +24,6 @@ import {
 
 const BASE_CONCEPTS = [
   ['NORMAL_HOURS', 'Horas normales', 'earning', 'attendance', true, false, 10],
-  ['OVERTIME_HOURS', 'Horas extra', 'earning', 'overtime', true, false, 20],
   ['WORK_DAYS', 'Jornadas', 'earning', 'attendance', true, false, 30],
   ['WORKED_EVENTS', 'Eventos trabajados', 'earning', 'event', true, false, 40],
   ['SHIFT_PREMIUM', 'Adicional nocturno o fin de semana', 'earning', 'overtime', true, false, 50],
