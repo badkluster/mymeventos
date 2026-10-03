@@ -63,13 +63,14 @@ export default function AttendancePage() {
   const [tab, setTab] = useState<Tab>(() => requestedTab === 'history' ? 'history' : 'active');
   const [loading, setLoading] = useState(false);
   const [salons, setSalons] = useState<SalonOption[]>([]);
+  const [attendanceUsers, setAttendanceUsers] = useState<AttendanceUserOption[]>([]);
 
   const [activeSessions, setActiveSessions] = useState<WorkSession[]>([]);
 
   const [historySessions, setHistorySessions] = useState<WorkSession[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
-  const [historyFilters, setHistoryFilters] = useState({ status: '', salonId: '', requiresReview: '', from: '', to: '' });
+  const [historyFilters, setHistoryFilters] = useState({ userId: '', status: '', salonId: '', requiresReview: '', from: '', to: '' });
 
   const [incidents, setIncidents] = useState<AttendanceIncident[]>([]);
   const [incidentStatus, setIncidentStatus] = useState('');
@@ -120,6 +121,7 @@ export default function AttendancePage() {
     setLoading(true);
     try {
       const query = new URLSearchParams({ page: String(historyPage), limit: '20' });
+      if (historyFilters.userId) query.set('userId', historyFilters.userId);
       if (historyFilters.status) query.set('status', historyFilters.status);
       if (historyFilters.salonId) query.set('salonId', historyFilters.salonId);
       if (historyFilters.requiresReview) query.set('requiresReview', historyFilters.requiresReview);
@@ -192,7 +194,15 @@ export default function AttendancePage() {
     }
   }, [showToast]);
 
-  useEffect(() => { void api.get<{ salons: SalonOption[] }>('/salons').then((response) => setSalons(response.salons ?? [])).catch(() => setSalons([])); }, []);
+  useEffect(() => {
+    void Promise.all([
+      api.get<{ salons: SalonOption[] }>('/salons'),
+      api.get<{ items: AttendanceUserOption[] }>('/attendance/sessions/users')
+    ]).then(([salonsResponse, usersResponse]) => {
+      setSalons(salonsResponse.salons ?? []);
+      setAttendanceUsers(usersResponse.items ?? []);
+    }).catch(() => { setSalons([]); setAttendanceUsers([]); });
+  }, []);
 
   useEffect(() => {
     if (tab === 'active') void loadActive();
@@ -399,7 +409,7 @@ export default function AttendancePage() {
       showToast({ message: 'Horario agregado correctamente al historial.', variant: 'success' });
       setManualSessionOpen(false);
       setManualSessionForm({ userId: '', date: '', startedTime: '', endedTime: '', notes: '' });
-      setHistoryFilters({ status: '', salonId: '', requiresReview: '', from: '', to: '' });
+      setHistoryFilters({ userId: '', status: '', salonId: '', requiresReview: '', from: '', to: '' });
       setHistoryPage(1);
       setTab('history');
     } catch (error) {
@@ -454,6 +464,7 @@ export default function AttendancePage() {
 
     {tab === 'history' && <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <FilterField label="Usuario"><Select value={historyFilters.userId} onChange={(event) => { setHistoryFilters((current) => ({ ...current, userId: event.target.value })); setHistoryPage(1); }}><option value="">Todos los usuarios con registros</option>{attendanceUsers.map((attendanceUser) => <option key={attendanceUser._id} value={attendanceUser._id}>{attendanceUser.fullName || [attendanceUser.firstName, attendanceUser.lastName].filter(Boolean).join(' ') || attendanceUser.username || attendanceUser.email || 'Usuario sin nombre'}</option>)}</Select></FilterField>
         <FilterField label="Estado"><Select value={historyFilters.status} onChange={(event) => { setHistoryFilters((current) => ({ ...current, status: event.target.value })); setHistoryPage(1); }}><option value="">Todos</option>{Object.entries(workSessionStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></FilterField>
         <FilterField label="Salón"><Select value={historyFilters.salonId} onChange={(event) => { setHistoryFilters((current) => ({ ...current, salonId: event.target.value })); setHistoryPage(1); }}><option value="">Todos</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></FilterField>
         <FilterField label="Desde"><Input type="date" value={historyFilters.from} onChange={(event) => { setHistoryFilters((current) => ({ ...current, from: event.target.value })); setHistoryPage(1); }} /></FilterField>

@@ -9,6 +9,7 @@ import { sendSuccess } from '../../utils/api';
 import { writeAuditLog } from '../audit/audit.service';
 import { getApiMessage } from '../../utils/messages';
 import { WorkSession, AttendanceIncident, AttendanceAdjustmentRequest } from './attendance.models';
+import { User } from '../users/user.model';
 import * as attendanceService from './attendance.service';
 import { getAttendanceSettings, updateAttendanceSettings } from './attendance-settings.service';
 import { civilDateTimeInput } from '../../utils/argentina-date';
@@ -105,6 +106,15 @@ router.get('/sessions/active', requirePermission(Permission.ATTENDANCE_READ), as
       requiresReview: attendanceService.hasEffectiveReviewRequirement(session, checkInPunchId)
     }))
   });
+}));
+
+router.get('/sessions/users', requirePermission(Permission.ATTENDANCE_READ), asyncHandler(async (request, response) => {
+  const userIds = await WorkSession.distinct('userId', scopeFilter(request));
+  const users = await User.find({ _id: { $in: userIds } })
+    .select('firstName lastName fullName username email active')
+    .sort({ fullName: 1, firstName: 1, lastName: 1 })
+    .lean();
+  return sendSuccess(response, { items: users });
 }));
 
 router.get('/sessions', requirePermission(Permission.ATTENDANCE_READ), validateRequest(listSessionsSchema), asyncHandler(async (request, response) => {
