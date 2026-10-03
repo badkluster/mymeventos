@@ -94,7 +94,9 @@ export function PayrollWorkspace() {
   const [employees, setEmployees] = useState<Named[]>([]);
   const [modal, setModal] = useState<'profile' | 'advance' | 'individual' | 'settlement' | 'manual' | 'run' | null>(null);
   const [selectedSettlement, setSelectedSettlement] = useState<Settlement | null>(null);
-  const [attendanceFilters, setAttendanceFilters] = useState({ status: '', salonId: '', observed: '', incomplete: '' });
+  const [attendanceFilters, setAttendanceFilters] = useState({ employeeId: '', status: '', salonId: '', observed: '', incomplete: '' });
+  const [attendanceEmployeeOptions, setAttendanceEmployeeOptions] = useState<Named[]>([]);
+  const [profileEmployeeId, setProfileEmployeeId] = useState(requestedEmployeeId);
   const [selectedAttendance, setSelectedAttendance] = useState<string[]>([]);
   const [attendanceSummaryOpen, setAttendanceSummaryOpen] = useState(false);
   const [summaryEmployeeId, setSummaryEmployeeId] = useState<string | null>(null);
@@ -140,12 +142,15 @@ export function PayrollWorkspace() {
           query.set('page', String(page));
           return api.get<{ items: Attendance[] }>(`/payroll/attendance?${query}`);
         }));
-        setAttendance([...(firstPage.items ?? []), ...nextPages.flatMap((page) => page.items ?? [])]); setSelectedAttendance([]);
+        const records = [...(firstPage.items ?? []), ...nextPages.flatMap((page) => page.items ?? [])];
+        const peopleWithAttendance = [...new Map(records.filter((record) => record.userId?._id).map((record) => [record.userId._id, record.userId])).values()].sort((first, second) => person(first).localeCompare(person(second), 'es'));
+        setAttendanceEmployeeOptions(peopleWithAttendance);
+        setAttendance(attendanceFilters.employeeId ? records.filter((record) => record.userId?._id === attendanceFilters.employeeId) : records); setSelectedAttendance([]);
       }
       if (tab === 'settlements') { const data = await api.get<{ items: Settlement[] }>(`/payroll/settlements?${range}`); setSettlements(data.items ?? []); }
       if (tab === 'runs') { const data = await api.get<{ items: PayrollRun[] }>('/payroll/runs?limit=100'); setRuns(data.items ?? []); }
       if (tab === 'advances') { const data = await api.get<{ items: Advance[] }>('/payroll/advances?limit=100'); setAdvances(data.items ?? []); }
-      if (tab === 'profiles') { const data = await api.get<{ items: Profile[] }>('/payroll/profiles?limit=100'); const items = data.items ?? []; setProfiles(requestedEmployeeId ? items.filter((profile) => profile.employeeId?._id === requestedEmployeeId) : items); }
+      if (tab === 'profiles') { const data = await api.get<{ items: Profile[] }>('/payroll/profiles?limit=100'); setProfiles(data.items ?? []); }
       if (tab === 'concepts') { const data = await api.get<{ items: Concept[] }>('/payroll/concepts'); setConcepts(data.items ?? []); }
       if (tab === 'history' && canAudit) { const data = await api.get<{ items: AuditEntry[] }>('/payroll/audit'); setAudit(data.items ?? []); }
     } catch (error) { showToast({ message: apiError(error, 'No se pudo cargar la información de liquidaciones.'), variant: 'error' }); }
@@ -155,6 +160,7 @@ export function PayrollWorkspace() {
   useEffect(() => { void loadOptions(); }, [loadOptions]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (tabs.some((item) => item.id === requestedTab)) setTab(requestedTab as Tab); }, [requestedTab]);
+  useEffect(() => { setProfileEmployeeId(requestedEmployeeId); }, [requestedEmployeeId]);
 
   const attendanceByEmployee = useMemo<AttendanceGroup[]>(() => {
     const groups = new Map<string, AttendanceGroup>();
@@ -170,6 +176,8 @@ export function PayrollWorkspace() {
     });
     return [...groups.values()].sort((first, second) => person(first.employee).localeCompare(person(second.employee), 'es'));
   }, [attendance]);
+  const profileEmployeeOptions = useMemo(() => [...new Map(profiles.filter((profile) => profile.employeeId?._id).map((profile) => [profile.employeeId._id, profile.employeeId])).values()].sort((first, second) => person(first).localeCompare(person(second), 'es')), [profiles]);
+  const visibleProfiles = useMemo(() => profileEmployeeId ? profiles.filter((profile) => profile.employeeId?._id === profileEmployeeId) : profiles, [profileEmployeeId, profiles]);
 
   async function runAction(action: () => Promise<unknown>, success: string) {
     setActing(true);
@@ -326,6 +334,7 @@ export function PayrollWorkspace() {
 
     {tab === 'attendance' ? <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <Field label="Empleado"><Select value={attendanceFilters.employeeId} onChange={(event) => setAttendanceFilters((current) => ({ ...current, employeeId: event.target.value }))}><option value="">Todas las personas con asistencias</option>{attendanceEmployeeOptions.map((employee) => <option key={employee._id} value={employee._id}>{person(employee)}</option>)}</Select></Field>
         <Field label="Estado"><Select value={attendanceFilters.status} onChange={(event) => setAttendanceFilters((current) => ({ ...current, status: event.target.value }))}><option value="">Todos</option><option value="pending">Pendiente</option><option value="approved">Aprobada</option><option value="rejected">Rechazada</option></Select></Field>
         <Field label="Salón"><Select value={attendanceFilters.salonId} onChange={(event) => setAttendanceFilters((current) => ({ ...current, salonId: event.target.value }))}><option value="">Todos</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field>
         <label className="flex items-center gap-2 pb-2.5 text-sm"><input type="checkbox" checked={attendanceFilters.observed === 'true'} onChange={(event) => setAttendanceFilters((current) => ({ ...current, observed: event.target.checked ? 'true' : '' }))} />Sólo observadas</label>
@@ -345,7 +354,7 @@ export function PayrollWorkspace() {
 
     {tab === 'advances' ? <div className="space-y-4"><div className="flex justify-end">{canCreate ? <Button onClick={() => openModal('advance')}><Plus className="mr-2 h-4 w-4" />Registrar adelanto</Button> : null}</div><DataTable columns={['Empleado', 'Fecha', 'Importe', 'Motivo', 'Estado']} empty="No hay adelantos registrados." rows={advances.map((advance) => [person(advance.employeeId), date(advance.date), money(advance.amountMinor, advance.currency), advance.reason, <Badge key={advance._id} value={advance.status} />])} /></div> : null}
 
-    {tab === 'profiles' ? <div className="space-y-4"><div className="flex justify-end">{canProfiles ? <Button onClick={() => openModal('profile')}><Plus className="mr-2 h-4 w-4" />Nueva configuración</Button> : null}</div><DataTable columns={['Empleado', 'Tipo', 'Frecuencia', 'Tarifas', 'Vigencia', 'Versión', 'Estado', 'Acciones']} empty="No hay configuraciones salariales cargadas." rows={profiles.map((profile) => [person(profile.employeeId), compensationLabels[profile.compensationType] ?? profile.compensationType, profile.payrollFrequency, [profile.hourlyRateMinor ? `Hora ${money(profile.hourlyRateMinor, profile.currency)}` : '', profile.dailyRateMinor ? `Jornada ${money(profile.dailyRateMinor, profile.currency)}` : '', profile.monthlySalaryMinor ? `Mensual ${money(profile.monthlySalaryMinor, profile.currency)}` : '', profile.eventRateMinor ? `Evento ${money(profile.eventRateMinor, profile.currency)}` : ''].filter(Boolean).join(' · ') || 'Sin tarifa', `${date(profile.effectiveFrom)}${profile.effectiveTo ? ` — ${date(profile.effectiveTo)}` : ' — vigente'}`, `v${profile.version}`, <span key={`${profile._id}-state`} className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${profile.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>{profile.isActive ? 'Vigente' : 'Histórica'}</span>, canProfiles && profile.isActive ? <div key={`${profile._id}-actions`} className="flex"><TableActionButton icon={Pencil} label="Editar configuración" disabled={acting} onClick={() => editProfile(profile)} /><TableActionButton icon={Trash2} label="Eliminar configuración" disabled={acting} onClick={() => void deleteProfile(profile)} /></div> : '—'])} /></div> : null}
+    {tab === 'profiles' ? <div className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><Field label="Empleado"><Select value={profileEmployeeId} onChange={(event) => setProfileEmployeeId(event.target.value)}><option value="">Todas las personas con configuración</option>{profileEmployeeOptions.map((employee) => <option key={employee._id} value={employee._id}>{person(employee)}</option>)}</Select></Field>{canProfiles ? <Button onClick={() => openModal('profile')}><Plus className="mr-2 h-4 w-4" />Nueva configuración</Button> : null}</div><DataTable columns={['Empleado', 'Tipo', 'Frecuencia', 'Tarifas', 'Vigencia', 'Versión', 'Estado', 'Acciones']} empty="No hay configuraciones salariales cargadas." rows={visibleProfiles.map((profile) => [person(profile.employeeId), compensationLabels[profile.compensationType] ?? profile.compensationType, profile.payrollFrequency, [profile.hourlyRateMinor ? `Hora ${money(profile.hourlyRateMinor, profile.currency)}` : '', profile.dailyRateMinor ? `Jornada ${money(profile.dailyRateMinor, profile.currency)}` : '', profile.monthlySalaryMinor ? `Mensual ${money(profile.monthlySalaryMinor, profile.currency)}` : '', profile.eventRateMinor ? `Evento ${money(profile.eventRateMinor, profile.currency)}` : ''].filter(Boolean).join(' · ') || 'Sin tarifa', `${date(profile.effectiveFrom)}${profile.effectiveTo ? ` — ${date(profile.effectiveTo)}` : ' — vigente'}`, `v${profile.version}`, <span key={`${profile._id}-state`} className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${profile.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>{profile.isActive ? 'Vigente' : 'Histórica'}</span>, canProfiles && profile.isActive ? <div key={`${profile._id}-actions`} className="flex"><TableActionButton icon={Pencil} label="Editar configuración" disabled={acting} onClick={() => editProfile(profile)} /><TableActionButton icon={Trash2} label="Eliminar configuración" disabled={acting} onClick={() => void deleteProfile(profile)} /></div> : '—'])} /></div> : null}
 
     {tab === 'concepts' ? <ConceptsView concepts={concepts} loading={loading} canProfiles={canProfiles} onReload={load} showToast={showToast} /> : null}
 
