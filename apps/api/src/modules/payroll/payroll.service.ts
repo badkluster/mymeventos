@@ -341,14 +341,27 @@ export async function updatePayrollAttendance(actor: PayrollActor, sessionId: st
   const session: any = await WorkSession.findById(sessionId);
   if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
   assertSalonScope(actor, ids([session.salonId]));
-  if (session.payrollSettlementId) throw new ApiError(409, 'PAYROLL_ATTENDANCE_ALREADY_SETTLED');
+  const settlement: any = session.payrollSettlementId ? await PayrollSettlement.findById(session.payrollSettlementId) : null;
+  if (session.payrollSettlementId && (!settlement || settlement.status !== 'draft')) throw new ApiError(409, 'PAYROLL_ATTENDANCE_ALREADY_SETTLED');
+  if (settlement) await assertSettlementScope(actor, settlement);
   if (!Number.isInteger(input.approvedMinutes) || input.approvedMinutes < 0 || input.approvedMinutes > Number(session.workedMinutes ?? 0)) throw new ApiError(422, 'PAYROLL_ATTENDANCE_INVALID_MINUTES');
-  const original = { approvedMinutes: session.approvedMinutes, payrollApprovalStatus: session.payrollApprovalStatus };
+  const original = { approvedMinutes: session.approvedMinutes, payrollApprovalStatus: session.payrollApprovalStatus, payrollManualAdjustmentReason: session.payrollManualAdjustmentReason, payrollOriginalValues: session.payrollOriginalValues };
   session.approvedMinutes = input.approvedMinutes;
   session.payrollManualAdjustmentReason = input.reason.trim();
   session.payrollOriginalValues = original;
-  session.payrollApprovalStatus = 'pending';
+  session.payrollApprovalStatus = settlement ? 'approved' : 'pending';
   await session.save();
+  if (settlement) {
+    try { await recalculateSettlement(actor, String(settlement._id)); }
+    catch (error) {
+      session.approvedMinutes = original.approvedMinutes;
+      session.payrollApprovalStatus = original.payrollApprovalStatus;
+      session.payrollManualAdjustmentReason = original.payrollManualAdjustmentReason;
+      session.payrollOriginalValues = original.payrollOriginalValues;
+      await session.save();
+      throw error;
+    }
+  }
   return { session, original };
 }
 
