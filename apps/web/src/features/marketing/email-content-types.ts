@@ -18,6 +18,7 @@ export type EmailBlockData = {
   rightText?: string;
   showCode?: boolean;
   showButton?: boolean;
+  buttonUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
   whatsappUrl?: string;
@@ -71,7 +72,7 @@ function blockData(type: EmailBlockType): EmailBlockData {
     case 'divider': return { color: '#E4E4E7', thickness: 1 };
     case 'spacer': return { height: 24 };
     case 'columns': return { leftText: 'Primera columna', rightText: 'Segunda columna' };
-    case 'promotion': return { showCode: true, showButton: true };
+    case 'promotion': return { showCode: true, showButton: true, buttonUrl: '{{buttonUrl}}' };
     case 'social': return { instagramUrl: '', facebookUrl: '', whatsappUrl: '' };
     case 'contact': return { showAddress: true, showPhone: true, showWhatsApp: true };
     case 'footer': return { text: '{{legalFooterText}}' };

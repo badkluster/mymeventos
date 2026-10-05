@@ -64,7 +64,12 @@ function canUpload(request: Express.Request, context: z.infer<typeof uploadSchem
     hasPermission(role, Permission.EXPENSES_CREATE, user.permissionOverrides, user.permissionDeniedOverrides)
     || hasPermission(role, Permission.EXPENSES_UPDATE, user.permissionOverrides, user.permissionDeniedOverrides)
   ));
-  const needed = context === 'salons' ? Permission.SALONS_UPDATE : context === 'invitations' ? Permission.INVITATIONS_UPDATE : context === 'tickets' ? Permission.TICKETS_UPDATE : context === 'marketing' ? Permission.MARKETING_SETTINGS_UPDATE : context === 'general' ? Permission.LANDING_UPDATE : Permission.SALONS_UPDATE;
+  if (context === 'marketing') return user.roles.some((role) => (
+    hasPermission(role, Permission.CAMPAIGNS_CREATE, user.permissionOverrides, user.permissionDeniedOverrides)
+    || hasPermission(role, Permission.CAMPAIGNS_UPDATE, user.permissionOverrides, user.permissionDeniedOverrides)
+    || hasPermission(role, Permission.MARKETING_SETTINGS_UPDATE, user.permissionOverrides, user.permissionDeniedOverrides)
+  ));
+  const needed = context === 'salons' ? Permission.SALONS_UPDATE : context === 'invitations' ? Permission.INVITATIONS_UPDATE : context === 'tickets' ? Permission.TICKETS_UPDATE : context === 'general' ? Permission.LANDING_UPDATE : Permission.SALONS_UPDATE;
   return user.roles.some((role) => hasPermission(role, needed, user.permissionOverrides, user.permissionDeniedOverrides));
 }
 

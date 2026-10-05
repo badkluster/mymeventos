@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { MARKETING_DYNAMIC_VARIABLES } from '@mym/shared';
-import { ChevronUp, ChevronDown, Copy, Eye, EyeOff, Monitor, Plus, Smartphone, Trash2, Variable } from 'lucide-react';
+import { ChevronUp, ChevronDown, Copy, Eye, EyeOff, ImagePlus, Monitor, Plus, Smartphone, Trash2, Variable } from 'lucide-react';
 import { Button, Input, Select, Textarea } from '@/components/ui/primitives';
 import { CloudinaryUpload, type UploadedAsset } from '@/components/cloudinary-upload';
 import {
@@ -49,6 +49,15 @@ export function EmailBlockEditor({ content, onChange, previewContext }: Props) {
     setSelectedId(block.id);
     setAddMenuOpen(false);
   }
+  function addImageBlock() {
+    const block = createEmailBlock('image');
+    const buttonIndex = blocks.findIndex((item) => item.type === 'button');
+    const next = [...blocks];
+    next.splice(buttonIndex >= 0 ? buttonIndex : next.length, 0, block);
+    updateBlocks(next);
+    setSelectedId(block.id);
+    setAddMenuOpen(false);
+  }
   function removeBlock(id: string) {
     updateBlocks(blocks.filter((block) => block.id !== id));
     if (selectedId === id) setSelectedId(undefined);
@@ -91,12 +100,14 @@ export function EmailBlockEditor({ content, onChange, previewContext }: Props) {
               {addMenuOpen ? (
                 <div className="absolute right-0 z-10 mt-1 w-48 rounded-xl border border-zinc-200 bg-white p-1 shadow-lg">
                   {AVAILABLE_EMAIL_BLOCKS.map((type) => (
-                    <button key={type} type="button" onClick={() => addBlock(type)} className="block w-full rounded-lg px-3 py-1.5 text-left text-xs hover:bg-zinc-100">{EMAIL_BLOCK_LABELS[type]}</button>
+                    <button key={type} type="button" onClick={() => type === 'image' ? addImageBlock() : addBlock(type)} className="block w-full rounded-lg px-3 py-1.5 text-left text-xs hover:bg-zinc-100">{EMAIL_BLOCK_LABELS[type]}</button>
                   ))}
                 </div>
               ) : null}
             </div>
           </div>
+          <Button type="button" variant="secondary" onClick={addImageBlock} className="w-full justify-center text-xs"><ImagePlus className="mr-1.5 h-3.5 w-3.5" />Agregar imagen</Button>
+          <p className="px-1 text-[11px] leading-4 text-zinc-500">La imagen se agrega antes del botón y podés moverla desde esta lista.</p>
           {blocks.map((block, index) => (
             <div key={block.id} onClick={() => setSelectedId(block.id)} className={`cursor-pointer rounded-xl border p-2 text-xs ${selected?.id === block.id ? 'border-zinc-950 bg-zinc-50' : 'border-zinc-200'}`}>
               <div className="flex items-center justify-between">
@@ -230,7 +241,7 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
       {block.type === 'image' || block.type === 'logo' ? (
         <div className="space-y-1.5">
           {block.type === 'logo' ? <p className="rounded-lg bg-zinc-50 p-2 text-[11px] leading-4 text-zinc-600">{block.data.url === '{{companyLogoUrl}}' ? 'Está usando el logo de la Configuración de marketing.' : 'Esta campaña usa un logo propio.'}</p> : null}
-          <CloudinaryUpload context={block.type === 'logo' ? 'marketing' : 'general'} accept="image/*" label={block.type === 'logo' ? 'Usar otro logo en esta campaña' : 'Subir imagen'} onUploaded={(asset: UploadedAsset) => onChangeData('url', asset.secureUrl || asset.url)} />
+          <CloudinaryUpload context="marketing" accept="image/*" label={block.type === 'logo' ? 'Usar otro logo en esta campaña' : 'Subir imagen'} onUploaded={(asset: UploadedAsset) => onChangeData('url', asset.secureUrl || asset.url)} />
           {block.type === 'image' || block.data.url !== '{{companyLogoUrl}}' ? <Input placeholder={block.type === 'logo' ? 'URL de un logo alternativo (opcional)' : 'URL de la imagen'} value={block.data.url ?? ''} onChange={(e) => onChangeData('url', e.target.value)} /> : null}
           {block.type === 'logo' && block.data.url !== '{{companyLogoUrl}}' ? <Button type="button" variant="secondary" className="w-full text-xs" onClick={() => onChangeData('url', '{{companyLogoUrl}}')}>Volver al logo configurado</Button> : null}
           {block.type === 'image' ? <Input placeholder="Texto alternativo" value={block.data.alt ?? ''} onChange={(e) => onChangeData('alt', e.target.value)} /> : null}
@@ -241,8 +252,10 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
       {block.type === 'button' ? (
         <div className="space-y-1.5">
           <Input placeholder="Texto del botón" value={block.data.label ?? ''} onChange={(e) => onChangeData('label', e.target.value)} />
-          <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Enlace</span><VariablePicker onInsert={insertInto('url', block.data.url ?? '')} /></div>
-          <Input value={presentDynamicTokens(block.data.url ?? '')} onChange={(e) => onChangeData('url', storeDynamicTokens(e.target.value))} />
+          <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Destino del botón</span><VariablePicker onInsert={insertInto('url', block.data.url ?? '')} /></div>
+          <Input placeholder="https://ejemplo.com/promocion" value={presentDynamicTokens(block.data.url ?? '')} onChange={(e) => onChangeData('url', storeDynamicTokens(e.target.value))} />
+          <p className="text-[11px] leading-4 text-zinc-500">Pegá un enlace propio para esta campaña o usá el enlace de la promoción vinculada.</p>
+          {block.data.url !== '{{buttonUrl}}' ? <Button type="button" variant="secondary" className="w-full text-xs" onClick={() => onChangeData('url', '{{buttonUrl}}')}>Usar enlace de la promoción</Button> : null}
           <div className="grid grid-cols-2 gap-2">
             <ColorMini label="Fondo" value={block.data.backgroundColor ?? '#18181B'} onChange={(v) => onChangeData('backgroundColor', v)} />
             <ColorMini label="Texto" value={block.data.textColor ?? '#FFFFFF'} onChange={(v) => onChangeData('textColor', v)} />
@@ -272,6 +285,12 @@ function BlockEditorPanel({ block, onChangeData, onChangeBlock }: { block: Email
           <p className="text-xs text-zinc-500">Usa los datos de la promoción vinculada a la campaña.</p>
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={block.data.showCode ?? true} onChange={(e) => onChangeData('showCode', e.target.checked)} />Mostrar código de descuento</label>
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={block.data.showButton ?? true} onChange={(e) => onChangeData('showButton', e.target.checked)} />Mostrar botón</label>
+          {block.data.showButton !== false ? <>
+            <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">Destino del botón</span><VariablePicker onInsert={insertInto('buttonUrl', block.data.buttonUrl ?? '{{buttonUrl}}')} /></div>
+            <Input placeholder="https://ejemplo.com/promocion" value={presentDynamicTokens(block.data.buttonUrl ?? '{{buttonUrl}}')} onChange={(e) => onChangeData('buttonUrl', storeDynamicTokens(e.target.value))} />
+            <p className="text-[11px] leading-4 text-zinc-500">Podés reemplazar el enlace de la promoción solo para este envío.</p>
+            {block.data.buttonUrl !== '{{buttonUrl}}' ? <Button type="button" variant="secondary" className="w-full text-xs" onClick={() => onChangeData('buttonUrl', '{{buttonUrl}}')}>Usar enlace de la promoción</Button> : null}
+          </> : null}
         </div>
       ) : null}
 

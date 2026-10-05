@@ -46,15 +46,17 @@ function renderBlock(block: EmailBlock, settings: EmailContent['settings']): str
         <td width="50%" valign="top" style="padding-right:8px;font-family:${settings.fontFamily};font-size:14px;color:#3F3F46;">${nl2br(block.data.leftText || '')}</td>
         <td width="50%" valign="top" style="padding-left:8px;font-family:${settings.fontFamily};font-size:14px;color:#3F3F46;">${nl2br(block.data.rightText || '')}</td>
       </tr></table>`, block);
-    case 'promotion':
+    case 'promotion': {
+      const promotionButtonUrl = escapeHtml(block.data.buttonUrl || '{{buttonUrl}}');
       return cell(`<table role="presentation" width="100%" style="border:1px solid #E4E4E7;border-radius:12px;">
         <tr><td style="padding:20px;font-family:${settings.fontFamily};">
           <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#18181B;">{{promotionTitle}}</p>
           <p style="margin:0 0 12px;font-size:14px;color:#3F3F46;">{{promotionDescription}}</p>
           ${block.data.showCode ? '<p style="margin:0 0 12px;font-size:13px;color:#71717A;">Código: <strong>{{promotionCode}}</strong> · Válido hasta {{promotionValidUntil}}</p>' : ''}
-          ${block.data.showButton ? '<a href="{{buttonUrl}}" style="display:inline-block;padding:10px 22px;background-color:#18181B;color:#FFFFFF;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">Quiero aprovecharla</a>' : ''}
+          ${block.data.showButton ? `<a href="${promotionButtonUrl}" style="display:inline-block;padding:10px 22px;background-color:#18181B;color:#FFFFFF;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">Quiero aprovecharla</a>` : ''}
         </td></tr>
       </table>`, block);
+    }
     case 'social': {
       const links = [
         block.data.instagramUrl ? `<a href="${escapeHtml(block.data.instagramUrl)}" style="margin:0 8px;color:#3F3F46;text-decoration:none;">Instagram</a>` : '',
@@ -98,7 +100,7 @@ export function renderEmailContentToText(content: EmailContent): string {
         case 'text': return `${block.data.text || ''}\n`;
         case 'button': return `${block.data.label || ''}: ${block.data.url || ''}\n`;
         case 'columns': return `${block.data.leftText || ''}\n${block.data.rightText || ''}\n`;
-        case 'promotion': return '{{promotionTitle}}\n{{promotionDescription}}\nCódigo: {{promotionCode}}\n{{buttonUrl}}\n';
+        case 'promotion': return `{{promotionTitle}}\n{{promotionDescription}}\nCódigo: {{promotionCode}}\n${block.data.buttonUrl || '{{buttonUrl}}'}\n`;
         case 'contact': return '{{salonAddress}}\n{{salonPhone}}\n';
         case 'footer': return `${block.data.text || ''}\n`;
         default: return '';
