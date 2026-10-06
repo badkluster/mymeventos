@@ -139,6 +139,7 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
   try {
     const payment = await Payment.create({
       paymentNumber: await nextPaymentNumber(),
+      source: contract.eventSnapshot?.serviceMode === 'external_catering' ? 'external_catering' : 'manual',
       customerId: payload.customerId ?? contract.customerId,
       eventId: payload.eventId ?? contract.eventId,
       contractId: contract._id,

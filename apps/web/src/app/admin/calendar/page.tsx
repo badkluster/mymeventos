@@ -13,6 +13,7 @@ import {
   CalendarRange,
   CheckCircle2,
   CheckSquare,
+  ChefHat,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
@@ -53,7 +54,7 @@ import type { Event, Salon } from '@/features/quotes/types';
 type CalendarView = 'day' | 'week' | 'month' | 'year';
 type CalendarMode = 'agenda' | 'availability';
 type CalendarItemType = 'event' | 'alert' | 'reminder' | 'note' | 'task' | 'payment_window' | 'meeting';
-type CalendarSourceFilter = 'all' | 'events' | 'alerts' | 'notes' | 'reminders' | 'tasks' | 'payments' | 'meetings';
+type CalendarSourceFilter = 'all' | 'events' | 'catering' | 'alerts' | 'notes' | 'reminders' | 'tasks' | 'payments' | 'meetings';
 type Priority = 'low' | 'normal' | 'high' | 'critical';
 type CalendarFilters = { query: string; status: string; salonId: string; source: CalendarSourceFilter; priority: '' | Priority; notifications: 'all' | 'with' | 'without' };
 type ListResponse = { items?: Event[]; meta?: { totalPages?: number; hasNextPage?: boolean } };
@@ -392,14 +393,16 @@ function formFromEntry(entry: CalendarEntry): CalendarForm {
   };
 }
 
-function TypeBadge({ type }: { type: CalendarItemType }) {
-  const meta = typeMeta[type];
+function TypeBadge({ type, catering = false }: { type: CalendarItemType; catering?: boolean }) {
+  const meta = catering ? { label: 'Catering externo', icon: ChefHat, badge: 'bg-orange-100 text-orange-800' } : typeMeta[type];
   const Icon = meta.icon;
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${meta.badge}`}><Icon className="h-3.5 w-3.5" />{meta.label}</span>;
 }
 
 function EntryCard({ entry, compact = false, onOpen }: { entry: CalendarEntry; compact?: boolean; onOpen: (entry: CalendarEntry) => void }) {
-  const meta = typeMeta[entry.type];
+  const meta = entry.event?.serviceMode === 'external_catering'
+    ? { label: 'Catering externo', icon: ChefHat, tone: 'border-orange-200 bg-orange-50 text-orange-900', dot: 'bg-orange-500', badge: 'bg-orange-100 text-orange-800' }
+    : typeMeta[entry.type];
   const priority = priorityMeta[entry.priority];
   const Icon = meta.icon;
   return <button type="button" onClick={() => onOpen(entry)} className={`group block w-full rounded-lg border border-l-4 px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${meta.tone} ${priority.rail}`}>
@@ -469,8 +472,8 @@ export default function CalendarPage() {
     }
     return rangeFor('week', focusDate);
   }, [availabilityView, focusDate, mode, view]);
-  const canShowEvents = mode === 'availability' || filters.source === 'all' || filters.source === 'events';
-  const canShowItems = mode === 'agenda' && filters.source !== 'events';
+  const canShowEvents = mode === 'availability' || filters.source === 'all' || filters.source === 'events' || filters.source === 'catering';
+  const canShowItems = mode === 'agenda' && filters.source !== 'events' && filters.source !== 'catering';
 
   const safeGet = useCallback(async <T,>(path: string, fallback: T): Promise<T> => {
     try {
@@ -494,6 +497,7 @@ export default function CalendarPage() {
       });
       if (mode === 'agenda' && filters.status) eventQuery.set('status', filters.status);
       if (mode === 'agenda' && filters.salonId) eventQuery.set('salonId', filters.salonId);
+      if (mode === 'agenda' && filters.source === 'catering') eventQuery.set('serviceMode', 'external_catering');
       const itemQuery = new URLSearchParams(eventQuery);
       itemQuery.set('limit', '200');
       itemQuery.set('dateFrom', visibleRange.start.toISOString());
@@ -557,14 +561,14 @@ export default function CalendarPage() {
         source: 'event' as const,
         type: 'event' as const,
         title: event.eventName || event.eventType || 'Evento',
-        description: event.notes,
+        description: event.serviceMode === 'external_catering' ? event.externalVenue?.address || event.notes : event.notes,
         startAt,
         endAt,
         allDay: !event.startTime,
         status: event.status,
         priority: event.status === 'deposit_pending' ? 'high' as const : 'normal' as const,
         visibility: 'shared' as const,
-        salonName: entityName(event.salonId),
+        salonName: event.serviceMode === 'external_catering' ? event.externalVenue?.name || 'Locación externa' : entityName(event.salonId),
         href: `/admin/events/${event._id}`,
         event
       };
@@ -750,7 +754,7 @@ export default function CalendarPage() {
           <Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-11 pl-10" placeholder="Buscar por evento, alerta, nota, tarea o reunión" />
         </div>
         <Select aria-label="Filtrar origen" value={filters.source} onChange={(event) => updateFilters({ source: event.target.value as CalendarSourceFilter })} className="h-11">
-          <option value="all">Todo</option><option value="events">Eventos</option><option value="alerts">Alertas</option><option value="notes">Notas</option><option value="reminders">Recordatorios</option><option value="tasks">Tareas</option><option value="payments">Pagos</option><option value="meetings">Reuniones</option>
+          <option value="all">Todo</option><option value="events">Eventos</option><option value="catering">Catering externo</option><option value="alerts">Alertas</option><option value="notes">Notas</option><option value="reminders">Recordatorios</option><option value="tasks">Tareas</option><option value="payments">Pagos</option><option value="meetings">Reuniones</option>
         </Select>
         <Select aria-label="Filtrar estado" value={filters.status} onChange={(event) => updateFilters({ status: event.target.value })} className="h-11">
           <option value="">Estados</option>{Object.entries(eventStatusOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -767,7 +771,7 @@ export default function CalendarPage() {
       </div>}
     </div>
 
-    {mode === 'availability' ? <EventAvailabilityBoard date={focusDate} view={availabilityView} events={events} salons={salons} loading={loading} canCreateEvents={canCreateEvents} canCreateQuotes={canCreateQuotes} selectedSlot={selectedAvailabilitySlot} onSelectSlot={setSelectedAvailabilitySlot} onSelectDate={openAvailabilityDay} onCreateEvent={openEventCreateFromAvailability} /> : <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+    {mode === 'availability' ? <EventAvailabilityBoard date={focusDate} view={availabilityView} events={events.filter((event) => event.serviceMode !== 'external_catering')} salons={salons} loading={loading} canCreateEvents={canCreateEvents} canCreateQuotes={canCreateQuotes} selectedSlot={selectedAvailabilitySlot} onSelectSlot={setSelectedAvailabilitySlot} onSelectDate={openAvailabilityDay} onCreateEvent={openEventCreateFromAvailability} /> : <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
         <CalendarSurface view={view} focusDate={focusDate} entries={entries} loading={loading} onSelectDate={setFocusDate} onCreate={openCreate} onOpenEntry={setSelectedEntry} onOpenDayStack={setDayStackDate} />
       </div>
@@ -882,7 +886,7 @@ function AgendaPanel({ title, icon: Icon, entries, empty, onOpen }: { title: str
       {entries.map((entry) => <button type="button" key={`${entry.source}-${entry.id}`} onClick={() => onOpen(entry)} className={`rounded-xl border border-l-4 p-3 text-left transition hover:bg-zinc-50 ${priorityMeta[entry.priority].rail}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0"><p className="truncate text-sm font-semibold text-zinc-950">{entry.title}</p><p className="mt-1 text-xs text-zinc-500">{entryTime(entry)} · {entry.salonName}</p></div>
-          <TypeBadge type={entry.type} />
+          <TypeBadge type={entry.type} catering={entry.event?.serviceMode === 'external_catering'} />
         </div>
       </button>)}
       {!entries.length ? <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-6 text-center text-sm text-zinc-500">{empty}</p> : null}

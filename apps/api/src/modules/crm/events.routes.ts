@@ -55,6 +55,13 @@ const activityNoteSchema = z.object({ body: z.object({ description: z.string().t
 const menuSectionsSchema = z.array(z.object({ title: z.string().trim().min(1), items: z.array(z.string().trim().min(1)) }));
 const civilDateSchema = z.preprocess(civilDateInput, z.coerce.date());
 const eventTimeSchema = z.string().trim().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'El horario debe tener formato HH:mm y contener una hora válida.');
+const externalVenueSchema = z.object({
+  name: z.string().trim().min(1, 'Debe indicar el nombre de la locación.'),
+  address: z.string().trim().min(1, 'Debe indicar la dirección de la locación.'),
+  contactName: z.string().trim().min(1, 'Debe indicar un contacto de la locación.'),
+  contactPhone: z.string().trim().optional(),
+  notes: z.string().trim().optional()
+});
 const newCustomerSchema = z.object({
   fullName: z.string().trim().optional(),
   firstName: z.string().trim().optional(),
@@ -73,6 +80,8 @@ const createEventSchema = z.object({
     customer: newCustomerSchema.optional(),
     createContract: z.boolean().optional(),
     salonId: optionalObjectId,
+    serviceMode: z.enum(['venue_event', 'external_catering']).optional(),
+    externalVenue: externalVenueSchema.optional(),
     packageTemplateId: optionalObjectId,
     eventType: z.string().trim().optional(),
     eventName: z.string().trim().optional(),
@@ -106,14 +115,15 @@ const createEventSchema = z.object({
   }).superRefine((body, context) => {
     if (!body.quoteId && !body.eventDate) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventDate'], message: 'Debe indicar la fecha del evento.' });
     if (body.quoteId) return;
-    if (!body.salonId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['salonId'], message: 'Debe seleccionar un salón.' });
+    if (body.serviceMode !== 'external_catering' && !body.salonId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['salonId'], message: 'Debe seleccionar un salón.' });
+    if (body.serviceMode === 'external_catering' && !body.externalVenue) context.addIssue({ code: z.ZodIssueCode.custom, path: ['externalVenue'], message: 'Debe completar la locación externa.' });
     if (!body.customerId && !body.customer?.fullName && !body.customer?.firstName) context.addIssue({ code: z.ZodIssueCode.custom, path: ['customer'], message: 'Debe seleccionar o crear un cliente.' });
     if (!body.eventName && !body.eventType) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventName'], message: 'Debe indicar nombre o tipo de evento.' });
     if (!body.eventType) context.addIssue({ code: z.ZodIssueCode.custom, path: ['eventType'], message: 'Debe indicar el tipo de evento.' });
     if (!body.packageTemplateId && !body.startTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['startTime'], message: 'Debe indicar el horario de inicio.' });
     if (!body.packageTemplateId && !body.endTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['endTime'], message: 'Debe indicar el horario de fin.' });
     if (!body.guestCount) context.addIssue({ code: z.ZodIssueCode.custom, path: ['guestCount'], message: 'Debe indicar una cantidad de invitados válida.' });
-    if (!body.packageName && !body.packageTemplateId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['packageName'], message: 'Debe indicar el paquete o propuesta.' });
+    if (!body.packageName && !body.packageTemplateId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['packageName'], message: body.serviceMode === 'external_catering' ? 'Debe indicar una propuesta comercial para el catering.' : 'Debe indicar el paquete o propuesta.' });
     const amount = body.pricingMode === 'per_person' ? body.finalPricePerPerson ?? body.pricePerPerson : body.finalAmount ?? body.finalFixedPrice ?? body.fixedPrice;
     if (!body.packageTemplateId && (!amount || amount <= 0)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['finalAmount'], message: 'Debe indicar un precio mayor a cero.' });
     if (Boolean(body.startTime) !== Boolean(body.endTime)) context.addIssue({ code: z.ZodIssueCode.custom, path: [body.startTime ? 'endTime' : 'startTime'], message: 'Debe indicar el horario de inicio y de fin.' });
@@ -138,6 +148,7 @@ const statusSchema = z.object({ body: z.object({ status: z.enum(eventStatuses), 
 const reactivateSchema = z.object({ body: z.object({ status: z.enum(activeEventStatuses), reason: z.string().trim().min(3).max(500) }), params: z.object({ id: objectId }), query: z.object({}) });
 const updateSchema = z.object({
   body: z.object({
+    externalVenue: externalVenueSchema.optional(),
     eventType: z.string().trim().optional(),
     eventName: z.string().trim().optional(),
     eventDate: civilDateSchema.optional(),
@@ -379,7 +390,7 @@ function ensureEventOperationallyEditable(event: any): void {
 async function transitionStaffAssignment(request: Request, event: any, assignmentId: string, nextStatus: StaffAssignmentStatus) {
   const assignment: any = await EventStaffAssignment.findOne({ _id: assignmentId, eventId: event._id, deletedAt: null });
   if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
-  if (String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
+  if (event.salonId && String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
 
   const currentStatus = assignment.status as StaffAssignmentStatus;
   if (!staffStatusTransitions[currentStatus]?.includes(nextStatus)) {
@@ -430,14 +441,14 @@ async function getAccessibleQuote(request: Request, quoteId: string): Promise<an
   return quote;
 }
 
-async function resolveCustomerForEvent(request: Request, body: any, salonId: string, quote?: any): Promise<any> {
+async function resolveCustomerForEvent(request: Request, body: any, salonId?: string, quote?: any): Promise<any> {
   const customerId = cleanId(body.customerId) ?? quote?.customerId?.toString?.();
   if (customerId) {
     const customer: any = await Customer.findOne({ _id: customerId, deletedAt: null });
     if (!customer) throw new ApiError(404, 'CUSTOMER_NOT_FOUND');
     const salonIds = (customer.salonIds ?? []).map((id: { toString(): string }) => id.toString());
-    if (!request.user!.roles.includes(Role.ADMIN) && salonIds.length && !salonIds.some((id: string) => canAccessSalon(request.user!, id))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
-    if (!salonIds.includes(salonId)) {
+    if (body.serviceMode !== 'external_catering' && !request.user!.roles.includes(Role.ADMIN) && salonIds.length && !salonIds.some((id: string) => canAccessSalon(request.user!, id))) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+    if (salonId && !salonIds.includes(salonId)) {
       customer.salonIds = uniqueIds([...salonIds, salonId]);
       customer.updatedBy = request.user!.id;
       await customer.save();
@@ -456,7 +467,7 @@ async function resolveCustomerForEvent(request: Request, body: any, salonId: str
     eventType: body.eventType || quote?.eventType,
     estimatedEventDate: body.eventDate || quote?.eventDate,
     guestCount: body.guestCount || quote?.guestCount,
-    salonIds: [salonId],
+    salonIds: salonId ? [salonId] : [],
     quoteId: quote?._id?.toString?.(),
     message: customerInput.notes || body.notes || quote?.notes,
     userId: request.user!.id
@@ -537,6 +548,8 @@ function applyPackageToEventBody(body: any, packageSnapshot: Record<string, any>
 
 function eventPatchFromCreateBody(body: any): Record<string, unknown> {
   return pickDefined(body, [
+    'serviceMode',
+    'externalVenue',
     'eventType',
     'eventName',
     'eventDate',
@@ -711,11 +724,16 @@ async function packageChangePreview(event: any, packageSnapshot: Record<string, 
 
 async function buildQuery(request: Request): Promise<Record<string, unknown>> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }];
-  if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ salonId: { $in: accessibleSalonIds(request.user!) } });
+  if (!request.user!.roles.includes(Role.ADMIN)) terms.push({ $or: [{ salonId: { $in: accessibleSalonIds(request.user!) } }, { salonId: null, serviceMode: 'external_catering' }] });
   const status = getQueryString(request.query.status);
   if (status && eventStatuses.includes(status as any)) terms.push({ status });
   const salonId = getQueryString(request.query.salonId);
   if (salonId && objectId.safeParse(salonId).success) terms.push({ salonId });
+  const serviceMode = getQueryString(request.query.serviceMode);
+  if (serviceMode === 'external_catering') terms.push({ serviceMode });
+  // Existing venue events created before serviceMode was introduced have no value,
+  // so exclude catering rather than requiring an explicit venue_event value.
+  if (serviceMode === 'venue_event') terms.push({ serviceMode: { $ne: 'external_catering' } });
   const dateFrom = getQueryString(request.query.dateFrom);
   const dateTo = getQueryString(request.query.dateTo);
   const dateRange: Record<string, Date> = {};
@@ -798,10 +816,11 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
     return sendSuccess(response, { event: freshEvent, customer: result.customer, quote: result.quote, contract, contractCreated, contractError, createdFromQuote: true }, result.createdEvent ? 201 : 200, getApiMessage(result.createdEvent ? 'EVENT_CREATED_FROM_QUOTE' : 'EVENT_ALREADY_CREATED_FROM_QUOTE'));
   }
 
-  const salonId = cleanId(request.body.salonId)!;
-  await ensureSalonAccess(request, salonId);
-  const selectedPackage = cleanId(request.body.packageTemplateId);
-  const packageSnapshot = selectedPackage ? await getApplicablePackageForEvent(selectedPackage, salonId) : undefined;
+  const isExternalCatering = request.body.serviceMode === 'external_catering';
+  const salonId = cleanId(request.body.salonId);
+  if (salonId) await ensureSalonAccess(request, salonId);
+  const selectedPackage = isExternalCatering ? undefined : cleanId(request.body.packageTemplateId);
+  const packageSnapshot = selectedPackage && salonId ? await getApplicablePackageForEvent(selectedPackage, salonId) : undefined;
   const eventBody = packageSnapshot ? applyPackageToEventBody(request.body, packageSnapshot) : request.body;
   const resultingAmount = eventBody.pricingMode === 'per_person' ? eventBody.finalPricePerPerson ?? eventBody.pricePerPerson : eventBody.finalAmount ?? eventBody.finalFixedPrice ?? eventBody.fixedPrice;
   const missingEventFields = [
@@ -852,7 +871,8 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
       customerComplete: Boolean(customer.fullName && (customer.phone || customer.email)),
       document: Boolean(customer.documentNumber),
       address: Boolean(customer.address),
-      salonDefined: true,
+      salonDefined: !isExternalCatering && Boolean(salonId),
+      externalVenueDefined: !isExternalCatering || Boolean(eventBody.externalVenue?.name && eventBody.externalVenue?.address && eventBody.externalVenue?.contactName),
       dateDefined: Boolean(eventBody.eventDate),
       timeDefined: Boolean(eventBody.startTime && eventBody.endTime),
       guestCount: Boolean(eventBody.guestCount),
@@ -866,7 +886,7 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
     updatedBy: request.user!.id
   });
   await LeadActivity.create({ customerId: customer._id, eventId: event._id, type: 'event_created', title: 'Evento creado', description: `Se creó el evento ${event.eventName}.`, createdBy: request.user!.id });
-  await writeAuditLog(request, 'EVENT_CREATE', 'Event', event._id.toString(), { customerId: customer._id.toString(), salonId, packageTemplateId: packageSnapshot?.packageTemplateId });
+  await writeAuditLog(request, 'EVENT_CREATE', 'Event', event._id.toString(), { customerId: customer._id.toString(), salonId, serviceMode: event.serviceMode, packageTemplateId: packageSnapshot?.packageTemplateId });
   await syncEventAlertCalendarItems(event, event.resourcePlanSnapshot?.alerts, request.user!.id);
 
   let contract: any;
@@ -1050,7 +1070,7 @@ router.patch('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UPD
   }
   const assignment: any = await EventStaffAssignment.findOne({ _id: request.params.assignmentId, eventId: event._id, deletedAt: null });
   if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
-  if (String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
+  if (event.salonId && String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
   Object.assign(assignment, request.body, { updatedBy: request.user!.id });
   await assignment.save();
   await writeAuditLog(request, 'EVENT_STAFF_UPDATE', 'EventStaffAssignment', request.params.assignmentId);
@@ -1063,7 +1083,7 @@ router.delete('/:id/staff/:assignmentId', requirePermission(Permission.EVENTS_UP
   ensureEventOperationallyEditable(event);
   const assignment: any = await EventStaffAssignment.findOne({ _id: request.params.assignmentId, eventId: event._id, deletedAt: null });
   if (!assignment) throw new ApiError(404, 'STAFF_ASSIGNMENT_NOT_FOUND');
-  if (String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
+  if (event.salonId && String(assignment.salonId) !== String(event.salonId)) throw new ApiError(403, 'STAFF_ASSIGNMENT_SALON_SCOPE_FORBIDDEN');
   if (!['proposed', 'assigned'].includes(assignment.status)) throw new ApiError(422, 'STAFF_ASSIGNMENT_DELETE_NOT_ALLOWED');
   assignment.deletedAt = new Date();
   assignment.deletedBy = request.user!.id;
@@ -1177,6 +1197,7 @@ router.post('/:id/guest-list-link', requirePermission(Permission.EVENTS_UPDATE),
 router.get('/:id/tableware', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensureEventAccess(request, event);
+  if (event.serviceMode === 'external_catering') throw new ApiError(422, 'El catering externo usa recursos libres del plan operativo; no reserva vajilla ni stock de salón.');
   if (!event.salonId) throw new ApiError(422, 'El evento debe tener un salón asignado para reservar vajilla.');
   const day = eventDay(event.eventDate);
   if (!day) throw new ApiError(422, 'El evento debe tener una fecha asignada para reservar vajilla.');
@@ -1191,6 +1212,7 @@ router.put('/:id/tableware', requirePermission(Permission.EVENTS_UPDATE), valida
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
   ensureEventOperationallyEditable(event);
+  if (event.serviceMode === 'external_catering') throw new ApiError(422, 'El catering externo usa recursos libres del plan operativo; no reserva vajilla ni stock de salón.');
   if (!event.salonId) throw new ApiError(422, 'El evento debe tener un salón asignado para reservar vajilla.');
   const day = eventDay(event.eventDate);
   if (!day) throw new ApiError(422, 'El evento debe tener una fecha asignada para reservar vajilla.');
@@ -1464,7 +1486,7 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
     }
   }
   const scheduleChanged = ['eventDate', 'startTime', 'endTime'].some((field) => Object.prototype.hasOwnProperty.call(updateBody, field));
-  if (lockedEventStatuses.has(event.status) && scheduleChanged && event.salonId) {
+  if (event.serviceMode !== 'external_catering' && lockedEventStatuses.has(event.status) && scheduleChanged && event.salonId) {
     const resultingDay = nextReservationDay ?? currentReservationDay;
     if (resultingDay) {
       await assertVenueAvailable({
@@ -1545,7 +1567,7 @@ router.delete('/:id', requirePermission(Permission.EVENTS_DELETE), validateReque
 router.post('/:id/reactivate', requirePermission(Permission.EVENTS_CANCEL), validateRequest(reactivateSchema), asyncHandler(async (request, response) => {
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
-  if (lockedEventStatuses.has(request.body.status) && event.salonId) {
+  if (event.serviceMode !== 'external_catering' && lockedEventStatuses.has(request.body.status) && event.salonId) {
     const day = eventDay(event.eventDate);
     if (day) await assertVenueAvailable({ salonId: event.salonId.toString(), day, startTime: event.startTime, endTime: event.endTime, excludeEventId: event._id.toString() });
   }
@@ -1570,7 +1592,7 @@ router.patch('/:id/status', requirePermission(Permission.EVENTS_UPDATE), validat
     await writeAuditLog(request, 'EVENT_STATUS_UPDATE', 'Event', request.params.id, { status: request.body.status, reason: request.body.reason, impacts: result.preview.impacts });
     return sendSuccess(response, result, 200, getApiMessage('EVENT_UPDATED'));
   }
-  if (lockedEventStatuses.has(request.body.status) && event.salonId) {
+  if (event.serviceMode !== 'external_catering' && lockedEventStatuses.has(request.body.status) && event.salonId) {
     const day = eventDay(event.eventDate);
     if (day) await assertVenueAvailable({ salonId: event.salonId.toString(), day, startTime: event.startTime, endTime: event.endTime, excludeEventId: event._id.toString() });
   }

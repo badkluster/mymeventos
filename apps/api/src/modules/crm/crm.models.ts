@@ -172,6 +172,15 @@ const revisionSchema = new Schema({
 const eventSchema = new Schema({
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true }, leadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, quoteId: { type: Schema.Types.ObjectId, ref: 'Quote' }, sourceLeadId: { type: Schema.Types.ObjectId, ref: 'Lead' }, sourceQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' }, createdFromQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
   salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true }, eventType: String, eventName: String, eventDate: Date,
+  // External catering has no M&M venue association. Its actual service location lives in externalVenue.
+  serviceMode: { type: String, enum: ['venue_event', 'external_catering'], default: 'venue_event', index: true },
+  externalVenue: {
+    name: { type: String, trim: true },
+    address: { type: String, trim: true },
+    contactName: { type: String, trim: true },
+    contactPhone: { type: String, trim: true },
+    notes: { type: String, trim: true }
+  },
   honoreeName: String, vegetarianCount: Number, veganCount: Number, celiacCount: Number, lactoseIntolerantCount: Number, tableLinenColor: String,
   startTime: String, endTime: String, guestCount: Number, status: { type: String, enum: ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'], default: 'draft' },
   quoteMode: { type: String, enum: ['PACKAGE', 'CUSTOM', 'HYBRID'], default: 'PACKAGE', index: true },
@@ -202,7 +211,7 @@ eventSchema.index({ salonId: 1, eventDate: 1, status: 1 });
 const eventStaffAssignmentSchema = new Schema({
   eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
   staffUserId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true },
   roleLabel: { type: String, trim: true },
   staffSubrole: { type: String, enum: ['WAITER', 'MAITRE', 'COOK', 'KITCHEN_ASSISTANT', 'BARTENDER', 'DJ', 'DECORATION', 'CLEANING', 'SECURITY', 'COORDINATOR', 'RECEPTION', 'OTHER'] },
   shiftStart: Date,
@@ -293,7 +302,7 @@ const contractSchema = new Schema({
   quoteId: { type: Schema.Types.ObjectId, ref: 'Quote', index: true },
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
   leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
-  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true },
   status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'requires_changes', 'cancelled', 'superseded'], default: 'pending_approval', index: true },
   contractMode: { type: String, enum: ['PACKAGE', 'CUSTOM', 'HYBRID'], default: 'PACKAGE', index: true },
   contractFamilyId: { type: Schema.Types.ObjectId, ref: 'Contract', index: true },
@@ -338,7 +347,7 @@ const contractAddendumSchema = new Schema({
   contractId: { type: Schema.Types.ObjectId, ref: 'Contract', required: true, index: true },
   eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
-  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', required: true, index: true },
+  salonId: { type: Schema.Types.ObjectId, ref: 'Salon', index: true },
   status: { type: String, enum: ['draft', 'pending_approval', 'approved', 'rejected', 'cancelled'], default: 'pending_approval', index: true },
   title: { type: String, required: true },
   description: String,
@@ -356,7 +365,7 @@ contractAddendumSchema.index({ contractId: 1, deletedAt: 1 });
 
 const paymentSchema = new Schema({
   paymentNumber: { type: String, required: true, unique: true, index: true },
-  source: { type: String, enum: ['manual', 'ticket_order'], default: 'manual', index: true },
+  source: { type: String, enum: ['manual', 'external_catering', 'ticket_order'], default: 'manual', index: true },
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
   eventId: { type: Schema.Types.ObjectId, ref: 'Event', index: true },
   contractId: { type: Schema.Types.ObjectId, ref: 'Contract', index: true },

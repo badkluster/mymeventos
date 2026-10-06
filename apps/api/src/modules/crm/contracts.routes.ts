@@ -69,7 +69,7 @@ const router = Router();
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
 function scopedQuery(request: Request): Record<string, unknown>[] {
-  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ salonId: { $in: accessibleSalonIds(request.user!) } }];
+  return request.user!.roles.includes(Role.ADMIN) ? [] : [{ $or: [{ salonId: { $in: accessibleSalonIds(request.user!) } }, { salonId: null, 'eventSnapshot.serviceMode': 'external_catering' }] }];
 }
 async function ensureContractAccess(request: Request, contract: any): Promise<void> {
   if (!contract || contract.deletedAt) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
@@ -142,8 +142,9 @@ router.post('/:id/refresh-snapshots', requirePermission(Permission.CONTRACTS_UPD
   const event: any = eventRecord;
   const salon: any = salonRecord;
   if (customer) contract.customerSnapshot = { ...(contract.customerSnapshot ?? {}), firstName: customer.firstName, lastName: customer.lastName, fullName: customer.fullName, dni: customer.dni, documentNumber: customer.documentNumber, address: customer.address, occupation: customer.occupation, phone: customer.phone, email: customer.email };
-  if (event) contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
-  if (salon) contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), salonName: salon.name, salonAddress: [salon.address, salon.locality || salon.city, salon.province].filter(Boolean).join(', ') };
+  if (event) contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), serviceMode: event.serviceMode ?? 'venue_event', externalVenue: event.externalVenue, eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
+  if (event?.serviceMode === 'external_catering') contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), salonName: event.externalVenue?.name, salonAddress: event.externalVenue?.address };
+  else if (salon) contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), salonName: salon.name, salonAddress: [salon.address, salon.locality || salon.city, salon.province].filter(Boolean).join(', ') };
   contract.updatedBy = request.user!.id;
   await contract.save();
   await writeAuditLog(request, 'CONTRACT_REFRESH_SNAPSHOTS', 'Contract', contract._id.toString());

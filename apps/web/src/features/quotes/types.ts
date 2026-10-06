@@ -139,6 +139,8 @@ export type Event = {
   leadId?: string | LeadOption;
   quoteId?: string | Quote;
   salonId?: string | Salon;
+  serviceMode?: 'venue_event' | 'external_catering';
+  externalVenue?: { name?: string; address?: string; contactName?: string; contactPhone?: string; notes?: string };
   eventType?: string;
   eventName?: string;
   eventDate?: string;

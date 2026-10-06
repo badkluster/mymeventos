@@ -46,7 +46,8 @@ function validateEvent(event: any): void {
   const hasCommercialDescription = Boolean(commercial.packageName || event?.eventType || hasList(event?.servicesSnapshot));
   const hasMenuOrDescription = hasList(event?.menuSnapshot) || Boolean(commercial.packageName || event?.notes);
   const hasTime = Boolean(event?.startTime && event?.endTime) || Boolean(commercial.durationHours);
-  if (!event?.customerId || !event?.salonId || !event?.eventDate || !hasTime || !event?.guestCount || !amount || !hasCommercialDescription || !hasMenuOrDescription) {
+  const hasExternalVenue = event?.serviceMode !== 'external_catering' || Boolean(event?.externalVenue?.name && event?.externalVenue?.address && event?.externalVenue?.contactName);
+  if (!event?.customerId || (!event?.salonId && event?.serviceMode !== 'external_catering') || !event?.eventDate || !hasTime || !event?.guestCount || !amount || !hasCommercialDescription || !hasMenuOrDescription || !hasExternalVenue) {
     throw new ApiError(422, 'CONTRACT_EVENT_INCOMPLETE', missingMessage);
   }
 }
@@ -127,6 +128,8 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
       email: customer?.email
     },
     eventSnapshot: {
+      serviceMode: event.serviceMode ?? 'venue_event',
+      externalVenue: event.externalVenue,
       eventType: event.eventType,
       eventName: event.eventName,
       eventDate: event.eventDate,
@@ -144,8 +147,8 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
       adultsCount: event.adultsCount,
       childrenCount: event.childrenCount,
       teenagersCount: event.teenagersCount,
-      salonName: salon?.name,
-      salonAddress: [salon?.address, salon?.locality || salon?.city, salon?.province].filter(Boolean).join(', '),
+      salonName: event.serviceMode === 'external_catering' ? event.externalVenue?.name : salon?.name,
+      salonAddress: event.serviceMode === 'external_catering' ? event.externalVenue?.address : [salon?.address, salon?.locality || salon?.city, salon?.province].filter(Boolean).join(', '),
       resourcePlanSnapshot: event.resourcePlanSnapshot
     },
     commercialSnapshot: {

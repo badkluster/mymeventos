@@ -9,15 +9,21 @@ import { createDefaultResourcePlan } from '@/features/events/event-operations';
 import type { Customer, Event, PackageTemplate, Quote, Salon } from '@/features/quotes/types';
 
 type CreateResponse = { event?: Event; contractCreated?: boolean; contractError?: string };
-export type EventCreateDefaults = { salonId?: string; eventDate?: string; startTime?: string; endTime?: string };
+export type EventCreateDefaults = { salonId?: string; eventDate?: string; startTime?: string; endTime?: string; serviceMode?: 'venue_event' | 'external_catering' };
 type Props = { open: boolean; salons: Salon[]; initialValues?: EventCreateDefaults; onClose: () => void; onCreated: (eventId: string, message?: string) => void; onError: (message: string) => void };
 
 const emptyForm = {
   sourceMode: 'direct',
   customerMode: 'new',
   quoteId: '',
+  serviceMode: 'venue_event',
   customerId: '',
   salonId: '',
+  externalVenueName: '',
+  externalVenueAddress: '',
+  externalVenueContactName: '',
+  externalVenueContactPhone: '',
+  externalVenueNotes: '',
   packageTemplateId: '',
   eventName: '',
   eventType: '',
@@ -91,6 +97,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
   const [saving, setSaving] = useState(false);
   const [touchedTimes, setTouchedTimes] = useState({ startTime: false, endTime: false });
   const selectedQuote = useMemo(() => quotes.find((quote) => quote._id === form.quoteId), [form.quoteId, quotes]);
+  const isExternalCatering = form.serviceMode === 'external_catering';
   const availablePackages = useMemo(() => packagesSalonId === form.salonId ? packages : [], [form.salonId, packages, packagesSalonId]);
   const selectedPackage = useMemo(() => availablePackages.find((item) => item._id === form.packageTemplateId), [availablePackages, form.packageTemplateId]);
   const timeErrors = useMemo(() => validateTimes(form.startTime, form.endTime), [form.endTime, form.startTime]);
@@ -110,7 +117,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
   }, [open, onError]);
 
   useEffect(() => {
-    if (!open || !form.salonId || form.sourceMode !== 'direct') {
+    if (!open || !form.salonId || form.sourceMode !== 'direct' || isExternalCatering) {
       return;
     }
     let cancelled = false;
@@ -130,7 +137,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
       }
     });
     return () => { cancelled = true; };
-  }, [open, form.salonId, form.sourceMode]);
+  }, [open, form.salonId, form.sourceMode, isExternalCatering]);
 
   const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
   const selectSalon = (salonId: string) => {
@@ -180,8 +187,16 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         createContract: form.createContract,
         resourcePlanSnapshot: plan
       } : {
-        salonId: form.salonId,
-        packageTemplateId: selectedPackage?.active === false ? undefined : form.packageTemplateId || undefined,
+        salonId: isExternalCatering ? undefined : form.salonId,
+        serviceMode: form.serviceMode,
+        externalVenue: isExternalCatering ? {
+          name: form.externalVenueName,
+          address: form.externalVenueAddress,
+          contactName: form.externalVenueContactName,
+          contactPhone: form.externalVenueContactPhone || undefined,
+          notes: form.externalVenueNotes || undefined
+        } : undefined,
+        packageTemplateId: isExternalCatering || selectedPackage?.active === false ? undefined : form.packageTemplateId || undefined,
         customerId: form.customerMode === 'existing' ? form.customerId : undefined,
         customer: form.customerMode === 'new' ? {
           fullName: form.customerFullName,
@@ -239,25 +254,26 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
   const canSubmit = form.sourceMode === 'quote'
     ? Boolean(form.quoteId && selectedQuote && !quoteMissing.length)
     : Boolean(
-      form.salonId
+      (isExternalCatering || form.salonId)
       && (form.customerMode === 'existing' ? form.customerId : form.customerFullName.trim())
       && form.eventType.trim()
       && form.eventDate
       && form.startTime
       && form.endTime
       && numberOrUndefined(form.guestCount)
-      && (form.packageTemplateId || form.packageName.trim())
+      && (isExternalCatering ? form.packageName.trim() : (form.packageTemplateId || form.packageName.trim()))
       && directPrice
+      && (!isExternalCatering || (form.externalVenueName.trim() && form.externalVenueAddress.trim() && form.externalVenueContactName.trim()))
       && validTimes
     );
 
-  return <Modal open={open} title="Nuevo evento" description="Creá un evento directo o desde un presupuesto existente." onClose={onClose}>
+  return <Modal open={open} title={isExternalCatering ? 'Nuevo catering externo' : 'Nuevo evento'} description={isExternalCatering ? 'Registrá el cliente, la locación y el acuerdo comercial. Los recursos se completan después, en una ficha ordenada.' : 'Creá un evento directo o desde un presupuesto existente.'} onClose={onClose}>
     <div className="space-y-6 p-6">
       <p className="text-sm text-zinc-600">Los campos marcados con <span className="font-semibold text-red-600" aria-hidden="true">*</span> son necesarios para generar el contrato.</p>
-      <div className="grid gap-2 rounded-xl bg-zinc-100 p-1 sm:grid-cols-2">
+      {!isExternalCatering ? <div className="grid gap-2 rounded-xl bg-zinc-100 p-1 sm:grid-cols-2">
         <button type="button" onClick={() => set('sourceMode', 'direct')} className={`rounded-lg px-4 py-2 text-sm font-medium ${form.sourceMode === 'direct' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500'}`}>Evento directo</button>
         <button type="button" onClick={() => set('sourceMode', 'quote')} className={`rounded-lg px-4 py-2 text-sm font-medium ${form.sourceMode === 'quote' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500'}`}>Desde presupuesto</button>
-      </div>
+      </div> : null}
 
       {form.sourceMode === 'quote' ? <section className="space-y-4">
         <Field label="Presupuesto existente" required><Select value={form.quoteId} disabled={loadingOptions} onChange={(event) => set('quoteId', event.target.value)}><option value="">Seleccionar presupuesto</option>{quotes.map((quote) => <option key={quote._id} value={quote._id}>{quote.quoteNumber} · {quote.contactName || entityName(quote.customerId) || 'Sin cliente'} · {entityName(quote.salonId)}</option>)}</Select></Field>
@@ -265,10 +281,11 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         <Field label="Nombre de evento opcional"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} placeholder="Si querés sobrescribir el nombre generado" /></Field>
       </section> : <section className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Salón" required><Select value={form.salonId} onChange={(event) => selectSalon(event.target.value)}><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field>
+          {!isExternalCatering ? <Field label="Salón" required><Select value={form.salonId} onChange={(event) => selectSalon(event.target.value)}><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field> : null}
           <Field label="Cliente" required><Select value={form.customerMode} onChange={(event) => set('customerMode', event.target.value)}><option value="new">Crear cliente nuevo</option><option value="existing">Usar cliente existente</option></Select></Field>
         </div>
-        {form.salonId ? <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        {isExternalCatering ? <section className="space-y-4 rounded-2xl border border-orange-200 bg-orange-50/60 p-4"><div><h3 className="text-sm font-semibold text-orange-950">Locación del catering</h3><p className="mt-1 text-sm text-orange-900">Esta información identifica el salón o espacio de terceros y se mostrará en calendario, ficha y contrato.</p></div><div className="grid gap-4 md:grid-cols-2"><Field label="Nombre de la locación" required><Input value={form.externalVenueName} onChange={(event) => set('externalVenueName', event.target.value)} placeholder="Ej.: Salón Los Tilos" /></Field><Field label="Contacto en locación" required><Input value={form.externalVenueContactName} onChange={(event) => set('externalVenueContactName', event.target.value)} placeholder="Nombre o referencia" /></Field><Field label="Dirección" required className="md:col-span-2"><Input value={form.externalVenueAddress} onChange={(event) => set('externalVenueAddress', event.target.value)} placeholder="Calle, número, localidad" /></Field><Field label="Teléfono de contacto"><Input value={form.externalVenueContactPhone} onChange={(event) => set('externalVenueContactPhone', event.target.value)} /></Field><Field label="Indicaciones de acceso"><Input value={form.externalVenueNotes} onChange={(event) => set('externalVenueNotes', event.target.value)} placeholder="Ingreso, estacionamiento, carga y descarga" /></Field></div></section> : null}
+        {form.salonId && !isExternalCatering ? <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
           <div><h3 className="text-sm font-semibold text-zinc-950">¿Cómo querés iniciar la carga?</h3><p className="mt-1 text-sm text-foreground/75">Elegí un paquete del salón, incluso uno desactivado, para precargar sus datos; o completá el evento de forma manual.</p></div>
           <div className="grid gap-3 sm:grid-cols-2">
             <button type="button" onClick={() => setPackageMode('package')} className={`rounded-xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-zinc-900/20 ${packageMode === 'package' ? 'border-zinc-950 bg-white shadow-sm' : 'border-zinc-200 bg-white hover:border-zinc-400'}`}><span className="flex items-center gap-2 font-medium text-zinc-950"><PackageCheck className="h-4 w-4" />Usar un paquete</span><span className="mt-1 block text-sm text-foreground/75">Precarga valores, menú, servicios y condiciones.</span></button>
@@ -295,7 +312,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
           <Field label="Mantelería" className="md:col-span-2"><Input value={form.tableLinenColor} onChange={(event) => set('tableLinenColor', event.target.value)} /></Field>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Paquete / propuesta" required><Input value={form.packageName} onChange={(event) => set('packageName', event.target.value)} placeholder="Ej: Personalizado infantil" /></Field>
+          <Field label={isExternalCatering ? 'Propuesta comercial' : 'Paquete / propuesta'} required><Input value={form.packageName} onChange={(event) => set('packageName', event.target.value)} placeholder={isExternalCatering ? 'Ej.: Catering completo para 120 personas' : 'Ej: Personalizado infantil'} /></Field>
           <Field label="Modalidad"><Select value={form.pricingMode} onChange={(event) => set('pricingMode', event.target.value)}><option value="fixed">Precio total</option><option value="per_person">Precio por persona</option></Select></Field>
           <Field label={form.pricingMode === 'fixed' ? 'Precio total' : 'Precio por persona'} required><Input type="number" min={0} value={form.pricingMode === 'fixed' ? form.finalAmount : form.pricePerPerson} onChange={(event) => form.pricingMode === 'fixed' ? set('finalAmount', event.target.value) : set('pricePerPerson', event.target.value)} /></Field>
           <Field label="Seña"><Input type="number" min={0} value={form.depositAmount} onChange={(event) => set('depositAmount', event.target.value)} /></Field>
@@ -307,8 +324,8 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
 
       <Field label="Consideraciones"><Textarea value={form.considerations} onChange={(event) => set('considerations', event.target.value)} /><span className="mt-1 block text-xs text-zinc-500">Se incluyen completas en el contrato y su PDF.</span></Field>
       <Field label="Notas internas"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
-      <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700"><input type="checkbox" className="mt-1" checked={form.createContract} onChange={(event) => set('createContract', event.target.checked)} /><span>Crear contrato al guardar si el evento tiene los datos mínimos. Si falta información, el evento se guarda y el contrato queda pendiente.</span></label>
-      <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={saving || !canSubmit} onClick={() => void submit()}>{saving ? 'Creando...' : 'Crear evento'}</Button></div>
+      <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700"><input type="checkbox" className="mt-1" checked={form.createContract} onChange={(event) => set('createContract', event.target.checked)} /><span>{isExternalCatering ? 'Crear contrato al guardar. Así el servicio queda listo para definir cuotas y registrar cobros.' : 'Crear contrato al guardar si el evento tiene los datos mínimos. Si falta información, el evento se guarda y el contrato queda pendiente.'}</span></label>
+      <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={saving || !canSubmit} onClick={() => void submit()}>{saving ? 'Creando...' : isExternalCatering ? 'Crear catering' : 'Crear evento'}</Button></div>
     </div>
   </Modal>;
 }

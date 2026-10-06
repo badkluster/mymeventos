@@ -56,11 +56,10 @@ const router = Router();
 
 function queryValue(value: unknown): string | undefined { return typeof value === 'string' && value.trim() ? value.trim() : undefined; }
 function scopedQuery(request: Request): Record<string, unknown>[] {
-  // Ticket-order payments have no salonId (TicketPublication is salon-independent) — never
-  // hide them from salon-scoped staff, only restrict the manual event/contract payments.
+  // Ticket orders and external catering are company-wide services with no salonId.
   return request.user!.roles.includes(Role.ADMIN)
     ? []
-    : [{ $or: [{ salonId: { $in: accessibleSalonIds(request.user!) } }, { source: 'ticket_order' }] }];
+    : [{ $or: [{ salonId: { $in: accessibleSalonIds(request.user!) } }, { source: { $in: ['ticket_order', 'external_catering'] } }] }];
 }
 function buildQuery(request: Request): Record<string, unknown> {
   const terms: Record<string, unknown>[] = [{ deletedAt: null }, ...scopedQuery(request)];
@@ -71,7 +70,7 @@ function buildQuery(request: Request): Record<string, unknown> {
   const status = queryValue(request.query.status);
   if (status && paymentStatuses.includes(status as any)) terms.push({ status });
   const source = queryValue(request.query.source);
-  if (source === 'manual' || source === 'ticket_order') terms.push({ source });
+  if (source === 'manual' || source === 'external_catering' || source === 'ticket_order') terms.push({ source });
   const type = queryValue(request.query.type);
   if (type && paymentTypes.includes(type as any)) terms.push({ type });
   const method = queryValue(request.query.method);

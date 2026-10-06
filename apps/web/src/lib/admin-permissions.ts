@@ -12,6 +12,7 @@ export const adminModules: AdminModule[] = [
   { href: '/admin/customers', label: 'Clientes', title: 'Clientes', description: 'Clientes consolidados con historial comercial.', icon: UserRound, permissions: [Permission.CUSTOMERS_READ] },
   { href: '/admin/quotes', label: 'Presupuestos', title: 'Solicitudes / Presupuestos', description: 'Solicitudes web y presupuesto comercial.', icon: ReceiptText, permissions: [Permission.QUOTES_READ] },
   { href: '/admin/events', label: 'Eventos', title: 'Eventos', description: 'Eventos creados desde presupuestos convertidos.', icon: CalendarDays, permissions: [Permission.EVENTS_READ] },
+  { href: '/admin/catering', label: 'Catering externo', title: 'Catering externo', description: 'Servicios en locaciones de terceros con operación, contrato y cobros.', icon: ChefHat, permissions: [Permission.EVENTS_READ] },
   { href: '/admin/contracts', label: 'Contratos', title: 'Contratos', description: 'Contratos formales generados desde eventos.', icon: FileText, permissions: [Permission.CONTRACTS_READ] },
   { href: '/admin/digital-invitations', label: 'Invitaciones Digitales', title: 'Invitaciones Digitales', description: 'Invitaciones, invitados y confirmaciones independientes.', icon: Mail, permissions: [Permission.INVITATIONS_READ] },
   { href: '/admin/digital-tickets', label: 'Entradas Digitales', title: 'Entradas Digitales', description: 'Publicaciones, órdenes, entradas y control de ingreso independientes.', icon: Ticket, permissions: [Permission.TICKETS_READ] },

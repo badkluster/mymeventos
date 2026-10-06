@@ -137,6 +137,66 @@ describe('manual event creation from a package', () => {
     expect(sameTime.status).toBe(400);
     expect(mocks.eventCreate).not.toHaveBeenCalled();
   });
+
+  it('creates external catering without a package and preserves its external venue', async () => {
+    const customer = { _id: '507f1f77bcf86cd799439016', salonIds: [salonId], fullName: 'Ana Pérez', phone: '1112345678', email: 'ana@example.com' };
+    const event = { _id: eventId, eventName: 'Catering aniversario', resourcePlanSnapshot: {}, serviceMode: 'external_catering' };
+    customer.salonIds = [];
+    mocks.customerFindOne.mockResolvedValue(customer);
+    mocks.eventCreate.mockResolvedValue(event);
+    mocks.eventFindOne.mockReturnValue(populatedQuery({ ...event, customerId: customer }));
+
+    const response = await request(app).post('/api/events').set('Cookie', adminCookie).send({
+      serviceMode: 'external_catering',
+      customerId: customer._id,
+      eventName: 'Catering aniversario',
+      eventType: 'Catering',
+      eventDate: '2026-12-05',
+      startTime: '20:00',
+      endTime: '02:00',
+      guestCount: 80,
+      packageName: 'Catering completo',
+      pricingMode: 'fixed',
+      finalAmount: 1200000,
+      externalVenue: { name: 'Salón Los Tilos', address: 'Calle 10 123, La Plata', contactName: 'María' }
+    });
+
+    expect(response.status).toBe(201);
+    expect(mocks.eventCreate).toHaveBeenCalledWith(expect.objectContaining({
+      serviceMode: 'external_catering',
+      externalVenue: expect.objectContaining({ name: 'Salón Los Tilos', address: 'Calle 10 123, La Plata', contactName: 'María' }),
+      salonId: undefined,
+      packageTemplateId: undefined,
+      quoteMode: 'CUSTOM'
+    }));
+  });
+});
+
+describe('event listing service mode separation', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+    mocks.eventCountDocuments.mockResolvedValue(0);
+    mocks.eventFind.mockReturnValue(paginatedQuery([]));
+  });
+
+  it('excludes external catering from the venue events listing', async () => {
+    const response = await request(app).get('/api/events?serviceMode=venue_event').set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(mocks.eventFind).toHaveBeenCalledWith(expect.objectContaining({
+      $and: expect.arrayContaining([{ serviceMode: { $ne: 'external_catering' } }])
+    }));
+  });
+
+  it('lists only external catering in its dedicated listing', async () => {
+    const response = await request(app).get('/api/events?serviceMode=external_catering').set('Cookie', adminCookie);
+
+    expect(response.status).toBe(200);
+    expect(mocks.eventFind).toHaveBeenCalledWith(expect.objectContaining({
+      $and: expect.arrayContaining([{ serviceMode: 'external_catering' }])
+    }));
+  });
 });
 
 describe('public guest-list persistence', () => {
