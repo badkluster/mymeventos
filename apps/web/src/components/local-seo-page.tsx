@@ -95,7 +95,10 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/72 to-black/20" />
       <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-5 md:px-8 md:py-6">
         <Link href="/" aria-label="Ir a M&M Eventos"><img src={logoOnDark} alt="M&M Eventos" className="h-11 w-auto max-w-[150px] object-contain md:h-14 md:max-w-none" /></Link>
-        <Link href="/whatsapp" className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold transition hover:bg-white hover:text-black">Consultar por WhatsApp</Link>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link href="/" className="hidden items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-black sm:inline-flex">Inicio M&M <ArrowRight className="h-4 w-4" /></Link>
+          <Link href="/whatsapp" className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold transition hover:bg-white hover:text-black">Consultar por WhatsApp</Link>
+        </div>
       </header>
       <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-16 pt-14 md:px-8 lg:grid-cols-[1fr_360px] lg:pt-24">
         <div className="min-w-0 max-w-3xl">
@@ -104,7 +107,7 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
           <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-200">{intro}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/whatsapp" className="inline-flex items-center gap-2 rounded-lg bg-[#25d366] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#35e176]"><MessageCircle className="h-4 w-4" />Consultar por WhatsApp</Link>
-            <Link href="/#paquetes" className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-5 py-3 text-sm font-semibold transition hover:bg-white hover:text-black">Ver paquetes <ArrowRight className="h-4 w-4" /></Link>
+            <Link href="/" className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-5 py-3 text-sm font-semibold transition hover:bg-white hover:text-black">Conocé todo M&M Eventos <ArrowRight className="h-4 w-4" /></Link>
           </div>
           <div className="mt-8 flex flex-wrap gap-2 text-sm text-zinc-300">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1.5"><MapPin className="h-4 w-4" />{location}</span>
