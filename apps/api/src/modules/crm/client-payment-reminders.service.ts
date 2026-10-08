@@ -109,7 +109,7 @@ async function syncClientPaymentReminders(now: Date): Promise<number> {
     _id: { $in: eventIds },
     deletedAt: null,
     status: { $nin: [...EVENT_TERMINAL_STATUSES] }
-  }).select('_id customerId salonId eventName eventType eventDate paymentPlanSnapshot status').lean() : [];
+  }).select('_id customerId salonId eventName eventType eventDate finalAmount estimatedAmount commercialSnapshot paymentPlanSnapshot status').lean() : [];
 
   let synced = 0;
   for (const event of events) {

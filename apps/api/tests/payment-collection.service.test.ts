@@ -99,6 +99,19 @@ describe('payment collection service', () => {
     });
   });
 
+  it('allows contact for a generated installment that remains scheduled after expiring', async () => {
+    mocks.eventFindOne.mockReturnValue(populateQuery({
+      _id: '507f1f77bcf86cd799439021', status: 'confirmed', eventName: 'Boda de Sol y Martín',
+      customerId: { _id: '507f1f77bcf86cd799439023', fullName: 'Sol Díaz' },
+      paymentPlanSnapshot: [{ id: 'installment-1', amount: 100_000, paidAmount: 0, status: 'scheduled', dueDate: '2026-07-10' }]
+    }));
+    mocks.contractFindOne.mockReturnValue(leanQuery({ _id: '507f1f77bcf86cd799439024', paymentPlanSnapshot: [] }));
+
+    const contact = await resolvePaymentCollectionContact({ source: 'installment', eventId: '507f1f77bcf86cd799439021', installmentId: 'installment-1' }, new Date('2026-07-11T15:00:00.000Z'));
+
+    expect(contact.obligation.amount).toBe(100_000);
+  });
+
   it('sends the edited email copy and reports unavailable SMTP explicitly', async () => {
     const contact = {
       target: { source: 'payment' as const, paymentId: '507f1f77bcf86cd799439011' },

@@ -2,6 +2,7 @@ import { CalendarItem, Contract, Event, Payment } from './crm.models';
 import { ApiError } from '../../middlewares/errorHandler';
 import { sendEmail } from '../email/email.service';
 import { argentinaDateKey, dueDateKey } from '../../utils/argentina-date';
+import { planFor } from './financial-reminders.service';
 
 const TERMINAL_EVENT_STATUSES = new Set(['cancelled', 'lost']);
 const TERMINAL_INSTALLMENT_STATUSES = new Set(['paid', 'cancelled']);
@@ -56,13 +57,10 @@ function assertOverdue(status: unknown, dueKey: string | undefined, now: Date): 
   }
 }
 
-function remainingInstallmentAmount(installment: any): number {
-  return Math.max(0, Number(installment?.amount ?? 0) - Number(installment?.paidAmount ?? 0));
-}
-
-function paymentPlan(event: any, contract: any): any[] {
-  if (Array.isArray(event?.paymentPlanSnapshot) && event.paymentPlanSnapshot.length) return event.paymentPlanSnapshot;
-  return Array.isArray(contract?.paymentPlanSnapshot) ? contract.paymentPlanSnapshot : [];
+function assertInstallmentOverdue(status: unknown, dueKey: string | undefined, now: Date): asserts dueKey is string {
+  if (!['pending', 'scheduled', 'partial'].includes(String(status)) || !dueKey || dueKey >= argentinaDateKey(now)) {
+    throw new ApiError(422, 'PAYMENT_COLLECTION_NOT_OVERDUE', 'Sólo podés solicitar el pago de obligaciones pendientes y vencidas.');
+  }
 }
 
 function paymentDescription(obligation: { label: string; amount: number; dueDate: string; eventName?: string }, recipient: string): { subject: string; email: string; whatsapp: string } {
@@ -146,13 +144,13 @@ async function contactForInstallment(eventId: string, installmentId: string, now
     .select('_id paymentPlanSnapshot')
     .lean();
   if (!contract) throw new ApiError(422, 'PAYMENT_COLLECTION_INSTALLMENT_NOT_FOUND', 'No se encontró un contrato aprobado para esta cuota.');
-  const installment = paymentPlan(event, contract).find((item: any) => String(item?.id ?? '') === installmentId);
+  const installment = planFor(event, contract, now).find((item: any) => String(item?.id ?? '') === installmentId);
   const dueDate = dueDateKey(installment?.paymentWindowEnd ?? installment?.dueDate);
-  const remainingAmount = remainingInstallmentAmount(installment);
+  const remainingAmount = Math.max(0, Number(installment?.amount ?? 0) - Number(installment?.paidAmount ?? 0));
   if (!installment || TERMINAL_INSTALLMENT_STATUSES.has(String(installment.status ?? '')) || remainingAmount <= 0) {
     throw new ApiError(422, 'PAYMENT_COLLECTION_INSTALLMENT_NOT_FOUND', 'La cuota ya no está pendiente de cobro.');
   }
-  assertOverdue('pending', dueDate, now);
+  assertInstallmentOverdue(installment.status, dueDate, now);
   return contactFromObligation({
     target: { source: 'installment', eventId, installmentId },
     auditEntity: { type: 'Event', id: idOf(event._id) ?? eventId },

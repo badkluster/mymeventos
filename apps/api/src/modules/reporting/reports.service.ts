@@ -4,7 +4,8 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { userHasPermission } from '../../middlewares/auth';
 import { Expense, ExpenseCategory } from '../operations/operations.models';
 import { Contract, Event, EventStaffAssignment, Lead, Payment, Quote } from '../crm/crm.models';
-import { isOpenInstallment, planFor, remainingInstallmentAmount } from '../crm/financial-reminders.service';
+import { isOpenInstallment, remainingInstallmentAmount } from '../crm/financial-reminders.service';
+import { paymentPlanSource } from '../crm/payment-plan-late-fee.service';
 import { parseReportPeriod, periodMatch, resolveReportScope } from './report-filter';
 import { ProductionPlan } from '../production/production.models';
 
@@ -491,7 +492,10 @@ async function paymentControlReport(request: Request, definition: ReportDefiniti
 
   const rows = contracts.map((contract: any) => {
     if (!contract.eventId || ['cancelled', 'lost'].includes(contract.eventId.status)) return undefined;
-    const openInstallments = planFor(contract.eventId, contract).filter(isOpenInstallment);
+    // This report describes the originally programmed collection for the selected period.
+    // Live late fees belong to the event payment flow and collection reminders, not a
+    // retrospective monthly scheduling report.
+    const openInstallments = paymentPlanSource(contract.eventId, contract).filter(isOpenInstallment);
     if (!openInstallments.length) return undefined;
     const dueInPeriod = openInstallments
       .filter((installment: any) => {

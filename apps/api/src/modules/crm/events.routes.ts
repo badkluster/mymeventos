@@ -22,6 +22,7 @@ import { buildDefaultEventAlerts } from './event-alert-defaults';
 import { createContractFromEvent } from './event-to-contract.service';
 import { convertQuoteToEvent } from './quote-to-event.service';
 import { applyPaymentToPlan, createPayment, paymentSummary } from './payments.service';
+import { newlySettledLateFeeAmount, paymentPlanForStorage, paymentPlanWithLateFees, storeAppliedPaymentPlan } from './payment-plan-late-fee.service';
 import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
 import { sendEmail } from '../email/email.service';
 import { uploadBuffer } from '../uploads/cloudinary.service';
@@ -649,7 +650,7 @@ function syncContractSnapshot(contract: any, event: any, userId: string) {
   contract.paymentPlanSnapshot = event.paymentPlanSnapshot ?? event.paymentSnapshot?.paymentPlan ?? contract.paymentPlanSnapshot;
   contract.paymentAgreementSnapshot = { ...(contract.paymentAgreementSnapshot ?? {}), paymentTerms: event.commercialSnapshot?.paymentTerms, depositAmount: event.commercialSnapshot?.depositAmount, balanceAmount: Math.max(0, baseAmount - Number(contract.paidAmount ?? 0)) };
   contract.baseAmount = baseAmount;
-  contract.totalAmount = baseAmount + Number(contract.approvedAddendumsAmount ?? 0) - Number(contract.discountsAmount ?? 0);
+  contract.totalAmount = baseAmount + Number(contract.approvedAddendumsAmount ?? 0) + Number(contract.lateFeesAmount ?? 0) - Number(contract.discountsAmount ?? 0);
   contract.balanceAmount = contract.totalAmount - Number(contract.paidAmount ?? 0);
   contract.updatedBy = userId;
 }
@@ -961,6 +962,16 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
   const previousBalance = contract.balanceAmount;
 
   const type = request.body.type ?? 'installment';
+  let planOverpaymentAmount = 0;
+  let paymentPlanAtCollection: any[] | undefined;
+  let lateFeeAmount = 0;
+  if (type === 'installment' && Array.isArray(event.paymentPlanSnapshot) && event.paymentPlanSnapshot.length) {
+    paymentPlanAtCollection = paymentPlanWithLateFees(event, contract, request.body.paidAt ?? new Date());
+    const result = applyPaymentToPlan(paymentPlanAtCollection, request.body.amount, { planInstallmentId: request.body.planInstallmentId });
+    planOverpaymentAmount = result.overpaymentAmount;
+    const plannedStorage = storeAppliedPaymentPlan(event.paymentPlanSnapshot, paymentPlanAtCollection, result.plan);
+    lateFeeAmount = newlySettledLateFeeAmount(event.paymentPlanSnapshot, plannedStorage);
+  }
   const payment = await createPayment({
     ...request.body,
     type,
@@ -970,6 +981,7 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
     customerId: event.customerId?.toString(),
     salonId: event.salonId?.toString(),
     quoteId: event.quoteId?.toString(),
+    lateFeeAmount,
     allowOverpayment: request.body.allowOverpayment && canOverride
   }, request.user!.id);
   contract = await Contract.findOne({ _id: contract._id, deletedAt: null });
@@ -979,13 +991,11 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
   // pago de tipo distinto a 'installment' (seña, saldo global, extra, ajuste, etc.) impacta el
   // saldo del contrato igual, pero nunca debe descontarse de esas cuotas: antes cualquier cobro
   // registrado desde "Importe libre" — incluida la seña — se tomaba como si fuera una cuota.
-  let planOverpaymentAmount = 0;
-  if (type === 'installment' && Array.isArray(event.paymentPlanSnapshot) && event.paymentPlanSnapshot.length) {
-    const result = applyPaymentToPlan(event.paymentPlanSnapshot, request.body.amount, { planInstallmentId: request.body.planInstallmentId, paymentId: payment._id.toString() });
-    planOverpaymentAmount = result.overpaymentAmount;
-    event.paymentPlanSnapshot = result.plan;
+  if (paymentPlanAtCollection) {
+    const result = applyPaymentToPlan(paymentPlanAtCollection, request.body.amount, { planInstallmentId: request.body.planInstallmentId, paymentId: payment._id.toString() });
+    event.paymentPlanSnapshot = storeAppliedPaymentPlan(event.paymentPlanSnapshot, paymentPlanAtCollection, result.plan);
     await event.save();
-    contract.paymentPlanSnapshot = result.plan;
+    contract.paymentPlanSnapshot = event.paymentPlanSnapshot;
     await contract.save();
   }
   let receiptEmailSent = false;
@@ -1015,7 +1025,7 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
       .lean(),
     paymentSummary({ eventId: request.params.id }),
   ]);
-  return sendSuccess(response, { payment, items, summary, contract, paymentPlanSnapshot: event.paymentPlanSnapshot, planOverpaymentAmount, receiptEmailSent }, 201, getApiMessage('PAYMENT_CREATED'));
+  return sendSuccess(response, { payment, items, summary, contract, paymentPlanSnapshot: paymentPlanWithLateFees(event, contract), planOverpaymentAmount, receiptEmailSent }, 201, getApiMessage('PAYMENT_CREATED'));
 }));
 
 router.post('/:id/payments/:paymentId/receipt-email', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(paymentReceiptSchema), asyncHandler(async (request, response) => {
@@ -1375,7 +1385,7 @@ router.post('/:id/package-change', requirePermission(Permission.EVENTS_UPDATE), 
 }));
 
 router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {
-  const event = await Event.findOne({ _id: request.params.id, deletedAt: null })
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null })
     .populate('customerId')
     .populate('salonId', 'name address locality city')
     .populate('leadId', 'fullName phone email eventType')
@@ -1384,6 +1394,7 @@ router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(id
     .populate('sourceQuoteId')
     .lean();
   await ensureEventAccess(request, event);
+  event.paymentPlanSnapshot = paymentPlanWithLateFees(event);
   const contracts = await Contract.find({ eventId: request.params.id, deletedAt: null }).select('contractNumber status eventId customerId salonId versionNumber supersedesContractId supersededByContractId totalAmount pdfSecureUrl createdAt sentAt signedAt approvedAt').sort({ versionNumber: -1, createdAt: -1 }).lean();
   const contract = contracts.find((item: any) => item.status === 'approved')
     ?? contracts.find((item: any) => ['pending_approval', 'draft', 'requires_changes'].includes(item.status));
@@ -1433,6 +1444,9 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   // que sincroniza el gasto de forma transaccional. Los demás editores siguen
   // enviando el plan completo por compatibilidad, por eso preservamos esta rama.
   const updateBody: Record<string, any> = { ...request.body };
+  if (Object.prototype.hasOwnProperty.call(updateBody, 'paymentPlanSnapshot')) {
+    updateBody.paymentPlanSnapshot = paymentPlanForStorage(updateBody.paymentPlanSnapshot);
+  }
   const resultingEvent = { ...(typeof event.toObject === 'function' ? event.toObject() : event), ...updateBody };
   const missingRequired = [
     !resultingEvent.eventType && 'Debe indicar el tipo de evento.',

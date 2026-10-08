@@ -293,6 +293,21 @@ envía sólo al confirmar mediante el SMTP existente; WhatsApp abre un borrador
 saldo y alcance de salón, requiere `PAYMENTS_CREATE` y deja auditoría sin
 guardar el contenido del mensaje. Ver `PAYMENT_COLLECTION_CONTACT.md`.
 
+Actualización 2026-10-08 — mora diaria de cuotas: desde el día siguiente al
+fin de la ventana de pago, solamente la primera cuota abierta y vencida suma
+por cada día el **1% del valor total acordado del evento**. El cálculo usa la
+fecha civil de Argentina y se deriva al consultar/cobrar, por lo que refrescar
+la pantalla no compone ni duplica el recargo. Al pagar por completo la cuota,
+queda congelado en el plan únicamente el recargo ya liquidado; si el pago es
+parcial, la misma cuota continúa acumulando el 1% diario hasta quedar saldada.
+Las cuotas posteriores no reciben mora mientras exista una anterior vencida.
+Al liquidarse, el recargo se registra también en el pago y en
+`Contract.lateFeesAmount`, por lo que el cobro no se rechaza como sobrepago y
+el total/saldo contractual mantienen la trazabilidad financiera.
+La implementación vive en
+`apps/api/src/modules/crm/payment-plan-late-fee.service.ts` y se reutiliza en
+el cobro, los avisos y el contacto manual de cobranza.
+
 Actualización 2026-08-05 — bug real encontrado y corregido: en la ficha de un
 evento, la fecha mostrada en "Resumen" (18 de septiembre) no coincidía con la
 del input de "Ficha" (19 de septiembre) para el mismo evento. Causa raíz: el

@@ -11,6 +11,7 @@ import {
   daysBetweenDateKeys,
   dueDateKey
 } from '../../utils/argentina-date';
+import { paymentPlanWithLateFees } from './payment-plan-late-fee.service';
 
 const FINANCIAL_LOCK_MS = 10 * 60_000;
 const FINANCIAL_RETRY_DELAY_MS = 60 * 60_000;
@@ -441,9 +442,8 @@ async function applyDesiredCalendarItems(items: DesiredCalendarItem[]): Promise<
   return { generatedItemCount, uniqueAutomationKeyCount, existingItemCount: existingDocs.length, createdCount, updatedCount, reactivatedCount, unchangedCount };
 }
 
-export function planFor(event: any, contract: any): any[] {
-  if (Array.isArray(event?.paymentPlanSnapshot) && event.paymentPlanSnapshot.length) return event.paymentPlanSnapshot;
-  return Array.isArray(contract?.paymentPlanSnapshot) ? contract.paymentPlanSnapshot : [];
+export function planFor(event: any, contract: any, now = new Date()): any[] {
+  return paymentPlanWithLateFees(event, contract, now);
 }
 
 function installmentContext(event: any, contract: any, installment: any, rule: ReminderRule, sendAtKey: string, dueKey: string): ReminderContext {
@@ -545,7 +545,7 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     _id: { $in: eventIds },
     deletedAt: null,
     status: { $nin: [...EVENT_TERMINAL_STATUSES] }
-  }).select('_id customerId salonId leadId sourceLeadId eventName eventType eventDate paymentPlanSnapshot status').lean() : [];
+  }).select('_id customerId salonId leadId sourceLeadId eventName eventType eventDate finalAmount estimatedAmount commercialSnapshot paymentPlanSnapshot status').lean() : [];
   const eventsQueryMs = Date.now() - eventsStartedAt;
   const eventById = new Map(events.map((event: any) => [idOf(event._id)!, event]));
   await cancelFinancialItems({ eventId: { $nin: events.map((event: any) => event._id) } });
@@ -568,7 +568,7 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
   for (const event of events) {
     const contract = contractByEvent.get(idOf(event._id)!);
     if (!contract) continue;
-    const installments = planFor(event, contract);
+    const installments = planFor(event, contract, now);
     installmentCount += installments.length;
     const activeInstallmentObligationKeys: string[] = [];
     for (const installment of installments) {

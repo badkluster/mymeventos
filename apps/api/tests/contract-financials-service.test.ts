@@ -54,6 +54,17 @@ describe('contract financials service — single source of truth', () => {
     expect(contract.balanceAmount).toBe(95000);
   });
 
+  it('keeps settled late fees when recalculating contract totals', async () => {
+    const contract = contractDoc({ lateFeesAmount: 20_000, paidAmount: 100_000 });
+    mocks.contractFindOne.mockResolvedValue(contract);
+    mocks.addendumFind.mockResolvedValue([]);
+
+    await recalculateContractTotals('contract-1');
+
+    expect(contract.totalAmount).toBe(120_000);
+    expect(contract.balanceAmount).toBe(20_000);
+  });
+
   it('does not count a pending addendum toward the total, only toward pendingAddendumsAmount', async () => {
     const contract = contractDoc({ paidAmount: 20000 });
     mocks.contractFindOne.mockResolvedValue(contract);
@@ -123,11 +134,11 @@ describe('contract financials service — single source of truth', () => {
   });
 
   it('explainBalance reports the stored breakdown without mutating anything', async () => {
-    mocks.contractFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ baseAmount: 100000, approvedAddendumsAmount: 15000, pendingAddendumsAmount: 0, discountsAmount: 0, totalAmount: 115000, paidAmount: 20000, balanceAmount: 95000 }) });
+    mocks.contractFindOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ baseAmount: 100000, approvedAddendumsAmount: 15000, pendingAddendumsAmount: 0, lateFeesAmount: 5000, discountsAmount: 0, totalAmount: 120000, paidAmount: 20000, balanceAmount: 100000 }) });
 
     const breakdown = await explainBalance('contract-1');
 
-    expect(breakdown).toEqual({ baseAmount: 100000, approvedAddendumsAmount: 15000, pendingAddendumsAmount: 0, discountsAmount: 0, totalAmount: 115000, paidAmount: 20000, balanceAmount: 95000 });
+    expect(breakdown).toEqual({ baseAmount: 100000, approvedAddendumsAmount: 15000, pendingAddendumsAmount: 0, lateFeesAmount: 5000, discountsAmount: 0, totalAmount: 120000, paidAmount: 20000, balanceAmount: 100000 });
   });
 
   describe('reserveContractBalance — concurrency gate', () => {
@@ -141,6 +152,21 @@ describe('contract financials service — single source of truth', () => {
       expect(mocks.contractFindOneAndUpdate).toHaveBeenCalledWith(
         { _id: 'contract-1', deletedAt: null, status: { $nin: ['cancelled', 'superseded'] }, balanceAmount: { $gte: 20000 } },
         { $inc: { paidAmount: 20000, balanceAmount: -20000 } },
+        { new: true }
+      );
+    });
+
+    it('accepts a settled late fee without treating it as a manual overpayment', async () => {
+      mocks.contractFindOneAndUpdate.mockResolvedValue({ _id: { toString: () => 'contract-1' }, balanceAmount: 0 });
+
+      await reserveContractBalance('contract-1', 120_000, { lateFeeAmount: 20_000 });
+
+      expect(mocks.contractFindOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: 'contract-1', deletedAt: null, status: { $nin: ['cancelled', 'superseded'] },
+          $expr: { $gte: [{ $add: ['$balanceAmount', 20_000] }, 120_000] }
+        },
+        { $inc: { paidAmount: 120_000, balanceAmount: -100_000, totalAmount: 20_000, lateFeesAmount: 20_000 } },
         { new: true }
       );
     });

@@ -110,7 +110,7 @@ export type EventExpense = {
   notes?: string;
 };
 export type EventExpenseSummary = { totalPaid: number; totalCancelled: number; activeExpenseCount: number; cancelledExpenseCount: number };
-export type PaymentPlanInstallment = { id?: string; label?: string; amount?: number; paidAmount?: number; paymentId?: string; dueDate?: string; paymentWindowStart?: string; paymentWindowEnd?: string; status?: string; notes?: string };
+export type PaymentPlanInstallment = { id?: string; label?: string; amount?: number; baseAmount?: number; lateFeeAmount?: number; lateFeeDailyAmount?: number; lateFeeDays?: number; settledLateFeeAmount?: number; paidAmount?: number; paymentId?: string; dueDate?: string; paymentWindowStart?: string; paymentWindowEnd?: string; status?: string; notes?: string };
 export type EventTaskItem = { id?: string; title: string; owner?: string; dueDate?: string; priority?: 'low' | 'normal' | 'high' | 'critical' | string; status?: 'pending' | 'in_progress' | 'done' | 'blocked' | string; notes?: string };
 export type EventAlertItem = { id?: string; title: string; remindAt?: string; channel?: string; status?: 'pending' | 'scheduled' | 'sent' | 'done' | string; notes?: string };
 export type EventStaffNote = { id?: string; title?: string; notes: string };

@@ -51,7 +51,7 @@ export async function recalculateContractTotals(contractId: string): Promise<any
   const pendingAddendumsAmount = addendums.filter((item: any) => ['draft', 'pending_approval'].includes(item.status)).reduce((sum: number, item: any) => sum + amount(item.totalAmount), 0);
   contract.approvedAddendumsAmount = approvedAddendumsAmount;
   contract.pendingAddendumsAmount = pendingAddendumsAmount;
-  contract.totalAmount = amount(contract.baseAmount) + approvedAddendumsAmount - amount(contract.discountsAmount);
+  contract.totalAmount = amount(contract.baseAmount) + approvedAddendumsAmount + amount(contract.lateFeesAmount) - amount(contract.discountsAmount);
   contract.balanceAmount = amount(contract.totalAmount) - amount(contract.paidAmount);
   await contract.save();
   return contract;
@@ -74,6 +74,7 @@ export async function explainBalance(contractId: string): Promise<Record<string,
     baseAmount: amount(contract.baseAmount),
     approvedAddendumsAmount: amount(contract.approvedAddendumsAmount),
     pendingAddendumsAmount: amount(contract.pendingAddendumsAmount),
+    lateFeesAmount: amount(contract.lateFeesAmount),
     discountsAmount: amount(contract.discountsAmount),
     totalAmount: amount(contract.totalAmount),
     paidAmount: amount(contract.paidAmount),
@@ -92,11 +93,20 @@ export async function explainBalance(contractId: string): Promise<Record<string,
 export async function reserveContractBalance(
   contractId: string,
   requestedAmount: number,
-  options: { allowOverpayment?: boolean } = {}
+  options: { allowOverpayment?: boolean; lateFeeAmount?: number } = {}
 ): Promise<{ contract: any; previousBalance: number; resultingBalance: number }> {
+  const lateFeeAmount = amount(options.lateFeeAmount);
   const filter: Record<string, unknown> = { _id: contractId, deletedAt: null, status: { $nin: Array.from(nonPayableContractStatuses) } };
-  if (!options.allowOverpayment) filter.balanceAmount = { $gte: requestedAmount };
-  const updated: any = await Contract.findOneAndUpdate(filter, { $inc: { paidAmount: requestedAmount, balanceAmount: -requestedAmount } }, { new: true });
+  if (!options.allowOverpayment) {
+    if (lateFeeAmount > 0) filter.$expr = { $gte: [{ $add: ['$balanceAmount', lateFeeAmount] }, requestedAmount] };
+    else filter.balanceAmount = { $gte: requestedAmount };
+  }
+  const increments: Record<string, number> = { paidAmount: requestedAmount, balanceAmount: lateFeeAmount - requestedAmount };
+  if (lateFeeAmount > 0) {
+    increments.totalAmount = lateFeeAmount;
+    increments.lateFeesAmount = lateFeeAmount;
+  }
+  const updated: any = await Contract.findOneAndUpdate(filter, { $inc: increments }, { new: true });
   if (!updated) {
     const existing: any = await Contract.findOne({ _id: contractId, deletedAt: null });
     if (!existing) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
@@ -107,8 +117,13 @@ export async function reserveContractBalance(
 }
 
 /** Compensates a reservation when the Payment record could not be persisted afterward. */
-export async function releaseContractBalance(contractId: string, releasedAmount: number): Promise<void> {
-  await Contract.findOneAndUpdate({ _id: contractId, deletedAt: null }, { $inc: { paidAmount: -releasedAmount, balanceAmount: releasedAmount } });
+export async function releaseContractBalance(contractId: string, releasedAmount: number, lateFeeAmount = 0): Promise<void> {
+  const increments: Record<string, number> = { paidAmount: -releasedAmount, balanceAmount: releasedAmount - lateFeeAmount };
+  if (lateFeeAmount > 0) {
+    increments.totalAmount = -lateFeeAmount;
+    increments.lateFeesAmount = -lateFeeAmount;
+  }
+  await Contract.findOneAndUpdate({ _id: contractId, deletedAt: null }, { $inc: increments });
 }
 
 /**
