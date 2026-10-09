@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   eventFindOne: vi.fn(),
   eventFindOneAndUpdate: vi.fn(),
   startSession: vi.fn(),
+  paymentFind: vi.fn(),
   addendumCount: vi.fn(),
   addendumFind: vi.fn(),
   addendumFindOne: vi.fn(),
@@ -16,7 +17,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../src/modules/crm/crm.models', () => ({
   Contract: { countDocuments: mocks.contractCount, findOne: mocks.contractFindOne, create: mocks.contractCreate },
   ContractAddendum: { countDocuments: mocks.addendumCount, find: mocks.addendumFind, findOne: mocks.addendumFindOne, create: mocks.addendumCreate },
-  Event: { findOne: mocks.eventFindOne, findOneAndUpdate: mocks.eventFindOneAndUpdate }
+  Event: { findOne: mocks.eventFindOne, findOneAndUpdate: mocks.eventFindOneAndUpdate },
+  Payment: { find: mocks.paymentFind }
 }));
 // `errorHandler` imports the shared DB connection, which configures Mongoose through
 // `set()` before this service is loaded. Keep the mock compatible with that bootstrap.
@@ -53,6 +55,7 @@ describe('event to contract service', () => {
     ));
     mocks.addendumCount.mockResolvedValue(0);
     mocks.addendumFind.mockResolvedValue([]);
+    mocks.paymentFind.mockResolvedValue([]);
   });
 
   it('creates a contract from a complete event and stores snapshots', async () => {
@@ -174,7 +177,7 @@ describe('event to contract service', () => {
   it('approves a pending contract and synchronizes only its event to deposit pending', async () => {
     const contract = { _id: 'contract-1', eventId: 'event-1', status: 'pending_approval', customerSnapshot: { fullName: 'Ana Perez' }, eventSnapshot: { eventDate: new Date(), guestCount: 100 }, baseAmount: 100000, totalAmount: 100000, paidAmount: 20000, discountsAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
     const event = { _id: 'event-1', status: 'contract_draft', save: vi.fn().mockResolvedValue(undefined) };
-    mocks.contractFindOne.mockResolvedValueOnce(contract).mockReturnValueOnce(sessionQuery(contract));
+    mocks.contractFindOne.mockResolvedValueOnce(contract).mockResolvedValueOnce(contract).mockReturnValueOnce(sessionQuery(contract));
     mocks.eventFindOne.mockReturnValue(sessionQuery(event));
     const session = transactionSession();
     mocks.startSession.mockResolvedValue(session);
@@ -190,11 +193,13 @@ describe('event to contract service', () => {
     expect(mocks.eventFindOne).toHaveBeenCalledWith({ _id: 'event-1', deletedAt: null });
   });
 
-  it('supersedes the previous approved version when a draft revision is approved', async () => {
+  it('supersedes the previous approved version and preserves the applied payment plan when a draft revision is approved', async () => {
     const revision = { _id: 'contract-2', eventId: 'event-1', supersedesContractId: 'contract-1', status: 'draft', customerSnapshot: { fullName: 'Ana Perez' }, eventSnapshot: { eventDate: new Date(), guestCount: 100 }, baseAmount: 120000, totalAmount: 120000, paidAmount: 20000, discountsAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
     const previous = { _id: 'contract-1', eventId: 'event-1', status: 'approved', save: vi.fn().mockResolvedValue(undefined) };
-    const event = { _id: 'event-1', status: 'deposit_pending', save: vi.fn().mockResolvedValue(undefined) };
+    const currentPlan = [{ id: 'installment-1', amount: 60000, paidAmount: 60000, status: 'paid' }, { id: 'installment-2', amount: 60000, paidAmount: 0, status: 'scheduled' }];
+    const event = { _id: 'event-1', status: 'deposit_pending', paymentPlanSnapshot: currentPlan, save: vi.fn().mockResolvedValue(undefined) };
     mocks.contractFindOne
+      .mockResolvedValueOnce(revision)
       .mockResolvedValueOnce(revision)
       .mockReturnValueOnce(sessionQuery(revision))
       .mockReturnValueOnce(sessionQuery(previous));
@@ -202,6 +207,7 @@ describe('event to contract service', () => {
     const session = transactionSession();
     mocks.startSession.mockResolvedValue(session);
     mocks.addendumFind.mockResolvedValue([]);
+    mocks.paymentFind.mockResolvedValue([{ status: 'paid', affectsContractBalance: true, amount: 60000, type: 'installment' }]);
 
     await approveContract('contract-2', 'user-1');
 
@@ -209,12 +215,15 @@ describe('event to contract service', () => {
     expect(previous.status).toBe('superseded');
     expect(previous.supersededByContractId).toBe('contract-2');
     expect(previous.save).toHaveBeenCalledWith({ session });
+    expect(revision.paidAmount).toBe(60000);
+    expect(revision.balanceAmount).toBe(60000);
+    expect(revision.paymentPlanSnapshot).toEqual(currentPlan);
   });
 
   it('is idempotent when an approved contract is approved again and repairs only a stale event', async () => {
     const contract = { _id: 'contract-1', eventId: 'event-1', status: 'approved', approvedAt: new Date(), customerSnapshot: { fullName: 'Ana Perez' }, eventSnapshot: { eventDate: new Date(), guestCount: 100 }, baseAmount: 100000, totalAmount: 100000, paidAmount: 0, discountsAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
     const event = { _id: 'event-1', status: 'contract_draft', save: vi.fn().mockResolvedValue(undefined) };
-    mocks.contractFindOne.mockResolvedValueOnce(contract).mockReturnValueOnce(sessionQuery(contract));
+    mocks.contractFindOne.mockResolvedValueOnce(contract).mockResolvedValueOnce(contract).mockReturnValueOnce(sessionQuery(contract));
     mocks.eventFindOne.mockReturnValue(sessionQuery(event));
     mocks.startSession.mockResolvedValue(transactionSession());
     mocks.addendumFind.mockResolvedValue([]);
@@ -227,7 +236,7 @@ describe('event to contract service', () => {
   it('never updates an event other than the one associated with the contract', async () => {
     const contract = { _id: 'contract-1', eventId: 'event-associated', status: 'pending_approval', customerSnapshot: { fullName: 'Ana Perez' }, eventSnapshot: { eventDate: new Date(), guestCount: 100 }, baseAmount: 100000, totalAmount: 100000, paidAmount: 0, discountsAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
     const associatedEvent = { _id: 'event-associated', status: 'contract_draft', save: vi.fn().mockResolvedValue(undefined) };
-    mocks.contractFindOne.mockResolvedValueOnce(contract).mockReturnValueOnce(sessionQuery(contract));
+    mocks.contractFindOne.mockResolvedValueOnce(contract).mockResolvedValueOnce(contract).mockReturnValueOnce(sessionQuery(contract));
     mocks.eventFindOne.mockReturnValue(sessionQuery(associatedEvent));
     mocks.startSession.mockResolvedValue(transactionSession());
     mocks.addendumFind.mockResolvedValue([]);

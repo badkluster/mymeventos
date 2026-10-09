@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { Contract, ContractAddendum, Event } from './crm.models';
 import { ApiError } from '../../middlewares/errorHandler';
-import { recalculateContractTotals } from './contract-financials.service';
+import { recalculateContractPayments, recalculateContractTotals } from './contract-financials.service';
 
 export { recalculateContractTotals };
 
@@ -234,6 +234,7 @@ export async function approveContract(contractId: string, userId: string): Promi
   // The financial snapshot is refreshed before the state transition. The approval itself and
   // its corresponding commercial Event transition happen in one transaction below.
   await recalculateContractTotals(contractId);
+  await recalculateContractPayments(contractId);
   const session = await mongoose.startSession();
   let approvedContract: any;
 
@@ -247,6 +248,17 @@ export async function approveContract(contractId: string, userId: string): Promi
         ? await Event.findOne({ _id: contract.eventId, deletedAt: null }).session(session)
         : null;
       if (!event) throw new ApiError(422, 'CONTRACT_EVENT_INCONSISTENT', 'El contrato no tiene un evento activo asociado.');
+
+      // The plan belongs to the event, so a revision approved after a payment was collected
+      // receives the same applied installments as the previously active version.
+      const hasEventPaymentPlan = Array.isArray(event.paymentPlanSnapshot);
+      if (hasEventPaymentPlan) {
+        contract.paymentPlanSnapshot = event.paymentPlanSnapshot;
+        contract.paymentAgreementSnapshot = {
+          ...(contract.paymentAgreementSnapshot ?? {}),
+          balanceAmount: Math.max(0, Number(contract.totalAmount ?? 0) - Number(contract.paidAmount ?? 0))
+        };
+      }
 
       // Replaying an approval is intentionally safe. It also repairs a legacy inconsistency
       // left by the previous implementation without moving events backwards from later states.
@@ -267,6 +279,8 @@ export async function approveContract(contractId: string, userId: string): Promi
           previous.updatedBy = userId;
           await previous.save({ session });
         }
+      } else if (hasEventPaymentPlan) {
+        await contract.save({ session });
       }
 
       if (event.status === 'contract_draft') {
