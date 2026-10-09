@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ClipboardList, Clock3, History, MapPin, Settings2, ShieldAlert, Square, UserRound } from 'lucide-react';
+import { AlertTriangle, ArrowRight, ClipboardList, Clock3, History, MapPin, Settings2, ShieldAlert, Square, UserRound } from 'lucide-react';
 import { Permission, Role } from '@mym/shared';
 import { api } from '@/lib/api';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
@@ -37,6 +37,28 @@ function elapsedLabel(startedAt: string): string {
 
 const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
 const compactCount = (value: number) => value > 99 ? '99+' : String(value);
+
+function minutesBetween(startedAt?: string, endedAt?: string): number | undefined {
+  if (!startedAt || !endedAt) return undefined;
+  const minutes = Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000);
+  return Number.isFinite(minutes) ? minutes : undefined;
+}
+
+function timeChangeLabel(recordedAt?: string, requestedAt?: string): string {
+  if (!requestedAt) return 'Sin cambio solicitado';
+  if (!recordedAt) return 'Sin registro original';
+  const minutes = Math.round((new Date(requestedAt).getTime() - new Date(recordedAt).getTime()) / 60_000);
+  if (!Number.isFinite(minutes)) return 'No se puede calcular';
+  if (minutes === 0) return 'Sin diferencia';
+  return `${formatMinutes(Math.abs(minutes))} ${minutes > 0 ? 'más tarde' : 'más temprano'}`;
+}
+
+function durationChangeLabel(recordedMinutes?: number, requestedMinutes?: number): string | null {
+  if (recordedMinutes === undefined || requestedMinutes === undefined) return null;
+  const minutes = requestedMinutes - recordedMinutes;
+  if (minutes === 0) return 'Sin diferencia';
+  return `${formatMinutes(Math.abs(minutes))} ${minutes > 0 ? 'más' : 'menos'}`;
+}
 
 function StatusBadge({ label, tone }: { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
   const styles = { ok: 'bg-emerald-100 text-emerald-700', warn: 'bg-amber-100 text-amber-700', bad: 'bg-red-100 text-red-700', neutral: 'bg-muted text-muted-foreground' };
@@ -602,14 +624,68 @@ export default function AttendancePage() {
       </div>
     </Modal>
 
-    <Modal open={Boolean(reviewTarget)} onClose={() => setReviewTarget(null)} title="Revisar solicitud de corrección" description={reviewTarget ? `${personName(reviewTarget.userId)} · ${reviewTarget.reason}` : ''}>
-      <div className="space-y-4 p-6">
-        <FilterField label="Decisión"><Select value={reviewForm.decision} onChange={(event) => setReviewForm((current) => ({ ...current, decision: event.target.value as 'approved' | 'rejected' }))}><option value="approved">Aprobar (ajusta la jornada)</option><option value="rejected">Rechazar</option></Select></FilterField>
-        <Textarea placeholder="Notas de la revisión" value={reviewForm.reviewNotes} onChange={(event) => setReviewForm((current) => ({ ...current, reviewNotes: event.target.value }))} />
+    <Modal open={Boolean(reviewTarget)} onClose={() => setReviewTarget(null)} title="Revisar solicitud de corrección" description={reviewTarget ? `Enviada el ${formatDateTime(reviewTarget.createdAt)}` : ''}>
+      <div className="space-y-6 p-6">
+        {reviewTarget ? <AdjustmentReviewSummary adjustment={reviewTarget} /> : null}
+        <div className="space-y-4 border-t border-zinc-200 pt-5">
+          <FilterField label="Decisión"><Select value={reviewForm.decision} onChange={(event) => setReviewForm((current) => ({ ...current, decision: event.target.value as 'approved' | 'rejected' }))}><option value="approved">Aprobar (ajusta la jornada)</option><option value="rejected">Rechazar</option></Select></FilterField>
+          <FilterField label="Nota de la revisión (opcional)"><Textarea placeholder="Ej.: se verificó el registro con el encargado del salón." value={reviewForm.reviewNotes} onChange={(event) => setReviewForm((current) => ({ ...current, reviewNotes: event.target.value }))} /></FilterField>
+        </div>
         <footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setReviewTarget(null)}>Cancelar</Button><Button disabled={acting} onClick={() => void confirmReview()}>{acting ? 'Guardando…' : 'Confirmar'}</Button></footer>
       </div>
     </Modal>
   </section>;
+}
+
+function AdjustmentReviewSummary({ adjustment }: { adjustment: AttendanceAdjustmentRequest }) {
+  const original = adjustment.originalSnapshot;
+  const recordedStartAt = original?.startedAt;
+  const recordedEndAt = original?.endedAt;
+  const requestedStartAt = adjustment.requestedStartAt ?? recordedStartAt;
+  const requestedEndAt = adjustment.requestedEndAt ?? recordedEndAt;
+  const recordedMinutes = original?.workedMinutes ?? minutesBetween(recordedStartAt, recordedEndAt);
+  const requestedMinutes = minutesBetween(requestedStartAt, requestedEndAt);
+  const durationDifference = durationChangeLabel(recordedMinutes, requestedMinutes);
+
+  return <div className="space-y-4">
+    <section className="overflow-hidden rounded-xl border border-zinc-200">
+      <div className="flex items-start gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-3.5">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-200 text-zinc-700"><UserRound className="h-4 w-4" aria-hidden="true" /></span>
+        <div className="min-w-0">
+          <h3 className="font-semibold text-zinc-950">{personName(adjustment.userId)}</h3>
+          <p className="mt-0.5 text-sm text-zinc-600">Solicitó una corrección de su jornada{recordedStartAt ? ` del ${formatDateTime(recordedStartAt)}` : ''}.</p>
+        </div>
+      </div>
+      <div className="px-4 py-3.5">
+        <h3 className="text-sm font-semibold text-zinc-900">Mensaje de la persona</h3>
+        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-zinc-700">{adjustment.reason}</p>
+      </div>
+    </section>
+
+    <section className="overflow-hidden rounded-xl border border-zinc-200" aria-labelledby="adjustment-comparison-title">
+      <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3.5">
+        <h3 id="adjustment-comparison-title" className="text-sm font-semibold text-zinc-900">Horario registrado y cambio solicitado</h3>
+        <p className="mt-1 text-sm text-zinc-600">Compará el fichaje original con el horario que se aplicará si aprobás la solicitud.</p>
+      </div>
+      <div className="divide-y divide-zinc-200">
+        <AdjustmentTimeComparison label="Entrada" recordedAt={recordedStartAt} requestedAt={adjustment.requestedStartAt} />
+        <AdjustmentTimeComparison label="Salida" recordedAt={recordedEndAt} requestedAt={adjustment.requestedEndAt} />
+        {recordedMinutes !== undefined || requestedMinutes !== undefined ? <div className="grid gap-3 px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+          <div><p className="text-xs font-medium text-zinc-500">Duración registrada</p><p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">{recordedMinutes === undefined ? 'Sin calcular' : formatMinutes(recordedMinutes)}</p></div>
+          <ArrowRight className="hidden h-4 w-4 text-zinc-400 sm:block" aria-hidden="true" />
+          <div><p className="text-xs font-medium text-zinc-500">Duración solicitada</p><p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">{requestedMinutes === undefined ? 'Sin calcular' : formatMinutes(requestedMinutes)}</p>{durationDifference ? <p className="mt-1 text-xs font-medium text-zinc-600">{durationDifference}</p> : null}</div>
+        </div> : null}
+      </div>
+    </section>
+  </div>;
+}
+
+function AdjustmentTimeComparison({ label, recordedAt, requestedAt }: { label: string; recordedAt?: string; requestedAt?: string }) {
+  return <div className="grid gap-3 px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+    <div><p className="text-xs font-medium text-zinc-500">{label} registrada</p><p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">{formatDateTime(recordedAt)}</p></div>
+    <ArrowRight className="hidden h-4 w-4 text-zinc-400 sm:block" aria-hidden="true" />
+    <div><p className="text-xs font-medium text-zinc-500">{label} solicitada</p><p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">{requestedAt ? formatDateTime(requestedAt) : 'Sin cambio solicitado'}</p><p className="mt-1 text-xs font-medium text-zinc-600">{timeChangeLabel(recordedAt, requestedAt)}</p></div>
+  </div>;
 }
 
 function FilterField({ label, children }: { label: string; children: React.ReactNode }) {

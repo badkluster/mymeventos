@@ -251,7 +251,7 @@ export async function approveContract(contractId: string, userId: string): Promi
       // Replaying an approval is intentionally safe. It also repairs a legacy inconsistency
       // left by the previous implementation without moving events backwards from later states.
       if (contract.status !== 'approved') {
-        if (contract.status !== 'pending_approval') throw new ApiError(422, 'CONTRACT_NOT_APPROVABLE');
+        if (!['draft', 'pending_approval', 'requires_changes'].includes(contract.status)) throw new ApiError(422, 'CONTRACT_NOT_APPROVABLE');
         contract.status = 'approved';
         contract.approvedAt = new Date();
         contract.approvedByUserId = userId;

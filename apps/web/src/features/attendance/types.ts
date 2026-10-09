@@ -92,6 +92,12 @@ export type AttendanceAdjustmentRequest = {
   workSessionId: string;
   requestedStartAt?: string;
   requestedEndAt?: string;
+  originalSnapshot?: {
+    startedAt?: string;
+    endedAt?: string;
+    workedMinutes?: number;
+    status?: WorkSessionStatus;
+  };
   reason: string;
   status: AttendanceAdjustmentStatus;
   reviewNotes?: string;

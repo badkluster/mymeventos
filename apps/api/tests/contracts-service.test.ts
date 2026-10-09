@@ -190,8 +190,8 @@ describe('event to contract service', () => {
     expect(mocks.eventFindOne).toHaveBeenCalledWith({ _id: 'event-1', deletedAt: null });
   });
 
-  it('supersedes the previous approved version only when its revision is approved', async () => {
-    const revision = { _id: 'contract-2', eventId: 'event-1', supersedesContractId: 'contract-1', status: 'pending_approval', customerSnapshot: { fullName: 'Ana Perez' }, eventSnapshot: { eventDate: new Date(), guestCount: 100 }, baseAmount: 120000, totalAmount: 120000, paidAmount: 20000, discountsAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
+  it('supersedes the previous approved version when a draft revision is approved', async () => {
+    const revision = { _id: 'contract-2', eventId: 'event-1', supersedesContractId: 'contract-1', status: 'draft', customerSnapshot: { fullName: 'Ana Perez' }, eventSnapshot: { eventDate: new Date(), guestCount: 100 }, baseAmount: 120000, totalAmount: 120000, paidAmount: 20000, discountsAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
     const previous = { _id: 'contract-1', eventId: 'event-1', status: 'approved', save: vi.fn().mockResolvedValue(undefined) };
     const event = { _id: 'event-1', status: 'deposit_pending', save: vi.fn().mockResolvedValue(undefined) };
     mocks.contractFindOne
