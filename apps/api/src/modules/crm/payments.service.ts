@@ -80,7 +80,6 @@ type PaymentPayload = {
   allowExcessRefund?: boolean;
   overrideReason?: string;
   reason?: string;
-  lateFeeAmount?: number;
 };
 
 function assertOverrideReason(allow: boolean | undefined, reason: string | undefined): void {
@@ -133,7 +132,7 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
   let reserved = false;
   if (status === 'paid' && affectsContractBalance) {
     assertOverrideReason(payload.allowOverpayment, payload.overrideReason);
-    await reserveContractBalance(contract._id.toString(), requestedAmount, { allowOverpayment: payload.allowOverpayment, lateFeeAmount: payload.lateFeeAmount });
+    await reserveContractBalance(contract._id.toString(), requestedAmount, { allowOverpayment: payload.allowOverpayment });
     reserved = true;
   }
 
@@ -156,7 +155,6 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
       reference: payload.reference,
       notes: payload.notes,
       planInstallmentId: payload.planInstallmentId,
-      lateFeeAmount: payload.lateFeeAmount,
       affectsContractBalance,
       createdBy: userId,
       updatedBy: userId
@@ -164,7 +162,7 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
     await recalculateContractPayments(contract._id.toString());
     return payment;
   } catch (error) {
-    if (reserved) await releaseContractBalance(contract._id.toString(), requestedAmount, amount(payload.lateFeeAmount));
+    if (reserved) await releaseContractBalance(contract._id.toString(), requestedAmount);
     throw error;
   }
 }
