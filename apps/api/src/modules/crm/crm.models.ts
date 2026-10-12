@@ -376,6 +376,11 @@ const paymentSchema = new Schema({
   method: { type: String, enum: ['cash', 'bank_transfer', 'mercado_pago', 'card', 'other'] },
   status: { type: String, enum: ['pending', 'paid', 'cancelled', 'refunded'], default: 'pending', index: true },
   amount: { type: Number, required: true, min: 0 },
+  // The gross amount actually received can include a manual late-payment add-on. Keeping the
+  // contractual portion separately lets the payment remain a real income entry without making
+  // that add-on reduce the agreed contractual balance.
+  contractAppliedAmount: { type: Number, min: 0 },
+  manualAdditionalAmount: { type: Number, default: 0, min: 0 },
   dueDate: { type: Date, index: true },
   paidAt: Date,
   receiptNumber: String,

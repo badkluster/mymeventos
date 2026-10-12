@@ -79,6 +79,25 @@ describe('payments service', () => {
     );
   });
 
+  it('keeps a manual installment add-on in the payment total while only the quota portion reduces the contract balance', async () => {
+    const contract = contractDoc({ totalAmount: 100000, balanceAmount: 100000 });
+    mocks.contractFindOne.mockResolvedValue(contract);
+    mocks.contractFindOneAndUpdate.mockResolvedValue({ _id: { toString: () => 'contract-1' }, balanceAmount: 0 });
+    mocks.paymentCreate.mockResolvedValue({ _id: 'payment-1', contractId: contract._id, status: 'paid', amount: 102000, contractAppliedAmount: 100000, manualAdditionalAmount: 2000, type: 'installment', affectsContractBalance: true });
+    mocks.paymentFind.mockResolvedValue([{ status: 'paid', amount: 102000, contractAppliedAmount: 100000, manualAdditionalAmount: 2000, type: 'installment', affectsContractBalance: true }]);
+
+    await createPayment({ contractId: 'contract-1', amount: 102000, contractAppliedAmount: 100000, manualAdditionalAmount: 2000, type: 'installment', status: 'paid', method: 'cash' }, 'user-1');
+
+    expect(mocks.contractFindOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'contract-1', balanceAmount: { $gte: 100000 } }),
+      { $inc: { paidAmount: 100000, balanceAmount: -100000 } },
+      { new: true }
+    );
+    expect(mocks.paymentCreate).toHaveBeenCalledWith(expect.objectContaining({ amount: 102000, contractAppliedAmount: 100000, manualAdditionalAmount: 2000 }));
+    expect(contract.paidAmount).toBe(100000);
+    expect(contract.balanceAmount).toBe(0);
+  });
+
   it('rejects a paid payment that exceeds the outstanding balance', async () => {
     mocks.contractFindOne
       .mockResolvedValueOnce(contractDoc({ totalAmount: 100000, balanceAmount: 20000 }))
@@ -164,6 +183,25 @@ describe('payments service', () => {
 
     await refundPayment('payment-1', { reason: 'El cliente canceló el evento.' }, 'user-1');
 
+    expect(contract.paidAmount).toBe(0);
+    expect(contract.balanceAmount).toBe(100000);
+  });
+
+  it('refunds a payment with a manual add-on without treating the add-on as contractual debt', async () => {
+    const contract = contractDoc({ totalAmount: 100000 });
+    const original = { _id: 'payment-1', paymentNumber: 'PAY-2026-00001', contractId: { toString: () => 'contract-1' }, customerId: 'customer-1', eventId: 'event-1', salonId: 'salon-1', status: 'paid', type: 'installment', method: 'cash', amount: 102000, contractAppliedAmount: 100000, manualAdditionalAmount: 2000 };
+    mocks.paymentFindOne.mockResolvedValue(original);
+    mocks.paymentFindOneAndUpdate.mockResolvedValue({ ...original, refundedAmount: 102000, save: vi.fn().mockResolvedValue(undefined) });
+    mocks.paymentCreate.mockResolvedValue({ _id: 'payment-2', type: 'refund', amount: 102000, contractAppliedAmount: 100000 });
+    mocks.contractFindOne.mockResolvedValue(contract);
+    mocks.paymentFind.mockResolvedValue([
+      { status: 'paid', amount: 102000, contractAppliedAmount: 100000, type: 'installment', affectsContractBalance: true },
+      { status: 'paid', amount: 102000, contractAppliedAmount: 100000, type: 'refund', affectsContractBalance: true },
+    ]);
+
+    await refundPayment('payment-1', { reason: 'Se reintegró el cobro completo.' }, 'user-1');
+
+    expect(mocks.paymentCreate).toHaveBeenCalledWith(expect.objectContaining({ amount: 102000, contractAppliedAmount: 100000 }));
     expect(contract.paidAmount).toBe(0);
     expect(contract.balanceAmount).toBe(100000);
   });

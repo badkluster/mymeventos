@@ -190,6 +190,7 @@ const packageApplySchema = z.object({
 const eventPaymentSchema = z.object({
   body: z.object({
     amount: z.coerce.number().positive(),
+    manualAdditionalAmount: z.coerce.number().nonnegative().optional(),
     method: z.enum(['cash', 'bank_transfer', 'mercado_pago', 'card', 'other']),
     type: z.enum(['deposit', 'installment', 'balance', 'extra', 'adjustment', 'other']).optional(),
     paidAt: z.preprocess((input) => typeof input === 'string' && isDateKey(input) ? argentinaMidnight(input) : input, z.coerce.date()).optional(),
@@ -961,9 +962,32 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
   const previousBalance = contract.balanceAmount;
 
   const type = request.body.type ?? 'installment';
+  const manualAdditionalAmount = Number(request.body.manualAdditionalAmount ?? 0);
+  let installmentAmount = Number(request.body.amount);
+  if (manualAdditionalAmount > 0) {
+    if (type !== 'installment' || !request.body.planInstallmentId) {
+      throw new ApiError(422, 'El agregado manual sólo se puede registrar junto con una cuota seleccionada.');
+    }
+    const installment = Array.isArray(event.paymentPlanSnapshot)
+      ? event.paymentPlanSnapshot.find((item: any) => item.id === request.body.planInstallmentId)
+      : undefined;
+    const dueKey = installmentDueDateKey(installment);
+    const todayKey = argentinaDateKey(new Date());
+    const paymentDateKey = argentinaDateKey(request.body.paidAt ?? new Date());
+    const pendingAmount = Math.max(0, Number(installment?.amount ?? 0) - Number(installment?.paidAmount ?? 0));
+    if (!installment || !dueKey || dueKey >= todayKey || dueKey >= paymentDateKey) {
+      throw new ApiError(422, 'El agregado manual sólo está disponible para una cuota vencida.');
+    }
+    if (installmentAmount > pendingAmount) {
+      throw new ApiError(422, 'El importe de la cuota no puede superar el saldo pendiente cuando incluye un agregado manual.');
+    }
+  }
   const payment = await createPayment({
     ...request.body,
     type,
+    amount: installmentAmount + manualAdditionalAmount,
+    contractAppliedAmount: manualAdditionalAmount > 0 ? installmentAmount : undefined,
+    manualAdditionalAmount,
     status: 'paid',
     eventId: event._id.toString(),
     contractId: contract._id.toString(),
@@ -981,7 +1005,7 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
   // registrado desde "Importe libre" — incluida la seña — se tomaba como si fuera una cuota.
   let planOverpaymentAmount = 0;
   if (type === 'installment' && Array.isArray(event.paymentPlanSnapshot) && event.paymentPlanSnapshot.length) {
-    const result = applyPaymentToPlan(event.paymentPlanSnapshot, request.body.amount, { planInstallmentId: request.body.planInstallmentId, paymentId: payment._id.toString() });
+    const result = applyPaymentToPlan(event.paymentPlanSnapshot, installmentAmount, { planInstallmentId: request.body.planInstallmentId, paymentId: payment._id.toString() });
     planOverpaymentAmount = result.overpaymentAmount;
     event.paymentPlanSnapshot = result.plan;
     await event.save();
@@ -1000,12 +1024,17 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
     }
     await payment.save();
   } catch (error) { console.error('No se pudo generar o enviar el comprobante de pago:', error); }
-  await writeAuditLog(request, 'EVENT_PAYMENT_CREATE', 'Payment', payment._id.toString(), { eventId: request.params.id, planInstallmentId: request.body.planInstallmentId });
+  await writeAuditLog(request, 'EVENT_PAYMENT_CREATE', 'Payment', payment._id.toString(), {
+    eventId: request.params.id,
+    planInstallmentId: request.body.planInstallmentId,
+    contractAppliedAmount: payment.contractAppliedAmount,
+    manualAdditionalAmount: payment.manualAdditionalAmount ?? 0
+  });
   if (request.body.allowOverpayment && canOverride) {
     const contractAfter: any = await Contract.findOne({ _id: contract._id, deletedAt: null }).select('balanceAmount').lean();
     await writeAuditLog(request, 'PAYMENT_OVERPAYMENT_OVERRIDE', 'Payment', payment._id.toString(), { contractId: contract._id, eventId: request.params.id, requestedAmount: payment.amount, previousBalance, resultingBalance: contractAfter?.balanceAmount, reason: request.body.overrideReason });
   }
-  await LeadActivity.create({ eventId: event._id, customerId: event.customerId, type: 'payment_registered', title: 'Pago registrado', description: `Se registró el pago ${payment.paymentNumber} por $ ${Number(payment.amount || 0).toLocaleString('es-AR')}.`, metadata: { paymentId: payment._id, amount: payment.amount, type: payment.type }, createdBy: request.user!.id });
+  await LeadActivity.create({ eventId: event._id, customerId: event.customerId, type: 'payment_registered', title: manualAdditionalAmount > 0 ? 'Cuota cobrada con agregado manual' : 'Pago registrado', description: `Se registró el pago ${payment.paymentNumber} por $ ${Number(payment.amount || 0).toLocaleString('es-AR')}.`, metadata: { paymentId: payment._id, amount: payment.amount, contractAppliedAmount: payment.contractAppliedAmount, manualAdditionalAmount: payment.manualAdditionalAmount ?? 0, type: payment.type }, createdBy: request.user!.id });
   const [items, summary] = await Promise.all([
     Payment.find({ eventId: request.params.id, deletedAt: null })
       .populate('customerId', 'fullName phone email')

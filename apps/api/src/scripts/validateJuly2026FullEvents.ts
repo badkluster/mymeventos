@@ -105,7 +105,8 @@ function eventInterval(day: string, startTime: unknown, endTime: unknown): { sta
 
 function signedPayment(payment: AnyRecord): number {
   if (payment.status !== 'paid' || !payment.affectsContractBalance) return 0;
-  return payment.type === 'refund' ? -amount(payment.amount) : amount(payment.amount);
+  const contractualAmount = amount(payment.contractAppliedAmount ?? payment.amount);
+  return payment.type === 'refund' ? -contractualAmount : contractualAmount;
 }
 
 function issueFor(event: AnyRecord | undefined, severity: Severity, code: string, message: string, extra: Partial<AuditIssue> = {}): AuditIssue {
@@ -141,7 +142,7 @@ async function reportingReconciliation(): Promise<July2026AuditResult['reporting
   ] = await Promise.all([
     Event.countDocuments({ ...current('eventDate'), status: 'confirmed' }),
     Contract.find({ ...current('approvedAt'), status: 'approved' }).select('totalAmount').lean(),
-    Payment.find({ ...current('paidAt'), status: 'paid', affectsContractBalance: true }).select('type amount').lean(),
+    Payment.find({ ...current('paidAt'), status: 'paid', affectsContractBalance: true }).select('type amount contractAppliedAmount').lean(),
     Expense.find({ ...current('paidAt'), status: 'paid' }).select('amount').lean(),
     Lead.countDocuments(current('createdAt')),
     Quote.countDocuments(current('sentAt')),

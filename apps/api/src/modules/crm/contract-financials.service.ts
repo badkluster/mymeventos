@@ -23,7 +23,10 @@ export function defaultAffectsContractBalance(type?: string): boolean {
 
 function signedAmount(payment: any): number {
   if (payment.status !== 'paid' || !payment.affectsContractBalance) return 0;
-  const value = amount(payment.amount);
+  // Payments created before this field existed keep their historical behavior. For a manual
+  // late-payment add-on, only the quota portion pays down the contract; the add-on is still
+  // retained in `amount` for the receipts and income ledger.
+  const value = amount(payment.contractAppliedAmount ?? payment.amount);
   return payment.type === 'refund' ? -value : value;
 }
 

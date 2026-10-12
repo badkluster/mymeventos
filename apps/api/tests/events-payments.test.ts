@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Role } from '@mym/shared';
 import { generateAccessToken } from '../src/utils/tokens';
@@ -68,6 +68,8 @@ describe('event payment registration and the installment plan', () => {
       .mockResolvedValueOnce([{ amount: 400000, status: 'paid', type: 'deposit', affectsContractBalance: true }]);
   });
 
+  afterEach(() => vi.useRealTimers());
+
   it('does not touch the installment plan when the payment is a deposit ("seña")', async () => {
     const plan = installmentPlan(12, 112500);
     const event: any = { _id: eventId, salonId, customerId: undefined, quoteId: undefined, paymentPlanSnapshot: plan, save: vi.fn().mockResolvedValue(undefined) };
@@ -100,5 +102,51 @@ describe('event payment registration and the installment plan', () => {
     expect(event.paymentPlanSnapshot[0]).toMatchObject({ status: 'paid', paidAmount: 112500 });
     expect(event.paymentPlanSnapshot[3]).toMatchObject({ status: 'partial', paidAmount: 62500 });
     expect(event.save).toHaveBeenCalled();
+  });
+
+  it('records a manual add-on for an overdue installment without applying it to future installments or the contract balance', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-11T12:00:00.000Z'));
+    const plan = [
+      { id: 'installment-1', label: 'Cuota 1', amount: 100000, paidAmount: 0, status: 'scheduled', paymentWindowEnd: '2026-10-10' },
+      { id: 'installment-2', label: 'Cuota 2', amount: 100000, paidAmount: 0, status: 'scheduled', paymentWindowEnd: '2026-11-10' },
+    ];
+    const event: any = { _id: eventId, salonId, customerId: undefined, quoteId: undefined, paymentPlanSnapshot: plan, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.createPayment.mockResolvedValue({ _id: 'payment-3', paymentNumber: 'PAY-2026-00003', amount: 102000, contractAppliedAmount: 100000, manualAdditionalAmount: 2000, save: vi.fn().mockResolvedValue(undefined) });
+
+    const response = await request(app).post(`/api/events/${eventId}/payments`).set('Cookie', adminCookie).send({
+      amount: 100000,
+      manualAdditionalAmount: 2000,
+      method: 'cash',
+      planInstallmentId: 'installment-1',
+    });
+
+    expect(response.status).toBe(201);
+    expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'installment', amount: 102000, contractAppliedAmount: 100000, manualAdditionalAmount: 2000,
+    }), adminId);
+    expect(event.paymentPlanSnapshot[0]).toMatchObject({ status: 'paid', paidAmount: 100000 });
+    expect(event.paymentPlanSnapshot[1]).toMatchObject({ status: 'scheduled', paidAmount: 0 });
+    expect(response.body.data.paymentPlanSnapshot[1]).toMatchObject({ status: 'scheduled', paidAmount: 0 });
+  });
+
+  it('does not allow a manual add-on when the selected installment is not yet overdue', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-11T12:00:00.000Z'));
+    const plan = [{ id: 'installment-1', label: 'Cuota 1', amount: 100000, paidAmount: 0, status: 'scheduled', paymentWindowEnd: '2026-10-12' }];
+    const event: any = { _id: eventId, salonId, customerId: undefined, quoteId: undefined, paymentPlanSnapshot: plan, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.eventFindOne.mockResolvedValue(event);
+
+    const response = await request(app).post(`/api/events/${eventId}/payments`).set('Cookie', adminCookie).send({
+      amount: 100000,
+      manualAdditionalAmount: 2000,
+      method: 'cash',
+      planInstallmentId: 'installment-1',
+    });
+
+    expect(response.status).toBe(422);
+    expect(mocks.createPayment).not.toHaveBeenCalled();
+    expect(event.save).not.toHaveBeenCalled();
   });
 });

@@ -69,6 +69,8 @@ type PaymentPayload = {
   method?: string;
   status?: string;
   amount?: number;
+  contractAppliedAmount?: number;
+  manualAdditionalAmount?: number;
   dueDate?: Date | string;
   paidAt?: Date | string;
   receiptNumber?: string;
@@ -88,6 +90,16 @@ function assertOverrideReason(allow: boolean | undefined, reason: string | undef
 
 function assertReasonProvided(reason: string | undefined): void {
   if (!reason || !reason.trim()) throw new ApiError(422, 'PAYMENT_CANCELLATION_REASON_REQUIRED');
+}
+
+function paymentContractAppliedAmount(payment: { amount?: unknown; contractAppliedAmount?: unknown }): number {
+  const grossAmount = amount(payment.amount);
+  if (payment.contractAppliedAmount === undefined || payment.contractAppliedAmount === null) return grossAmount;
+  const contractualAmount = Number(payment.contractAppliedAmount);
+  if (!Number.isFinite(contractualAmount) || contractualAmount < 0 || contractualAmount > grossAmount) {
+    throw new ApiError(422, 'PAYMENT_CONTRACT_APPLIED_AMOUNT_INVALID');
+  }
+  return contractualAmount;
 }
 
 const paymentMethods = ['cash', 'bank_transfer', 'mercado_pago', 'card', 'other'] as const;
@@ -128,11 +140,12 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
   if (status === 'paid' && !payload.method) throw new ApiError(422, 'PAYMENT_METHOD_REQUIRED');
   const affectsContractBalance = payload.affectsContractBalance ?? defaultAffectsContractBalance(type);
   const requestedAmount = amount(payload.amount);
+  const contractAppliedAmount = paymentContractAppliedAmount(payload);
 
   let reserved = false;
   if (status === 'paid' && affectsContractBalance) {
     assertOverrideReason(payload.allowOverpayment, payload.overrideReason);
-    await reserveContractBalance(contract._id.toString(), requestedAmount, { allowOverpayment: payload.allowOverpayment });
+    await reserveContractBalance(contract._id.toString(), contractAppliedAmount, { allowOverpayment: payload.allowOverpayment });
     reserved = true;
   }
 
@@ -148,7 +161,9 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
       type,
       method: payload.method,
       status,
-      amount: payload.amount,
+      amount: requestedAmount,
+      contractAppliedAmount,
+      manualAdditionalAmount: amount(payload.manualAdditionalAmount),
       dueDate: payload.dueDate,
       paidAt: status === 'paid' ? payload.paidAt ?? new Date() : payload.paidAt,
       receiptNumber: payload.receiptNumber,
@@ -162,7 +177,7 @@ export async function createPayment(payload: PaymentPayload, userId: string): Pr
     await recalculateContractPayments(contract._id.toString());
     return payment;
   } catch (error) {
-    if (reserved) await releaseContractBalance(contract._id.toString(), requestedAmount);
+    if (reserved) await releaseContractBalance(contract._id.toString(), contractAppliedAmount);
     throw error;
   }
 }
@@ -183,12 +198,15 @@ export async function updatePayment(paymentId: string, payload: PaymentPayload, 
 
   const transitioningToPaid = payload.status === 'paid' && payment.status !== 'paid';
   const affectsContractBalance = payload.affectsContractBalance ?? payment.affectsContractBalance ?? defaultAffectsContractBalance(payload.type ?? payment.type);
-  const finalAmount = amount(payload.amount ?? payment.amount);
+  const finalContractAppliedAmount = paymentContractAppliedAmount({
+    amount: payload.amount ?? payment.amount,
+    contractAppliedAmount: payload.contractAppliedAmount ?? payment.contractAppliedAmount
+  });
 
   let reserved = false;
   if (transitioningToPaid && affectsContractBalance) {
     assertOverrideReason(payload.allowOverpayment, payload.overrideReason);
-    await reserveContractBalance(payment.contractId.toString(), finalAmount, { allowOverpayment: payload.allowOverpayment });
+    await reserveContractBalance(payment.contractId.toString(), finalContractAppliedAmount, { allowOverpayment: payload.allowOverpayment });
     reserved = true;
   }
 
@@ -202,7 +220,7 @@ export async function updatePayment(paymentId: string, payload: PaymentPayload, 
     await recalculateContractPayments(payment.contractId.toString());
     return payment;
   } catch (error) {
-    if (reserved) await releaseContractBalance(payment.contractId.toString(), finalAmount);
+    if (reserved) await releaseContractBalance(payment.contractId.toString(), finalContractAppliedAmount);
     throw error;
   }
 }
@@ -213,7 +231,7 @@ export async function markPaymentPaid(paymentId: string, payload: PaymentPayload
   assertEditableManualPayment(payment);
   assertValidPaymentStatusTransition(payment.status, 'paid');
   if (!payload.method && !payment.method) throw new ApiError(422, 'PAYMENT_METHOD_REQUIRED');
-  const paymentAmount = amount(payment.amount);
+  const paymentAmount = paymentContractAppliedAmount(payment);
   const wasAlreadyPaid = payment.status === 'paid';
 
   let reserved = false;
@@ -265,9 +283,21 @@ export async function refundPayment(paymentId: string, payload: PaymentPayload, 
 
   const requestedAmount = amount(payload.amount ?? original.amount);
   assertOverrideReason(payload.allowExcessRefund, payload.overrideReason);
-  const { previousRefundable, resultingRefundable } = await reserveRefundAmount(original._id.toString(), requestedAmount, { allowExcessRefund: payload.allowExcessRefund });
+  const refundable = await reserveRefundAmount(original._id.toString(), requestedAmount, { allowExcessRefund: payload.allowExcessRefund });
+  const { previousRefundable, resultingRefundable } = refundable;
 
   try {
+    // Allocate a partial refund against the contractual portion first. This makes a sequence
+    // of partial refunds reconcile exactly even when the original receipt included a manual
+    // add-on that never affected the contract balance.
+    const originalContractAppliedAmount = paymentContractAppliedAmount(original);
+    const totalRefundedAfterThisRequest = amount(refundable.payment.refundedAmount);
+    const totalRefundedBeforeThisRequest = Math.max(0, totalRefundedAfterThisRequest - requestedAmount);
+    const refundContractAppliedAmount = Math.max(
+      0,
+      Math.min(originalContractAppliedAmount, totalRefundedAfterThisRequest)
+        - Math.min(originalContractAppliedAmount, totalRefundedBeforeThisRequest)
+    );
     const refund = await Payment.create({
       paymentNumber: await nextPaymentNumber(),
       customerId: original.customerId,
@@ -279,6 +309,7 @@ export async function refundPayment(paymentId: string, payload: PaymentPayload, 
       method: payload.method ?? original.method ?? 'other',
       status: 'paid',
       amount: requestedAmount,
+      contractAppliedAmount: refundContractAppliedAmount,
       paidAt: payload.paidAt ?? new Date(),
       receiptNumber: payload.receiptNumber,
       reference: payload.reference ?? `Reembolso de ${original.paymentNumber}`,

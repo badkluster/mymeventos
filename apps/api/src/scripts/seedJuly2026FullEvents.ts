@@ -687,7 +687,7 @@ async function auditSeed(): Promise<{ rows: AuditRow[]; totals: AnyRecord }> {
     else {
       if (contract.status !== 'approved') errors.push(`Contrato=${contract.status}.`);
       if (Math.abs(Number(contract.balanceAmount || 0)) > 0.01) errors.push(`Saldo contractual=${contract.balanceAmount}.`);
-      const paid = payments.filter((payment) => payment.status === 'paid' && payment.affectsContractBalance).reduce((sum, payment) => sum + (payment.type === 'refund' ? -Number(payment.amount || 0) : Number(payment.amount || 0)), 0);
+      const paid = payments.filter((payment) => payment.status === 'paid' && payment.affectsContractBalance).reduce((sum, payment) => sum + (payment.type === 'refund' ? -Number(payment.contractAppliedAmount ?? payment.amount ?? 0) : Number(payment.contractAppliedAmount ?? payment.amount ?? 0)), 0);
       if (Math.abs(paid - Number(contract.totalAmount || 0)) > 0.01) errors.push(`Pagos=${paid}; contrato=${contract.totalAmount}.`);
     }
     if (payments.some((payment) => payment.status === 'pending' && payment.affectsContractBalance)) errors.push('Hay pagos relevantes pendientes.');

@@ -248,6 +248,8 @@ export type Payment = {
   method?: string;
   status: string;
   amount: number;
+  contractAppliedAmount?: number;
+  manualAdditionalAmount?: number;
   dueDate?: string;
   paidAt?: string;
   receiptNumber?: string;

@@ -34,7 +34,7 @@ async function diagnoseFinancialIntegrity(): Promise<void> {
       0,
       payments.reduce((sum: number, payment: any) => {
         if (payment.status !== 'paid' || !payment.affectsContractBalance) return sum;
-        const value = amount(payment.amount);
+        const value = amount(payment.contractAppliedAmount ?? payment.amount);
         return sum + (payment.type === 'refund' ? -value : value);
       }, 0)
     );
