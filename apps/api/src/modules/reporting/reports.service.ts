@@ -7,6 +7,7 @@ import { Contract, Event, EventStaffAssignment, Lead, Payment, Quote } from '../
 import { isOpenInstallment, planFor, remainingInstallmentAmount } from '../crm/financial-reminders.service';
 import { parseReportPeriod, periodMatch, resolveReportScope } from './report-filter';
 import { ProductionPlan } from '../production/production.models';
+import { marketingFunnelReport } from './marketing-funnel.service';
 
 // 'date' = instante real con hora propia (createdAt, sentAt, approvedAt, paidAt) — se muestra en
 // hora de Argentina. 'civilDate' = fecha civil sin hora (eventDate, dueDate/paymentWindow*,
@@ -23,6 +24,16 @@ type ReportDefinition = {
 };
 
 export const reportDefinitions: ReportDefinition[] = [
+  {
+    key: 'marketing-funnel', group: 'Marketing y comercial', title: 'Embudo Meta → CRM por salón', description: 'Contrasta conversaciones de Meta con leads, solicitudes, presupuestos, eventos y resultado comercial por salón.', permission: Permission.REPORTS_ANALYTICS_READ,
+    columns: [
+      { key: 'campaign', label: 'Campaña' }, { key: 'salon', label: 'Salón' }, { key: 'conversations', label: 'Conversaciones Meta', format: 'number' },
+      { key: 'metaLeads', label: 'Leads Meta', format: 'number' }, { key: 'crmLeads', label: 'Leads CRM vinculados', format: 'number' }, { key: 'requests', label: 'Solicitudes vinculadas', format: 'number' },
+      { key: 'quotes', label: 'Presupuestos', format: 'number' }, { key: 'acceptedQuotes', label: 'Aceptados', format: 'number' }, { key: 'events', label: 'Eventos cerrados', format: 'number' },
+      { key: 'spend', label: 'Inversión Meta', format: 'currency' }, { key: 'bookedRevenue', label: 'Facturación atribuida', format: 'currency' }, { key: 'collectedRevenue', label: 'Cobrado atribuido', format: 'currency' },
+      { key: 'observableCaptureRate', label: 'Captura observable', format: 'percentage' }, { key: 'roas', label: 'ROAS', format: 'number' },
+    ],
+  },
   {
     key: 'leads', group: 'Comercial', title: 'Leads', description: 'Consultas, origen, responsables y evolución comercial.', permission: Permission.REPORTS_COMMERCIAL_READ,
     columns: [
@@ -579,6 +590,7 @@ export function availableReports(request: Request) {
 
 export async function getReport(request: Request, key: string, exportAll = false): Promise<any> {
   const definition = ensureReportAccess(request, key);
+  if (key === 'marketing-funnel') return marketingFunnelReport(request, definition, exportAll);
   if (key === 'leads') return leadsReport(request, definition, exportAll);
   if (key === 'quotes') return quotesReport(request, definition, exportAll);
   if (key === 'events') return eventsReport(request, definition, exportAll);

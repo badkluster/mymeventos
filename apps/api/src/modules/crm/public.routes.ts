@@ -40,6 +40,7 @@ const schema = z.object({
     utmSource: z.string().trim().max(120).optional(),
     utmMedium: z.string().trim().max(120).optional(),
     utmCampaign: z.string().trim().max(120).optional(),
+    utmCampaignId: z.string().trim().max(64).regex(/^[A-Za-z0-9._:-]+$/).optional(),
     message: z.string().max(700).optional().refine((value) => countWords(value) <= messageMaxWords, `El mensaje no puede superar ${messageMaxWords} palabras.`)
   }),
   params: z.object({}),

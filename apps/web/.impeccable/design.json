@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13T15:58:10.3748502-03:00",
+  "title": "Design System: M&M Eventos Web",
+  "extensions": {
+    "colorMeta": {
+      "background": { "role": "neutral", "displayName": "Lienzo de aplicación", "canonical": "#fafafa", "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#fafafa"] },
+      "foreground": { "role": "neutral", "displayName": "Tinta base", "canonical": "#171717", "tonalRamp": ["#0a0a0a", "#171717", "#27272a", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#fafafa"] },
+      "card": { "role": "neutral", "displayName": "Papel de superficie", "canonical": "#ffffff", "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#e4e4e7", "#ffffff"] },
+      "muted": { "role": "neutral", "displayName": "Plano tenue", "canonical": "#f1f1f1", "tonalRamp": ["#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#f1f1f1"] },
+      "muted-foreground": { "role": "neutral", "displayName": "Texto secundario", "canonical": "#5f6472", "tonalRamp": ["#18191d", "#292c33", "#3c404a", "#50545f", "#5f6472", "#9297a3", "#c6c9cf", "#f4f5f6"] },
+      "border": { "role": "neutral", "displayName": "Divisor silencioso", "canonical": "#e4e4e7", "tonalRamp": ["#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#fafafa"] },
+      "primary": { "role": "primary", "displayName": "Tinta de operación", "canonical": "#171717", "tonalRamp": ["#0a0a0a", "#171717", "#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#e4e4e7"] },
+      "primary-foreground": { "role": "neutral", "displayName": "Papel de acción", "canonical": "#ffffff", "tonalRamp": ["#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#ffffff"] },
+      "ink-strong": { "role": "neutral", "displayName": "Zinc fuerte", "canonical": "#09090b", "tonalRamp": ["#09090b", "#18181b", "#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#e4e4e7"] },
+      "ink-muted": { "role": "neutral", "displayName": "Zinc de apoyo", "canonical": "#71717a", "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#fafafa"] },
+      "warning-bg": { "role": "tertiary", "displayName": "Ámbar de atención", "canonical": "#fef6e7", "tonalRamp": ["#3f2607", "#5c3909", "#79500c", "#9a6810", "#b9821a", "#d8a94d", "#efcd8c", "#fef6e7"] },
+      "warning-border": { "role": "tertiary", "displayName": "Borde ámbar", "canonical": "#f0d29a", "tonalRamp": ["#3f2607", "#5c3909", "#79500c", "#9a6810", "#b9821a", "#d8a94d", "#f0d29a", "#fef6e7"] },
+      "warning-foreground": { "role": "tertiary", "displayName": "Tinta ámbar", "canonical": "#8a5a10", "tonalRamp": ["#3f2607", "#5c3909", "#79500c", "#8a5a10", "#a97217", "#c99334", "#e7c279", "#fef6e7"] },
+      "success-bg": { "role": "secondary", "displayName": "Verde de confirmación", "canonical": "#eaf7f0", "tonalRamp": ["#063d28", "#075338", "#0d6a46", "#147a4a", "#2e9a68", "#6ac58f", "#a9dfc1", "#eaf7f0"] },
+      "success-border": { "role": "secondary", "displayName": "Borde verde", "canonical": "#a9dfc1", "tonalRamp": ["#063d28", "#075338", "#0d6a46", "#147a4a", "#2e9a68", "#6ac58f", "#a9dfc1", "#eaf7f0"] },
+      "success-foreground": { "role": "secondary", "displayName": "Tinta verde", "canonical": "#147a4a", "tonalRamp": ["#063d28", "#075338", "#0d6a46", "#147a4a", "#2e9a68", "#6ac58f", "#a9dfc1", "#eaf7f0"] },
+      "danger-bg": { "role": "tertiary", "displayName": "Rojo de excepción", "canonical": "#fdecec", "tonalRamp": ["#4b1010", "#671717", "#822020", "#a12626", "#bf4848", "#df8585", "#f3b4b4", "#fdecec"] },
+      "danger-border": { "role": "tertiary", "displayName": "Borde rojo", "canonical": "#f3b4b4", "tonalRamp": ["#4b1010", "#671717", "#822020", "#a12626", "#bf4848", "#df8585", "#f3b4b4", "#fdecec"] },
+      "danger-foreground": { "role": "tertiary", "displayName": "Tinta roja", "canonical": "#a12626", "tonalRamp": ["#4b1010", "#671717", "#822020", "#a12626", "#bf4848", "#df8585", "#f3b4b4", "#fdecec"] }
+    },
+    "typographyMeta": {
+      "heading": { "displayName": "Heading", "purpose": "Título operativo de página." },
+      "section": { "displayName": "Section", "purpose": "Título de tarjeta, bloque o tabla." },
+      "body": { "displayName": "Body", "purpose": "Contenido de formularios, tablas y explicaciones." },
+      "control": { "displayName": "Control", "purpose": "Botones y acciones compactas de interfaz." },
+      "label": { "displayName": "Label", "purpose": "Rótulos de control y métricas." },
+      "table-label": { "displayName": "Table label", "purpose": "Encabezados compactos de tablas." },
+      "number": { "displayName": "Number", "purpose": "Importes, porcentajes, contadores y comparaciones." }
+    },
+    "shadows": [
+      { "name": "surface-low", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "Separación mínima para filtros, tarjetas y tablas en reposo." },
+      { "name": "floating", "value": "0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.10)", "purpose": "Menús y elementos que flotan sobre la tarea." },
+      { "name": "modal", "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)", "purpose": "Diálogos que bloquean el contexto de fondo." }
+    ],
+    "motion": [
+      { "name": "state-standard", "value": "200ms cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Cambio de ancho del shell y estados de control." },
+      { "name": "loading-spin", "value": "1s linear infinite", "purpose": "Indicadores de carga sin movimiento ornamental." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Confirma la acción principal de una sección operativa.",
+      "html": "<button class=\"ds-btn-primary\">Aplicar</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; min-height:42px; padding:8px 16px; border:1px solid transparent; border-radius:12px; background:var(--primary); color:var(--primary-foreground); font-family:Arial, Helvetica, sans-serif; font-size:14px; font-weight:500; line-height:20px; cursor:pointer; box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05); transition:opacity 150ms cubic-bezier(0.4,0,0.2,1), box-shadow 150ms cubic-bezier(0.4,0,0.2,1); } .ds-btn-primary:hover { opacity:.9; } .ds-btn-primary:focus-visible { outline:2px solid rgb(23 23 23 / .2); outline-offset:2px; } .ds-btn-primary:active { opacity:.82; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Expone acciones paralelas como exportar, volver o limpiar sin competir con la confirmación.",
+      "html": "<button class=\"ds-btn-secondary\">Exportar CSV</button>",
+      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; justify-content:center; min-height:42px; padding:8px 16px; border:1px solid var(--border); border-radius:12px; background:var(--card); color:var(--foreground); font-family:Arial, Helvetica, sans-serif; font-size:14px; font-weight:500; line-height:20px; cursor:pointer; box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05); transition:background 150ms cubic-bezier(0.4,0,0.2,1), box-shadow 150ms cubic-bezier(0.4,0,0.2,1); } .ds-btn-secondary:hover { background:var(--muted); } .ds-btn-secondary:focus-visible { outline:2px solid rgb(23 23 23 / .2); outline-offset:2px; } .ds-btn-secondary:active { background:#e4e4e7; }"
+    },
+    {
+      "name": "Date or Select Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo administrativo de borde fino para fechas, búsqueda o alcance por salón.",
+      "html": "<label class=\"ds-field\"><span>Desde</span><input class=\"ds-input\" type=\"date\" value=\"2026-10-01\"></label>",
+      "css": ".ds-field { display:grid; gap:6px; color:#52525c; font-family:Arial, Helvetica, sans-serif; font-size:12px; font-weight:600; line-height:16px; } .ds-input { width:100%; min-height:42px; padding:8px 12px; border:1px solid var(--border); border-radius:12px; background:var(--card); color:var(--foreground); font:400 14px/20px Arial, Helvetica, sans-serif; box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05); outline:none; transition:border-color 150ms cubic-bezier(0.4,0,0.2,1), box-shadow 150ms cubic-bezier(0.4,0,0.2,1); } .ds-input:focus { border-color:rgb(23 23 23 / .4); box-shadow:0 0 0 2px rgb(23 23 23 / .1); } .ds-input:disabled { opacity:.5; cursor:not-allowed; }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "surface-card",
+      "description": "Agrupa filtros, resúmenes o secciones auditables sobre papel blanco.",
+      "html": "<article class=\"ds-card\"><p class=\"ds-card-label\">Conversaciones Meta</p><p class=\"ds-card-value\">1.284</p><p class=\"ds-card-detail\">Sólo campañas asignadas a un salón</p></article>",
+      "css": ".ds-card { padding:16px; border:1px solid var(--border); border-radius:16px; background:var(--card); color:var(--foreground); font-family:Arial, Helvetica, sans-serif; box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05); } .ds-card-label { margin:0; color:#71717a; font-size:12px; font-weight:600; letter-spacing:.025em; line-height:16px; text-transform:uppercase; } .ds-card-value { margin:12px 0 0; color:#09090b; font-size:24px; font-weight:600; letter-spacing:-.025em; line-height:28px; font-variant-numeric:tabular-nums; } .ds-card-detail { margin:4px 0 0; color:#71717a; font-size:12px; line-height:16px; }"
+    },
+    {
+      "name": "Audit Table",
+      "kind": "custom",
+      "description": "Tabla densa y desplazable para comparar registros sin ocultar métricas.",
+      "html": "<div class=\"ds-table-scroll\"><table class=\"ds-table\"><thead><tr><th>Salón</th><th>Conv. Meta</th><th>Cobrado</th></tr></thead><tbody><tr><td>Salón Norte</td><td>426</td><td>$ 1.280.000</td></tr></tbody></table></div>",
+      "css": ".ds-table-scroll { overflow-x:auto; border:1px solid var(--border); border-radius:16px; background:var(--card); font-family:Arial, Helvetica, sans-serif; box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05); } .ds-table { width:100%; min-width:520px; border-collapse:collapse; color:#3f3f46; font-size:14px; line-height:20px; } .ds-table th { padding:12px 16px; background:#fafafa; color:#71717a; font-size:11px; font-weight:600; letter-spacing:.025em; text-align:left; text-transform:uppercase; white-space:nowrap; } .ds-table th:not(:first-child), .ds-table td:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums; } .ds-table td { padding:12px 16px; border-top:1px solid #f4f4f5; white-space:nowrap; } .ds-table tbody tr:hover { background:rgb(250 250 250 / .7); } .ds-table td:first-child { color:#09090b; font-weight:600; }"
+    },
+    {
+      "name": "Connection Status",
+      "kind": "chip",
+      "refersTo": "status-warning",
+      "description": "Estado con punto y texto para conexión, disponibilidad o cobertura pendiente.",
+      "html": "<span class=\"ds-status ds-status-warning\"><i></i>Meta pendiente</span>",
+      "css": ".ds-status { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid; border-radius:9999px; font-family:Arial, Helvetica, sans-serif; font-size:12px; font-weight:600; line-height:16px; } .ds-status i { width:6px; height:6px; border-radius:9999px; background:currentColor; } .ds-status-warning { border-color:var(--warning-border); background:var(--warning-bg); color:var(--warning-foreground); }"
+    },
+    {
+      "name": "Funnel Stage",
+      "kind": "custom",
+      "description": "Etapa compacta del embudo: la fuente activa en tinta y el resto en zinc tenue.",
+      "html": "<article class=\"ds-stage ds-stage-active\"><p>Conversaciones Meta</p><strong>1.284</strong><span><i style=\"width:100%\"></i></span><small>Campañas con salón asignado</small></article>",
+      "css": ".ds-stage { padding:16px; border-radius:12px; background:#fafafa; color:#09090b; font-family:Arial, Helvetica, sans-serif; } .ds-stage p { margin:0; color:#71717a; font-size:12px; font-weight:600; letter-spacing:.025em; line-height:16px; text-transform:uppercase; } .ds-stage strong { display:block; margin-top:12px; font-size:24px; font-weight:600; letter-spacing:-.025em; line-height:28px; font-variant-numeric:tabular-nums; } .ds-stage span { display:block; height:6px; margin-top:12px; overflow:hidden; border-radius:9999px; background:#e4e4e7; } .ds-stage span i { display:block; height:100%; border-radius:9999px; background:#09090b; } .ds-stage small { display:block; margin-top:8px; color:#71717a; font-size:12px; line-height:16px; } .ds-stage-active { background:#09090b; color:#ffffff; } .ds-stage-active p, .ds-stage-active small { color:#d4d4d8; } .ds-stage-active span { background:rgb(255 255 255 / .2); } .ds-stage-active span i { background:#ffffff; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "La mesa de control serena",
+    "overview": "M&M Eventos usa una interfaz administrativa clara, de baja ornamentación y alta trazabilidad. La superficie de trabajo es luminosa y predominantemente zinc: tinta casi negra, planos blancos, bordes grises y una jerarquía que deja que los datos, el estado y la siguiente acción hagan el trabajo visual. El sistema está pensado para el uso operativo continuo: información en español rioplatense, controles previsibles, datos compactos y explicaciones cercanas cuando una cifra requiere contexto. En reportes, la claridad metodológica acompaña a la métrica; una agregación o atribución no se presenta como una certeza que no es.",
+    "keyCharacteristics": [
+      "Densidad administrativa moderada: cada bloque justifica su espacio con una decisión, cifra o acción.",
+      "Neutros zinc como lenguaje base; el color de estado informa y no decora.",
+      "Contenedores moderados, tablas auditables y números alineados para lectura comparativa.",
+      "Tema oscuro como inversión tonal del shell administrativo, no como una estética distinta."
+    ],
+    "rules": [
+      { "name": "Operational Read Rule", "body": "Los filtros y el alcance aparecen antes de los resultados, y toda métrica abreviada conserva una explicación visible de su criterio.", "section": "Overview" },
+      { "name": "One Accent Rule", "body": "Un estado semántico sólo se muestra cuando cambia la lectura o la acción posible; el zinc sigue siendo la voz dominante de cada pantalla.", "section": "Colors" },
+      { "name": "Verifiable Figure Rule", "body": "Toda cifra comparable se trata como dato: formato local `es-AR`, anchura tabular y alineación que permita contrastarla fila a fila.", "section": "Typography" },
+      { "name": "Table Integrity Rule", "body": "En una pantalla estrecha se preserva el modelo comparativo de la tabla mediante scroll horizontal; la precisión prevalece sobre una simplificación que oculte columnas.", "section": "Layout" },
+      { "name": "Resting Surface Rule", "body": "Una tarjeta en reposo no necesita una sombra dramática: el borde y la sombra baja sólo definen agrupación. La elevación mayor indica superposición o interacción temporal.", "section": "Elevation & Depth" },
+      { "name": "Explain-At-The-Point Rule", "body": "El aviso sobre conexión, permisos, atribución o alcance se muestra en el mismo bloque que la métrica afectada; no se relega a una ayuda genérica.", "section": "Components" }
+    ],
+    "dos": [
+      "Do usar las fichas y tablas sobre `card`, separadas por `border` y una elevación baja.",
+      "Do ubicar filtros de rango y alcance antes de cualquier resumen que cambien.",
+      "Do acompañar datos de conversión, cobertura o atribución con una frase de método cerca del valor.",
+      "Do conservar cifras tabulares y alineadas a la derecha cuando haya comparación entre filas o etapas.",
+      "Do usar los tokens semánticos completos (fondo, borde y texto) para estados de éxito, advertencia y error."
+    ],
+    "donts": [
+      "Don't usar color decorativo, gradientes o gráficos llamativos para reemplazar una jerarquía de datos clara.",
+      "Don't elevar cada tarjeta con sombras profundas ni mezclar radios dentro de un mismo bloque.",
+      "Don't ocultar columnas de una tabla auditable para encajarla en móvil; habilitá desplazamiento horizontal.",
+      "Don't presentar una métrica derivada como una atribución exacta si su metodología o cobertura es parcial.",
+      "Don't usar sólo un punto de color para comunicar un estado; incluí una etiqueta legible."
+    ]
+  }
+}

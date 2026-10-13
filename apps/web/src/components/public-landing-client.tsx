@@ -897,6 +897,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
         utmSource: new URLSearchParams(window.location.search).get('utm_source') || undefined,
         utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
         utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
+        utmCampaignId: new URLSearchParams(window.location.search).get('utm_id') || undefined,
       });
       if (selectedSalonForRequest && salonWhatsAppNumber(selectedSalonForRequest)) {
         const whatsappUrl = waLink(salonWhatsAppNumber(selectedSalonForRequest), quoteRequestManagerMessage({
