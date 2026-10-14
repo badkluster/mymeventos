@@ -125,6 +125,22 @@ describe('payments routes', () => {
     expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), 'PAYMENT_UPDATE', 'Payment', paymentId, expect.objectContaining({ paidAtChanged: true, receiptRegenerated: true }));
   });
 
+  it('regenerates a paid receipt with the current event data without sending an email', async () => {
+    const payment = { _id: paymentId, salonId, status: 'paid', eventId: '507f1f77bcf86cd799439014', customerId: '507f1f77bcf86cd799439015', contractId: '507f1f77bcf86cd799439016', save: vi.fn().mockResolvedValue(undefined) };
+    mocks.paymentFindOne.mockResolvedValue(payment);
+    mocks.eventFindOne.mockReturnValue(chainLean({ _id: payment.eventId, eventName: 'Fiesta de 15' }));
+    mocks.customerFindOne.mockReturnValue(chainLean({ _id: payment.customerId, fullName: 'Julieta Soledad Guadia' }));
+    mocks.contractFindOne.mockReturnValue(chainLean({ _id: payment.contractId, contractNumber: 'C-2028-00001' }));
+    mocks.generateReceipt.mockResolvedValue({ receiptPdfUrl: 'http://example.test/receipt.pdf', receiptPdfSecureUrl: 'https://example.test/receipt.pdf', receiptPdfPublicId: 'receipt-1', receiptPdfGeneratedAt: new Date(), pdfBuffer: Buffer.from('pdf') });
+
+    const response = await request(app).post(`/api/payments/${paymentId}/regenerate-receipt`).set('Cookie', adminCookie).send({});
+
+    expect(response.status).toBe(200);
+    expect(mocks.generateReceipt).toHaveBeenCalledWith(payment, expect.anything(), expect.anything(), expect.anything());
+    expect(payment.save).toHaveBeenCalled();
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), 'PAYMENT_RECEIPT_REGENERATED', 'Payment', paymentId, { eventId: payment.eventId });
+  });
+
   it('rejects cancellation without a reason', async () => {
     mocks.paymentFindOne.mockReturnValue(detailChain({ _id: paymentId, salonId }));
 

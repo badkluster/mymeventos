@@ -172,6 +172,16 @@ router.get('/:id', requirePermission(Permission.PAYMENTS_READ), validateRequest(
   return sendSuccess(response, { payment });
 }));
 
+router.post('/:id/regenerate-receipt', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(idSchema), asyncHandler(async (request, response) => {
+  const payment: any = await Payment.findOne({ _id: request.params.id, deletedAt: null });
+  await ensurePaymentAccess(request, payment);
+  if (payment.source === 'ticket_order') throw new ApiError(422, 'PAYMENT_TICKET_ORDER_READONLY');
+  if (payment.status !== 'paid') throw new ApiError(422, 'Sólo se pueden regenerar comprobantes de pagos cobrados.');
+  await regeneratePaymentReceipt(payment);
+  await writeAuditLog(request, 'PAYMENT_RECEIPT_REGENERATED', 'Payment', payment._id.toString(), { eventId: referenceId(payment.eventId) });
+  return sendSuccess(response, { payment });
+}));
+
 router.patch('/:id', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(updateSchema), asyncHandler(async (request, response) => {
   const existing: any = await Payment.findOne({ _id: request.params.id, deletedAt: null }).lean();
   await ensurePaymentAccess(request, existing);

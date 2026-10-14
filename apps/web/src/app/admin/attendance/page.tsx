@@ -617,9 +617,12 @@ export default function AttendancePage() {
     </Modal>
 
     <Modal open={Boolean(resolveTarget)} onClose={() => setResolveTarget(null)} title="Revisar incidencia" description={resolveTarget ? personName(resolveTarget.userId) : ''}>
-      <div className="space-y-4 p-6">
-        <FilterField label="Resultado"><Select value={resolveForm.status} onChange={(event) => setResolveForm((current) => ({ ...current, status: event.target.value }))}><option value="resolved">Resuelta</option><option value="in_review">En revisión</option><option value="rejected">Rechazada</option></Select></FilterField>
-        <Textarea placeholder="Notas de la resolución" value={resolveForm.resolution} onChange={(event) => setResolveForm((current) => ({ ...current, resolution: event.target.value }))} />
+      <div className="space-y-6 p-6">
+        {resolveTarget ? <IncidentReviewSummary incident={resolveTarget} /> : null}
+        <div className="space-y-4 border-t border-zinc-200 pt-5">
+          <FilterField label="Resultado"><Select value={resolveForm.status} onChange={(event) => setResolveForm((current) => ({ ...current, status: event.target.value }))}><option value="resolved">Resuelta</option><option value="in_review">En revisión</option><option value="rejected">Rechazada</option></Select></FilterField>
+          <FilterField label="Notas de la resolución"><Textarea placeholder="Indicá cómo se resolvió o qué queda pendiente." value={resolveForm.resolution} onChange={(event) => setResolveForm((current) => ({ ...current, resolution: event.target.value }))} /></FilterField>
+        </div>
         <footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setResolveTarget(null)}>Cancelar</Button><Button disabled={acting} onClick={() => void confirmResolve()}>{acting ? 'Guardando…' : 'Guardar'}</Button></footer>
       </div>
     </Modal>
@@ -634,6 +637,25 @@ export default function AttendancePage() {
         <footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setReviewTarget(null)}>Cancelar</Button><Button disabled={acting} onClick={() => void confirmReview()}>{acting ? 'Guardando…' : 'Confirmar'}</Button></footer>
       </div>
     </Modal>
+  </section>;
+}
+
+function IncidentReviewSummary({ incident }: { incident: AttendanceIncident }) {
+  const statusTone = incident.status === 'resolved' ? 'ok' : incident.status === 'rejected' ? 'bad' : 'warn';
+
+  return <section aria-labelledby="incident-review-summary-title" className="space-y-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h3 id="incident-review-summary-title" className="text-base font-semibold text-zinc-950">{attendanceIncidentTypeLabels[incident.type] ?? incident.type}</h3>
+        <p className="mt-1 text-sm text-zinc-500">Reportada el {formatDateTime(incident.createdAt)}</p>
+      </div>
+      <StatusBadge label={attendanceIncidentStatusLabels[incident.status]} tone={statusTone} />
+    </div>
+    <div>
+      <h4 className="text-sm font-semibold text-zinc-900">Detalle informado</h4>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-zinc-700">{incident.description || 'No se informó un detalle adicional.'}</p>
+    </div>
+    {incident.resolution ? <div className="border-t border-zinc-200 pt-4"><h4 className="text-sm font-semibold text-zinc-900">Última actualización</h4><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-zinc-600">{incident.resolution}</p></div> : null}
   </section>;
 }
 
