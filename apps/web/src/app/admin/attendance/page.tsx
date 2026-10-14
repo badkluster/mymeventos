@@ -478,7 +478,7 @@ export default function AttendancePage() {
           <td className="px-5 py-4 text-zinc-600">{formatDateTime(session.startedAt)}</td>
           <td className="px-5 py-4 font-semibold text-zinc-950">{elapsedLabel(session.startedAt)}</td>
           <td className="px-5 py-4">{session.requiresReview ? <StatusBadge label="Revisar" tone="warn" /> : <StatusBadge label="Normal" tone="ok" />}</td>
-          <td className="px-5 py-4"><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => void openDetail(session)}>Ver detalle</Button>{canManage ? <Button variant="danger" onClick={() => setCloseTarget(session)}><Square className="mr-2 h-4 w-4" />Cerrar</Button> : null}</div></td>
+          <td className="px-5 py-4"><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => void openDetail(session)}>Ver detalle</Button>{canManage ? <Button variant="danger" onClick={() => setCloseTarget(session)}>Cerrar</Button> : null}</div></td>
         </tr>)}</tbody>
       </table></div>
       {!loading && !activeSessions.length && <div className="grid place-items-center px-6 py-14 text-center"><UserRound className="h-9 w-9 text-zinc-400" /><p className="mt-3 text-sm text-zinc-500">Nadie tiene una jornada activa en este momento.</p></div>}
