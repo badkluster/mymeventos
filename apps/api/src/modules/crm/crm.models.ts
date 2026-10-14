@@ -182,7 +182,11 @@ const eventSchema = new Schema({
     notes: { type: String, trim: true }
   },
   honoreeName: String, vegetarianCount: Number, veganCount: Number, celiacCount: Number, lactoseIntolerantCount: Number, tableLinenColor: String,
-  startTime: String, endTime: String, guestCount: Number, status: { type: String, enum: ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'], default: 'draft' },
+  startTime: String, endTime: String, guestCount: Number,
+  // `headcount` is used for venue-only events: every person occupies one contracted place.
+  // Keep the legacy age-weighted behavior as the default for existing events.
+  guestCountMode: { type: String, enum: ['age_weighted', 'headcount'], default: 'age_weighted' },
+  status: { type: String, enum: ['draft', 'quoted', 'contract_draft', 'deposit_pending', 'reserved', 'confirmed', 'cancelled', 'lost'], default: 'draft' },
   quoteMode: { type: String, enum: ['PACKAGE', 'CUSTOM', 'HYBRID'], default: 'PACKAGE', index: true },
   packageTemplateId: { type: Schema.Types.ObjectId, ref: 'PackageTemplate', index: true },
   guestBreakdown: Schema.Types.Mixed,

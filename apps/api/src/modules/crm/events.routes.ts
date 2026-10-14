@@ -48,6 +48,7 @@ const staffStatusTransitions: Record<StaffAssignmentStatus, readonly StaffAssign
   no_show: [],
 };
 const pricingModes = ['per_person', 'fixed'] as const;
+const guestCountModes = ['age_weighted', 'headcount'] as const;
 const packageChangeSections = ['commercial', 'schedule', 'menu', 'services'] as const;
 const idSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId }), query: z.object({}) });
 const assignmentIdSchema = z.object({ body: z.unknown().optional(), params: z.object({ id: objectId, assignmentId: objectId }), query: z.object({}) });
@@ -89,6 +90,7 @@ const createEventSchema = z.object({
     startTime: eventTimeSchema.optional(),
     endTime: eventTimeSchema.optional(),
     guestCount: z.coerce.number().int().positive().optional(),
+    guestCountMode: z.enum(guestCountModes).optional(),
     honoreeName: z.string().trim().optional(),
     vegetarianCount: z.coerce.number().int().min(0).optional(),
     veganCount: z.coerce.number().int().min(0).optional(),
@@ -155,6 +157,7 @@ const updateSchema = z.object({
     startTime: eventTimeSchema.optional(),
     endTime: eventTimeSchema.optional(),
     guestCount: z.coerce.number().int().positive().optional(),
+    guestCountMode: z.enum(guestCountModes).optional(),
     honoreeName: z.string().trim().optional(), vegetarianCount: z.coerce.number().int().min(0).optional(), veganCount: z.coerce.number().int().min(0).optional(), celiacCount: z.coerce.number().int().min(0).optional(), lactoseIntolerantCount: z.coerce.number().int().min(0).optional(), tableLinenColor: z.string().trim().optional(),
     estimatedAmount: z.coerce.number().min(0).optional(),
     finalAmount: z.coerce.number().min(0).optional(),
@@ -510,7 +513,7 @@ function commercialSnapshotFromBody(body: any): Record<string, unknown> {
 }
 
 const packageOverrideKeys = ['name', 'durationHours', 'startTime', 'endTime', 'pricingMode', 'pricePerPerson', 'fixedPrice', 'discountPercentage', 'finalPricePerPerson', 'finalFixedPrice', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSections', 'includedServices', 'notes', 'considerations'];
-const packageEventOverrideKeys = ['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'packageName', 'pricingMode', 'pricePerPerson', 'finalPricePerPerson', 'fixedPrice', 'finalFixedPrice', 'estimatedAmount', 'finalAmount', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSnapshot', 'servicesSnapshot', 'resourcePlanSnapshot', 'notes', 'considerations'];
+const packageEventOverrideKeys = ['eventType', 'eventName', 'eventDate', 'startTime', 'endTime', 'guestCount', 'guestCountMode', 'honoreeName', 'vegetarianCount', 'veganCount', 'celiacCount', 'lactoseIntolerantCount', 'tableLinenColor', 'packageName', 'pricingMode', 'pricePerPerson', 'finalPricePerPerson', 'fixedPrice', 'finalFixedPrice', 'estimatedAmount', 'finalAmount', 'depositAmount', 'paymentTerms', 'promotionText', 'giftText', 'menuSnapshot', 'servicesSnapshot', 'resourcePlanSnapshot', 'notes', 'considerations'];
 
 async function getApplicablePackageForEvent(templateId: string, salonId: string): Promise<Record<string, any>> {
   const template: any = await PackageTemplate.findOne({ _id: templateId, active: true, deletedAt: null }).lean();
@@ -557,6 +560,7 @@ function eventPatchFromCreateBody(body: any): Record<string, unknown> {
     'startTime',
     'endTime',
     'guestCount',
+    'guestCountMode',
     'honoreeName',
     'vegetarianCount',
     'veganCount',

@@ -371,6 +371,7 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
     startTime: event.startTime ?? '',
     endTime: event.endTime ?? '',
     guestCount: event.guestCount?.toString() ?? '',
+    soloSalon: event.guestCountMode === 'headcount',
     honoreeName: event.honoreeName ?? '',
     vegetarianCount: event.vegetarianCount?.toString() ?? '',
     veganCount: event.veganCount?.toString() ?? '',
@@ -380,7 +381,7 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
     notes: event.notes ?? '',
     considerations: event.considerations ?? ''
   });
-  const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
   const complete = Boolean(form.eventType.trim() && form.eventDate && form.startTime && form.endTime && numeric(form.guestCount));
   const save = () => {
     if (!complete) {
@@ -394,6 +395,7 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
     startTime: form.startTime,
     endTime: form.endTime,
     guestCount: numeric(form.guestCount),
+    guestCountMode: form.soloSalon ? 'headcount' : 'age_weighted',
     honoreeName: form.honoreeName,
     vegetarianCount: numeric(form.vegetarianCount),
     veganCount: numeric(form.veganCount),
@@ -413,6 +415,7 @@ export function EventBasicsEditor({ event, saving, onSave }: { event: Event; sav
       <Field label="Inicio" required><Input required type="time" value={form.startTime} onChange={(event) => set('startTime', event.target.value)} /></Field>
       <Field label="Fin" required><Input required type="time" value={form.endTime} onChange={(event) => set('endTime', event.target.value)} /></Field>
       <Field label="Invitados" required><Input required type="number" min={1} value={form.guestCount} onChange={(event) => set('guestCount', event.target.value)} /></Field>
+      {event.serviceMode !== 'external_catering' ? <label className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 md:col-span-2"><input type="checkbox" className="mt-1" checked={form.soloSalon} onChange={(event) => set('soloSalon', event.target.checked)} /><span><strong className="block">Evento solo salón</strong><span className="mt-1 block text-sky-800">Cada asistente ocupa una plaza contratada. Las edades continúan disponibles para mesas, restricciones y operación.</span></span></label> : null}
       <Field label="Vegetarianos"><Input type="number" min={0} value={form.vegetarianCount} onChange={(event) => set('vegetarianCount', event.target.value)} /></Field>
       <Field label="Veganos"><Input type="number" min={0} value={form.veganCount} onChange={(event) => set('veganCount', event.target.value)} /></Field>
       <Field label="Celíacos"><Input type="number" min={0} value={form.celiacCount} onChange={(event) => set('celiacCount', event.target.value)} /></Field>

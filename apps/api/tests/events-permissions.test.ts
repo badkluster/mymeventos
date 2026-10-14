@@ -115,7 +115,7 @@ describe('manual event creation from a package', () => {
     mocks.eventCreate.mockResolvedValue(event);
     mocks.eventFindOne.mockReturnValue(populatedQuery({ ...event, customerId: customer, salonId: { _id: salonId, name: 'Salón Norte' } }));
 
-    const response = await request(app).post('/api/events').set('Cookie', adminCookie).send({ salonId, customerId: customer._id, packageTemplateId: templateId, eventName: 'Cumple de Ana', eventType: 'Cumpleaños', eventDate: '2026-12-05', guestCount: 80 });
+    const response = await request(app).post('/api/events').set('Cookie', adminCookie).send({ salonId, customerId: customer._id, packageTemplateId: templateId, eventName: 'Cumple de Ana', eventType: 'Cumpleaños', eventDate: '2026-12-05', guestCount: 80, guestCountMode: 'headcount' });
 
     expect(response.status).toBe(201);
     expect(mocks.eventCreate).toHaveBeenCalledWith(expect.objectContaining({
@@ -123,6 +123,7 @@ describe('manual event creation from a package', () => {
       quoteMode: 'PACKAGE',
       menuSnapshot: [{ title: 'Menú', items: ['Entrada'] }],
       servicesSnapshot: ['DJ'],
+      guestCountMode: 'headcount',
       commercialSnapshot: expect.objectContaining({ packageName: 'Clásico Salón Norte', finalPricePerPerson: 22000, totalAmount: 1760000, paymentTerms: 'Saldo 7 días antes.' })
     }));
   });
@@ -213,6 +214,7 @@ describe('public guest-list persistence', () => {
       eventType: 'Quince años',
       eventDate: new Date('2028-12-05T00:00:00.000Z'),
       guestCount: 80,
+      guestCountMode: 'headcount',
       customerId: { fullName: 'María González' },
       resourcePlanSnapshot: { guestList: { tables: [], guests: [] } }
     }));
@@ -220,7 +222,7 @@ describe('public guest-list persistence', () => {
     const response = await request(app).get(`/api/public/guest-list/${token}`);
 
     expect(response.status, JSON.stringify(response.body)).toBe(200);
-    expect(response.body.data.event).toEqual(expect.objectContaining({ customerName: 'María González' }));
+    expect(response.body.data.event).toEqual(expect.objectContaining({ customerName: 'María González', guestCountMode: 'headcount' }));
     expect(mocks.eventFindOne).toHaveBeenCalledWith(expect.objectContaining({ guestListAccessToken: token }));
   });
 
@@ -798,10 +800,11 @@ describe('event supplier financial synchronization', () => {
       timelineItems: [{ id: 'arrival', title: 'Llegada' }],
       supplierAssignments: [{ id: 'forged', supplierId: '507f1f77bcf86cd799439017', agreedAmount: 1, status: 'confirmed' }],
       guestList: { tables: [], guests: [] },
-    } });
+    }, guestCountMode: 'headcount' });
 
     expect(response.status).toBe(200);
     expect(event.resourcePlanSnapshot.timelineItems).toEqual([{ id: 'arrival', title: 'Llegada' }]);
+    expect(event.guestCountMode).toBe('headcount');
     expect(event.resourcePlanSnapshot.supplierAssignments).toEqual(originalAssignments);
     expect(event.resourcePlanSnapshot.guestList).toEqual(savedGuestList);
     expect(event.set).toHaveBeenCalledWith('resourcePlanSnapshot.timelineItems', [{ id: 'arrival', title: 'Llegada' }]);

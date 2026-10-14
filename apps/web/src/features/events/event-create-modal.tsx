@@ -31,6 +31,7 @@ const emptyForm = {
   startTime: '',
   endTime: '',
   guestCount: '',
+  soloSalon: false,
   honoreeName: '',
   tableLinenColor: '',
   customerFullName: '',
@@ -184,6 +185,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         quoteId: form.quoteId,
         eventName: form.eventName || undefined,
         notes: form.notes || undefined,
+        guestCountMode: form.soloSalon ? 'headcount' : 'age_weighted',
         createContract: form.createContract,
         resourcePlanSnapshot: plan
       } : {
@@ -212,6 +214,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         startTime: form.startTime || undefined,
         endTime: form.endTime || undefined,
         guestCount,
+        guestCountMode: !isExternalCatering && form.soloSalon ? 'headcount' : 'age_weighted',
         honoreeName: form.honoreeName || undefined,
         tableLinenColor: form.tableLinenColor || undefined,
         packageName: form.packageName || undefined,
@@ -279,6 +282,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         <Field label="Presupuesto existente" required><Select value={form.quoteId} disabled={loadingOptions} onChange={(event) => set('quoteId', event.target.value)}><option value="">Seleccionar presupuesto</option>{quotes.map((quote) => <option key={quote._id} value={quote._id}>{quote.quoteNumber} · {quote.contactName || entityName(quote.customerId) || 'Sin cliente'} · {entityName(quote.salonId)}</option>)}</Select></Field>
         {selectedQuote ? <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-3"><Info label="Cliente" value={selectedQuote.contactName || entityName(selectedQuote.customerId) || 'Sin cliente'} /><Info label="Evento" value={selectedQuote.eventType || 'Sin tipo'} /><Info label="Total" value={new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(selectedQuote.totalAmount ?? 0)} />{quoteMissing.length ? <p className="text-red-700 sm:col-span-3" role="alert">Completá {quoteMissing.join(', ')} en el presupuesto antes de crear el evento.</p> : null}</div> : null}
         <Field label="Nombre de evento opcional"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} placeholder="Si querés sobrescribir el nombre generado" /></Field>
+        <label className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950"><input type="checkbox" className="mt-1" checked={form.soloSalon} onChange={(event) => set('soloSalon', event.target.checked)} /><span><strong className="block">Evento solo salón</strong><span className="mt-1 block text-sky-800">Cada asistente cuenta como una persona contratada, sin descuentos por edad. Las edades se conservan para organizar el evento.</span></span></label>
       </section> : <section className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
           {!isExternalCatering ? <Field label="Salón" required><Select value={form.salonId} onChange={(event) => selectSalon(event.target.value)}><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field> : null}
@@ -309,6 +313,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
           <Field label="Inicio" required error={touchedTimes.startTime ? timeErrors.startTime : undefined}><Input id="event-start-time" type="time" step={60} required value={form.startTime} onBlur={() => setTouchedTimes((current) => ({ ...current, startTime: true }))} onChange={(event) => set('startTime', event.target.value)} aria-invalid={Boolean(touchedTimes.startTime && timeErrors.startTime)} aria-describedby={touchedTimes.startTime && timeErrors.startTime ? 'event-start-time-error' : undefined} className={touchedTimes.startTime && timeErrors.startTime ? 'border-red-500 focus:border-red-600 focus:ring-red-600/10' : ''} /></Field>
           <Field label="Fin" required error={touchedTimes.endTime ? timeErrors.endTime : undefined} hint={!timeErrors.endTime && crossesMidnight(form.startTime, form.endTime) ? 'Finaliza al día siguiente.' : undefined}><Input id="event-end-time" type="time" step={60} required value={form.endTime} onBlur={() => setTouchedTimes((current) => ({ ...current, endTime: true }))} onChange={(event) => set('endTime', event.target.value)} aria-invalid={Boolean(touchedTimes.endTime && timeErrors.endTime)} aria-describedby={touchedTimes.endTime && timeErrors.endTime ? 'event-end-time-error' : crossesMidnight(form.startTime, form.endTime) ? 'event-end-time-hint' : undefined} className={touchedTimes.endTime && timeErrors.endTime ? 'border-red-500 focus:border-red-600 focus:ring-red-600/10' : ''} /></Field>
           <Field label="Invitados" required><Input type="number" min={1} value={form.guestCount} onChange={(event) => set('guestCount', event.target.value)} /></Field>
+          {!isExternalCatering ? <label className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 md:col-span-2"><input type="checkbox" className="mt-1" checked={form.soloSalon} onChange={(event) => set('soloSalon', event.target.checked)} /><span><strong className="block">Evento solo salón</strong><span className="mt-1 block text-sky-800">Cada asistente cuenta como una persona contratada, sin descuentos por edad. Las edades se conservan para organizar el evento.</span></span></label> : null}
           <Field label="Mantelería" className="md:col-span-2"><Input value={form.tableLinenColor} onChange={(event) => set('tableLinenColor', event.target.value)} /></Field>
         </div>
         <div className="grid gap-4 md:grid-cols-2">

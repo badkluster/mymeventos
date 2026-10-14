@@ -7,6 +7,7 @@ const page = { width: 595.28, height: 841.89, left: 42, right: 553, bottom: 790 
 const color = { ink: '#101827', gold: '#b8965a', cream: '#fbf8f1', card: '#f4f6f8', muted: '#667085', line: '#dfe3e8', white: '#ffffff' };
 const dietaryPreferenceLabels: Record<string, string> = { vegetarian: 'Vegetariano/a', vegan: 'Vegano/a', celiac: 'Celíaco/a', lactose_free: 'Sin lactosa' };
 const guestAgeGroupLabels: Record<string, string> = { child_1_4: '1 a 4 años · sin cargo', child_5_9: '5 a 9 años · media tarifa', minor_10_17: '10 a 17 años · menor' };
+const guestAgeGroupHeadcountLabels: Record<string, string> = { child_1_4: '1 a 4 años', child_5_9: '5 a 9 años', minor_10_17: '10 a 17 años · menor' };
 const tableAudienceLabels: Record<string, string> = { children: 'Chicos', family: 'Familia', open: 'Libre' };
 const tableAudienceLegendLabels: Record<string, string> = { children: 'Chicos', family: 'Familiares', open: 'Libres' };
 const logisticSections: Array<[string, string]> = [
@@ -405,9 +406,9 @@ function guestListData(event: any): { tables: any[]; guests: any[] } {
 }
 
 /** La lista de mesas sólo expone datos útiles para identificar al invitado, no indicaciones internas de operación. */
-function guestListDetail(guest: any): string {
+function guestListDetail(guest: any, guestCountMode?: string): string {
   return [
-    guestAgeGroupLabels[guest.ageGroup] ?? '',
+    (guestCountMode === 'headcount' ? guestAgeGroupHeadcountLabels : guestAgeGroupLabels)[guest.ageGroup] ?? '',
     guest.dietaryPreference && guest.dietaryPreference !== 'none' ? dietaryPreferenceLabels[guest.dietaryPreference] ?? text(guest.dietaryPreference) : ''
   ].filter(Boolean).join(' · ');
 }
@@ -425,7 +426,7 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
   const detailWidth = 48;
   const nameWidth = tableWidth - numberWidth - detailWidth - 14;
   const groups = Array.from({ length: Math.ceil(entries.length / 3) }, (_, index) => entries.slice(index * 3, index * 3 + 3));
-  const detailFor = guestListDetail;
+  const detailFor = (guest: any) => guestListDetail(guest, event.guestCountMode);
 
   groups.forEach((group) => {
     const entryMetrics = group.map((entry: any) => {
@@ -493,7 +494,7 @@ function guestList(document: PDFKit.PDFDocument, event: any, type: OperationalDo
   ];
   entries.forEach((entry: any) => {
     const rows = entry.guests.map((guest: any) => {
-      const detail = guestListDetail(guest);
+      const detail = guestListDetail(guest, event.guestCountMode);
       return { name: text(guest.fullName), detail };
     });
     const height = Math.max(49, 31 + rows.reduce((sum: number, row: { name: string; detail: string }) => sum + Math.max(14, document.heightOfString(`${row.name}${row.detail ? ` · ${row.detail}` : ''}`, { width: page.right - page.left - 42 }) + 3), 0));
@@ -513,8 +514,8 @@ function guestList(document: PDFKit.PDFDocument, event: any, type: OperationalDo
 function guestControlEntries(event: any) {
   const { tables, guests } = guestListData(event);
   return [
-    ...tables.map((table: any) => ({ title: text(table.name), audience: tableAudienceLabels[table.audience] ?? 'Libre', audienceKey: table.audience || 'open', capacity: Number(table.capacity ?? 0), notes: text(table.notes, ''), guests: guests.filter((guest: any) => guest.tableId === table.id) })),
-    ...(guests.some((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) ? [{ title: 'Sin mesa asignada', audience: '', audienceKey: '', capacity: 0, notes: '', guests: guests.filter((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) }] : [])
+    ...tables.map((table: any) => ({ title: text(table.name), audience: tableAudienceLabels[table.audience] ?? 'Libre', audienceKey: table.audience || 'open', capacity: Number(table.capacity ?? 0), notes: text(table.notes, ''), guestCountMode: event.guestCountMode, guests: guests.filter((guest: any) => guest.tableId === table.id) })),
+    ...(guests.some((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) ? [{ title: 'Sin mesa asignada', audience: '', audienceKey: '', capacity: 0, notes: '', guestCountMode: event.guestCountMode, guests: guests.filter((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) }] : [])
   ];
 }
 
@@ -522,8 +523,8 @@ function guestControlSlots(entry: any) {
   return Math.max(entry.guests.length, entry.capacity || 10);
 }
 
-function guestControlDetail(guest: any): string {
-  return [guestAgeGroupLabels[guest.ageGroup] ?? '', text(guest.meal, ''), dietaryPreferenceLabels[guest.dietaryPreference] ?? '', text(guest.notes, '')].filter(Boolean).join(' · ');
+function guestControlDetail(guest: any, guestCountMode?: string): string {
+  return [(guestCountMode === 'headcount' ? guestAgeGroupHeadcountLabels : guestAgeGroupLabels)[guest.ageGroup] ?? '', text(guest.meal, ''), dietaryPreferenceLabels[guest.dietaryPreference] ?? '', text(guest.notes, '')].filter(Boolean).join(' · ');
 }
 
 function guestControlLegend(entries: any[]) {
@@ -554,7 +555,7 @@ function guestEntryControl(document: PDFKit.PDFDocument, event: any): void {
     const slots = guestControlSlots(entry);
     const rows = Array.from({ length: slots }, (_, index) => {
       const guest = entry.guests[index];
-      return guest ? { name: text(guest.fullName), detail: guestControlDetail(guest) } : { name: '................................................................................................', detail: '' };
+      return guest ? { name: text(guest.fullName), detail: guestControlDetail(guest, entry.guestCountMode) } : { name: '................................................................................................', detail: '' };
     });
     let offset = 0;
     do {
@@ -618,7 +619,7 @@ function compactGuestRows(entry: any): CompactGuestRow[] {
   return Array.from({ length: guestControlSlots(entry) }, (_, index) => {
     const guest = entry.guests[index];
     return guest
-      ? { name: text(guest.fullName), detail: guestControlDetail(guest) }
+      ? { name: text(guest.fullName), detail: guestControlDetail(guest, entry.guestCountMode) }
       : { name: '........................................................', detail: '' };
   });
 }
@@ -1076,7 +1077,7 @@ function guestListWordHtml(event: any, includeHeading = true): string {
     ...(guests.some((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) ? [{ title: 'Sin mesa asignada', capacity: undefined, notes: '', guests: guests.filter((guest: any) => !guest.tableId || !tables.some((table: any) => table.id === guest.tableId)) }] : [])
   ];
   const heading = includeHeading ? `<h2>Invitados y mesas</h2><p class="staff-hint">${guests.length} invitado${guests.length === 1 ? '' : 's'} cargado${guests.length === 1 ? '' : 's'} para la operación.</p>` : '';
-  return `${heading}${entries.map((entry: any) => `<section class="note"><h3>${escapeHtml(`${entry.title}${entry.audience ? ` · ${entry.audience}` : ''}${entry.capacity ? ` · ${entry.guests.length}/${entry.capacity}` : ` · ${entry.guests.length}`}`)}</h3>${entry.guests.length ? `<ul class="guest-items">${entry.guests.map((guest: any) => { const detail = guestListDetail(guest); return `<li><b>${escapeHtml(guest.fullName)}</b>${detail ? ` <span>· ${escapeHtml(detail)}</span>` : ''}</li>`; }).join('')}</ul>` : '<p>Sin invitados asignados.</p>'}</section>`).join('')}`;
+  return `${heading}${entries.map((entry: any) => `<section class="note"><h3>${escapeHtml(`${entry.title}${entry.audience ? ` · ${entry.audience}` : ''}${entry.capacity ? ` · ${entry.guests.length}/${entry.capacity}` : ` · ${entry.guests.length}`}`)}</h3>${entry.guests.length ? `<ul class="guest-items">${entry.guests.map((guest: any) => { const detail = guestListDetail(guest, event.guestCountMode); return `<li><b>${escapeHtml(guest.fullName)}</b>${detail ? ` <span>· ${escapeHtml(detail)}</span>` : ''}</li>`; }).join('')}</ul>` : '<p>Sin invitados asignados.</p>'}</section>`).join('')}`;
 }
 
 function tablewareRowsWordHtml(rows: any[], emptyText: string): string {
@@ -1148,7 +1149,7 @@ function guestEntryControlWordHtml(event: any): string {
   const entries = guestControlEntries(event);
   if (!entries.length) return '<p class="empty">Todavía no hay invitados o mesas cargados para generar el control de ingreso.</p>';
   const legend = guestControlLegend(entries).map((item) => `<div><b>${escapeHtml(item.label)}</b><span>${escapeHtml(item.detail)}</span></div>`).join('');
-  return `<section class="control-legend">${legend}<div><b>Control</b><span>Números visibles en cada fila</span></div></section>${entries.map((entry: any) => { const rows = Array.from({ length: guestControlSlots(entry) }, (_, index) => { const guest = entry.guests[index]; const detail = guest ? guestControlDetail(guest) : ''; return `<tr><td class="number">${index + 1}</td><td class="guest-name">${guest ? `<b>${escapeHtml(guest.fullName)}</b>` : '................................................................................................'}</td><td class="guest-detail">${escapeHtml(detail)}</td></tr>`; }).join(''); const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience}` : ''} · ${entry.guests.length} lugar${entry.guests.length === 1 ? '' : 'es'}`; return `<section class="mesa-sheet"><h3>${escapeHtml(heading)}</h3>${entry.notes ? `<small>${escapeHtml(entry.notes)}</small>` : ''}<table class="mesa-list"><tbody>${rows}</tbody></table></section>`; }).join('')}`;
+  return `<section class="control-legend">${legend}<div><b>Control</b><span>Números visibles en cada fila</span></div></section>${entries.map((entry: any) => { const rows = Array.from({ length: guestControlSlots(entry) }, (_, index) => { const guest = entry.guests[index]; const detail = guest ? guestControlDetail(guest, entry.guestCountMode) : ''; return `<tr><td class="number">${index + 1}</td><td class="guest-name">${guest ? `<b>${escapeHtml(guest.fullName)}</b>` : '................................................................................................'}</td><td class="guest-detail">${escapeHtml(detail)}</td></tr>`; }).join(''); const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience}` : ''} · ${entry.guests.length} lugar${entry.guests.length === 1 ? '' : 'es'}`; return `<section class="mesa-sheet"><h3>${escapeHtml(heading)}</h3>${entry.notes ? `<small>${escapeHtml(entry.notes)}</small>` : ''}<table class="mesa-list"><tbody>${rows}</tbody></table></section>`; }).join('')}`;
 }
 
 /** Espejo en HTML de `fullReport()`: el resumen y Momentos comparten portada;

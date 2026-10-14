@@ -115,6 +115,7 @@ export type EventTaskItem = { id?: string; title: string; owner?: string; dueDat
 export type EventAlertItem = { id?: string; title: string; remindAt?: string; channel?: string; status?: 'pending' | 'scheduled' | 'sent' | 'done' | string; notes?: string };
 export type EventStaffNote = { id?: string; title?: string; notes: string };
 export type EventGuest = { id?: string; fullName: string; tableId?: string; meal?: string; ageGroup?: 'adult' | 'child_1_4' | 'child_5_9' | 'minor_10_17' | string; dietaryPreference?: 'vegetarian' | 'vegan' | 'celiac' | 'lactose_free' | 'none' | string; notes?: string; confirmed?: boolean };
+export type GuestCountMode = 'age_weighted' | 'headcount';
 export type EventGuestTable = { id?: string; name: string; capacity?: number; audience?: 'children' | 'family' | 'open' | string; notes?: string };
 export type EventGuestList = { tables?: EventGuestTable[]; guests?: EventGuest[]; notes?: string; submittedAt?: string };
 export type EventResourcePlan = {
@@ -145,6 +146,8 @@ export type Event = {
   eventName?: string;
   eventDate?: string;
   guestCount?: number;
+  /** Define si las edades reducen el cupo contratado o si cada asistente ocupa una plaza. */
+  guestCountMode?: GuestCountMode;
   honoreeName?: string;
   vegetarianCount?: number;
   veganCount?: number;
