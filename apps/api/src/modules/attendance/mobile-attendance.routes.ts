@@ -78,7 +78,8 @@ const incidentSchema = z.object({
   params: z.object({}), query: z.object({})
 });
 const adjustmentSchema = z.object({
-  body: z.object({ workSessionId: ObjectIdSchema, requestedStartAt: z.coerce.date().optional(), requestedEndAt: z.coerce.date().optional(), reason: z.string().trim().min(3).max(1000), attachments: z.array(attachmentSchema).optional() }),
+  body: z.object({ workSessionId: ObjectIdSchema, requestedStartAt: z.coerce.date().optional(), requestedEndAt: z.coerce.date().optional(), reason: z.string().trim().min(3).max(1000), attachments: z.array(attachmentSchema).optional() })
+    .refine((body) => Boolean(body.requestedStartAt || body.requestedEndAt), 'Indicá al menos un horario para corregir.'),
   params: z.object({}), query: z.object({})
 });
 

@@ -70,6 +70,7 @@ export const ApiMessages = {
   ATTENDANCE_ADJUSTMENT_NOT_FOUND: 'Solicitud de corrección no encontrada.',
   ATTENDANCE_ADJUSTMENT_NOT_PENDING: 'Esta solicitud ya fue revisada.',
   ATTENDANCE_ADJUSTMENT_ALREADY_PENDING: 'Ya existe una solicitud de corrección pendiente para esta jornada.',
+  ATTENDANCE_ADJUSTMENT_CHANGE_REQUIRED: 'Indicá al menos un horario distinto al registrado para corregir.',
   ATTENDANCE_ADJUSTMENT_INVALID_RANGE: 'El horario de salida solicitado debe ser posterior al de entrada.',
   ATTENDANCE_ADJUSTMENT_CREATED: 'Solicitud de corrección enviada correctamente.',
   ATTENDANCE_ADJUSTMENT_REVIEWED: 'Solicitud de corrección revisada correctamente.',

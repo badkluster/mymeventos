@@ -60,6 +60,26 @@ function durationChangeLabel(recordedMinutes?: number, requestedMinutes?: number
   return `${formatMinutes(Math.abs(minutes))} ${minutes > 0 ? 'más' : 'menos'}`;
 }
 
+function adjustmentReviewValidationMessage(adjustment: AttendanceAdjustmentRequest): string | null {
+  const original = adjustment.originalSnapshot;
+  const requestedStartAt = adjustment.requestedStartAt;
+  const requestedEndAt = adjustment.requestedEndAt;
+  if (!requestedStartAt && !requestedEndAt) return 'La solicitud no incluye ningún horario para corregir y no se puede aprobar.';
+
+  const effectiveStartAt = requestedStartAt ?? original?.startedAt;
+  const effectiveEndAt = requestedEndAt ?? original?.endedAt;
+  const effectiveStartTime = effectiveStartAt ? new Date(effectiveStartAt).getTime() : Number.NaN;
+  const effectiveEndTime = effectiveEndAt ? new Date(effectiveEndAt).getTime() : Number.NaN;
+  if (Number.isFinite(effectiveStartTime) && Number.isFinite(effectiveEndTime) && effectiveEndTime <= effectiveStartTime) {
+    return 'La salida solicitada no es posterior a la entrada; la solicitud no se puede aprobar.';
+  }
+
+  const changesStart = Boolean(requestedStartAt && (!original?.startedAt || new Date(requestedStartAt).getTime() !== new Date(original.startedAt).getTime()));
+  const changesEnd = Boolean(requestedEndAt && (!original?.endedAt || new Date(requestedEndAt).getTime() !== new Date(original.endedAt).getTime()));
+  if (!changesStart && !changesEnd) return 'Los horarios solicitados son iguales a los registrados; la solicitud no se puede aprobar.';
+  return null;
+}
+
 function StatusBadge({ label, tone }: { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
   const styles = { ok: 'bg-emerald-100 text-emerald-700', warn: 'bg-amber-100 text-amber-700', bad: 'bg-red-100 text-red-700', neutral: 'bg-muted text-muted-foreground' };
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${styles[tone]}`}>{label}</span>;
@@ -324,6 +344,11 @@ export default function AttendancePage() {
 
   async function confirmReview() {
     if (!reviewTarget) return;
+    const validationMessage = adjustmentReviewValidationMessage(reviewTarget);
+    if (reviewForm.decision === 'approved' && validationMessage) {
+      showToast({ message: validationMessage, variant: 'error' });
+      return;
+    }
     setActing(true);
     try {
       await api.post(`/attendance/adjustments/${reviewTarget._id}/review`, reviewForm);
@@ -367,14 +392,22 @@ export default function AttendancePage() {
   }
 
   async function confirmAdministrativeAdjustment() {
-    if (!adjustTarget || !adjustmentForm.requestedStartAt) return;
-    const requestedStartAt = new Date(adjustmentForm.requestedStartAt);
-    const requestedEndAt = adjustmentForm.requestedEndAt ? new Date(adjustmentForm.requestedEndAt) : undefined;
-    if (Number.isNaN(requestedStartAt.getTime()) || (requestedEndAt && Number.isNaN(requestedEndAt.getTime()))) {
+    if (!adjustTarget) return;
+    const enteredStartAt = adjustmentForm.requestedStartAt ? new Date(adjustmentForm.requestedStartAt) : undefined;
+    const enteredEndAt = adjustmentForm.requestedEndAt ? new Date(adjustmentForm.requestedEndAt) : undefined;
+    if ((enteredStartAt && Number.isNaN(enteredStartAt.getTime())) || (enteredEndAt && Number.isNaN(enteredEndAt.getTime()))) {
       showToast({ message: 'Ingresá horarios válidos para continuar.', variant: 'error' });
       return;
     }
-    if (requestedEndAt && requestedEndAt.getTime() <= requestedStartAt.getTime()) {
+    const changesStart = Boolean(enteredStartAt && adjustmentForm.requestedStartAt !== dateTimeInputValue(adjustTarget.startedAt));
+    const changesEnd = Boolean(enteredEndAt && adjustmentForm.requestedEndAt !== dateTimeInputValue(adjustTarget.endedAt));
+    if (!changesStart && !changesEnd) {
+      showToast({ message: 'Modificá al menos un horario para guardar el ajuste.', variant: 'error' });
+      return;
+    }
+    const effectiveStartAt = changesStart ? enteredStartAt! : new Date(adjustTarget.startedAt);
+    const effectiveEndAt = changesEnd ? enteredEndAt : adjustTarget.endedAt ? new Date(adjustTarget.endedAt) : undefined;
+    if (effectiveEndAt && effectiveEndAt.getTime() <= effectiveStartAt.getTime()) {
       showToast({ message: 'La salida debe ser posterior a la entrada.', variant: 'error' });
       return;
     }
@@ -382,8 +415,8 @@ export default function AttendancePage() {
     setActing(true);
     try {
       await api.post(`/attendance/sessions/${adjustTarget._id}/adjust`, {
-        requestedStartAt: requestedStartAt.toISOString(),
-        ...(requestedEndAt ? { requestedEndAt: requestedEndAt.toISOString() } : {}),
+        ...(changesStart ? { requestedStartAt: enteredStartAt!.toISOString() } : {}),
+        ...(changesEnd ? { requestedEndAt: enteredEndAt!.toISOString() } : {}),
         ...(adjustmentForm.reviewNotes.trim() ? { reviewNotes: adjustmentForm.reviewNotes.trim() } : {})
       });
       showToast({ message: 'Horario ajustado y registrado en el historial.', variant: 'success' });
@@ -395,6 +428,11 @@ export default function AttendancePage() {
     } finally {
       setActing(false);
     }
+  }
+
+  function openAdjustmentReview(adjustment: AttendanceAdjustmentRequest) {
+    setReviewTarget(adjustment);
+    setReviewForm({ decision: adjustmentReviewValidationMessage(adjustment) ? 'rejected' : 'approved', reviewNotes: '' });
   }
 
   async function openManualSession() {
@@ -448,9 +486,20 @@ export default function AttendancePage() {
     { id: 'adjustments', label: 'Correcciones', icon: ClipboardList },
     ...(canManageSettings ? [{ id: 'settings' as Tab, label: 'Configuración', icon: Settings2 }] : [])
   ];
-  const adjustmentPreviewMinutes = adjustTarget && adjustmentForm.requestedStartAt && adjustmentForm.requestedEndAt
-    ? Math.round((new Date(adjustmentForm.requestedEndAt).getTime() - new Date(adjustmentForm.requestedStartAt).getTime()) / 60_000)
+  const adjustmentPreviewMinutes = adjustTarget
+    ? (() => {
+      const hasChangedStart = Boolean(adjustmentForm.requestedStartAt && adjustmentForm.requestedStartAt !== dateTimeInputValue(adjustTarget.startedAt));
+      const hasChangedEnd = Boolean(adjustmentForm.requestedEndAt && adjustmentForm.requestedEndAt !== dateTimeInputValue(adjustTarget.endedAt));
+      const startedAt = hasChangedStart ? new Date(adjustmentForm.requestedStartAt) : new Date(adjustTarget.startedAt);
+      const endedAt = hasChangedEnd ? new Date(adjustmentForm.requestedEndAt) : adjustTarget.endedAt ? new Date(adjustTarget.endedAt) : undefined;
+      return endedAt ? Math.round((endedAt.getTime() - startedAt.getTime()) / 60_000) : null;
+    })()
     : null;
+  const administrativeAdjustmentHasChange = Boolean(adjustTarget && (
+    (adjustmentForm.requestedStartAt && adjustmentForm.requestedStartAt !== dateTimeInputValue(adjustTarget.startedAt))
+    || (adjustmentForm.requestedEndAt && adjustmentForm.requestedEndAt !== dateTimeInputValue(adjustTarget.endedAt))
+  ));
+  const reviewValidationMessage = reviewTarget ? adjustmentReviewValidationMessage(reviewTarget) : null;
   const manualSessionPreviewMinutes = manualSessionForm.date && manualSessionForm.startedTime && manualSessionForm.endedTime
     ? Math.round((new Date(`${manualSessionForm.date}T${manualSessionForm.endedTime}`).getTime() - new Date(`${manualSessionForm.date}T${manualSessionForm.startedTime}`).getTime()) / 60_000)
     : null;
@@ -519,7 +568,7 @@ export default function AttendancePage() {
 
     {tab === 'adjustments' && <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><FilterField label="Estado"><Select value={adjustmentStatus} onChange={(event) => setAdjustmentStatus(event.target.value)}><option value="">Todas</option>{Object.entries(attendanceAdjustmentStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></FilterField></div>
-      <div className="space-y-3">{adjustments.map((adjustment) => <article key={adjustment._id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">{personName(adjustment.userId)}</h2><p className="mt-1 text-sm text-zinc-500">Solicitado el {formatDateTime(adjustment.createdAt)}</p><p className="mt-2 max-w-2xl text-sm text-zinc-700">{adjustment.reason}</p><p className="mt-2 text-sm text-zinc-500">Horario solicitado: {formatDateTime(adjustment.requestedStartAt)} → {formatDateTime(adjustment.requestedEndAt)}</p>{adjustment.reviewNotes ? <p className="mt-2 text-sm text-zinc-500"><b>Respuesta:</b> {adjustment.reviewNotes}</p> : null}</div><div className="flex flex-col items-end gap-2"><StatusBadge label={attendanceAdjustmentStatusLabels[adjustment.status]} tone={adjustment.status === 'approved' ? 'ok' : adjustment.status === 'rejected' ? 'bad' : 'warn'} />{canManage && adjustment.status === 'pending' ? <Button variant="secondary" onClick={() => { setReviewTarget(adjustment); setReviewForm({ decision: 'approved', reviewNotes: '' }); }}>Revisar</Button> : null}</div></div></article>)}
+      <div className="space-y-3">{adjustments.map((adjustment) => <article key={adjustment._id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-4"><div><h2 className="font-semibold text-zinc-950">{personName(adjustment.userId)}</h2><p className="mt-1 text-sm text-zinc-500">Solicitado el {formatDateTime(adjustment.createdAt)}</p><p className="mt-2 max-w-2xl text-sm text-zinc-700">{adjustment.reason}</p><p className="mt-2 text-sm text-zinc-500">Horario solicitado: {formatDateTime(adjustment.requestedStartAt)} → {formatDateTime(adjustment.requestedEndAt)}</p>{adjustment.reviewNotes ? <p className="mt-2 text-sm text-zinc-500"><b>Respuesta:</b> {adjustment.reviewNotes}</p> : null}</div><div className="flex flex-col items-end gap-2"><StatusBadge label={attendanceAdjustmentStatusLabels[adjustment.status]} tone={adjustment.status === 'approved' ? 'ok' : adjustment.status === 'rejected' ? 'bad' : 'warn'} />{canManage && adjustment.status === 'pending' ? <Button variant="secondary" onClick={() => openAdjustmentReview(adjustment)}>Revisar</Button> : null}</div></div></article>)}
       {!loading && !adjustments.length && <p className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center text-sm text-zinc-500">No hay solicitudes de corrección para el filtro seleccionado.</p>}</div>
     </div>}
 
@@ -576,7 +625,7 @@ export default function AttendancePage() {
              <PunchTechnicalDetails punch={punch} />
            </div>)}{!detailPunches.length && <p className="text-sm text-zinc-500">Sin registros de horario.</p>}</div></section>
            <section className="border-t border-zinc-200 pt-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-zinc-900">Incidencias</h3><span className="text-xs tabular-nums text-zinc-500">{detailIncidents.length}</span></div>{detailIncidents.length ? <div className="mt-2 divide-y divide-zinc-100">{detailIncidents.map((incident) => <article key={incident._id} className="py-3 first:pt-0 last:pb-0"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-zinc-900">{attendanceIncidentTypeLabels[incident.type] ?? incident.type}</p><p className="mt-1 text-sm text-zinc-600">{incident.description}</p><p className="mt-1 text-xs text-zinc-500">Reportada {formatDateTime(incident.createdAt)}</p>{incident.resolution ? <p className="mt-2 text-sm text-zinc-600"><span className="font-medium text-zinc-800">Resolución:</span> {incident.resolution}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-2"><StatusBadge label={attendanceIncidentStatusLabels[incident.status]} tone={incident.status === 'resolved' ? 'ok' : incident.status === 'rejected' ? 'bad' : 'warn'} />{canManage && incident.status !== 'resolved' && incident.status !== 'rejected' ? <Button variant="secondary" className="px-3 py-2" onClick={() => { setResolveTarget(incident); setResolveForm({ status: 'resolved', resolution: '' }); }}>Revisar</Button> : null}</div></div></article>)}</div> : <p className="mt-2 text-sm text-zinc-500">No hay incidencias en esta jornada.</p>}</section>
-           <section className="border-t border-zinc-200 pt-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-zinc-900">Correcciones</h3><span className="text-xs tabular-nums text-zinc-500">{detailAdjustments.length}</span></div>{detailAdjustments.length ? <div className="mt-2 divide-y divide-zinc-100">{detailAdjustments.map((adjustment) => <article key={adjustment._id} className="py-3 first:pt-0 last:pb-0"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-zinc-900">{adjustment.reason}</p><p className="mt-1 text-sm text-zinc-600">Horario solicitado: {formatDateTime(adjustment.requestedStartAt)} → {formatDateTime(adjustment.requestedEndAt)}</p><p className="mt-1 text-xs text-zinc-500">Solicitada {formatDateTime(adjustment.createdAt)}</p>{adjustment.reviewNotes ? <p className="mt-2 text-sm text-zinc-600"><span className="font-medium text-zinc-800">Respuesta:</span> {adjustment.reviewNotes}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-2"><StatusBadge label={attendanceAdjustmentStatusLabels[adjustment.status]} tone={adjustment.status === 'approved' ? 'ok' : adjustment.status === 'rejected' ? 'bad' : 'warn'} />{canManage && adjustment.status === 'pending' ? <Button variant="secondary" className="px-3 py-2" onClick={() => { setReviewTarget(adjustment); setReviewForm({ decision: 'approved', reviewNotes: '' }); }}>Revisar</Button> : null}</div></div></article>)}</div> : <p className="mt-2 text-sm text-zinc-500">No hay correcciones solicitadas para esta jornada.</p>}</section>
+           <section className="border-t border-zinc-200 pt-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-zinc-900">Correcciones</h3><span className="text-xs tabular-nums text-zinc-500">{detailAdjustments.length}</span></div>{detailAdjustments.length ? <div className="mt-2 divide-y divide-zinc-100">{detailAdjustments.map((adjustment) => <article key={adjustment._id} className="py-3 first:pt-0 last:pb-0"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium text-zinc-900">{adjustment.reason}</p><p className="mt-1 text-sm text-zinc-600">Horario solicitado: {formatDateTime(adjustment.requestedStartAt)} → {formatDateTime(adjustment.requestedEndAt)}</p><p className="mt-1 text-xs text-zinc-500">Solicitada {formatDateTime(adjustment.createdAt)}</p>{adjustment.reviewNotes ? <p className="mt-2 text-sm text-zinc-600"><span className="font-medium text-zinc-800">Respuesta:</span> {adjustment.reviewNotes}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-2"><StatusBadge label={attendanceAdjustmentStatusLabels[adjustment.status]} tone={adjustment.status === 'approved' ? 'ok' : adjustment.status === 'rejected' ? 'bad' : 'warn'} />{canManage && adjustment.status === 'pending' ? <Button variant="secondary" className="px-3 py-2" onClick={() => openAdjustmentReview(adjustment)}>Revisar</Button> : null}</div></div></article>)}</div> : <p className="mt-2 text-sm text-zinc-500">No hay correcciones solicitadas para esta jornada.</p>}</section>
            {canManage && detailSession.status !== 'active' && (detailSession.requiresReview || detailSession.status === 'under_review') ? <div className="flex justify-end border-t border-zinc-100 pt-4"><Button onClick={() => { setSessionReviewTarget(detailSession); setSessionReviewForm({ status: 'completed', reviewNotes: '' }); }}>Revisar estado de jornada</Button></div> : null}
          </>}
        </div>
@@ -591,7 +640,7 @@ export default function AttendancePage() {
           : <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">La salida debe ser posterior a la entrada.</p>
           : null}
         <FilterField label="Nota de la corrección (opcional)"><Textarea placeholder="Ej.: se corrigió la entrada informada por el encargado." value={adjustmentForm.reviewNotes} onChange={(event) => setAdjustmentForm((current) => ({ ...current, reviewNotes: event.target.value }))} /></FilterField>
-        <footer className="flex flex-wrap justify-end gap-3"><Button variant="secondary" onClick={() => setAdjustTarget(null)}>Cancelar</Button><Button disabled={acting || !adjustmentForm.requestedStartAt || adjustmentPreviewMinutes === 0 || (adjustmentPreviewMinutes !== null && adjustmentPreviewMinutes < 0)} onClick={() => void confirmAdministrativeAdjustment()}>{acting ? 'Guardando…' : 'Guardar ajuste'}</Button></footer>
+        <footer className="flex flex-wrap justify-end gap-3"><Button variant="secondary" onClick={() => setAdjustTarget(null)}>Cancelar</Button><Button disabled={acting || !administrativeAdjustmentHasChange || adjustmentPreviewMinutes === 0 || (adjustmentPreviewMinutes !== null && adjustmentPreviewMinutes < 0)} onClick={() => void confirmAdministrativeAdjustment()}>{acting ? 'Guardando…' : 'Guardar ajuste'}</Button></footer>
       </div>
     </Modal>
 
@@ -631,10 +680,11 @@ export default function AttendancePage() {
       <div className="space-y-6 p-6">
         {reviewTarget ? <AdjustmentReviewSummary adjustment={reviewTarget} /> : null}
         <div className="space-y-4 border-t border-zinc-200 pt-5">
-          <FilterField label="Decisión"><Select value={reviewForm.decision} onChange={(event) => setReviewForm((current) => ({ ...current, decision: event.target.value as 'approved' | 'rejected' }))}><option value="approved">Aprobar (ajusta la jornada)</option><option value="rejected">Rechazar</option></Select></FilterField>
+          {reviewValidationMessage ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{reviewValidationMessage}</p> : null}
+          <FilterField label="Decisión"><Select value={reviewForm.decision} onChange={(event) => setReviewForm((current) => ({ ...current, decision: event.target.value as 'approved' | 'rejected' }))}><option value="approved" disabled={Boolean(reviewValidationMessage)}>Aprobar (ajusta la jornada)</option><option value="rejected">Rechazar</option></Select></FilterField>
           <FilterField label="Nota de la revisión (opcional)"><Textarea placeholder="Ej.: se verificó el registro con el encargado del salón." value={reviewForm.reviewNotes} onChange={(event) => setReviewForm((current) => ({ ...current, reviewNotes: event.target.value }))} /></FilterField>
         </div>
-        <footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setReviewTarget(null)}>Cancelar</Button><Button disabled={acting} onClick={() => void confirmReview()}>{acting ? 'Guardando…' : 'Confirmar'}</Button></footer>
+        <footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setReviewTarget(null)}>Cancelar</Button><Button disabled={acting || (reviewForm.decision === 'approved' && Boolean(reviewValidationMessage))} onClick={() => void confirmReview()}>{acting ? 'Guardando…' : 'Confirmar'}</Button></footer>
       </div>
     </Modal>
   </section>;
@@ -666,8 +716,10 @@ function AdjustmentReviewSummary({ adjustment }: { adjustment: AttendanceAdjustm
   const requestedStartAt = adjustment.requestedStartAt ?? recordedStartAt;
   const requestedEndAt = adjustment.requestedEndAt ?? recordedEndAt;
   const recordedMinutes = original?.workedMinutes ?? minutesBetween(recordedStartAt, recordedEndAt);
-  const requestedMinutes = minutesBetween(requestedStartAt, requestedEndAt);
+  const calculatedRequestedMinutes = minutesBetween(requestedStartAt, requestedEndAt);
+  const requestedMinutes = calculatedRequestedMinutes !== undefined && calculatedRequestedMinutes >= 0 ? calculatedRequestedMinutes : undefined;
   const durationDifference = durationChangeLabel(recordedMinutes, requestedMinutes);
+  const validationMessage = adjustmentReviewValidationMessage(adjustment);
 
   return <div className="space-y-4">
     <section className="overflow-hidden rounded-xl border border-zinc-200">
@@ -692,6 +744,7 @@ function AdjustmentReviewSummary({ adjustment }: { adjustment: AttendanceAdjustm
       <div className="divide-y divide-zinc-200">
         <AdjustmentTimeComparison label="Entrada" recordedAt={recordedStartAt} requestedAt={adjustment.requestedStartAt} />
         <AdjustmentTimeComparison label="Salida" recordedAt={recordedEndAt} requestedAt={adjustment.requestedEndAt} />
+        {validationMessage ? <div className="bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{validationMessage}</div> : null}
         {recordedMinutes !== undefined || requestedMinutes !== undefined ? <div className="grid gap-3 px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
           <div><p className="text-xs font-medium text-zinc-500">Duración registrada</p><p className="mt-0.5 text-sm font-semibold tabular-nums text-zinc-900">{recordedMinutes === undefined ? 'Sin calcular' : formatMinutes(recordedMinutes)}</p></div>
           <ArrowRight className="hidden h-4 w-4 text-zinc-400 sm:block" aria-hidden="true" />

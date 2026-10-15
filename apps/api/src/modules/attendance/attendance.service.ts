@@ -349,6 +349,24 @@ export interface ManualSessionInput {
   notes?: string;
 }
 
+type AdjustmentTimes = Pick<AdjustmentInput, 'requestedStartAt' | 'requestedEndAt'>;
+
+// The API is the final safeguard for every caller (mobile app, backoffice and
+// future integrations). A correction must actually change a recorded time and
+// must never turn a closed jornada into a zero or negative-length interval.
+function assertValidAdjustmentTimes(session: { startedAt: Date; endedAt?: Date }, input: AdjustmentTimes) {
+  const { requestedStartAt, requestedEndAt } = input;
+  if (!requestedStartAt && !requestedEndAt) throw new ApiError(422, 'ATTENDANCE_ADJUSTMENT_CHANGE_REQUIRED');
+
+  const startedAt = requestedStartAt ?? session.startedAt;
+  const endedAt = requestedEndAt ?? session.endedAt;
+  if (endedAt && endedAt.getTime() <= startedAt.getTime()) throw new ApiError(422, 'ATTENDANCE_ADJUSTMENT_INVALID_RANGE');
+
+  const changesStart = Boolean(requestedStartAt && requestedStartAt.getTime() !== session.startedAt.getTime());
+  const changesEnd = Boolean(requestedEndAt && requestedEndAt.getTime() !== session.endedAt?.getTime());
+  if (!changesStart && !changesEnd) throw new ApiError(422, 'ATTENDANCE_ADJUSTMENT_CHANGE_REQUIRED');
+}
+
 // A manual reconstruction has the same immutable check-in/check-out evidence as
 // a mobile jornada. The only difference is its explicit BACKOFFICE source and
 // audit actor, which preserves why the effective timestamps were backdated.
@@ -426,6 +444,8 @@ export async function createManualSession(actorId: string, input: ManualSessionI
 export async function createAdjustmentRequest(userId: string, input: AdjustmentInput) {
   const session: any = await WorkSession.findOne({ _id: input.workSessionId, userId }).lean();
   if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
+  if (session.status === WorkSessionStatus.ACTIVE) throw new ApiError(409, 'ATTENDANCE_ACTIVE_SESSION_ADJUSTMENT_NOT_ALLOWED');
+  assertValidAdjustmentTimes(session, input);
   const pending = await AttendanceAdjustmentRequest.exists({ workSessionId: input.workSessionId, status: AttendanceAdjustmentStatus.PENDING });
   if (pending) throw new ApiError(409, 'ATTENDANCE_ADJUSTMENT_ALREADY_PENDING');
   return AttendanceAdjustmentRequest.create({
@@ -446,6 +466,7 @@ export async function applyAdministrativeAdjustment(sessionId: string, actorId: 
 
   const pending = await AttendanceAdjustmentRequest.exists({ workSessionId: sessionId, status: AttendanceAdjustmentStatus.PENDING });
   if (pending) throw new ApiError(409, 'ATTENDANCE_ADJUSTMENT_ALREADY_PENDING');
+  assertValidAdjustmentTimes(session, input);
 
   const adjustment: any = await AttendanceAdjustmentRequest.create({
     userId: session.userId,
@@ -475,10 +496,10 @@ export async function reviewAdjustmentRequest(id: string, actorId: string, decis
 
   const session: any = await WorkSession.findById(request.workSessionId);
   if (!session) throw new ApiError(404, 'ATTENDANCE_SESSION_NOT_FOUND');
+  assertValidAdjustmentTimes(session, request);
   const startedAt: Date = request.requestedStartAt ?? session.startedAt;
   const endedAt: Date | undefined = request.requestedEndAt ?? session.endedAt;
-  if (endedAt && endedAt.getTime() <= startedAt.getTime()) throw new ApiError(422, 'ATTENDANCE_ADJUSTMENT_INVALID_RANGE');
-  const workedMinutes = endedAt ? Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 60_000)) : session.workedMinutes;
+  const workedMinutes = endedAt ? Math.round((endedAt.getTime() - startedAt.getTime()) / 60_000) : session.workedMinutes;
 
   session.startedAt = startedAt;
   if (endedAt) session.endedAt = endedAt;

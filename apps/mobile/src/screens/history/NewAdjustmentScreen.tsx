@@ -25,6 +25,48 @@ function formatReference(value?: string): string {
   return value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Sin registrar';
 }
 
+function adjustmentValidationMessage({
+  startDate,
+  startTime,
+  endDate,
+  endTime,
+  currentStartedAt,
+  currentEndedAt
+}: {
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  currentStartedAt?: string;
+  currentEndedAt?: string;
+}): string | null {
+  const hasStartDate = Boolean(startDate.trim());
+  const hasStartTime = Boolean(startTime.trim());
+  const hasEndDate = Boolean(endDate.trim());
+  const hasEndTime = Boolean(endTime.trim());
+
+  if (hasStartDate !== hasStartTime) return 'Completá fecha y hora de entrada, o dejá ambas en blanco.';
+  if (hasEndDate !== hasEndTime) return 'Completá fecha y hora de salida, o dejá ambas en blanco.';
+
+  const requestedStartAt = parseDateTime(startDate, startTime);
+  const requestedEndAt = parseDateTime(endDate, endTime);
+  if (!requestedStartAt && !requestedEndAt) return 'Indicá la nueva entrada o salida que necesitás corregir.';
+  if ((hasStartDate && !requestedStartAt) || (hasEndDate && !requestedEndAt)) return 'Ingresá horarios válidos para continuar.';
+
+  const effectiveStartAt = requestedStartAt ?? currentStartedAt;
+  const effectiveEndAt = requestedEndAt ?? currentEndedAt;
+  if (effectiveStartAt && effectiveEndAt && new Date(effectiveEndAt).getTime() <= new Date(effectiveStartAt).getTime()) {
+    return 'La salida debe ser posterior a la entrada.';
+  }
+  if (requestedStartAt === currentStartedAt && (!requestedEndAt || requestedEndAt === currentEndedAt)) {
+    return 'Indicá al menos un horario distinto al registrado para corregir.';
+  }
+  if (requestedEndAt === currentEndedAt && (!requestedStartAt || requestedStartAt === currentStartedAt)) {
+    return 'Indicá al menos un horario distinto al registrado para corregir.';
+  }
+  return null;
+}
+
 export function NewAdjustmentScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
@@ -35,16 +77,23 @@ export function NewAdjustmentScreen({ route, navigation }: Props) {
   const [endTime, setEndTime] = useState('');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
+  const validationMessage = adjustmentValidationMessage({ startDate, startTime, endDate, endTime, currentStartedAt, currentEndedAt });
 
   async function submit() {
     if (reason.trim().length < 3) return;
+    if (validationMessage) {
+      showToast({ message: validationMessage, variant: 'error' });
+      return;
+    }
+    const requestedStartAt = parseDateTime(startDate, startTime);
+    const requestedEndAt = parseDateTime(endDate, endTime);
     setLoading(true);
     try {
       await api.post('/mobile/attendance/adjustments', {
         workSessionId,
         reason: reason.trim(),
-        requestedStartAt: parseDateTime(startDate, startTime),
-        requestedEndAt: parseDateTime(endDate, endTime)
+        ...(requestedStartAt ? { requestedStartAt } : {}),
+        ...(requestedEndAt ? { requestedEndAt } : {})
       });
       showToast({ message: 'Solicitud de corrección enviada correctamente.', variant: 'success' });
       navigation.goBack();
@@ -58,7 +107,7 @@ export function NewAdjustmentScreen({ route, navigation }: Props) {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl }]} keyboardShouldPersistTaps="handled">
-        <ScreenHeader title="Solicitar corrección" description="Indicá el horario correcto y el motivo. Un administrador la va a revisar. Dejá una sección en blanco si no necesitás corregirla." />
+        <ScreenHeader title="Solicitar corrección" description="Indicá una nueva entrada o salida y el motivo. Un administrador la va a revisar." />
 
         <AppCard style={styles.section}>
           <Text style={styles.sectionTitle}>Entrada</Text>
@@ -75,7 +124,8 @@ export function NewAdjustmentScreen({ route, navigation }: Props) {
         </AppCard>
 
         <AppTextInput label="Motivo" value={reason} onChangeText={setReason} multiline numberOfLines={4} style={styles.textarea} placeholder="Explicá qué pasó con el registro de horario" />
-        <AppButton title="Enviar solicitud" onPress={() => void submit()} loading={loading} disabled={reason.trim().length < 3} />
+        {validationMessage ? <Text style={styles.validation}>{validationMessage}</Text> : null}
+        <AppButton title="Enviar solicitud" onPress={() => void submit()} loading={loading} disabled={reason.trim().length < 3 || Boolean(validationMessage)} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -87,5 +137,6 @@ const styles = StyleSheet.create({
   section: { gap: spacing.md },
   sectionTitle: { ...typography.h3, color: colors.text },
   reference: { ...typography.small, color: colors.textMuted, marginTop: -spacing.xs },
-  textarea: { minHeight: 100, textAlignVertical: 'top', paddingTop: spacing.md }
+  textarea: { minHeight: 100, textAlignVertical: 'top', paddingTop: spacing.md },
+  validation: { ...typography.small, color: colors.danger, fontWeight: '600', marginTop: -spacing.xs }
 });

@@ -204,6 +204,67 @@ describe('attendance.service', () => {
     });
   });
 
+  describe('createAdjustmentRequest', () => {
+    const startedAt = new Date('2026-10-14T16:00:00.000Z');
+    const endedAt = new Date('2026-10-14T21:30:00.000Z');
+
+    function mockClosedSession() {
+      mocks.workSessionFindOne.mockReturnValue(chainLean({
+        _id: new Types.ObjectId(), userId, status: WorkSessionStatus.COMPLETED, startedAt, endedAt, workedMinutes: 330
+      }));
+    }
+
+    it('rejects a correction that does not include a changed horario', async () => {
+      mockClosedSession();
+
+      await expect(attendanceService.createAdjustmentRequest(userId, {
+        workSessionId: new Types.ObjectId().toString(), reason: 'No pude registrar el horario.'
+      })).rejects.toMatchObject({ status: 422, code: 'ATTENDANCE_ADJUSTMENT_CHANGE_REQUIRED' });
+
+      expect(mocks.adjustmentCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects a requested exit before the effective entry', async () => {
+      mockClosedSession();
+
+      await expect(attendanceService.createAdjustmentRequest(userId, {
+        workSessionId: new Types.ObjectId().toString(),
+        requestedStartAt: new Date('2026-10-14T19:30:00.000Z'),
+        requestedEndAt: new Date('2026-10-14T19:20:00.000Z'),
+        reason: 'Corregir ambos horarios.'
+      })).rejects.toMatchObject({ status: 422, code: 'ATTENDANCE_ADJUSTMENT_INVALID_RANGE' });
+
+      expect(mocks.adjustmentCreate).not.toHaveBeenCalled();
+    });
+
+    it('creates a correction when at least one horario genuinely changes', async () => {
+      mockClosedSession();
+      mocks.adjustmentExists.mockResolvedValue(null);
+      const adjustment = { _id: new Types.ObjectId() };
+      mocks.adjustmentCreate.mockResolvedValue(adjustment);
+      const requestedEndAt = new Date('2026-10-14T22:00:00.000Z');
+
+      await expect(attendanceService.createAdjustmentRequest(userId, {
+        workSessionId: new Types.ObjectId().toString(), requestedEndAt, reason: 'La salida se registró antes.'
+      })).resolves.toBe(adjustment);
+
+      expect(mocks.adjustmentCreate).toHaveBeenCalledWith(expect.objectContaining({ requestedEndAt }));
+    });
+
+    it('does not approve a legacy blank request that reached review', async () => {
+      const workSessionId = new Types.ObjectId();
+      const request = { _id: new Types.ObjectId(), workSessionId };
+      const session = { startedAt, endedAt, save: vi.fn() };
+      mocks.adjustmentFindOne.mockResolvedValue(request);
+      mocks.workSessionFindById.mockResolvedValue(session);
+
+      await expect(attendanceService.reviewAdjustmentRequest(request._id.toString(), userId, 'approved'))
+        .rejects.toMatchObject({ status: 422, code: 'ATTENDANCE_ADJUSTMENT_CHANGE_REQUIRED' });
+
+      expect(session.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('reviewSession', () => {
     it('resolves a flagged closed session and clears its review marker', async () => {
       const sessionId = new Types.ObjectId().toString();
