@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { AlertTriangle, CalendarPlus, ChevronLeft, CreditCard, Download, Eye, FileText, LockKeyhole, Mail, MapPin, MessageCircle, Plus, Printer, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, ChevronLeft, Copy, CreditCard, Download, Eye, FileText, LockKeyhole, Mail, MapPin, MessageCircle, Plus, Printer, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import { Permission } from '@mym/shared';
 import { api } from '@/lib/api';
 import { activityTypeLabels, contractStatusLabels, displayLabel, eventStaffStatusLabels, eventStatusLabels, eventTypeLabels, paymentMethodLabels, paymentTypeLabels, quoteStatusLabels, staffSubroleLabels } from '@/lib/display-labels';
@@ -95,6 +95,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
   const [reactivation, setReactivation] = useState({ status: 'draft', reason: '' });
   const notice = (message: string, variant: 'success' | 'error' | 'info' = 'success') => showToast({ message, variant });
+  const copyEventId = async () => {
+    if (!event) return;
+    const recordLabel = event.serviceMode === 'external_catering' ? 'servicio' : 'evento';
+    try {
+      await navigator.clipboard.writeText(event._id);
+      notice(`ID del ${recordLabel} copiado.`);
+    } catch {
+      notice(`No se pudo copiar el ID del ${recordLabel}.`, 'error');
+    }
+  };
 
   const load = async (eventId: string) => {
     setLoading(true);
@@ -441,6 +451,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           {!isTerminal ? <label className="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">Estado<Select value={event.status} disabled={saving} onChange={(change) => void requestStatusChange(change.target.value)} className="w-56 py-2">{Object.entries(eventStatusLabels).filter(([value]) => canCancel || !['cancelled', 'lost'].includes(value)).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label> : null}
         </div>
       </div>
+      <button type="button" aria-label={`Copiar ID del ${event.serviceMode === 'external_catering' ? 'servicio' : 'evento'}: ${event._id}`} title="Copiar ID" onClick={() => void copyEventId()} className="mt-4 inline-flex max-w-full items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-medium tabular-nums text-zinc-600 transition hover:border-zinc-300 hover:bg-white hover:text-zinc-950 focus:outline-none focus:ring-2 focus:ring-zinc-500/20"><Copy aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /><span className="truncate">ID: {event._id}</span></button>
     </header>
     {isTerminal ? <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-rose-950"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-semibold">Evento en estado terminal: sólo lectura</p><p className="mt-1 text-sm leading-6 text-rose-800">Se preservan contratos, pagos, gastos e historial. Reactivalo para editarlo; las reservas operativas liberadas deberán revisarse antes de volver a confirmarlo.</p></div></div> : null}
     <div className="flex flex-wrap gap-2 border-b border-zinc-200">{eventTabs.map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`px-4 py-3 text-sm font-medium ${activeTab === tab ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>{eventTabLabels[tab]}</button>)}</div>
