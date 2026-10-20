@@ -80,6 +80,21 @@ function adjustmentReviewValidationMessage(adjustment: AttendanceAdjustmentReque
   return null;
 }
 
+function adjustmentCrossesCalendarDay(adjustment: AttendanceAdjustmentRequest): { startedAt: string; endedAt: string } | null {
+  const startedAt = adjustment.requestedStartAt ?? adjustment.originalSnapshot?.startedAt;
+  const endedAt = adjustment.requestedEndAt ?? adjustment.originalSnapshot?.endedAt;
+  if (!startedAt || !endedAt) return null;
+
+  const start = new Date(startedAt);
+  const end = new Date(endedAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const hasSameCalendarDate = start.getFullYear() === end.getFullYear()
+    && start.getMonth() === end.getMonth()
+    && start.getDate() === end.getDate();
+
+  return hasSameCalendarDate ? null : { startedAt, endedAt };
+}
+
 function StatusBadge({ label, tone }: { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
   const styles = { ok: 'bg-emerald-100 text-emerald-700', warn: 'bg-amber-100 text-amber-700', bad: 'bg-red-100 text-red-700', neutral: 'bg-muted text-muted-foreground' };
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${styles[tone]}`}>{label}</span>;
@@ -141,6 +156,7 @@ export default function AttendancePage() {
   const [resolveForm, setResolveForm] = useState({ status: 'resolved', resolution: '' });
   const [reviewTarget, setReviewTarget] = useState<AttendanceAdjustmentRequest | null>(null);
   const [reviewForm, setReviewForm] = useState<{ decision: 'approved' | 'rejected'; reviewNotes: string }>({ decision: 'approved', reviewNotes: '' });
+  const [crossDateApprovalConfirmed, setCrossDateApprovalConfirmed] = useState(false);
   const [manualSessionOpen, setManualSessionOpen] = useState(false);
   const [manualSessionUsers, setManualSessionUsers] = useState<AttendanceUserOption[]>([]);
   const [loadingManualSessionUsers, setLoadingManualSessionUsers] = useState(false);
@@ -349,12 +365,17 @@ export default function AttendancePage() {
       showToast({ message: validationMessage, variant: 'error' });
       return;
     }
+    if (reviewForm.decision === 'approved' && adjustmentCrossesCalendarDay(reviewTarget) && !crossDateApprovalConfirmed) {
+      showToast({ message: 'Confirmá que verificaste que la jornada cruza de fecha antes de aprobarla.', variant: 'error' });
+      return;
+    }
     setActing(true);
     try {
       await api.post(`/attendance/adjustments/${reviewTarget._id}/review`, reviewForm);
       showToast({ message: reviewForm.decision === 'approved' ? 'Corrección aprobada y aplicada a la jornada.' : 'Corrección rechazada.', variant: 'success' });
       setReviewTarget(null);
       setReviewForm({ decision: 'approved', reviewNotes: '' });
+      setCrossDateApprovalConfirmed(false);
       await Promise.all([
         loadAdjustments(),
         loadReviewCounts(),
@@ -433,6 +454,7 @@ export default function AttendancePage() {
   function openAdjustmentReview(adjustment: AttendanceAdjustmentRequest) {
     setReviewTarget(adjustment);
     setReviewForm({ decision: adjustmentReviewValidationMessage(adjustment) ? 'rejected' : 'approved', reviewNotes: '' });
+    setCrossDateApprovalConfirmed(false);
   }
 
   async function openManualSession() {
@@ -500,6 +522,7 @@ export default function AttendancePage() {
     || (adjustmentForm.requestedEndAt && adjustmentForm.requestedEndAt !== dateTimeInputValue(adjustTarget.endedAt))
   ));
   const reviewValidationMessage = reviewTarget ? adjustmentReviewValidationMessage(reviewTarget) : null;
+  const crossDateWarning = reviewTarget ? adjustmentCrossesCalendarDay(reviewTarget) : null;
   const manualSessionPreviewMinutes = manualSessionForm.date && manualSessionForm.startedTime && manualSessionForm.endedTime
     ? Math.round((new Date(`${manualSessionForm.date}T${manualSessionForm.endedTime}`).getTime() - new Date(`${manualSessionForm.date}T${manualSessionForm.startedTime}`).getTime()) / 60_000)
     : null;
@@ -676,15 +699,20 @@ export default function AttendancePage() {
       </div>
     </Modal>
 
-    <Modal open={Boolean(reviewTarget)} onClose={() => setReviewTarget(null)} title="Revisar solicitud de corrección" description={reviewTarget ? `Enviada el ${formatDateTime(reviewTarget.createdAt)}` : ''}>
+    <Modal open={Boolean(reviewTarget)} onClose={() => { setReviewTarget(null); setCrossDateApprovalConfirmed(false); }} title="Revisar solicitud de corrección" description={reviewTarget ? `Enviada el ${formatDateTime(reviewTarget.createdAt)}` : ''}>
       <div className="space-y-6 p-6">
         {reviewTarget ? <AdjustmentReviewSummary adjustment={reviewTarget} /> : null}
         <div className="space-y-4 border-t border-zinc-200 pt-5">
           {reviewValidationMessage ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{reviewValidationMessage}</p> : null}
+          {reviewForm.decision === 'approved' && crossDateWarning ? <CrossDateApprovalWarning
+            range={crossDateWarning}
+            confirmed={crossDateApprovalConfirmed}
+            onConfirmedChange={setCrossDateApprovalConfirmed}
+          /> : null}
           <FilterField label="Decisión"><Select value={reviewForm.decision} onChange={(event) => setReviewForm((current) => ({ ...current, decision: event.target.value as 'approved' | 'rejected' }))}><option value="approved" disabled={Boolean(reviewValidationMessage)}>Aprobar (ajusta la jornada)</option><option value="rejected">Rechazar</option></Select></FilterField>
           <FilterField label="Nota de la revisión (opcional)"><Textarea placeholder="Ej.: se verificó el registro con el encargado del salón." value={reviewForm.reviewNotes} onChange={(event) => setReviewForm((current) => ({ ...current, reviewNotes: event.target.value }))} /></FilterField>
         </div>
-        <footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setReviewTarget(null)}>Cancelar</Button><Button disabled={acting || (reviewForm.decision === 'approved' && Boolean(reviewValidationMessage))} onClick={() => void confirmReview()}>{acting ? 'Guardando…' : 'Confirmar'}</Button></footer>
+        <footer className="flex justify-end gap-3"><Button variant="secondary" onClick={() => { setReviewTarget(null); setCrossDateApprovalConfirmed(false); }}>Cancelar</Button><Button disabled={acting || (reviewForm.decision === 'approved' && (Boolean(reviewValidationMessage) || Boolean(crossDateWarning) && !crossDateApprovalConfirmed))} onClick={() => void confirmReview()}>{acting ? 'Guardando…' : 'Confirmar'}</Button></footer>
       </div>
     </Modal>
   </section>;
@@ -753,6 +781,22 @@ function AdjustmentReviewSummary({ adjustment }: { adjustment: AttendanceAdjustm
       </div>
     </section>
   </div>;
+}
+
+function CrossDateApprovalWarning({ range, confirmed, onConfirmedChange }: { range: { startedAt: string; endedAt: string }; confirmed: boolean; onConfirmedChange: (checked: boolean) => void }) {
+  return <aside role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-amber-950">
+    <div className="flex items-start gap-3">
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold">La jornada resultante cruza de fecha</h3>
+        <p className="mt-1 text-sm leading-5 text-amber-900">Se aplicará desde el {formatDateTime(range.startedAt)} hasta el {formatDateTime(range.endedAt)}. Verificá el horario con la persona o el encargado antes de aprobar.</p>
+        <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-sm font-medium leading-5 text-amber-950">
+          <input type="checkbox" checked={confirmed} onChange={(event) => onConfirmedChange(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-400 accent-amber-700" />
+          <span>Confirmo que revisé que esta corrección debe abarcar más de un día.</span>
+        </label>
+      </div>
+    </div>
+  </aside>;
 }
 
 function AdjustmentTimeComparison({ label, recordedAt, requestedAt }: { label: string; recordedAt?: string; requestedAt?: string }) {
