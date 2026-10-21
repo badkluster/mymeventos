@@ -171,6 +171,65 @@ function card(document: PDFKit.PDFDocument, event: any, type: OperationalDocumen
   document.y = y + height + 8;
 }
 
+type RichTextToken = { text: string; bold: boolean };
+type RichTextLine = RichTextToken[];
+
+/** Convierte el Markdown mínimo usado por las notas (**texto**) en líneas listas para PDFKit. */
+function staffNoteTokens(value: string): RichTextToken[] {
+  return value.split(/(\*\*[\s\S]+?\*\*)/g).filter(Boolean).map((part) => {
+    const bold = part.startsWith('**') && part.endsWith('**');
+    return { text: bold ? part.slice(2, -2) : part, bold };
+  });
+}
+
+function richTextLines(document: PDFKit.PDFDocument, value: string, width: number, fontSize: number): RichTextLine[] {
+  const lines: RichTextLine[] = [];
+  let line: RichTextLine = [];
+  let lineWidth = 0;
+  const flush = () => {
+    while (line.at(-1)?.text.trim() === '') line.pop();
+    lines.push(line);
+    line = [];
+    lineWidth = 0;
+  };
+
+  staffNoteTokens(value).forEach((token) => {
+    token.text.split(/(\n|\s+)/).filter(Boolean).forEach((part) => {
+      if (part === '\n') { flush(); return; }
+      const whitespace = /^\s+$/.test(part);
+      if (whitespace && !line.length) return;
+      const partWidth = document.font(token.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(fontSize).widthOfString(part);
+      if (line.length && lineWidth + partWidth > width) {
+        flush();
+        if (whitespace) return;
+      }
+      line.push({ text: part, bold: token.bold });
+      lineWidth += partWidth;
+    });
+  });
+  if (line.length || !lines.length) flush();
+  return lines;
+}
+
+function richTextLineHeight(fontSize: number, lineGap: number): number {
+  return fontSize + lineGap + 2.5;
+}
+
+function richTextHeight(document: PDFKit.PDFDocument, value: string, width: number, fontSize: number, lineGap: number): number {
+  return richTextLines(document, value, width, fontSize).length * richTextLineHeight(fontSize, lineGap);
+}
+
+function renderRichText(document: PDFKit.PDFDocument, value: string, x: number, y: number, width: number, fontSize: number, lineGap: number, fill: string): void {
+  const lineHeight = richTextLineHeight(fontSize, lineGap);
+  richTextLines(document, value, width, fontSize).forEach((line, lineIndex) => {
+    let cursor = x;
+    line.forEach((token) => {
+      document.font(token.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(fontSize).fillColor(fill).text(token.text, cursor, y + lineIndex * lineHeight, { lineBreak: false });
+      cursor += document.widthOfString(token.text);
+    });
+  });
+}
+
 /**
  * Las notas de staff pueden ser extensas. Se conservan completas y con una escala
  * de lectura operativa; el salto de página queda a cargo de `ensure()` sólo cuando
@@ -180,7 +239,7 @@ function staffNoteCard(document: PDFKit.PDFDocument, event: any, type: Operation
   const width = page.right - page.left - 28;
   const titleHeight = document.font('Helvetica-Bold').fontSize(9.2).heightOfString(title, { width, lineGap: 1.5 });
   const metaHeight = meta ? document.font('Helvetica').fontSize(7.7).heightOfString(meta, { width, lineGap: 1.2 }) : 0;
-  const bodyHeight = body ? document.font('Helvetica').fontSize(8.5).heightOfString(body, { width, lineGap: 2 }) : 0;
+  const bodyHeight = body ? richTextHeight(document, body, width, 8.5, 2) : 0;
   const height = Math.max(38, 10 + titleHeight + (meta ? metaHeight + 4 : 0) + (body ? bodyHeight + 7 : 0) + 9);
   ensure(document, event, type, height + 6);
   const y = document.y;
@@ -193,7 +252,7 @@ function staffNoteCard(document: PDFKit.PDFDocument, event: any, type: Operation
     document.font('Helvetica').fontSize(7.7).fillColor(color.muted).text(meta, page.left + 14, cursor, { width, lineGap: 1.2 });
     cursor += metaHeight + 4;
   }
-  if (body) document.font('Helvetica').fontSize(8.5).fillColor('#344054').text(body, page.left + 14, cursor, { width, lineGap: 2 });
+  if (body) renderRichText(document, body, page.left + 14, cursor, width, 8.5, 2, '#344054');
   document.y = y + height + 6;
 }
 
@@ -1058,13 +1117,17 @@ function escapeHtml(value: unknown): string {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function staffNoteHtml(value: string): string {
+  return escapeHtml(value).replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+}
+
 function timelineWordHtml(event: any, separateStaffNotes = false): string {
   const items = timelineItemRows(event);
   const table = items.length
     ? `<table><thead><tr><th>Hora</th><th>Momento</th><th>Notas</th></tr></thead><tbody>${items.map((item: any) => `<tr><td>${escapeHtml(text(item.time, '—'))}</td><td><b>${escapeHtml(text(item.title))}</b></td><td>${escapeHtml(text(item.notes, '—'))}</td></tr>`).join('')}</tbody></table>`
     : '<p class="empty">Todavía no hay momentos cargados en el cronograma.</p>';
   const staffNotes = generalStaffNotes(event);
-  const staffNotesContent = staffNotes.length ? `<h2>Notas para staff</h2><p class="staff-hint">Indicaciones clave para el equipo durante el evento.</p>${staffNotes.map((item) => `<section class="note"><h3>${escapeHtml(item.reference)}</h3><small>${escapeHtml(item.meta)}</small><p>${escapeHtml(item.note).replace(/\n/g, '<br>')}</p></section>`).join('')}` : '';
+  const staffNotesContent = staffNotes.length ? `<h2>Notas para staff</h2><p class="staff-hint">Indicaciones clave para el equipo durante el evento.</p>${staffNotes.map((item) => `<section class="note"><h3>${escapeHtml(item.reference)}</h3><small>${escapeHtml(item.meta)}</small><p>${staffNoteHtml(item.note)}</p></section>`).join('')}` : '';
   const staffNotesHtml = staffNotesContent && separateStaffNotes ? `<section class="staff-notes">${staffNotesContent}</section>` : staffNotesContent;
   return `${table}${staffNotesHtml}`;
 }

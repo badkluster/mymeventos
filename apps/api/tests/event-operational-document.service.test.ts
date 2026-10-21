@@ -228,6 +228,21 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(word).not.toContain('<h2>Notas para staff</h2>');
   });
 
+  it('preserves bold text from staff notes in the PDF and Word exports', async () => {
+    const note = 'Confirmar **SIN EXCEPCIÓN** con coordinación antes de abrir las puertas.';
+    const event = {
+      ...minimalEvent,
+      resourcePlanSnapshot: { staffNotes: [{ title: 'Ingreso', notes: note }] }
+    };
+
+    const pdf = await generateOperationalPdf(event, 'full');
+    const word = html(generateOperationalWord(event, 'full').buffer);
+
+    expect(pdfContentText(pdf.buffer)).toContain('SIN EXCEPCIÓN');
+    expect(pdfContentText(pdf.buffer)).not.toContain('**SIN EXCEPCIÓN**');
+    expect(word).toContain('Confirmar <strong>SIN EXCEPCIÓN</strong> con coordinación');
+  });
+
   it('uses a compact two-column layout when it keeps all event moments on their dedicated page', async () => {
     const timelineItems = Array.from({ length: 15 }, (_, index) => ({
       time: `${String(18 + Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`,
