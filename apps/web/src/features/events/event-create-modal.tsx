@@ -45,6 +45,9 @@ const emptyForm = {
   pricePerPerson: '',
   fixedPrice: '',
   finalAmount: '',
+  discountType: 'percentage',
+  discountValue: '',
+  discountReason: '',
   depositAmount: '',
   paymentTerms: '',
   notes: '',
@@ -56,6 +59,7 @@ type ApplicablePackage = PackageTemplate & { packageTemplateId?: string; package
 type TimeErrors = { startTime?: string; endTime?: string };
 
 const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const moneyFormatter = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
 function validateTimes(startTime: string, endTime: string): TimeErrors {
   const errors: TimeErrors = {};
@@ -153,8 +157,8 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
     const selected = availablePackages.find((item) => item._id === packageId);
     if (!selected) return;
     const pricingMode = selected.pricingMode ?? 'fixed';
-    const pricePerPerson = selected.finalPricePerPerson ?? selected.pricePerPerson;
-    const fixedPrice = selected.finalFixedPrice ?? selected.fixedPrice;
+    const pricePerPerson = selected.pricePerPerson ?? selected.finalPricePerPerson;
+    const fixedPrice = selected.fixedPrice ?? selected.finalFixedPrice;
     setForm((current) => ({
       ...current,
       packageTemplateId: selected._id,
@@ -163,7 +167,10 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
       startTime: initialValues?.startTime ?? selected.startTime ?? current.startTime,
       endTime: initialValues?.endTime ?? selected.endTime ?? current.endTime,
       pricePerPerson: pricePerPerson === undefined ? '' : String(pricePerPerson),
-      finalAmount: fixedPrice === undefined ? '' : String(fixedPrice),
+      finalAmount: fixedPrice === undefined ? '' : String(selected.fixedPrice ?? fixedPrice),
+      discountType: 'percentage',
+      discountValue: Number(selected.discountPercentage ?? 0) > 0 ? String(selected.discountPercentage) : '',
+      discountReason: '',
       depositAmount: selected.depositAmount === undefined ? '' : String(selected.depositAmount),
       paymentTerms: selected.paymentTerms ?? current.paymentTerms,
       considerations: selected.considerations ?? current.considerations
@@ -180,7 +187,10 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
       const guestCount = numberOrUndefined(form.guestCount);
       const pricePerPerson = numberOrUndefined(form.pricePerPerson);
       const fixedAmount = numberOrUndefined(form.finalAmount || form.fixedPrice);
-      const directTotalAmount = form.pricingMode === 'per_person' && guestCount && pricePerPerson ? guestCount * pricePerPerson : fixedAmount;
+      const listAmount = form.pricingMode === 'per_person' && guestCount && pricePerPerson ? guestCount * pricePerPerson : fixedAmount;
+      const enteredDiscount = numberOrUndefined(form.discountValue) ?? 0;
+      const discountAmount = Math.min(listAmount ?? 0, form.discountType === 'percentage' ? Math.round((listAmount ?? 0) * enteredDiscount / 100) : enteredDiscount);
+      const directTotalAmount = Math.max(0, (listAmount ?? 0) - discountAmount);
       const payload = form.sourceMode === 'quote' ? {
         quoteId: form.quoteId,
         eventName: form.eventName || undefined,
@@ -220,11 +230,14 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         packageName: form.packageName || undefined,
         pricingMode: form.pricingMode,
         pricePerPerson,
-        finalPricePerPerson: pricePerPerson,
-        fixedPrice: form.pricingMode === 'fixed' ? directTotalAmount : undefined,
+        finalPricePerPerson: form.pricingMode === 'per_person' && guestCount ? directTotalAmount / guestCount : undefined,
+        fixedPrice: form.pricingMode === 'fixed' ? listAmount : undefined,
         finalFixedPrice: form.pricingMode === 'fixed' ? directTotalAmount : undefined,
         estimatedAmount: directTotalAmount,
         finalAmount: directTotalAmount,
+        discountPercentage: form.discountType === 'percentage' ? enteredDiscount : undefined,
+        discountAmount,
+        discountReason: discountAmount > 0 ? form.discountReason.trim() : undefined,
         depositAmount: numberOrUndefined(form.depositAmount),
         paymentTerms: form.paymentTerms || undefined,
         considerations: form.considerations || undefined,
@@ -247,6 +260,13 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
   };
 
   const directPrice = form.pricingMode === 'per_person' ? numberOrUndefined(form.pricePerPerson) : numberOrUndefined(form.finalAmount || form.fixedPrice);
+  const listAmount = form.pricingMode === 'per_person'
+    ? (numberOrUndefined(form.pricePerPerson) ?? 0) * (numberOrUndefined(form.guestCount) ?? 0)
+    : numberOrUndefined(form.finalAmount || form.fixedPrice) ?? 0;
+  const enteredDiscount = numberOrUndefined(form.discountValue) ?? 0;
+  const discountAmount = Math.min(listAmount, form.discountType === 'percentage' ? Math.round(listAmount * enteredDiscount / 100) : enteredDiscount);
+  const directTotalAmount = Math.max(0, listAmount - discountAmount);
+  const hasInvalidDiscount = discountAmount >= listAmount && discountAmount > 0;
   const quoteMissing = selectedQuote ? [
     !selectedQuote.eventType && 'tipo de evento',
     !selectedQuote.eventDate && 'fecha',
@@ -266,6 +286,8 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
       && numberOrUndefined(form.guestCount)
       && (isExternalCatering ? form.packageName.trim() : (form.packageTemplateId || form.packageName.trim()))
       && directPrice
+      && !hasInvalidDiscount
+      && (!discountAmount || Boolean(form.discountReason.trim()) || Boolean(form.packageTemplateId))
       && (!isExternalCatering || (form.externalVenueName.trim() && form.externalVenueAddress.trim() && form.externalVenueContactName.trim()))
       && validTimes
     );
@@ -319,7 +341,11 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
         <div className="grid gap-4 md:grid-cols-2">
           <Field label={isExternalCatering ? 'Propuesta comercial' : 'Paquete / propuesta'} required><Input value={form.packageName} onChange={(event) => set('packageName', event.target.value)} placeholder={isExternalCatering ? 'Ej.: Catering completo para 120 personas' : 'Ej: Personalizado infantil'} /></Field>
           <Field label="Modalidad"><Select value={form.pricingMode} onChange={(event) => set('pricingMode', event.target.value)}><option value="fixed">Precio total</option><option value="per_person">Precio por persona</option></Select></Field>
-          <Field label={form.pricingMode === 'fixed' ? 'Precio total' : 'Precio por persona'} required><Input type="number" min={0} value={form.pricingMode === 'fixed' ? form.finalAmount : form.pricePerPerson} onChange={(event) => form.pricingMode === 'fixed' ? set('finalAmount', event.target.value) : set('pricePerPerson', event.target.value)} /></Field>
+          <Field label={form.pricingMode === 'fixed' ? 'Precio de lista' : 'Precio de lista por persona'} required><Input type="number" min={0} value={form.pricingMode === 'fixed' ? form.finalAmount : form.pricePerPerson} onChange={(event) => form.pricingMode === 'fixed' ? set('finalAmount', event.target.value) : set('pricePerPerson', event.target.value)} /></Field>
+          <Field label="Tipo de descuento"><Select value={form.discountType} onChange={(event) => set('discountType', event.target.value)}><option value="percentage">Porcentaje (%)</option><option value="fixed">Monto fijo ($)</option></Select></Field>
+          <Field label={form.discountType === 'percentage' ? 'Descuento (%)' : 'Descuento ($)'} error={hasInvalidDiscount ? 'El descuento debe ser menor al precio de lista.' : undefined}><Input type="number" min={0} max={form.discountType === 'percentage' ? 100 : listAmount || undefined} value={form.discountValue} onChange={(event) => set('discountValue', event.target.value)} /></Field>
+          {discountAmount > 0 ? <Field label="Motivo del descuento" required className="md:col-span-2"><Textarea value={form.discountReason} onChange={(event) => set('discountReason', event.target.value)} placeholder="Ej.: beneficio comercial acordado con el cliente." /><span className="mt-1 block text-xs text-zinc-500">Queda registrado en el evento y en el contrato.</span></Field> : null}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950"><p className="font-medium">Total acordado</p><p className="mt-1 text-lg font-semibold">{moneyFormatter.format(directTotalAmount)}</p>{discountAmount > 0 ? <p className="mt-1 text-xs text-emerald-800">Precio de lista: {moneyFormatter.format(listAmount)} · Descuento: {moneyFormatter.format(discountAmount)}</p> : null}</div>
           <Field label="Seña"><Input type="number" min={0} value={form.depositAmount} onChange={(event) => set('depositAmount', event.target.value)} /></Field>
           <Field label="Condiciones de pago" className="md:col-span-2"><Textarea value={form.paymentTerms} onChange={(event) => set('paymentTerms', event.target.value)} /></Field>
         </div>

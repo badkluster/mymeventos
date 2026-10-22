@@ -103,6 +103,9 @@ const createEventSchema = z.object({
     finalPricePerPerson: z.coerce.number().min(0).optional(),
     fixedPrice: z.coerce.number().min(0).optional(),
     finalFixedPrice: z.coerce.number().min(0).optional(),
+    discountPercentage: z.coerce.number().min(0).max(100).optional(),
+    discountAmount: z.coerce.number().min(0).optional(),
+    discountReason: z.string().trim().max(500).optional(),
     estimatedAmount: z.coerce.number().min(0).optional(),
     finalAmount: z.coerce.number().min(0).optional(),
     depositAmount: z.coerce.number().min(0).optional(),
@@ -128,6 +131,12 @@ const createEventSchema = z.object({
     if (!body.packageName && !body.packageTemplateId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['packageName'], message: body.serviceMode === 'external_catering' ? 'Debe indicar una propuesta comercial para el catering.' : 'Debe indicar el paquete o propuesta.' });
     const amount = body.pricingMode === 'per_person' ? body.finalPricePerPerson ?? body.pricePerPerson : body.finalAmount ?? body.finalFixedPrice ?? body.fixedPrice;
     if (!body.packageTemplateId && (!amount || amount <= 0)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['finalAmount'], message: 'Debe indicar un precio mayor a cero.' });
+    const listAmount = body.pricingMode === 'per_person'
+      ? Number(body.pricePerPerson ?? 0) * Number(body.guestCount ?? 0)
+      : Number(body.fixedPrice ?? body.finalFixedPrice ?? body.finalAmount ?? 0);
+    const discountAmount = Number(body.discountAmount ?? 0);
+    if (discountAmount >= listAmount && discountAmount > 0) context.addIssue({ code: z.ZodIssueCode.custom, path: ['discountAmount'], message: 'El descuento debe ser menor al precio de lista.' });
+    if (!body.packageTemplateId && discountAmount > 0 && !body.discountReason) context.addIssue({ code: z.ZodIssueCode.custom, path: ['discountReason'], message: 'Indicá el motivo del descuento.' });
     if (Boolean(body.startTime) !== Boolean(body.endTime)) context.addIssue({ code: z.ZodIssueCode.custom, path: [body.startTime ? 'endTime' : 'startTime'], message: 'Debe indicar el horario de inicio y de fin.' });
     if (body.startTime && body.endTime && body.startTime === body.endTime) context.addIssue({ code: z.ZodIssueCode.custom, path: ['endTime'], message: 'El horario de fin debe ser distinto del inicio.' });
   }),
@@ -487,9 +496,18 @@ async function resolveCustomerForEvent(request: Request, body: any, salonId?: st
 
 function commercialSnapshotFromBody(body: any): Record<string, unknown> {
   const pricingMode = body.pricingMode ?? (body.fixedPrice || body.finalFixedPrice ? 'fixed' : 'per_person');
-  const perPersonTotal = Number(body.finalPricePerPerson ?? body.pricePerPerson ?? 0) * Number(body.guestCount ?? 0);
+  const guestCount = Number(body.guestCount ?? 0);
+  const listAmount = pricingMode === 'fixed'
+    ? Number(body.fixedPrice ?? body.finalFixedPrice ?? body.finalAmount ?? 0)
+    : Number(body.pricePerPerson ?? body.finalPricePerPerson ?? 0) * guestCount;
+  const hasExplicitDiscount = body.discountAmount !== undefined;
+  const explicitDiscount = Number(body.discountAmount ?? 0);
+  const percentageDiscount = Math.round(listAmount * Number(body.discountPercentage ?? 0) / 100);
+  const discountAmount = Math.max(0, hasExplicitDiscount ? explicitDiscount : percentageDiscount);
+  const perPersonTotal = Number(body.finalPricePerPerson ?? body.pricePerPerson ?? 0) * guestCount;
   const fixedTotal = Number(body.finalFixedPrice ?? body.fixedPrice ?? 0);
-  const totalAmount = Number(body.finalAmount ?? body.estimatedAmount ?? (pricingMode === 'fixed' ? fixedTotal : perPersonTotal) ?? 0);
+  const quotedTotal = Number(body.finalAmount ?? body.estimatedAmount ?? (pricingMode === 'fixed' ? fixedTotal : perPersonTotal) ?? 0);
+  const totalAmount = hasExplicitDiscount ? Math.max(0, listAmount - discountAmount) : quotedTotal;
   const depositAmount = Number(body.depositAmount ?? 0);
   return {
     packageTemplateId: body.packageTemplateId,
@@ -503,6 +521,9 @@ function commercialSnapshotFromBody(body: any): Record<string, unknown> {
     finalPricePerPerson: body.finalPricePerPerson ?? body.pricePerPerson,
     fixedPrice: body.fixedPrice,
     finalFixedPrice: body.finalFixedPrice ?? body.fixedPrice,
+    subtotalAmount: listAmount,
+    discountAmount: Math.max(0, listAmount - totalAmount),
+    discountReason: body.discountReason || (discountAmount > 0 && body.packageTemplateId ? 'Descuento incluido en el paquete seleccionado.' : undefined),
     totalAmount,
     depositAmount,
     balanceAmount: Math.max(0, totalAmount - depositAmount),
@@ -646,15 +667,22 @@ function packageChangeRows(event: any, proposal: ReturnType<typeof packagePropos
 
 function syncContractSnapshot(contract: any, event: any, userId: string) {
   contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
-  const baseAmount = Number(event.finalAmount ?? event.estimatedAmount ?? contract.baseAmount ?? 0);
-  contract.commercialSnapshot = { ...(contract.commercialSnapshot ?? {}), ...(event.commercialSnapshot ?? {}), totalAmount: baseAmount };
+  const totalAmount = Number(event.finalAmount ?? event.estimatedAmount ?? contract.totalAmount ?? 0);
+  const commercial = event.commercialSnapshot ?? {};
+  const listedAmount = Number(commercial.subtotalAmount ?? 0);
+  const configuredDiscount = Number(commercial.discountAmount ?? 0);
+  const keepsDiscountBreakdown = listedAmount > 0 && configuredDiscount >= 0 && listedAmount - configuredDiscount === totalAmount;
+  const baseAmount = keepsDiscountBreakdown ? listedAmount : totalAmount;
+  const discountsAmount = keepsDiscountBreakdown ? configuredDiscount : 0;
+  contract.commercialSnapshot = { ...(contract.commercialSnapshot ?? {}), ...commercial, subtotalAmount: baseAmount, discountAmount: discountsAmount, totalAmount };
   contract.menuSnapshot = event.menuSnapshot ?? contract.menuSnapshot;
   contract.servicesSnapshot = event.servicesSnapshot ?? contract.servicesSnapshot;
   if (event.considerations !== undefined) contract.considerations = event.considerations;
   contract.paymentPlanSnapshot = event.paymentPlanSnapshot ?? event.paymentSnapshot?.paymentPlan ?? contract.paymentPlanSnapshot;
-  contract.paymentAgreementSnapshot = { ...(contract.paymentAgreementSnapshot ?? {}), paymentTerms: event.commercialSnapshot?.paymentTerms, depositAmount: event.commercialSnapshot?.depositAmount, balanceAmount: Math.max(0, baseAmount - Number(contract.paidAmount ?? 0)) };
+  contract.paymentAgreementSnapshot = { ...(contract.paymentAgreementSnapshot ?? {}), paymentTerms: commercial.paymentTerms, depositAmount: commercial.depositAmount, balanceAmount: Math.max(0, totalAmount - Number(contract.paidAmount ?? 0)) };
   contract.baseAmount = baseAmount;
-  contract.totalAmount = baseAmount + Number(contract.approvedAddendumsAmount ?? 0) - Number(contract.discountsAmount ?? 0);
+  contract.discountsAmount = discountsAmount;
+  contract.totalAmount = baseAmount + Number(contract.approvedAddendumsAmount ?? 0) - discountsAmount;
   contract.balanceAmount = contract.totalAmount - Number(contract.paidAmount ?? 0);
   contract.updatedBy = userId;
 }
@@ -860,8 +888,8 @@ router.post('/', requirePermission(Permission.EVENTS_CREATE), validateRequest(cr
     quoteMode: packageSnapshot ? 'PACKAGE' : 'CUSTOM',
     packageTemplateId: packageSnapshot?.packageTemplateId,
     status: 'draft',
-    estimatedAmount: eventBody.estimatedAmount ?? totalAmount,
-    finalAmount: eventBody.finalAmount ?? totalAmount,
+    estimatedAmount: totalAmount,
+    finalAmount: totalAmount,
     commercialSnapshot,
     packageSnapshot,
     menuSnapshot: eventBody.menuSnapshot ?? [],

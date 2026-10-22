@@ -102,6 +102,12 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
   const quote = event.quoteId || event.sourceQuoteId;
   const commercial = event.commercialSnapshot ?? {};
   const totalAmount = event.finalAmount ?? event.estimatedAmount ?? commercial.totalAmount ?? quote?.totalAmount ?? 0;
+  const listedAmount = Number(commercial.subtotalAmount
+    ?? (commercial.pricingMode === 'per_person'
+      ? Number(commercial.pricePerPerson ?? quote?.pricePerPerson ?? 0) * Number(event.guestCount ?? quote?.guestCount ?? 0)
+      : commercial.fixedPrice ?? quote?.fixedPrice ?? totalAmount));
+  const baseAmount = listedAmount > 0 ? listedAmount : Number(totalAmount);
+  const discountsAmount = Math.max(0, baseAmount - Number(totalAmount));
   const depositAmount = commercial.depositAmount ?? quote?.depositAmount ?? 0;
   const paidAmount = 0;
   const balanceAmount = Math.max(0, totalAmount - paidAmount);
@@ -159,6 +165,9 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
       finalPricePerPerson: commercial.finalPricePerPerson ?? quote?.finalPricePerPerson,
       fixedPrice: commercial.fixedPrice ?? quote?.fixedPrice,
       finalFixedPrice: commercial.finalFixedPrice ?? quote?.finalFixedPrice,
+      subtotalAmount: baseAmount,
+      discountAmount: discountsAmount,
+      discountReason: commercial.discountReason,
       totalAmount,
       depositAmount,
       balanceAmount,
@@ -186,10 +195,10 @@ export async function createContractFromEvent(input: { eventId: string; userId: 
       requiredAt: event.eventDate,
       status: 'pending'
     },
-    baseAmount: totalAmount,
+    baseAmount,
     approvedAddendumsAmount: 0,
     pendingAddendumsAmount: 0,
-    discountsAmount: 0,
+    discountsAmount,
     totalAmount,
     paidAmount,
     balanceAmount,
