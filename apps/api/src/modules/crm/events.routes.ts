@@ -183,6 +183,15 @@ const updateSchema = z.object({
   params: z.object({ id: objectId }),
   query: z.object({})
 });
+const changeSalonSchema = z.object({
+  body: z.object({
+    salonId: objectId,
+    reason: z.string().trim().min(3).max(500),
+    expectedUpdatedAt: z.string().datetime().optional()
+  }),
+  params: z.object({ id: objectId }),
+  query: z.object({})
+});
 const packagePreviewSchema = z.object({
   body: z.object({ packageTemplateId: objectId }),
   params: z.object({ id: objectId }),
@@ -441,10 +450,11 @@ async function createOperationalDocument(event: any, type: OperationalDocumentTy
   return { ...generated, url: uploaded.url, secureUrl: uploaded.secureUrl, publicId: uploaded.publicId };
 }
 
-async function ensureSalonAccess(request: Request, salonId: string): Promise<void> {
+async function ensureSalonAccess(request: Request, salonId: string): Promise<any> {
   if (!canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
   const salon = await Salon.findOne({ _id: salonId, active: true, deletedAt: null }).lean();
   if (!salon) throw new ApiError(404, 'SALON_NOT_FOUND');
+  return salon;
 }
 
 async function getAccessibleQuote(request: Request, quoteId: string): Promise<any> {
@@ -666,6 +676,7 @@ function packageChangeRows(event: any, proposal: ReturnType<typeof packagePropos
 }
 
 function syncContractSnapshot(contract: any, event: any, userId: string) {
+  if (event.salonId) contract.salonId = event.salonId;
   contract.eventSnapshot = { ...(contract.eventSnapshot ?? {}), eventType: event.eventType, eventName: event.eventName, eventDate: event.eventDate, startTime: event.startTime, endTime: event.endTime, guestCount: event.guestCount, honoreeName: event.honoreeName, vegetarianCount: event.vegetarianCount, veganCount: event.veganCount, celiacCount: event.celiacCount, lactoseIntolerantCount: event.lactoseIntolerantCount, tableLinenColor: event.tableLinenColor };
   const totalAmount = Number(event.finalAmount ?? event.estimatedAmount ?? contract.totalAmount ?? 0);
   const commercial = event.commercialSnapshot ?? {};
@@ -1433,6 +1444,92 @@ router.post('/:id/package-change', requirePermission(Permission.EVENTS_UPDATE), 
     contractImpact
   });
   return sendSuccess(response, { event, contractImpact, warnings: warnings.length ? warnings : undefined }, 200, 'Paquete del evento actualizado correctamente.');
+}));
+
+router.post('/:id/change-salon', requirePermission(Permission.EVENTS_UPDATE), validateRequest(changeSalonSchema), asyncHandler(async (request, response) => {
+  const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureEventAccess(request, event);
+  ensureEventOperationallyEditable(event);
+  if (event.serviceMode === 'external_catering') throw new ApiError(422, 'EVENT_SALON_CHANGE_NOT_APPLICABLE', 'Un servicio de catering externo no tiene un salón M&M asignado.');
+  if (!event.salonId) throw new ApiError(422, 'EVENT_SALON_MISSING', 'El evento no tiene un salón asignado.');
+  if (request.body.expectedUpdatedAt && new Date(request.body.expectedUpdatedAt).getTime() !== new Date(event.updatedAt).getTime()) {
+    throw new ApiError(409, 'EVENT_CHANGED', 'El evento cambió mientras preparabas el traslado. Actualizá la página y revisá nuevamente antes de confirmar.');
+  }
+
+  const currentSalonId = event.salonId.toString();
+  if (currentSalonId === request.body.salonId) throw new ApiError(422, 'EVENT_SALON_UNCHANGED', 'El evento ya está asignado a ese salón.');
+  const targetSalon = await ensureSalonAccess(request, request.body.salonId);
+  const day = eventDay(event.eventDate);
+  if (lockedEventStatuses.has(event.status) && day) {
+    await assertVenueAvailable({ salonId: request.body.salonId, day, startTime: event.startTime, endTime: event.endTime, excludeEventId: event._id.toString() });
+  }
+
+  const [allocations, activeAssignments] = await Promise.all([
+    EventTablewareAllocation.find({ eventId: event._id, releasedAt: null }).lean(),
+    EventStaffAssignment.find({ eventId: event._id, deletedAt: null, status: { $nin: ['cancelled', 'no_show'] } })
+      .populate('staffUserId', 'firstName lastName fullName roles salonIds active')
+      .lean()
+  ]);
+  const salonStockReservations = allocations.filter((item: any) => item.source === 'salon_stock');
+  if (salonStockReservations.length) {
+    throw new ApiError(422, 'EVENT_SALON_CHANGE_TABLEWARE_RESERVED', `El evento tiene ${salonStockReservations.length} reserva(s) de vajilla del salón actual. Liberalas o reasignalas desde Cronograma antes de cambiar de salón.`);
+  }
+  const incompatibleAssignments = activeAssignments.filter((assignment: any) => {
+    const staff = assignment.staffUserId;
+    if (!staff || staff.active === false) return true;
+    if ((staff.roles ?? []).includes(Role.ADMIN)) return false;
+    return !(staff.salonIds ?? []).some((salonId: { toString(): string }) => salonId.toString() === request.body.salonId);
+  });
+  if (incompatibleAssignments.length) {
+    const names = incompatibleAssignments.map((assignment: any) => {
+      const staff = assignment.staffUserId;
+      return staff?.fullName || [staff?.firstName, staff?.lastName].filter(Boolean).join(' ') || 'integrante sin nombre';
+    });
+    throw new ApiError(422, 'EVENT_SALON_CHANGE_STAFF_INCOMPATIBLE', `No se puede cambiar el salón porque ${names.join(', ')} no está habilitado/a para el salón de destino. Reasigná o retirá al personal antes de continuar.`);
+  }
+
+  event.salonId = request.body.salonId;
+  event.updatedBy = request.user!.id;
+  event.contractReadyChecklist = { ...(event.contractReadyChecklist ?? {}), salonDefined: true };
+  const session = await mongoose.startSession();
+  let contractImpact: 'none' | 'draft_updated' | 'revision_created';
+  try {
+    contractImpact = await session.withTransaction(async () => {
+      await event.save({ session });
+      if (activeAssignments.length) {
+        await EventStaffAssignment.updateMany(
+          { eventId: event._id, deletedAt: null, status: { $nin: ['cancelled', 'no_show'] } },
+          { $set: { salonId: event.salonId, updatedBy: request.user!.id } },
+          { session }
+        );
+      }
+      if (allocations.length) {
+        await EventTablewareAllocation.updateMany(
+          { eventId: event._id, source: 'external', releasedAt: null },
+          { $set: { salonId: event.salonId, updatedBy: request.user!.id } },
+          { session }
+        );
+      }
+      return syncContractsAfterEventChange(event, request.user!.id, session);
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  const warnings = [
+    'Se conservaron el precio, el plan de pagos, el menú y los servicios acordados. Revisá el paquete disponible para el nuevo salón si corresponde.',
+    contractImpact === 'revision_created' ? 'Se creó una nueva versión contractual en borrador. El contrato aprobado sigue vigente hasta que se apruebe la revisión.' : undefined
+  ].filter(Boolean);
+  await writeAuditLog(request, 'EVENT_SALON_CHANGE', 'Event', event._id.toString(), {
+    fromSalonId: currentSalonId,
+    toSalonId: request.body.salonId,
+    toSalonName: targetSalon.name,
+    reason: request.body.reason,
+    contractImpact,
+    externalTablewarePreserved: allocations.filter((item: any) => item.source === 'external').length,
+    staffAssignmentsMoved: activeAssignments.length
+  });
+  return sendSuccess(response, { event, contractImpact, warnings }, 200, 'Salón del evento actualizado correctamente.');
 }));
 
 router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(idSchema), asyncHandler(async (request, response) => {

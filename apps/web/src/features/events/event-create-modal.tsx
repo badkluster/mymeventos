@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { PackageCheck, PencilLine } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PackageCheck, PencilLine } from 'lucide-react';
+import { CreateWizardProgress, type CreateWizardStep } from '@/components/admin/create-wizard-progress';
 import { cleanMenuSections, cleanStringList, MenuSectionsEditor, StringListEditor, type MenuSectionValue } from '@/components/admin/structured-list-editors';
 import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
@@ -101,6 +102,8 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [touchedTimes, setTouchedTimes] = useState({ startTime: false, endTime: false });
+  const [currentStep, setCurrentStep] = useState(0);
+  const [stepError, setStepError] = useState('');
   const selectedQuote = useMemo(() => quotes.find((quote) => quote._id === form.quoteId), [form.quoteId, quotes]);
   const isExternalCatering = form.serviceMode === 'external_catering';
   const availablePackages = useMemo(() => packagesSalonId === form.salonId ? packages : [], [form.salonId, packages, packagesSalonId]);
@@ -110,6 +113,8 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
 
   useEffect(() => {
     if (!open) return;
+    setCurrentStep(0);
+    setStepError('');
     Promise.all([
       api.get<{ items?: Customer[] }>('/customers?limit=100'),
       api.get<{ items?: Quote[] }>('/quotes?limit=100&sortBy=createdAt')
@@ -291,27 +296,72 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
       && (!isExternalCatering || (form.externalVenueName.trim() && form.externalVenueAddress.trim() && form.externalVenueContactName.trim()))
       && validTimes
     );
+  const steps: CreateWizardStep[] = [
+    { title: 'Origen y cliente', description: 'Base del evento' },
+    { title: 'Evento', description: 'Fecha y propuesta' },
+    { title: 'Comercial', description: 'Importes y acuerdo' },
+    { title: 'Detalles', description: 'Menú y notas' },
+    { title: 'Resumen', description: 'Revisar y crear' }
+  ];
+  const validateStep = (step: number) => {
+    if (step === 0) {
+      if (form.sourceMode === 'quote') {
+        if (!form.quoteId) return 'Seleccioná el presupuesto desde el cual crear el evento.';
+        if (quoteMissing.length) return `Completá ${quoteMissing.join(', ')} en el presupuesto antes de continuar.`;
+      } else {
+        if (!isExternalCatering && !form.salonId) return 'Seleccioná el salón del evento.';
+        if (isExternalCatering && (!form.externalVenueName.trim() || !form.externalVenueAddress.trim() || !form.externalVenueContactName.trim())) return 'Completá los datos obligatorios de la locación.';
+        if (form.customerMode === 'existing' && !form.customerId) return 'Seleccioná el cliente existente.';
+        if (form.customerMode === 'new' && !form.customerFullName.trim()) return 'Ingresá el nombre completo del cliente.';
+      }
+    }
+    if (step === 1 && form.sourceMode === 'direct') {
+      setTouchedTimes({ startTime: true, endTime: true });
+      if (!form.eventType.trim() || !form.eventDate || !numberOrUndefined(form.guestCount)) return 'Completá tipo de evento, fecha y cantidad de invitados.';
+      if (!validTimes) return 'Revisá los horarios de inicio y fin.';
+      if (!isExternalCatering && !form.packageTemplateId && !form.packageName.trim()) return 'Elegí un paquete o ingresá una propuesta comercial.';
+    }
+    if (step === 2 && form.sourceMode === 'direct') {
+      if (!directPrice) return 'Ingresá el precio de lista para continuar.';
+      if (hasInvalidDiscount) return 'El descuento debe ser menor al precio de lista.';
+      if (discountAmount > 0 && !form.discountReason.trim() && !form.packageTemplateId) return 'Indicá el motivo del descuento.';
+    }
+    return '';
+  };
+  const nextStep = () => {
+    const error = validateStep(currentStep);
+    if (error) { setStepError(error); return; }
+    setStepError('');
+    setCurrentStep((step) => Math.min(step + 1, steps.length - 1));
+  };
 
-  return <Modal open={open} title={isExternalCatering ? 'Nuevo catering externo' : 'Nuevo evento'} description={isExternalCatering ? 'Registrá el cliente, la locación y el acuerdo comercial. Los recursos se completan después, en una ficha ordenada.' : 'Creá un evento directo o desde un presupuesto existente.'} onClose={onClose}>
+  return <Modal open={open} title={isExternalCatering ? 'Nuevo catering externo' : 'Nuevo evento'} description="Completá cada etapa y revisá el resumen antes de crear." onClose={onClose} wide>
     <div className="space-y-6 p-6">
-      <p className="text-sm text-zinc-600">Los campos marcados con <span className="font-semibold text-red-600" aria-hidden="true">*</span> son necesarios para generar el contrato.</p>
-      {!isExternalCatering ? <div className="grid gap-2 rounded-xl bg-zinc-100 p-1 sm:grid-cols-2">
+      <CreateWizardProgress steps={steps} currentStep={currentStep} />
+      <div><h2 className="text-lg font-semibold text-zinc-950">{steps[currentStep]?.title}</h2><p className="mt-1 text-sm text-zinc-600">{steps[currentStep]?.description}. Los campos con <span className="font-semibold text-red-600" aria-hidden="true">*</span> son obligatorios.</p></div>
+      {stepError ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{stepError}</p> : null}
+      {!isExternalCatering && currentStep === 0 ? <div className="grid gap-2 rounded-xl bg-zinc-100 p-1 sm:grid-cols-2">
         <button type="button" onClick={() => set('sourceMode', 'direct')} className={`rounded-lg px-4 py-2 text-sm font-medium ${form.sourceMode === 'direct' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500'}`}>Evento directo</button>
         <button type="button" onClick={() => set('sourceMode', 'quote')} className={`rounded-lg px-4 py-2 text-sm font-medium ${form.sourceMode === 'quote' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500'}`}>Desde presupuesto</button>
       </div> : null}
 
       {form.sourceMode === 'quote' ? <section className="space-y-4">
-        <Field label="Presupuesto existente" required><Select value={form.quoteId} disabled={loadingOptions} onChange={(event) => set('quoteId', event.target.value)}><option value="">Seleccionar presupuesto</option>{quotes.map((quote) => <option key={quote._id} value={quote._id}>{quote.quoteNumber} · {quote.contactName || entityName(quote.customerId) || 'Sin cliente'} · {entityName(quote.salonId)}</option>)}</Select></Field>
-        {selectedQuote ? <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-3"><Info label="Cliente" value={selectedQuote.contactName || entityName(selectedQuote.customerId) || 'Sin cliente'} /><Info label="Evento" value={selectedQuote.eventType || 'Sin tipo'} /><Info label="Total" value={new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(selectedQuote.totalAmount ?? 0)} />{quoteMissing.length ? <p className="text-red-700 sm:col-span-3" role="alert">Completá {quoteMissing.join(', ')} en el presupuesto antes de crear el evento.</p> : null}</div> : null}
-        <Field label="Nombre de evento opcional"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} placeholder="Si querés sobrescribir el nombre generado" /></Field>
-        <label className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950"><input type="checkbox" className="mt-1" checked={form.soloSalon} onChange={(event) => set('soloSalon', event.target.checked)} /><span><strong className="block">Evento solo salón</strong><span className="mt-1 block text-sky-800">Cada asistente cuenta como una persona contratada, sin descuentos por edad. Las edades se conservan para organizar el evento.</span></span></label>
+        <div hidden={currentStep !== 0}><Field label="Presupuesto existente" required><Select value={form.quoteId} disabled={loadingOptions} onChange={(event) => set('quoteId', event.target.value)}><option value="">Seleccionar presupuesto</option>{quotes.map((quote) => <option key={quote._id} value={quote._id}>{quote.quoteNumber} · {quote.contactName || entityName(quote.customerId) || 'Sin cliente'} · {entityName(quote.salonId)}</option>)}</Select></Field>
+        {selectedQuote ? <div className="mt-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm sm:grid-cols-3"><Info label="Cliente" value={selectedQuote.contactName || entityName(selectedQuote.customerId) || 'Sin cliente'} /><Info label="Evento" value={selectedQuote.eventType || 'Sin tipo'} /><Info label="Total" value={moneyFormatter.format(selectedQuote.totalAmount ?? 0)} />{quoteMissing.length ? <p className="text-red-700 sm:col-span-3" role="alert">Completá {quoteMissing.join(', ')} en el presupuesto antes de crear el evento.</p> : null}</div> : null}</div>
+        <div hidden={currentStep !== 1}><Field label="Nombre de evento opcional"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} placeholder="Si querés sobrescribir el nombre generado" /></Field>
+        <label className="mt-4 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950"><input type="checkbox" className="mt-1" checked={form.soloSalon} onChange={(event) => set('soloSalon', event.target.checked)} /><span><strong className="block">Evento solo salón</strong><span className="mt-1 block text-sky-800">Cada asistente cuenta como una persona contratada, sin descuentos por edad. Las edades se conservan para organizar el evento.</span></span></label></div>
+        <div hidden={currentStep !== 2} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 text-sm text-zinc-700">Las condiciones comerciales se toman del presupuesto seleccionado.</div>
+        <div hidden={currentStep !== 3} className="space-y-4"><Field label="Consideraciones"><Textarea value={form.considerations} onChange={(event) => set('considerations', event.target.value)} /></Field><Field label="Notas internas"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field><label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700"><input type="checkbox" className="mt-1" checked={form.createContract} onChange={(event) => set('createContract', event.target.checked)} /><span>Crear contrato al guardar si el evento tiene los datos mínimos.</span></label></div>
+        <EventSummary hidden={currentStep !== 4} customer={selectedQuote?.contactName || entityName(selectedQuote?.customerId) || '—'} eventType={selectedQuote?.eventType || '—'} eventDate={selectedQuote?.eventDate || '—'} amount={moneyFormatter.format(selectedQuote?.totalAmount ?? 0)} />
       </section> : <section className="space-y-5">
+        <div hidden={currentStep !== 0} className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
           {!isExternalCatering ? <Field label="Salón" required><Select value={form.salonId} onChange={(event) => selectSalon(event.target.value)}><option value="">Seleccionar salón</option>{salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}</Select></Field> : null}
           <Field label="Cliente" required><Select value={form.customerMode} onChange={(event) => set('customerMode', event.target.value)}><option value="new">Crear cliente nuevo</option><option value="existing">Usar cliente existente</option></Select></Field>
         </div>
         {isExternalCatering ? <section className="space-y-4 rounded-2xl border border-orange-200 bg-orange-50/60 p-4"><div><h3 className="text-sm font-semibold text-orange-950">Locación del catering</h3><p className="mt-1 text-sm text-orange-900">Esta información identifica el salón o espacio de terceros y se mostrará en calendario, ficha y contrato.</p></div><div className="grid gap-4 md:grid-cols-2"><Field label="Nombre de la locación" required><Input value={form.externalVenueName} onChange={(event) => set('externalVenueName', event.target.value)} placeholder="Ej.: Salón Los Tilos" /></Field><Field label="Contacto en locación" required><Input value={form.externalVenueContactName} onChange={(event) => set('externalVenueContactName', event.target.value)} placeholder="Nombre o referencia" /></Field><Field label="Dirección" required className="md:col-span-2"><Input value={form.externalVenueAddress} onChange={(event) => set('externalVenueAddress', event.target.value)} placeholder="Calle, número, localidad" /></Field><Field label="Teléfono de contacto"><Input value={form.externalVenueContactPhone} onChange={(event) => set('externalVenueContactPhone', event.target.value)} /></Field><Field label="Indicaciones de acceso"><Input value={form.externalVenueNotes} onChange={(event) => set('externalVenueNotes', event.target.value)} placeholder="Ingreso, estacionamiento, carga y descarga" /></Field></div></section> : null}
-        {form.salonId && !isExternalCatering ? <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        </div>
+        {form.salonId && !isExternalCatering ? <section hidden={currentStep !== 1} className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
           <div><h3 className="text-sm font-semibold text-zinc-950">¿Cómo querés iniciar la carga?</h3><p className="mt-1 text-sm text-foreground/75">Elegí un paquete del salón, incluso uno desactivado, para precargar sus datos; o completá el evento de forma manual.</p></div>
           <div className="grid gap-3 sm:grid-cols-2">
             <button type="button" onClick={() => setPackageMode('package')} className={`rounded-xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-zinc-900/20 ${packageMode === 'package' ? 'border-zinc-950 bg-white shadow-sm' : 'border-zinc-200 bg-white hover:border-zinc-400'}`}><span className="flex items-center gap-2 font-medium text-zinc-950"><PackageCheck className="h-4 w-4" />Usar un paquete</span><span className="mt-1 block text-sm text-foreground/75">Precarga valores, menú, servicios y condiciones.</span></button>
@@ -327,7 +377,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
           <Field label="Domicilio"><Input value={form.customerAddress} onChange={(event) => set('customerAddress', event.target.value)} /></Field>
           <Field label="Ocupación"><Input value={form.customerOccupation} onChange={(event) => set('customerOccupation', event.target.value)} /></Field>
         </div>}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div hidden={currentStep !== 1} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Field label="Nombre del evento" className="md:col-span-2"><Input value={form.eventName} onChange={(event) => set('eventName', event.target.value)} /></Field>
           <Field label="Tipo de evento" required><Input value={form.eventType} onChange={(event) => set('eventType', event.target.value)} placeholder="Ej.: Casamiento, cumpleaños de 15" /></Field>
           <Field label="Homenajeado"><Input value={form.honoreeName} onChange={(event) => set('honoreeName', event.target.value)} /></Field>
@@ -338,7 +388,7 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
           {!isExternalCatering ? <label className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 md:col-span-2"><input type="checkbox" className="mt-1" checked={form.soloSalon} onChange={(event) => set('soloSalon', event.target.checked)} /><span><strong className="block">Evento solo salón</strong><span className="mt-1 block text-sky-800">Cada asistente cuenta como una persona contratada, sin descuentos por edad. Las edades se conservan para organizar el evento.</span></span></label> : null}
           <Field label="Mantelería" className="md:col-span-2"><Input value={form.tableLinenColor} onChange={(event) => set('tableLinenColor', event.target.value)} /></Field>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div hidden={currentStep !== 2} className="grid gap-4 md:grid-cols-2">
           <Field label={isExternalCatering ? 'Propuesta comercial' : 'Paquete / propuesta'} required><Input value={form.packageName} onChange={(event) => set('packageName', event.target.value)} placeholder={isExternalCatering ? 'Ej.: Catering completo para 120 personas' : 'Ej: Personalizado infantil'} /></Field>
           <Field label="Modalidad"><Select value={form.pricingMode} onChange={(event) => set('pricingMode', event.target.value)}><option value="fixed">Precio total</option><option value="per_person">Precio por persona</option></Select></Field>
           <Field label={form.pricingMode === 'fixed' ? 'Precio de lista' : 'Precio de lista por persona'} required><Input type="number" min={0} value={form.pricingMode === 'fixed' ? form.finalAmount : form.pricePerPerson} onChange={(event) => form.pricingMode === 'fixed' ? set('finalAmount', event.target.value) : set('pricePerPerson', event.target.value)} /></Field>
@@ -349,14 +399,13 @@ export function EventCreateModal({ open, salons, initialValues, onClose, onCreat
           <Field label="Seña"><Input type="number" min={0} value={form.depositAmount} onChange={(event) => set('depositAmount', event.target.value)} /></Field>
           <Field label="Condiciones de pago" className="md:col-span-2"><Textarea value={form.paymentTerms} onChange={(event) => set('paymentTerms', event.target.value)} /></Field>
         </div>
-        <MenuSectionsEditor value={menuSections} onChange={setMenuSections} />
-        <StringListEditor label="Servicios incluidos" values={services} onChange={setServices} />
+        <div hidden={currentStep !== 3} className="space-y-5"><MenuSectionsEditor value={menuSections} onChange={setMenuSections} />
+        <StringListEditor label="Servicios incluidos" values={services} onChange={setServices} /></div>
       </section>}
 
-      <Field label="Consideraciones"><Textarea value={form.considerations} onChange={(event) => set('considerations', event.target.value)} /><span className="mt-1 block text-xs text-zinc-500">Se incluyen completas en el contrato y su PDF.</span></Field>
-      <Field label="Notas internas"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field>
-      <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700"><input type="checkbox" className="mt-1" checked={form.createContract} onChange={(event) => set('createContract', event.target.checked)} /><span>{isExternalCatering ? 'Crear contrato al guardar. Así el servicio queda listo para definir cuotas y registrar cobros.' : 'Crear contrato al guardar si el evento tiene los datos mínimos. Si falta información, el evento se guarda y el contrato queda pendiente.'}</span></label>
-      <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={saving || !canSubmit} onClick={() => void submit()}>{saving ? 'Creando...' : isExternalCatering ? 'Crear catering' : 'Crear evento'}</Button></div>
+      {form.sourceMode === 'direct' ? <div hidden={currentStep !== 3} className="space-y-5"><Field label="Consideraciones"><Textarea value={form.considerations} onChange={(event) => set('considerations', event.target.value)} /><span className="mt-1 block text-xs text-zinc-500">Se incluyen completas en el contrato y su PDF.</span></Field><Field label="Notas internas"><Textarea value={form.notes} onChange={(event) => set('notes', event.target.value)} /></Field><label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700"><input type="checkbox" className="mt-1" checked={form.createContract} onChange={(event) => set('createContract', event.target.checked)} /><span>{isExternalCatering ? 'Crear contrato al guardar. Así el servicio queda listo para definir cuotas y registrar cobros.' : 'Crear contrato al guardar si el evento tiene los datos mínimos. Si falta información, el evento se guarda y el contrato queda pendiente.'}</span></label></div> : null}
+      {form.sourceMode === 'direct' ? <EventSummary hidden={currentStep !== 4} customer={form.customerMode === 'existing' ? customers.find((customer) => customer._id === form.customerId)?.fullName || '—' : form.customerFullName || '—'} eventType={form.eventType || '—'} eventDate={form.eventDate || '—'} amount={moneyFormatter.format(directTotalAmount)} /> : null}
+      <div className="flex flex-col-reverse justify-between gap-3 border-t border-zinc-100 pt-4 sm:flex-row"><div className="flex gap-2"><Button variant="secondary" onClick={onClose}>Cancelar</Button>{currentStep > 0 ? <Button variant="secondary" onClick={() => { setStepError(''); setCurrentStep((step) => step - 1); }}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button> : null}</div>{currentStep < steps.length - 1 ? <Button onClick={nextStep}>Continuar<ChevronRight className="ml-1 h-4 w-4" /></Button> : <Button disabled={saving || !canSubmit} onClick={() => void submit()}>{saving ? 'Creando...' : isExternalCatering ? 'Crear catering' : 'Crear evento'}</Button>}</div>
     </div>
   </Modal>;
 }
@@ -368,4 +417,8 @@ function Field({ label, children, className = '', required = false, error, hint 
 
 function Info({ label, value }: { label: string; value: string }) {
   return <div><p className="text-xs font-medium uppercase tracking-wide text-zinc-400">{label}</p><p className="mt-1 font-medium text-zinc-800">{value}</p></div>;
+}
+
+function EventSummary({ hidden, customer, eventType, eventDate, amount }: { hidden: boolean; customer: string; eventType: string; eventDate: string; amount: string }) {
+  return <section hidden={hidden} className="space-y-4"><div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><h3 className="font-semibold text-emerald-950">Listo para crear</h3><p className="mt-1 text-sm text-emerald-900">Revisá los datos principales. Podés volver a una etapa anterior para corregirlos.</p></div><div className="grid gap-3 rounded-2xl border border-zinc-200 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><Info label="Cliente" value={customer} /><Info label="Evento" value={eventType} /><Info label="Fecha" value={eventDate} /><Info label="Total" value={amount} /></div></section>;
 }

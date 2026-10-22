@@ -27,24 +27,27 @@ const mocks = vi.hoisted(() => ({
   productionPlanFindOne: vi.fn(),
   staffAssignmentExists: vi.fn(),
   staffAssignmentCreate: vi.fn(),
+  staffAssignmentFind: vi.fn(),
   staffAssignmentFindOne: vi.fn(),
   salonStockFind: vi.fn(),
   tablewareFind: vi.fn(),
+  tablewareUpdateMany: vi.fn(),
   tablewareInsertMany: vi.fn(),
+  staffAssignmentUpdateMany: vi.fn(),
   cancelEvent: vi.fn()
 }));
 
 vi.mock('../src/modules/users/user.model', () => ({ User: { findOne: mocks.userFindOne, find: vi.fn() } }));
 vi.mock('../src/modules/salons/salon.model', () => ({ Salon: { countDocuments: vi.fn(), exists: mocks.salonExists, find: vi.fn(), findOne: mocks.salonFindOne } }));
 vi.mock('../src/modules/salons/salonStockItem.model', () => ({ SalonStockItem: { find: mocks.salonStockFind }, salonStockCategories: ['PLATES', 'GLASSWARE', 'DRINKWARE', 'CUTLERY', 'MISCELLANEOUS'] }));
-vi.mock('../src/modules/crm/eventTablewareAllocation.model', () => ({ EventTablewareAllocation: { find: mocks.tablewareFind, deleteMany: mocks.tablewareDeleteMany, insertMany: mocks.tablewareInsertMany } }));
+vi.mock('../src/modules/crm/eventTablewareAllocation.model', () => ({ EventTablewareAllocation: { find: mocks.tablewareFind, updateMany: mocks.tablewareUpdateMany, deleteMany: mocks.tablewareDeleteMany, insertMany: mocks.tablewareInsertMany } }));
 vi.mock('../src/modules/crm/crm.models', () => ({
   Lead: {}, LeadActivity: { create: mocks.leadActivityCreate }, Customer: { find: mocks.customerFind, findOne: mocks.customerFindOne }, ContactPerson: {},
   PackageTemplate: { find: vi.fn(), findOne: mocks.packageFindOne, exists: vi.fn() },
   VenuePackageRule: { find: vi.fn(), findOne: mocks.ruleFindOne, findOneAndUpdate: vi.fn() },
   Quote: { findOne: vi.fn() }, QuoteRevision: {},
   Event: { countDocuments: mocks.eventCountDocuments, findOne: mocks.eventFindOne, findOneAndUpdate: mocks.eventFindOneAndUpdate, find: mocks.eventFind, create: mocks.eventCreate },
-  EventStaffAssignment: { find: vi.fn(), findOne: mocks.staffAssignmentFindOne, exists: mocks.staffAssignmentExists, create: mocks.staffAssignmentCreate },
+  EventStaffAssignment: { find: mocks.staffAssignmentFind, findOne: mocks.staffAssignmentFindOne, exists: mocks.staffAssignmentExists, create: mocks.staffAssignmentCreate, updateMany: mocks.staffAssignmentUpdateMany },
   CalendarItem: { findOneAndUpdate: vi.fn(), updateMany: vi.fn().mockResolvedValue({}) },
   QuoteRequest: { findOne: vi.fn(), countDocuments: vi.fn(), find: vi.fn(), create: vi.fn() },
   Contract: { find: mocks.contractFind, findOne: vi.fn() }, ContractAddendum: {}, Payment: { countDocuments: vi.fn(), find: mocks.paymentFind, findOne: vi.fn() }
@@ -411,6 +414,65 @@ describe('event package correction and application', () => {
     expect(event.servicesSnapshot).toEqual(packageTemplate.includedServices);
     expect(event.quoteMode).toBe('HYBRID');
     expect(event.save).toHaveBeenCalledOnce();
+  });
+});
+
+describe('event salon changes', () => {
+  const targetSalonId = '507f1f77bcf86cd799439099';
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    startSessionSpy.mockResolvedValue({ withTransaction: vi.fn(async (work: () => Promise<void>) => work()), endSession: vi.fn().mockResolvedValue(undefined) } as any);
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: adminId, roles: [Role.ADMIN], permissionOverrides: [], salonIds: [], active: true }));
+    mocks.contractFind.mockReturnValue(sortedQuery([]));
+    mocks.tablewareUpdateMany.mockResolvedValue({});
+    mocks.staffAssignmentUpdateMany.mockResolvedValue({});
+  });
+
+  it('moves the event, compatible staff and external tableware without replacing the commercial agreement', async () => {
+    const event: any = {
+      _id: eventId,
+      salonId,
+      status: 'draft',
+      eventDate: new Date('2026-12-05T12:00:00.000Z'),
+      commercialSnapshot: { packageName: 'Acuerdo original', totalAmount: 6600000 },
+      paymentPlanSnapshot: [{ label: 'Cuota 1', amount: 100000 }],
+      save: vi.fn().mockResolvedValue(undefined)
+    };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.salonFindOne.mockReturnValue(chainLean({ _id: targetSalonId, name: 'Salón Sur', active: true }));
+    mocks.tablewareFind.mockReturnValue(chainLean([{ source: 'external', itemName: 'Copas alquiladas' }]));
+    mocks.staffAssignmentFind.mockReturnValue(queryChain([{ staffUserId: { fullName: 'María López', active: true, roles: [], salonIds: [targetSalonId] } }]));
+    const draftContract: any = { status: 'draft', salonId, eventSnapshot: {}, commercialSnapshot: {}, paymentAgreementSnapshot: {}, approvedAddendumsAmount: 0, paidAmount: 0, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.contractFind.mockReturnValue(sortedQuery([draftContract]));
+
+    const response = await request(app).post(`/api/events/${eventId}/change-salon`).set('Cookie', adminCookie).send({ salonId: targetSalonId, reason: 'El cliente solicitó el salón principal.' });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(event.salonId).toBe(targetSalonId);
+    expect(event.commercialSnapshot).toEqual({ packageName: 'Acuerdo original', totalAmount: 6600000 });
+    expect(event.paymentPlanSnapshot).toEqual([{ label: 'Cuota 1', amount: 100000 }]);
+    expect(event.save).toHaveBeenCalledOnce();
+    expect(draftContract.salonId).toBe(targetSalonId);
+    expect(draftContract.save).toHaveBeenCalledOnce();
+    expect(mocks.staffAssignmentUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ eventId: event._id }), expect.objectContaining({ $set: expect.objectContaining({ salonId: targetSalonId }) }), expect.anything());
+    expect(mocks.tablewareUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ source: 'external' }), expect.objectContaining({ $set: expect.objectContaining({ salonId: targetSalonId }) }), expect.anything());
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(expect.anything(), 'EVENT_SALON_CHANGE', 'Event', eventId, expect.objectContaining({ fromSalonId: salonId, toSalonId: targetSalonId }));
+  });
+
+  it('blocks the transfer before any write when salon stock is reserved', async () => {
+    const event: any = { _id: eventId, salonId, status: 'draft', eventDate: new Date('2026-12-05T12:00:00.000Z'), save: vi.fn() };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.salonFindOne.mockReturnValue(chainLean({ _id: targetSalonId, name: 'Salón Sur', active: true }));
+    mocks.tablewareFind.mockReturnValue(chainLean([{ source: 'salon_stock', itemName: 'Copas del salón' }]));
+    mocks.staffAssignmentFind.mockReturnValue(queryChain([]));
+
+    const response = await request(app).post(`/api/events/${eventId}/change-salon`).set('Cookie', adminCookie).send({ salonId: targetSalonId, reason: 'El cliente pidió otro salón.' });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('EVENT_SALON_CHANGE_TABLEWARE_RESERVED');
+    expect(event.save).not.toHaveBeenCalled();
+    expect(mocks.staffAssignmentUpdateMany).not.toHaveBeenCalled();
   });
 });
 
