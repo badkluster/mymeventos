@@ -993,12 +993,11 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
   const event: any = await Event.findOne({ _id: request.params.id, deletedAt: null });
   await ensureEventAccess(request, event);
   ensureEventOperationallyEditable(event);
-  // A proposed revision is not payable yet. Continue collecting against the approved agreement
-  // until the revision is approved; only fall back to a draft when the event has never had an
-  // approved contract.
+  // Payments affect the contractual balance and issue a receipt, so they can only be
+  // registered against an approved agreement. A draft or pending revision never becomes a
+  // fallback payment target.
   let contract: any = await Contract.findOne({ eventId: event._id, deletedAt: null, status: 'approved' }).sort({ versionNumber: -1, createdAt: -1 });
-  if (!contract) contract = await Contract.findOne({ eventId: event._id, deletedAt: null, status: { $in: ['pending_approval', 'draft', 'requires_changes'] } }).sort({ versionNumber: -1, createdAt: -1 });
-  if (!contract) throw new ApiError(422, 'Primero debe generar un contrato para registrar cobros del evento.');
+  if (!contract) throw new ApiError(422, 'CONTRACT_APPROVAL_REQUIRED');
 
   const canOverride = userHasPermission(request.user!, Permission.PAYMENTS_APPROVE);
   if (request.body.allowOverpayment && !canOverride) throw new ApiError(403, 'PAYMENT_OVERRIDE_NOT_AUTHORIZED');

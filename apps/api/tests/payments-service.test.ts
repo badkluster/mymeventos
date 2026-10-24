@@ -16,7 +16,7 @@ vi.mock('../src/modules/crm/crm.models', () => ({
 }));
 
 import { ApiError } from '../src/middlewares/errorHandler';
-import { applyPaymentToPlan, cancelPayment, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from '../src/modules/crm/payments.service';
+import { applyPaymentToPlan, cancelPayment, correctPaidInstallmentLateFee, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from '../src/modules/crm/payments.service';
 
 describe('payments service', () => {
   beforeEach(() => {
@@ -139,6 +139,14 @@ describe('payments service', () => {
     expect(mocks.paymentCreate).not.toHaveBeenCalled();
   });
 
+  it('rejects a payment against a contract pending approval', async () => {
+    mocks.contractFindOne.mockResolvedValue(contractDoc({ status: 'pending_approval' }));
+
+    await expect(createPayment({ contractId: 'contract-1', amount: 1000, type: 'deposit', status: 'paid', method: 'cash' }, 'user-1')).rejects.toMatchObject({ code: 'CONTRACT_APPROVAL_REQUIRED' });
+    expect(mocks.contractFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(mocks.paymentCreate).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid status transition from cancelled to paid', async () => {
     mocks.paymentFindOne.mockResolvedValue({ _id: 'payment-1', status: 'cancelled', contractId: { toString: () => 'contract-1' } });
 
@@ -161,6 +169,32 @@ describe('payments service', () => {
 
     expect(payment.paidAt).toEqual(correctedDate);
     expect(payment.amount).toBe(20000);
+    expect(payment.save).toHaveBeenCalled();
+  });
+
+  it('allows a date-only correction when an optional authorization flag is undefined', async () => {
+    const payment = {
+      _id: 'payment-1', source: 'manual', status: 'paid', amount: 20000, type: 'deposit', affectsContractBalance: true,
+      contractId: { toString: () => 'contract-1' }, paidAt: new Date('2026-09-15T03:00:00.000Z'), save: vi.fn().mockResolvedValue(undefined)
+    };
+    mocks.paymentFindOne.mockResolvedValue(payment);
+    mocks.contractFindOne.mockResolvedValue(contractDoc({ totalAmount: 100000 }));
+    mocks.paymentFind.mockResolvedValue([{ status: 'paid', amount: 20000, type: 'deposit', affectsContractBalance: true }]);
+
+    await expect(updatePayment('payment-1', { paidAt: new Date('2026-09-16T03:00:00.000Z'), allowOverpayment: undefined }, 'user-1')).resolves.toBe(payment);
+
+    expect(payment.save).toHaveBeenCalled();
+  });
+
+  it('adds an omitted late fee without changing the contractual installment amount', async () => {
+    const payment = { _id: 'payment-1', source: 'manual', status: 'paid', type: 'installment', amount: 1059721, contractId: { toString: () => 'contract-1' }, affectsContractBalance: true, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.paymentFindOne.mockResolvedValue(payment);
+    mocks.contractFindOne.mockResolvedValue(contractDoc({ totalAmount: 10_000_000 }));
+    mocks.paymentFind.mockResolvedValue([{ ...payment, contractAppliedAmount: 1059721, manualAdditionalAmount: 213750 }]);
+
+    await correctPaidInstallmentLateFee('payment-1', 213750, 'user-1');
+
+    expect(payment).toMatchObject({ amount: 1273471, contractAppliedAmount: 1059721, manualAdditionalAmount: 213750 });
     expect(payment.save).toHaveBeenCalled();
   });
 
@@ -264,6 +298,16 @@ describe('payments service', () => {
       { $inc: { paidAmount: 15000, balanceAmount: -15000 } },
       { new: true }
     );
+  });
+
+  it('does not mark a pending payment as paid when its contract is not approved', async () => {
+    const payment = { _id: 'payment-1', contractId: { toString: () => 'contract-1' }, status: 'pending', amount: 15000, affectsContractBalance: false, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.paymentFindOne.mockResolvedValue(payment);
+    mocks.contractFindOne.mockResolvedValue(contractDoc({ status: 'pending_approval' }));
+
+    await expect(markPaymentPaid('payment-1', { method: 'cash' }, 'user-1')).rejects.toMatchObject({ code: 'CONTRACT_APPROVAL_REQUIRED' });
+    expect(mocks.contractFindOneAndUpdate).not.toHaveBeenCalled();
+    expect(payment.save).not.toHaveBeenCalled();
   });
 
   it('reports summary paid amount net of refunds', async () => {

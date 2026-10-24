@@ -42,6 +42,21 @@ describe('payment receipt PDF', () => {
     expect(content).toContain('DNI 35.394.779');
   });
 
+  it('breaks out a late-payment surcharge from the contractual installment', async () => {
+    const pdf = await buildPaymentReceiptPdfBuffer(
+      { paymentNumber: 'P-2026-00002', amount: 105000, contractAppliedAmount: 100000, manualAdditionalAmount: 5000, method: 'bank_transfer', paidAt: '2026-10-22T03:00:00.000Z' },
+      { eventName: 'XV Mia', eventDate: '2027-05-01' },
+      { fullName: 'Maria Celeste Macedo' },
+      { contractNumber: 'C-2026-00032', balanceAmount: 6358334, paymentPlanSnapshot: [] }
+    );
+
+    const content = pdfText(pdf);
+    expect(content).toMatch(/Cuota imputada al contrato: \$\s+100\.000/);
+    expect(content).toMatch(/Recargo por vencimiento: \$\s+5\.000/);
+    expect(content).toContain('FECHA DE COBRO');
+    expect(content).toContain('SALDO CONTRACTUAL RESTANTE');
+  });
+
   it('overwrites the current receipt instead of accumulating PDF assets', async () => {
     mocks.uploadBuffer.mockResolvedValue({
       publicId: 'mym-eventos/payments/payment-1/comprobante-PAY-2026-00001',

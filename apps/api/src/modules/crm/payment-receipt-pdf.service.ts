@@ -5,7 +5,7 @@ import { resolveBrandLogoPath } from '../../utils/brand-logo';
 const money = (value?: unknown) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(value ?? 0));
 // `payment.paidAt` es un instante real (hora de cobro) — se muestra en hora de Argentina (la
 // del lector), no en el huso del proceso que generó el PDF.
-const date = (value?: unknown) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(value as string)) : 'No informado';
+const paymentDate = (value?: unknown) => value ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(value as string)) : 'No informado';
 // `event.eventDate`/`paymentWindowEnd`/`dueDate` son fechas civiles normalizadas a medianoche
 // UTC (`civilDateInput`) — sin `timeZone: 'UTC'` explícito, el huso local del proceso corre esa
 // medianoche al día anterior. No llevan hora (no tienen una hora real que mostrar).
@@ -15,6 +15,10 @@ const paymentMethod = (method?: string) => ({ cash: 'Efectivo', bank_transfer: '
 function collect(document: PDFKit.PDFDocument): Promise<Buffer> { return new Promise((resolve, reject) => { const chunks: Buffer[] = []; document.on('data', (chunk) => chunks.push(Buffer.from(chunk))); document.on('end', () => resolve(Buffer.concat(chunks))); document.on('error', reject); document.end(); }); }
 function logo(document: PDFKit.PDFDocument) { const asset = resolveBrandLogoPath(); if (asset) document.image(asset, 46, 21, { width: 72 }); else document.font('Helvetica-Bold').fontSize(14).fillColor('#ffffff').text('M&M EVENTOS', 46, 35); }
 function item(document: PDFKit.PDFDocument, label: string, content: unknown, x: number, y: number, width: number) { document.font('Helvetica-Bold').fontSize(7.5).fillColor('#64748b').text(label.toUpperCase(), x, y, { width }); document.font('Helvetica').fontSize(10).fillColor('#101a2c').text(value(content), x, y + 12, { width }); }
+function summaryItem(document: PDFKit.PDFDocument, label: string, content: string, x: number, y: number, width: number) {
+  document.font('Helvetica-Bold').fontSize(7.2).fillColor('#718096').text(label.toUpperCase(), x, y, { width });
+  document.font('Helvetica-Bold').fontSize(9.2).fillColor('#101a2c').text(content, x, y + 11, { width, lineBreak: false, ellipsis: true });
+}
 
 export async function buildPaymentReceiptPdfBuffer(payment: any, event: any, customer: any, contract: any): Promise<Buffer> {
   const document = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Comprobante ${payment.paymentNumber}`, Author: 'M&M Eventos', Subject: 'Comprobante de pago' } });
@@ -22,11 +26,23 @@ export async function buildPaymentReceiptPdfBuffer(payment: any, event: any, cus
   const nextInstallment = (Array.isArray(contract?.paymentPlanSnapshot) ? contract.paymentPlanSnapshot : []).find((item: any) => !['paid', 'cancelled'].includes(item.status) && Number(item.amount || 0) > Number(item.paidAmount || 0));
   const manualAdditionalAmount = Number(payment.manualAdditionalAmount ?? 0);
   const contractAppliedAmount = Number(payment.contractAppliedAmount ?? payment.amount ?? 0);
-  document.roundedRect(46, 146, 503, 132, 12).fill('#f5f7fa'); document.font('Helvetica').fontSize(9).fillColor('#64748b').text('IMPORTE RECIBIDO', 68, 169, { characterSpacing: .7 }); document.font('Helvetica-Bold').fontSize(28).fillColor('#101a2c').text(money(payment.amount), 68, 188); if (manualAdditionalAmount > 0) document.font('Helvetica').fontSize(8.5).fillColor('#64748b').text(`Cuota: ${money(contractAppliedAmount)} · Agregado manual: ${money(manualAdditionalAmount)}`, 68, 227, { width: 235 }); document.font('Helvetica').fontSize(9).fillColor('#64748b').text(`Fecha de cobro: ${date(payment.paidAt)}`, 322, 175, { width: 200, align: 'right' }); document.font('Helvetica-Bold').fontSize(9).fillColor('#101a2c').text(`Medio: ${paymentMethod(payment.method)}`, 322, 193, { width: 200, align: 'right' }); document.font('Helvetica').fontSize(9).fillColor('#64748b').text(`Saldo restante: ${money(contract?.balanceAmount)}`, 322, 211, { width: 200, align: 'right' }); document.font('Helvetica').fontSize(8.5).fillColor('#64748b').text(nextInstallment ? `Próxima cuota: ${civilDate(nextInstallment.paymentWindowEnd ?? nextInstallment.dueDate)}` : 'No quedan cuotas pendientes', 322, 229, { width: 200, align: 'right' });
-  document.font('Helvetica-Bold').fontSize(12).fillColor('#101a2c').text('Detalle del comprobante', 46, 318); document.moveTo(46, 341).lineTo(549, 341).strokeColor('#b78b45').stroke();
-  item(document, 'Cliente', customer?.fullName, 46, 361, 220); item(document, 'Evento', event?.eventName ?? event?.eventType, 300, 361, 249); item(document, 'Contrato', contract?.contractNumber, 46, 408, 220); item(document, 'Fecha del evento', event?.eventDate ? civilDate(event.eventDate) : undefined, 300, 408, 249); item(document, 'Referencia', payment.reference ?? payment.receiptNumber, 46, 455, 220); item(document, 'Próximo vencimiento', nextInstallment ? civilDate(nextInstallment.paymentWindowEnd ?? nextInstallment.dueDate) : 'Sin cuotas pendientes', 300, 455, 249);
-  document.roundedRect(46, 510, 503, 64, 10).fill('#f5f7fa'); item(document, 'Prestadora / recibe el pago', 'M&M Eventos\nNatalia Argüello · DNI 35.394.779', 66, 528, 463);
-  document.roundedRect(46, 594, 503, 84, 10).fill('#f7f1e4'); document.font('Helvetica-Bold').fontSize(9).fillColor('#101a2c').text('OBSERVACIONES', 66, 614); document.font('Helvetica').fontSize(9).fillColor('#374151').text(value(payment.notes, 'Pago registrado correctamente.'), 66, 630, { width: 463, height: 33, ellipsis: true });
+  document.roundedRect(46, 146, 503, 166, 12).fill('#f5f7fa');
+  document.font('Helvetica').fontSize(9).fillColor('#64748b').text('IMPORTE RECIBIDO', 68, 169, { characterSpacing: .7 });
+  document.font('Helvetica-Bold').fontSize(28).fillColor('#101a2c').text(money(payment.amount), 68, 188);
+  if (manualAdditionalAmount > 0) {
+    document.roundedRect(68, 230, 220, 58, 7).fill('#fff8e8');
+    document.font('Helvetica').fontSize(8.3).fillColor('#64748b').text(`Cuota imputada al contrato: ${money(contractAppliedAmount)}`, 80, 241, { width: 196 });
+    document.font('Helvetica-Bold').fontSize(8.5).fillColor('#9a6700').text(`Recargo por vencimiento: ${money(manualAdditionalAmount)}`, 80, 261, { width: 196 });
+  } else document.font('Helvetica').fontSize(8.5).fillColor('#64748b').text('Importe total efectivamente recibido.', 68, 239, { width: 220 });
+  document.moveTo(310, 169).lineTo(310, 289).strokeColor('#dce2ea').lineWidth(1).stroke();
+  summaryItem(document, 'Fecha de cobro', paymentDate(payment.paidAt), 332, 171, 195);
+  summaryItem(document, 'Medio de pago', paymentMethod(payment.method), 332, 201, 195);
+  summaryItem(document, 'Saldo contractual restante', money(contract?.balanceAmount), 332, 231, 195);
+  summaryItem(document, 'Próxima cuota', nextInstallment ? civilDate(nextInstallment.paymentWindowEnd ?? nextInstallment.dueDate) : 'Sin cuotas pendientes', 332, 261, 195);
+  document.font('Helvetica-Bold').fontSize(12).fillColor('#101a2c').text('Detalle del comprobante', 46, 352); document.moveTo(46, 375).lineTo(549, 375).strokeColor('#b78b45').stroke();
+  item(document, 'Cliente', customer?.fullName, 46, 395, 220); item(document, 'Evento', event?.eventName ?? event?.eventType, 300, 395, 249); item(document, 'Contrato', contract?.contractNumber, 46, 442, 220); item(document, 'Fecha del evento', event?.eventDate ? civilDate(event.eventDate) : undefined, 300, 442, 249); item(document, 'Referencia', payment.reference ?? payment.receiptNumber, 46, 489, 220); item(document, 'Próximo vencimiento', nextInstallment ? civilDate(nextInstallment.paymentWindowEnd ?? nextInstallment.dueDate) : 'Sin cuotas pendientes', 300, 489, 249);
+  document.roundedRect(46, 544, 503, 64, 10).fill('#f5f7fa'); item(document, 'Prestadora / recibe el pago', 'M&M Eventos\nNatalia Argüello · DNI 35.394.779', 66, 562, 463);
+  document.roundedRect(46, 628, 503, 84, 10).fill('#f7f1e4'); document.font('Helvetica-Bold').fontSize(9).fillColor('#101a2c').text('OBSERVACIONES', 66, 648); document.font('Helvetica').fontSize(9).fillColor('#374151').text(value(payment.notes, 'Pago registrado correctamente.'), 66, 664, { width: 463, height: 33, ellipsis: true });
   document.font('Helvetica').fontSize(8).fillColor('#64748b').text('Este comprobante acredita la recepción del importe informado por M&M Eventos.', 46, 756, { width: 503, align: 'center' });
   return collect(document);
 }

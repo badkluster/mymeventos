@@ -11,7 +11,18 @@ import { ApiError } from '../../middlewares/errorHandler';
  */
 
 const balanceTypes = new Set(['deposit', 'installment', 'balance', 'addendum', 'extra', 'adjustment', 'refund', 'other']);
-export const nonPayableContractStatuses = new Set(['cancelled', 'superseded']);
+// A payment changes the contractual balance and can generate a receipt. It is only valid
+// after the commercial agreement has been approved; drafts and proposed revisions must be
+// resolved first. Keep this guard here because both event and contract payment routes use it.
+const approvalRequiredContractStatuses = new Set(['draft', 'pending_approval', 'requires_changes']);
+
+/** Gives every payment entry point the same actionable reason when a contract is blocked. */
+export function paymentBlockCodeForContractStatus(status?: string): 'CONTRACT_APPROVAL_REQUIRED' | 'CONTRACT_CANCELLED' | 'CONTRACT_NOT_PAYABLE' | undefined {
+  if (status === 'approved') return undefined;
+  if (status === 'cancelled') return 'CONTRACT_CANCELLED';
+  if (approvalRequiredContractStatuses.has(String(status))) return 'CONTRACT_APPROVAL_REQUIRED';
+  return 'CONTRACT_NOT_PAYABLE';
+}
 
 export function amount(value: unknown): number {
   return Number(value || 0);
@@ -97,13 +108,17 @@ export async function reserveContractBalance(
   requestedAmount: number,
   options: { allowOverpayment?: boolean } = {}
 ): Promise<{ contract: any; previousBalance: number; resultingBalance: number }> {
-  const filter: Record<string, unknown> = { _id: contractId, deletedAt: null, status: { $nin: Array.from(nonPayableContractStatuses) } };
+  // Being merely non-cancelled is not enough: payments are only allowed against an
+  // approved agreement. This also protects the small window between the first check
+  // in the payment service and this atomic balance reservation.
+  const filter: Record<string, unknown> = { _id: contractId, deletedAt: null, status: 'approved' };
   if (!options.allowOverpayment) filter.balanceAmount = { $gte: requestedAmount };
   const updated: any = await Contract.findOneAndUpdate(filter, { $inc: { paidAmount: requestedAmount, balanceAmount: -requestedAmount } }, { new: true });
   if (!updated) {
     const existing: any = await Contract.findOne({ _id: contractId, deletedAt: null });
     if (!existing) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
-    if (nonPayableContractStatuses.has(existing.status)) throw new ApiError(422, 'CONTRACT_NOT_PAYABLE');
+    const blockCode = paymentBlockCodeForContractStatus(existing.status);
+    if (blockCode) throw new ApiError(422, blockCode);
     throw new ApiError(422, 'PAYMENT_EXCEEDS_BALANCE');
   }
   return { contract: updated, previousBalance: amount(updated.balanceAmount) + requestedAmount, resultingBalance: amount(updated.balanceAmount) };

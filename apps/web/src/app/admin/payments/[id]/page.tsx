@@ -36,6 +36,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
   const [method, setMethod] = useState('cash');
   const [notes, setNotes] = useState('');
   const [paidAt, setPaidAt] = useState('');
+  const [lateFee, setLateFee] = useState('');
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirmReason, setConfirmReason] = useState('');
   const [allowOverride, setAllowOverride] = useState(false);
@@ -114,12 +115,30 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
       setSaving(false);
     }
   };
+  const correctLateFee = async () => {
+    if (!Number(lateFee)) {
+      showToast({ message: 'Indicá el importe del recargo.', variant: 'error' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post(`/payments/${id}/correct-late-fee`, { manualAdditionalAmount: Number(lateFee) });
+      await load(id);
+      setLateFee('');
+      showToast({ message: 'Recargo corregido y comprobante regenerado.', variant: 'success' });
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : 'No se pudo corregir el recargo.', variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading || !payment) return <div className="grid min-h-56 place-items-center rounded-2xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">Cargando pago...</div>;
   const contractId = entityId(payment.contractId);
   const eventId = entityId(payment.eventId);
   const customerId = entityId(payment.customerId);
   const isTicketOrder = payment.source === 'ticket_order';
+  const canCorrectLateFee = !isTicketOrder && payment.status === 'paid' && payment.type === 'installment' && Number(payment.manualAdditionalAmount || 0) === 0;
   const ticketOrder = typeof payment.ticketOrderId === 'string' ? undefined : payment.ticketOrderId;
 
   return <section className="space-y-6 pb-8">
@@ -128,6 +147,7 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
     {isTicketOrder ? <Card title="Compra de entrada digital"><Item label="Comprador" value={ticketOrder?.buyer?.name || 'Sin datos'} /><Item label="Email" value={ticketOrder?.buyer?.email || 'Sin datos'} />{ticketOrder ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/digital-tickets/orders/${ticketOrder._id}`}>Ver orden {ticketOrder.publicId}</Link> : null}<p className="text-xs text-zinc-500">Este pago se registró automáticamente al aprobarse la compra. Para reembolsarlo o modificarlo, hacelo desde la orden en Entradas digitales.</p></Card> : null}
     <div className="grid gap-5 lg:grid-cols-3"><Card title="Pago"><Item label="Importe" value={money(payment.amount)} />{Number(payment.manualAdditionalAmount || 0) > 0 ? <><Item label="Cuota aplicada al contrato" value={money(payment.contractAppliedAmount ?? payment.amount - Number(payment.manualAdditionalAmount || 0))} /><Item label="Agregado manual por vencimiento" value={money(payment.manualAdditionalAmount)} /></> : null}<Item label="Estado" value={displayLabel(paymentStatusLabels, payment.status)} /><Item label="Tipo" value={displayLabel(paymentTypeLabels, payment.type)} /><Item label="Medio" value={payment.method ? displayLabel(paymentMethodLabels, payment.method) : 'No informado'} /><Item label="Vencimiento" value={formatDate(payment.dueDate)} /><Item label="Cobrado" value={formatDate(payment.paidAt)} /></Card>{isTicketOrder ? null : <Card title="Asociaciones"><Item label="Cliente" value={entityName(payment.customerId)} />{customerId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/customers/${customerId}`}>Ver cliente</Link> : null}<Item label="Evento" value={entityName(payment.eventId)} />{eventId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/events/${eventId}`}>Ver evento</Link> : null}<Item label="Contrato" value={entityName(payment.contractId)} />{contractId ? <Link className="text-sm font-medium text-zinc-950 underline" href={`/admin/contracts/${contractId}?tab=pagos`}>Ver contrato</Link> : null}</Card>}{isTicketOrder ? null : <Card title="Cobro"><label className="block text-sm font-medium text-zinc-700">Medio<Select className="mt-2" value={method} onChange={(event) => setMethod(event.target.value)}>{Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>{payment.status === 'paid' ? <label className="block text-sm font-medium text-zinc-700">Fecha de pago<Input className="mt-2" type="date" value={paidAt} onChange={(event) => setPaidAt(event.target.value)} /></label> : null}<Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Notas internas" />{payment.status === 'paid' ? <p className="text-xs leading-5 text-zinc-500">Al cambiar la fecha, el comprobante se regenera y reemplaza el PDF anterior.</p> : null}<Button variant="secondary" disabled={saving} onClick={() => void savePaymentDetails()}>Guardar cambios</Button></Card>}</div>
     <Card title="Referencias"><Item label="Recibo" value={payment.receiptNumber || 'No informado'} /><Item label="Referencia" value={payment.reference || 'No informado'} /><Item label="Afecta saldo contractual" value={payment.affectsContractBalance ? 'Sí' : 'No'} /></Card>
+    {canCorrectLateFee ? <Card title="Corregir recargo por vencimiento"><p className="text-sm leading-6 text-zinc-600">Usalo sólo si este pago cobrado incluyó un recargo que no quedó registrado. Mantiene intacta la cuota aplicada al contrato, suma el recargo al total recibido y regenera el comprobante.</p><label className="block text-sm font-medium text-zinc-700">Recargo cobrado<Input className="mt-2" type="number" min="1" inputMode="decimal" value={lateFee} onChange={(event) => setLateFee(event.target.value)} placeholder="Ej. 213750" /></label><Button variant="secondary" disabled={saving || !lateFee} onClick={() => void correctLateFee()}>Corregir y regenerar PDF</Button></Card> : null}
     {!isTicketOrder && payment.status === 'pending' && isOverduePaymentDate(payment.dueDate) ? <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm"><h2 className="font-semibold text-amber-950">Pago vencido</h2><p className="mt-1 text-sm text-amber-800">Prepará un recordatorio profesional y cordial para solicitar el pago.</p><div className="mt-4"><OverduePaymentContact target={{ source: 'payment', paymentId: id }} /></div></div> : null}
     <Modal open={Boolean(confirmAction)} title={confirmAction?.title ?? ''} description={confirmAction?.description} onClose={() => setConfirmAction(null)}>
       <div className="space-y-4 p-5 sm:p-8">

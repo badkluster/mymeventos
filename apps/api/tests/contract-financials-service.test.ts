@@ -139,7 +139,7 @@ describe('contract financials service — single source of truth', () => {
       expect(result.previousBalance).toBe(100000);
       expect(result.resultingBalance).toBe(80000);
       expect(mocks.contractFindOneAndUpdate).toHaveBeenCalledWith(
-        { _id: 'contract-1', deletedAt: null, status: { $nin: ['cancelled', 'superseded'] }, balanceAmount: { $gte: 20000 } },
+        { _id: 'contract-1', deletedAt: null, status: 'approved', balanceAmount: { $gte: 20000 } },
         { $inc: { paidAmount: 20000, balanceAmount: -20000 } },
         { new: true }
       );
@@ -164,7 +164,7 @@ describe('contract financials service — single source of truth', () => {
       mocks.contractFindOneAndUpdate.mockResolvedValue(null);
       mocks.contractFindOne.mockResolvedValue({ status: 'cancelled' });
 
-      await expect(reserveContractBalance('contract-1', 5000, { allowOverpayment: true })).rejects.toMatchObject({ code: 'CONTRACT_NOT_PAYABLE' });
+      await expect(reserveContractBalance('contract-1', 5000, { allowOverpayment: true })).rejects.toMatchObject({ code: 'CONTRACT_CANCELLED' });
     });
   });
 });

@@ -9,7 +9,7 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
-import { cancelPayment, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from './payments.service';
+import { cancelPayment, correctPaidInstallmentLateFee, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from './payments.service';
 import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
 import { argentinaMidnight, isDateKey } from '../../utils/argentina-date';
 
@@ -51,6 +51,7 @@ const refundSchema = z.object({
   params: z.object({ id: objectId }),
   query: z.object({})
 });
+const lateFeeCorrectionSchema = z.object({ body: z.object({ manualAdditionalAmount: z.coerce.number().positive() }), params: z.object({ id: objectId }), query: z.object({}) });
 
 const router = Router();
 
@@ -198,6 +199,15 @@ router.patch('/:id', requirePermission(Permission.PAYMENTS_CREATE), validateRequ
     await writeAuditLog(request, 'PAYMENT_OVERPAYMENT_OVERRIDE', 'Payment', payment._id.toString(), { contractId: payment.contractId, requestedAmount: payment.amount, previousBalance: (contractBefore as any)?.balanceAmount, resultingBalance: contractAfter?.balanceAmount, reason: request.body.overrideReason });
   }
   return sendSuccess(response, { payment }, 200, getApiMessage('PAYMENT_UPDATED'));
+}));
+
+router.post('/:id/correct-late-fee', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(lateFeeCorrectionSchema), asyncHandler(async (request, response) => {
+  const existing: any = await Payment.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensurePaymentAccess(request, existing);
+  const payment = await correctPaidInstallmentLateFee(request.params.id, request.body.manualAdditionalAmount, request.user!.id);
+  await regeneratePaymentReceipt(payment);
+  await writeAuditLog(request, 'PAYMENT_LATE_FEE_CORRECTED', 'Payment', payment._id.toString(), { manualAdditionalAmount: payment.manualAdditionalAmount, contractAppliedAmount: payment.contractAppliedAmount, receiptRegenerated: true });
+  return sendSuccess(response, { payment }, 200, 'Recargo por vencimiento corregido y comprobante regenerado.');
 }));
 
 router.post('/:id/mark-paid', requirePermission(Permission.PAYMENTS_APPROVE), validateRequest(actionSchema), asyncHandler(async (request, response) => {

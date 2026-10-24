@@ -89,6 +89,21 @@ describe('event payment registration and the installment plan', () => {
     expect(response.body.data.summary).toMatchObject({ paidAmount: 400000 });
   });
 
+  it('requires an approved contract before registering an event payment', async () => {
+    const event: any = { _id: eventId, salonId, customerId: undefined, quoteId: undefined, paymentPlanSnapshot: [], save: vi.fn().mockResolvedValue(undefined) };
+    mocks.eventFindOne.mockResolvedValue(event);
+    mocks.contractFindOne.mockReset();
+    mocks.contractFindOne.mockReturnValueOnce({ sort: vi.fn().mockResolvedValue(undefined) });
+
+    const response = await request(app).post(`/api/events/${eventId}/payments`).set('Cookie', adminCookie).send({ amount: 400000, method: 'cash', type: 'deposit' });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('CONTRACT_APPROVAL_REQUIRED');
+    expect(response.body.error.message).toContain('contrato aprobado');
+    expect(response.body.error.message).toContain('pestaña Contrato');
+    expect(mocks.createPayment).not.toHaveBeenCalled();
+  });
+
   it('still cascades an installment payment across the plan (default type)', async () => {
     const plan = installmentPlan(12, 112500);
     const event: any = { _id: eventId, salonId, customerId: undefined, quoteId: undefined, paymentPlanSnapshot: plan, save: vi.fn().mockResolvedValue(undefined) };
