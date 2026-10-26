@@ -16,8 +16,13 @@ const leadSchema = new Schema({
   salonIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Salon' }], default: [], index: true },
   assignedUserId: { type: Schema.Types.ObjectId, ref: 'User' },
   source: { type: String, enum: ['web_form', 'quick_quote', 'whatsapp', 'phone', 'email', 'instagram', 'facebook', 'tiktok', 'google', 'referral', 'walk_in', 'manual', 'promotion', 'ticket', 'invitation', 'other'], index: true },
+  commercialOrigin: { type: String, enum: ['meta_ads_whatsapp', 'organic_whatsapp', 'instagram', 'google', 'referral', 'returning_customer', 'other', 'unknown'], default: 'unknown', index: true },
+  originAttribution: { type: String, enum: ['manual', 'unknown'], default: 'unknown' },
+  campaignCode: String, adCode: String,
   status: { type: String, enum: ['new', 'contacted', 'follow_up', 'quote_sent', 'negotiation', 'won', 'lost', 'converted'], default: 'new', index: true },
-  lostReason: String, message: String, notes: String, promotionId: Schema.Types.ObjectId,
+  lostReason: String, lostAt: Date, lostBy: { type: Schema.Types.ObjectId, ref: 'User' }, lostObservation: String,
+  lastContactAt: Date, nextContactAt: Date, followUpResult: String,
+  message: String, notes: String, promotionId: Schema.Types.ObjectId,
   convertedCustomerId: { type: Schema.Types.ObjectId, ref: 'Customer' }, convertedEventId: { type: Schema.Types.ObjectId, ref: 'Event' }, convertedAt: Date,
   tags: { type: [String], default: [], index: true },
   ...base
@@ -27,7 +32,7 @@ const activitySchema = new Schema({
   leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
   customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
   eventId: { type: Schema.Types.ObjectId, ref: 'Event', index: true },
-  type: { type: String, enum: ['note', 'call', 'whatsapp', 'email', 'status_change', 'assignment', 'quote_created', 'quote_sent', 'lost', 'converted', 'event_created', 'customer_created', 'payment_registered', 'system'] },
+  type: { type: String, enum: ['note', 'call', 'whatsapp', 'email', 'status_change', 'assignment', 'quote_created', 'quote_sent', 'lost', 'converted', 'event_created', 'customer_created', 'payment_registered', 'visit', 'follow_up', 'attribution', 'system'] },
   title: String, description: String, metadata: Schema.Types.Mixed, createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: { createdAt: true, updatedAt: false } });
 

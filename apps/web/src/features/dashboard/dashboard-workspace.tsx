@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { userCanAccess } from '@/lib/admin-permissions';
 import { displayLabel, leadSourceLabels } from '@/lib/display-labels';
 import { FunnelChart, Meter, meterTone, money, number, RankedBars, Sparkline, type MeterTone, type TrendPoint } from './dashboard-charts';
+import { CommercialGoals } from './commercial-goals';
 
 type Metric = {
   id: string;
@@ -289,6 +290,8 @@ export function DashboardWorkspace() {
 
     {error ? <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger-border bg-danger-bg p-4 text-sm text-foreground"><span><strong>No pudimos actualizar el dashboard.</strong> {error}</span><Button variant="secondary" onClick={() => void load()}>Reintentar</Button></div> : null}
     {loading && !summary ? <LoadingBlock /> : null}
+
+    <CommercialGoals salonId={salonId} />
 
     {priorityMetrics.length ? <div>
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Necesita tu atención</p>

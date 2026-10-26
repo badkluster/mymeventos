@@ -1,4 +1,4 @@
-import { Event, Lead, LeadActivity, Quote, QuoteRevision } from './crm.models';
+import { CalendarItem, Event, Lead, LeadActivity, Quote, QuoteRevision } from './crm.models';
 import { findOrCreateCustomer } from './contact-dedupe.service';
 import { buildInitialResourcePlan } from './event-resource-plan';
 import { buildDefaultEventAlerts } from './event-alert-defaults';
@@ -93,6 +93,7 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
       lead.convertedAt = new Date();
       lead.updatedBy = input.userId;
       await lead.save();
+      await CalendarItem.updateOne({ automationKey: `lead_next_contact:${lead._id}` }, { $set: { status: 'cancelled', 'notification.status': 'cancelled' } });
     }
     return { quote, lead, customer, event: existingEvent, createdEvent: false };
   }
@@ -191,6 +192,7 @@ export async function convertQuoteToEvent(input: ConvertQuoteInput): Promise<{ q
     lead.convertedAt = new Date();
     lead.updatedBy = input.userId;
     await lead.save();
+    await CalendarItem.updateOne({ automationKey: `lead_next_contact:${lead._id}` }, { $set: { status: 'cancelled', 'notification.status': 'cancelled' } });
   }
   await LeadActivity.create({
     leadId: lead?._id,

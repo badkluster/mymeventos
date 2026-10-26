@@ -10,6 +10,7 @@ import { Button, Input, Modal, Select, Textarea } from '@/components/ui/primitiv
 import { useToast } from '@/components/ui/toast-provider';
 import { formatCivilDate } from '@/lib/dates';
 import { EntityChangeHistoryCard, type EntityChangeHistory } from '@/components/entity-change-history';
+import { CommercialTraceability } from './commercial-traceability';
 
 type Lead = {
   _id: string;
@@ -26,6 +27,15 @@ type Lead = {
   salonIds?: string[];
   status: string;
   source: string;
+  commercialOrigin?: string;
+  originAttribution?: string;
+  campaignCode?: string;
+  adCode?: string;
+  lastContactAt?: string;
+  nextContactAt?: string;
+  followUpResult?: string;
+  lostReason?: string;
+  lostObservation?: string;
   message?: string;
   notes?: string;
   createdAt?: string;
@@ -226,7 +236,7 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
              <p className="mt-2 text-sm text-zinc-500">Origen: {displayLabel(leadSourceLabels, lead.source)} · {displayLabel(eventTypeLabels, lead.eventType)}</p>
             <label className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-700">Estado
               <Select value={lead.status} disabled={isUpdatingStatus} onChange={(event) => void updateStatus(event.target.value)} className="w-52 py-2">
-                {Object.entries(leadStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {Object.entries(leadStatusLabels).filter(([value]) => value !== 'lost' || lead.status === 'lost').map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </Select>
             </label>
           </div>
@@ -238,6 +248,8 @@ export default function LeadDetail({ params }: { params: Promise<{ id: string }>
           </div>
         </div>
       </header>
+
+      <CommercialTraceability lead={lead} salons={salons} reload={() => load(id)} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm lg:col-span-2">

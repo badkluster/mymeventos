@@ -15,7 +15,8 @@ const mocks = vi.hoisted(() => ({
   revisionCreate: vi.fn(),
   eventFindOne: vi.fn(),
   eventCreate: vi.fn(),
-  syncEventAlerts: vi.fn()
+  syncEventAlerts: vi.fn(),
+  calendarItemUpdateOne: vi.fn()
 }));
 
 vi.mock('../src/modules/crm/crm.models', () => ({
@@ -24,7 +25,8 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   LeadActivity: { create: mocks.leadActivityCreate },
   Quote: { findOne: mocks.quoteFindOne },
   QuoteRevision: { findOne: mocks.revisionFindOne, create: mocks.revisionCreate },
-  Event: { findOne: mocks.eventFindOne, create: mocks.eventCreate }
+  Event: { findOne: mocks.eventFindOne, create: mocks.eventCreate },
+  CalendarItem: { updateOne: mocks.calendarItemUpdateOne }
 }));
 vi.mock('../src/modules/crm/event-alert-calendar-sync.service', () => ({ syncEventAlertCalendarItems: mocks.syncEventAlerts }));
 

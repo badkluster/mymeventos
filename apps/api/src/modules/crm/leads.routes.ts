@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Permission, Role } from '@mym/shared';
-import { Event, Lead, LeadActivity, Quote, QuoteRequest } from './crm.models';
+import { CalendarItem, Event, Lead, LeadActivity, Quote, QuoteRequest } from './crm.models';
 import { Salon } from '../salons/salon.model';
 import { User } from '../users/user.model';
 import { accessibleSalonIds, canAccessSalon, requireAuth, requirePermission } from '../../middlewares/auth';
@@ -15,6 +15,8 @@ import { getEntityChangeHistory } from '../audit/entity-change-history.service';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 const leadStatuses = ['new', 'contacted', 'follow_up', 'quote_sent', 'negotiation', 'won', 'lost', 'converted'] as const;
+const commercialOrigins = ['meta_ads_whatsapp', 'organic_whatsapp', 'instagram', 'google', 'referral', 'returning_customer', 'other', 'unknown'] as const;
+const lostReasons = ['price', 'date_unavailable', 'other_venue', 'no_response', 'event_postponed', 'other'] as const;
 const leadSources = [
   'web_form',
   'quick_quote',
@@ -293,9 +295,11 @@ router.patch(
   asyncHandler(async (request, response) => {
     const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
     await ensureLeadAccess(request, lead);
+    if (request.body.status === 'lost') throw new ApiError(422, 'LEAD_LOSS_REASON_REQUIRED', 'Usá la acción de pérdida con un motivo.');
     lead!.status = request.body.status;
     lead!.updatedBy = request.user!.id;
     await lead!.save();
+    if (['won', 'converted'].includes(lead!.status)) await CalendarItem.updateOne({ automationKey: `lead_next_contact:${lead!._id}` }, { $set: { status: 'cancelled', 'notification.status': 'cancelled' } });
     await LeadActivity.create({ leadId: lead!._id, type: 'status_change', title: 'Estado actualizado', metadata: { status: request.body.status }, createdBy: request.user!.id });
     await writeAuditLog(request, 'LEAD_STATUS_UPDATE', 'Lead', lead!._id.toString());
     return sendSuccess(response, { lead }, 200, getApiMessage('LEAD_STATUS_UPDATED'));
@@ -324,6 +328,7 @@ router.patch(
     lead!.assignedUserId = request.body.assignedUserId ?? undefined;
     lead!.updatedBy = request.user!.id;
     await lead!.save();
+    if (request.body.assignedUserId) await CalendarItem.updateOne({ automationKey: `lead_next_contact:${lead!._id}` }, { $set: { assignedToUserId: request.body.assignedUserId } });
     await LeadActivity.create({
       leadId: lead!._id,
       type: 'assignment',
@@ -405,19 +410,152 @@ router.get(
 router.post(
   '/:id/mark-lost',
   requirePermission(Permission.LEADS_UPDATE),
-  validateRequest(z.object({ body: z.object({ lostReason: z.string().trim().min(1) }), params: z.object({ id: objectId }), query: z.object({}) })),
+  validateRequest(z.object({ body: z.object({ lostReason: z.enum(lostReasons), observation: z.string().trim().max(1000).optional() }), params: z.object({ id: objectId }), query: z.object({}) })),
   asyncHandler(async (request, response) => {
     const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
     await ensureLeadAccess(request, lead);
     lead!.status = 'lost';
     lead!.lostReason = request.body.lostReason;
+    lead!.lostAt = new Date();
+    lead!.lostBy = request.user!.id;
+    lead!.lostObservation = request.body.observation;
     lead!.updatedBy = request.user!.id;
     await lead!.save();
-    await LeadActivity.create({ leadId: lead!._id, type: 'lost', title: 'Lead perdido', description: lead!.lostReason, createdBy: request.user!.id });
+    await CalendarItem.updateOne({ automationKey: `lead_next_contact:${lead!._id}` }, { $set: { status: 'cancelled', 'notification.status': 'cancelled' } });
+    await LeadActivity.create({ leadId: lead!._id, type: 'lost', title: 'Lead perdido', description: request.body.observation, metadata: { reason: lead!.lostReason, at: lead!.lostAt }, createdBy: request.user!.id });
     await writeAuditLog(request, 'LEAD_MARK_LOST', 'Lead', lead!._id.toString());
     return sendSuccess(response, { lead }, 200, getApiMessage('LEAD_LOST'));
   })
 );
+
+router.patch('/:id/attribution', requirePermission(Permission.LEADS_UPDATE), validateRequest(z.object({
+  body: z.object({ origin: z.enum(commercialOrigins), campaignCode: z.string().trim().max(120).optional(), adCode: z.string().trim().max(120).optional() }),
+  params: z.object({ id: objectId }), query: z.object({})
+})), asyncHandler(async (request, response) => {
+  const lead: any = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureLeadAccess(request, lead);
+  const before = { origin: lead.commercialOrigin ?? 'unknown', campaignCode: lead.campaignCode, adCode: lead.adCode };
+  lead.commercialOrigin = request.body.origin;
+  lead.originAttribution = request.body.origin === 'unknown' ? 'unknown' : 'manual';
+  lead.campaignCode = request.body.campaignCode || undefined;
+  lead.adCode = request.body.adCode || undefined;
+  lead.updatedBy = request.user!.id;
+  await lead.save();
+  await LeadActivity.create({ leadId: lead._id, type: 'attribution', title: 'Origen comercial actualizado', metadata: { before, after: { origin: lead.commercialOrigin, campaignCode: lead.campaignCode, adCode: lead.adCode }, attribution: lead.originAttribution }, createdBy: request.user!.id });
+  await writeAuditLog(request, 'LEAD_ATTRIBUTION_UPDATE', 'Lead', lead._id.toString());
+  return sendSuccess(response, { lead });
+}));
+
+router.post('/:id/follow-up', requirePermission(Permission.LEADS_UPDATE), validateRequest(z.object({
+  body: z.object({ lastContactAt: z.coerce.date().optional(), nextContactAt: z.coerce.date().optional(), result: z.string().trim().min(1).max(500) }),
+  params: z.object({ id: objectId }), query: z.object({})
+})), asyncHandler(async (request, response) => {
+  const lead: any = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureLeadAccess(request, lead);
+  const now = new Date();
+  if (['won', 'converted', 'lost'].includes(lead.status) && request.body.nextContactAt) throw new ApiError(422, 'LEAD_FOLLOW_UP_CLOSED');
+  if (request.body.nextContactAt && request.body.nextContactAt <= now) throw new ApiError(400, 'FOLLOW_UP_DATE_INVALID');
+  lead.lastContactAt = request.body.lastContactAt ?? now;
+  lead.nextContactAt = request.body.nextContactAt;
+  lead.followUpResult = request.body.result;
+  if (!['won', 'converted', 'lost'].includes(lead.status)) lead.status = request.body.nextContactAt ? 'follow_up' : 'contacted';
+  lead.updatedBy = request.user!.id;
+  await lead.save();
+  await CalendarItem.updateMany({ leadId: lead._id, 'metadata.leadFollowUp': true, status: { $ne: 'cancelled' } }, { $set: { status: 'cancelled', 'notification.status': 'cancelled' } });
+  const automationKey = `lead_next_contact:${lead._id}`;
+  if (lead.nextContactAt) {
+    await CalendarItem.findOneAndUpdate({ automationKey }, { $set: {
+      type: 'reminder', source: 'manual', title: `Contactar a ${lead.fullName || 'lead'}`,
+      description: lead.followUpResult, startAt: lead.nextContactAt, status: 'scheduled',
+      visibility: 'shared', salonId: lead.salonId, leadId: lead._id,
+      assignedToUserId: lead.assignedUserId ?? request.user!.id,
+      'notification.enabled': true, 'notification.channels': ['system'],
+      'notification.sendAt': lead.nextContactAt, 'notification.status': 'scheduled',
+      updatedBy: request.user!.id,
+    }, $setOnInsert: { automationKey, createdBy: request.user!.id } }, { upsert: true, new: true });
+  } else {
+    await CalendarItem.updateOne({ automationKey, deletedAt: null }, { $set: { status: 'cancelled', 'notification.status': 'cancelled', updatedBy: request.user!.id } });
+  }
+  await LeadActivity.create({ leadId: lead._id, type: 'follow_up', title: 'Seguimiento registrado', description: lead.followUpResult, metadata: { lastContactAt: lead.lastContactAt, nextContactAt: lead.nextContactAt }, createdBy: request.user!.id });
+  await writeAuditLog(request, 'LEAD_FOLLOW_UP', 'Lead', lead._id.toString());
+  return sendSuccess(response, { lead });
+}));
+
+router.get('/:id/visits', requirePermission(Permission.LEADS_READ), validateRequest(idParamsSchema), asyncHandler(async (request, response) => {
+  const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureLeadAccess(request, lead);
+  const visits = await CalendarItem.find({ leadId: request.params.id, type: 'meeting', 'metadata.commercialVisit': true, deletedAt: null })
+    .populate('salonId', 'name').populate('assignedToUserId', 'fullName firstName lastName').sort({ startAt: -1 }).lean();
+  return sendSuccess(response, { visits: visits.filter((visit: any) => canAccessSalon(request.user!, visit.salonId?._id?.toString() ?? visit.salonId?.toString())) });
+}));
+
+router.get('/:id/visit-assignees', requirePermission(Permission.LEADS_READ), validateRequest(idParamsSchema), asyncHandler(async (request, response) => {
+  const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureLeadAccess(request, lead);
+  const salonIds = normalizedSalonIds(lead!).filter((salonId) => canAccessSalon(request.user!, salonId));
+  const users = await User.find({ deletedAt: null, active: true, $or: [{ roles: Role.ADMIN }, { salonIds: { $in: salonIds } }] })
+    .select('_id fullName firstName lastName salonIds roles').sort({ fullName: 1 }).lean();
+  return sendSuccess(response, { users });
+}));
+
+router.post('/:id/visits/offer', requirePermission(Permission.LEADS_UPDATE), validateRequest(z.object({ body: z.object({ observation: z.string().trim().max(1000).optional() }), params: z.object({ id: objectId }), query: z.object({}) })), asyncHandler(async (request, response) => {
+  const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureLeadAccess(request, lead);
+  const activity = await LeadActivity.create({ leadId: lead!._id, type: 'visit', title: 'Visita ofrecida', description: request.body.observation, metadata: { action: 'offered' }, createdBy: request.user!.id });
+  await writeAuditLog(request, 'LEAD_VISIT_OFFER', 'Lead', lead!._id.toString());
+  return sendSuccess(response, { activity }, 201);
+}));
+
+router.post('/:id/visits', requirePermission(Permission.LEADS_UPDATE), validateRequest(z.object({
+  body: z.object({ startAt: z.coerce.date(), salonId: objectId, assignedToUserId: objectId, observation: z.string().trim().max(1000).optional() }),
+  params: z.object({ id: objectId }), query: z.object({})
+})), asyncHandler(async (request, response) => {
+  const lead: any = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureLeadAccess(request, lead);
+  if (!normalizedSalonIds(lead).includes(request.body.salonId) || !canAccessSalon(request.user!, request.body.salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  const assignee: any = await User.findOne({ _id: request.body.assignedToUserId, active: true, deletedAt: null }).select('roles salonIds').lean();
+  if (!assignee || (!assignee.roles.includes(Role.ADMIN) && !assignee.salonIds.some((value: any) => value.toString() === request.body.salonId))) throw new ApiError(422, 'VISIT_ASSIGNEE_INVALID');
+  const visit = await CalendarItem.create({ type: 'meeting', title: `Visita comercial: ${lead.fullName}`, description: request.body.observation, startAt: request.body.startAt, status: 'scheduled', visibility: 'shared', salonId: request.body.salonId, leadId: lead._id, assignedToUserId: request.body.assignedToUserId, source: 'manual', metadata: { commercialVisit: true, visitOutcome: 'scheduled' }, createdBy: request.user!.id, updatedBy: request.user!.id });
+  await LeadActivity.create({ leadId: lead._id, type: 'visit', title: 'Visita agendada', description: request.body.observation, metadata: { action: 'scheduled', visitId: visit._id, startAt: visit.startAt, salonId: visit.salonId, assignedToUserId: visit.assignedToUserId }, createdBy: request.user!.id });
+  await writeAuditLog(request, 'LEAD_VISIT_SCHEDULE', 'CalendarItem', visit._id.toString());
+  return sendSuccess(response, { visit }, 201);
+}));
+
+const visitActions = ['confirmed', 'completed', 'no_show', 'cancelled', 'rescheduled'] as const;
+router.patch('/:id/visits/:visitId', requirePermission(Permission.LEADS_UPDATE), validateRequest(z.object({
+  body: z.object({ action: z.enum(visitActions), startAt: z.coerce.date().optional(), salonId: objectId.optional(), assignedToUserId: objectId.optional(), observation: z.string().trim().max(1000).optional() }),
+  params: z.object({ id: objectId, visitId: objectId }), query: z.object({})
+})), asyncHandler(async (request, response) => {
+  const lead = await Lead.findOne({ _id: request.params.id, deletedAt: null });
+  await ensureLeadAccess(request, lead);
+  const visit: any = await CalendarItem.findOne({ _id: request.params.visitId, leadId: request.params.id, type: 'meeting', 'metadata.commercialVisit': true, deletedAt: null });
+  if (!visit) throw new ApiError(404, 'VISIT_NOT_FOUND');
+  if (!canAccessSalon(request.user!, visit.salonId?.toString())) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+  const action = request.body.action as typeof visitActions[number];
+  if (action === 'rescheduled' && !request.body.startAt) throw new ApiError(400, 'VISIT_DATE_REQUIRED');
+  if (action !== 'rescheduled' && (request.body.startAt || request.body.salonId || request.body.assignedToUserId)) throw new ApiError(400, 'VISIT_ACTION_INVALID');
+  if (['done', 'cancelled'].includes(visit.status) && action !== 'rescheduled') throw new ApiError(422, 'VISIT_ALREADY_CLOSED');
+  const before = { startAt: visit.startAt, salonId: visit.salonId, assignedToUserId: visit.assignedToUserId, status: visit.status, outcome: visit.metadata?.visitOutcome };
+  if (action === 'rescheduled') {
+    const salonId = request.body.salonId ?? visit.salonId.toString();
+    if (!normalizedSalonIds(lead!).includes(salonId) || !canAccessSalon(request.user!, salonId)) throw new ApiError(403, 'SALON_SCOPE_FORBIDDEN');
+    const assigneeId = request.body.assignedToUserId ?? visit.assignedToUserId?.toString();
+    const assignee: any = await User.findOne({ _id: assigneeId, active: true, deletedAt: null }).select('roles salonIds').lean();
+    if (!assignee || (!assignee.roles.includes(Role.ADMIN) && !assignee.salonIds.some((value: any) => value.toString() === salonId))) throw new ApiError(422, 'VISIT_ASSIGNEE_INVALID');
+    visit.startAt = request.body.startAt;
+    visit.salonId = salonId;
+    visit.assignedToUserId = assigneeId;
+    visit.status = 'scheduled';
+  } else if (action === 'cancelled') visit.status = 'cancelled';
+  else if (action === 'completed' || action === 'no_show') visit.status = 'done';
+  visit.metadata = { ...(visit.metadata ?? {}), commercialVisit: true, visitOutcome: action };
+  visit.description = request.body.observation ?? visit.description;
+  visit.updatedBy = request.user!.id;
+  await visit.save();
+  await LeadActivity.create({ leadId: lead!._id, type: 'visit', title: `Visita ${action}`, description: request.body.observation, metadata: { action, visitId: visit._id, before, after: { startAt: visit.startAt, salonId: visit.salonId, assignedToUserId: visit.assignedToUserId, status: visit.status } }, createdBy: request.user!.id });
+  await writeAuditLog(request, 'LEAD_VISIT_UPDATE', 'CalendarItem', visit._id.toString(), { action });
+  return sendSuccess(response, { visit });
+}));
 
 router.delete(
   '/:id',
