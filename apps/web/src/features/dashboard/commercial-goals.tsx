@@ -16,44 +16,50 @@ type GoalItem = {
   activity: { leads: number; quotedPeople: number; visitsScheduled: number; visitsCompleted: number };
   conversion: { cohortSize: number; withoutQuote: number; quoted: number; visitScheduled: number; visited: number; followUp: number; won: number; lost: number; lossReasons: Record<string, number>; quoteRate: number | null; visitRate: number | null };
 };
-type GoalResponse = { items: GoalItem[]; pendingFollowUps: number };
+type GoalResponse = { year: number; month: number; items: GoalItem[]; pendingFollowUps: number };
 
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit' }).format(new Date());
 const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const years = Array.from({ length: 81 }, (_, index) => 2020 + index);
 
-export function CommercialGoals({ salonId }: { salonId: string }) {
+export function CommercialGoals({ salonId, periodEnd, onPeriodChange }: { salonId: string; periodEnd: string; onPeriodChange: (year: number, month: number) => void }) {
   const { user } = useSession();
   const { showToast } = useToast();
-  const [year, setYear] = useState(Number(today.slice(0, 4)));
-  const [month, setMonth] = useState(Number(today.slice(5, 7)));
-  const [data, setData] = useState<GoalResponse>();
+  const selectedPeriod = /^\d{4}-\d{2}-\d{2}$/.test(periodEnd) ? periodEnd : `${today}-01`;
+  const year = Number(selectedPeriod.slice(0, 4));
+  const month = Number(selectedPeriod.slice(5, 7));
+  const requestKey = `${year}-${month}-${salonId}`;
+  const [loaded, setLoaded] = useState<{ key: string; response: GoalResponse }>();
   const [selected, setSelected] = useState<GoalItem>();
   const [editing, setEditing] = useState<GoalItem>();
   const [target, setTarget] = useState('10');
   const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
+  const [requestError, setRequestError] = useState<{ key: string; message: string }>();
   const [saving, setSaving] = useState(false);
   const canEdit = user?.roles?.includes(Role.ADMIN) ?? false;
+  const data = loaded?.key === requestKey ? loaded.response : undefined;
+  const error = requestError?.key === requestKey ? requestError.message : '';
 
   const load = useCallback(async () => {
     try {
       const params = new URLSearchParams({ year: String(year), month: String(month) });
       if (salonId) params.set('salonId', salonId);
-      setData(await api.get<GoalResponse>(`/dashboard/commercial-goals?${params}`));
-      setError('');
+      const response = await api.get<GoalResponse>(`/dashboard/commercial-goals?${params}`);
+      setLoaded({ key: requestKey, response });
+      setRequestError(undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No se pudieron cargar los objetivos.');
+      setRequestError({ key: requestKey, message: cause instanceof Error ? cause.message : 'No se pudieron cargar los objetivos.' });
     }
-  }, [year, month, salonId]);
+  }, [year, month, salonId, requestKey]);
   useEffect(() => {
     let active = true;
     const params = new URLSearchParams({ year: String(year), month: String(month) });
     if (salonId) params.set('salonId', salonId);
     void api.get<GoalResponse>(`/dashboard/commercial-goals?${params}`)
-      .then((response) => { if (active) { setData(response); setError(''); } })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'No se pudieron cargar los objetivos.'); });
+      .then((response) => { if (active) { setLoaded({ key: requestKey, response }); setRequestError(undefined); } })
+      .catch((cause) => { if (active) setRequestError({ key: requestKey, message: cause instanceof Error ? cause.message : 'No se pudieron cargar los objetivos.' }); });
     return () => { active = false; };
-  }, [year, month, salonId]);
+  }, [year, month, salonId, requestKey]);
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -74,13 +80,14 @@ export function CommercialGoals({ salonId }: { salonId: string }) {
 
   return <section className="rounded-2xl border border-border bg-card p-5 shadow-sm" aria-label="Objetivos comerciales del mes">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h2 className="text-lg font-semibold text-foreground">Objetivos comerciales del mes</h2><p className="mt-1 text-sm text-muted-foreground">Cierres formales por fecha de primera aprobación. Las reservas con seña se informan por separado.</p></div>
+      <div><h2 className="text-lg font-semibold text-foreground">Objetivos comerciales de {monthNames[month - 1]} {year}</h2><p className="mt-1 text-sm text-muted-foreground">Se usa el mes de la fecha «Hasta» del dashboard. Cierres por primera aprobación formal; reservas con seña se informan por separado.</p></div>
       <div className="flex gap-2">
-        <Select aria-label="Mes de objetivos" value={month} onChange={(event) => setMonth(Number(event.target.value))}>{monthNames.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</Select>
-        <Input aria-label="Año de objetivos" type="number" min={2020} max={2100} value={year} onChange={(event) => setYear(Number(event.target.value))} className="w-24" />
+        <Select aria-label="Mes de objetivos" value={month} onChange={(event) => onPeriodChange(year, Number(event.target.value))}>{monthNames.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</Select>
+        <Select aria-label="Año de objetivos" value={year} onChange={(event) => onPeriodChange(Number(event.target.value), month)} className="w-24">{years.map((option) => <option key={option} value={option}>{option}</option>)}</Select>
       </div>
     </div>
     {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+    {!data && !error ? <p className="mt-4 text-sm text-muted-foreground" role="status">Cargando objetivos de {monthNames[month - 1]} {year}…</p> : null}
     <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {data?.items.map((item) => <article key={item.salonId} className="rounded-xl border border-border bg-background p-4">
         <div className="flex items-start justify-between gap-2"><h3 className="font-semibold text-foreground">{item.salonName}</h3>{canEdit && `${year}-${String(month).padStart(2, '0')}` >= today ? <Button variant="secondary" onClick={() => { setEditing(item); setTarget(String(item.target ?? 10)); setReason(''); }}>Definir meta</Button> : null}</div>

@@ -214,6 +214,14 @@ export function DashboardWorkspace() {
   const [error, setError] = useState('');
   const [severityFilter, setSeverityFilter] = useState<Severity | null>(null);
 
+  function selectCommercialMonth(year: number, month: number) {
+    const prefix = `${year}-${String(month).padStart(2, '0')}`;
+    const lastDay = String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0');
+    const currentDay = initialPeriod().to;
+    setFrom(`${prefix}-01`);
+    setTo(prefix === currentDay.slice(0, 7) ? currentDay : `${prefix}-${lastDay}`);
+  }
+
   const canSeeAllSalons = userCanAccess(user, [Permission.DASHBOARD_ALL_SALONS_VIEW]);
   const load = useCallback(async () => {
     setLoading(true);
@@ -291,7 +299,7 @@ export function DashboardWorkspace() {
     {error ? <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger-border bg-danger-bg p-4 text-sm text-foreground"><span><strong>No pudimos actualizar el dashboard.</strong> {error}</span><Button variant="secondary" onClick={() => void load()}>Reintentar</Button></div> : null}
     {loading && !summary ? <LoadingBlock /> : null}
 
-    <CommercialGoals salonId={salonId} />
+    <CommercialGoals key={`${to.slice(0, 7)}-${salonId}`} salonId={salonId} periodEnd={to} onPeriodChange={selectCommercialMonth} />
 
     {priorityMetrics.length ? <div>
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Necesita tu atención</p>

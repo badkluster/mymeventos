@@ -48,7 +48,7 @@ export async function commercialGoals(request: Request, year: number, month: num
     Lead.find({ deletedAt: null, createdAt: { $gte: start, $lt: end }, $or: [{ salonId: { $in: salonIds } }, { salonIds: { $in: salonIds } }] }).select('_id salonId salonIds status lostReason').lean(),
     Quote.find({ deletedAt: null, salonId: { $in: salonIds }, createdAt: { $gte: start, $lt: end } }).select('_id salonId leadId').lean(),
     CalendarItem.find({ deletedAt: null, type: 'meeting', 'metadata.commercialVisit': true, salonId: { $in: salonIds }, startAt: { $gte: start, $lt: end } }).select('_id salonId leadId status metadata').lean(),
-    Lead.countDocuments({ deletedAt: null, status: 'follow_up', nextContactAt: { $lt: end }, $or: [{ salonId: { $in: salonIds } }, { salonIds: { $in: salonIds } }] }),
+    Lead.countDocuments({ deletedAt: null, status: 'follow_up', nextContactAt: { $gte: start, $lt: end }, $or: [{ salonId: { $in: salonIds } }, { salonIds: { $in: salonIds } }] }),
   ]);
   const cohortLeadIds = leads.map((lead: any) => lead._id);
   const [cohortQuotes, cohortVisits] = await Promise.all([

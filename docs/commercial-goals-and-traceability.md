@@ -27,6 +27,8 @@ El caso reportado de Villa Elisa de octubre de 2026 (cinco contrataciones con pa
 
 `SalonMonthlyGoal` usa clave única `(salonId, year, month)`, meta positiva e historial embebido de cambios con responsable, fecha, valor anterior y motivo. Sólo administradores configuran objetivos; los períodos anteriores al mes actual están bloqueados. No hay meta retroactiva implícita. Los tres objetivos de **noviembre de 2026: 10 por salón** se cargan desde la interfaz de administración por una persona autorizada; este cambio no ejecuta scripts ni escrituras directas de desarrollo sobre bases de datos.
 
+En el dashboard, el objetivo se calcula para el mes de la fecha **Hasta**. Cambiar el mes o año dentro del bloque de objetivos actualiza también **Desde/Hasta** al mes elegido. Cambiar días dentro de un mismo mes no modifica el KPI, porque su unidad es mensual. Los seguimientos pendientes del bloque se limitan a fechas de contacto de ese mes.
+
 `Lead` incorpora origen comercial separado de `source`, atribución manual, códigos de campaña/anuncio, último/próximo contacto y metadatos de pérdida. El calendario existente guarda las visitas y un recordatorio estable por lead; `LeadActivity` conserva oferta, agenda, confirmación, realización, ausencia, cancelación y reprogramación con datos anteriores. No hay migración de escritura de datos históricos.
 
 ## Límites del reporte de conversión
