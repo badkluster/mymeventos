@@ -26,7 +26,7 @@ import { TableActionButton } from '@/components/admin/table-action-button';
 import { Button, Input, Modal, PageHeader, Select, Textarea } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import { api } from '@/lib/api';
-import { displayLabel, leadSourceLabels, leadStatusLabels } from '@/lib/display-labels';
+import { commercialOriginLabels, displayLabel, leadSourceLabels, leadStatusLabels } from '@/lib/display-labels';
 import { isInteractiveTableRowTarget } from '@/lib/table-row-navigation';
 
 type Lead = {
@@ -43,6 +43,9 @@ type Lead = {
   salonIds?: string[];
   status: string;
   source: string;
+  commercialOrigin?: string;
+  nextContactAt?: string;
+  nextCommercialVisit?: { startAt: string; salonId: string; outcome?: string } | null;
   guestCount: number;
   message?: string;
   notes?: string;
@@ -102,6 +105,12 @@ function formatDate(value?: string): string {
 
 function dateForInput(value?: string): string {
   return value?.slice(0, 10) ?? '';
+}
+
+const commercialDateTime = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' });
+
+function formatCommercialDateTime(value?: string): string {
+  return value ? commercialDateTime.format(new Date(value)) : '—';
 }
 
 function csvCell(value: unknown): string {
@@ -221,7 +230,7 @@ export default function LeadsPage() {
     () => ({
       new: items.filter((lead) => lead.status === 'new').length,
       open: items.filter((lead) => ['contacted', 'follow_up', 'quote_sent', 'negotiation'].includes(lead.status)).length,
-      dated: items.filter((lead) => Boolean(lead.eventDate)).length,
+      nextAction: items.filter((lead) => Boolean(lead.nextContactAt || lead.nextCommercialVisit)).length,
     }),
     [items],
   );
@@ -336,7 +345,7 @@ export default function LeadsPage() {
 
   function exportRows(leads: Lead[]): string[][] {
     return [
-      ['Nombre', 'Teléfono', 'Email', 'Evento', 'Fecha estimativa', 'Personas', 'Salones', 'Estado', 'Origen'],
+      ['Nombre', 'Teléfono', 'Email', 'Evento', 'Fecha estimativa', 'Personas', 'Salones', 'Estado', 'Canal de ingreso', 'Origen comercial', 'Próximo contacto', 'Próxima visita'],
       ...leads.map((lead) => [
         lead.fullName,
         lead.phone,
@@ -347,6 +356,9 @@ export default function LeadsPage() {
         getLeadSalonNames(lead),
         displayLabel(leadStatusLabels, lead.status),
         displayLabel(leadSourceLabels, lead.source),
+        displayLabel(commercialOriginLabels, lead.commercialOrigin ?? 'unknown'),
+        formatCommercialDateTime(lead.nextContactAt),
+        formatCommercialDateTime(lead.nextCommercialVisit?.startAt),
       ]),
     ];
   }
@@ -397,20 +409,22 @@ export default function LeadsPage() {
 
   const columns: { key: string; label: string; sortable?: boolean }[] = [
     { key: 'fullName', label: 'Nombre', sortable: true },
+    { key: 'commercialOrigin', label: 'Origen comercial' },
     { key: 'phone', label: 'Teléfono', sortable: true },
     { key: 'email', label: 'Email', sortable: true },
     { key: 'eventType', label: 'Evento', sortable: true },
     { key: 'eventDate', label: 'Fecha estimativa', sortable: true },
     { key: 'guestCount', label: 'Personas', sortable: true },
     { key: 'status', label: 'Estado', sortable: true },
-    { key: 'source', label: 'Origen', sortable: true },
+    { key: 'source', label: 'Canal de ingreso', sortable: true },
+    { key: 'nextAction', label: 'Próximas acciones' },
   ];
 
   return (
     <section className="space-y-6">
       <PageHeader
         title="Leads (posibles clientes)"
-        description="Consultas y oportunidades comerciales."
+        description="Consultas y oportunidades comerciales. Abrí un lead para registrar su origen, seguimiento y visitas."
         action={
           <div className="flex flex-wrap gap-2">
             <DropdownMenu.Root open={exportMenuOpen} onOpenChange={setExportMenuOpen}>
@@ -438,7 +452,7 @@ export default function LeadsPage() {
         <MetricCard label="Leads registrados" value={meta.totalItems} icon={Users} detail="Según los filtros aplicados" />
         <MetricCard label="Nuevos" value={visibleMetrics.new} icon={Plus} detail="En la página actual" />
         <MetricCard label="En gestión" value={visibleMetrics.open} icon={MessageCircle} detail="En la página actual" />
-        <MetricCard label="Con fecha estimativa" value={visibleMetrics.dated} icon={CalendarDays} detail="En la página actual" />
+        <MetricCard label="Con próxima acción" value={visibleMetrics.nextAction} icon={CalendarDays} detail="Contactos y visitas en esta página" />
       </div>
 
       <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
@@ -451,8 +465,8 @@ export default function LeadsPage() {
             <option value="">Todos los estados</option>
             {Object.entries(leadStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
-          <Select aria-label="Filtrar por origen" value={filters.source} onChange={(event) => updateFilters({ source: event.target.value })} className="h-11 min-w-40">
-            <option value="">Todos los orígenes</option>
+          <Select aria-label="Filtrar por canal de ingreso" value={filters.source} onChange={(event) => updateFilters({ source: event.target.value })} className="h-11 min-w-40">
+            <option value="">Todos los canales</option>
             {Object.entries(leadSourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
           <Select aria-label="Filtrar por salón" value={filters.salonId} onChange={(event) => updateFilters({ salonId: event.target.value })} className="h-11 min-w-40">
@@ -468,7 +482,7 @@ export default function LeadsPage() {
 
       <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-[1120px] w-full text-sm">
+          <table className="min-w-[1480px] w-full text-sm">
             <thead className="border-b border-zinc-200 bg-zinc-50/80 text-zinc-500">
               <tr>
                 {columns.map((column) => (
@@ -488,6 +502,7 @@ export default function LeadsPage() {
               {items.map((lead) => (
                 <tr key={lead._id} tabIndex={0} role="link" aria-label={`Ver lead ${lead.fullName}`} onClick={(clickEvent) => { if (!isInteractiveTableRowTarget(clickEvent.target)) router.push(`/admin/leads/${lead._id}`); }} onKeyDown={(keyEvent) => { if ((keyEvent.key === 'Enter' || keyEvent.key === ' ') && !isInteractiveTableRowTarget(keyEvent.target)) { keyEvent.preventDefault(); router.push(`/admin/leads/${lead._id}`); } }} className="cursor-pointer transition-colors hover:bg-amber-50/35 focus-visible:bg-amber-50/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500">
                   <td className="px-5 py-4 font-semibold text-zinc-900">{lead.fullName}</td>
+                  <td className="px-5 py-4 text-zinc-700">{displayLabel(commercialOriginLabels, lead.commercialOrigin ?? 'unknown')}</td>
                   <td className="px-5 py-4 text-zinc-700">{lead.phone}</td>
                   <td className="px-5 py-4 text-zinc-600">{lead.email || '—'}</td>
                   <td className="px-5 py-4 text-zinc-700">{lead.eventType}</td>
@@ -495,6 +510,12 @@ export default function LeadsPage() {
                   <td className="px-5 py-4 text-zinc-700">{lead.guestCount || '—'}</td>
                   <td className="px-5 py-4"><LeadBadge type="status" value={lead.status} /></td>
                   <td className="px-5 py-4"><LeadBadge type="source" value={lead.source} /></td>
+                  <td className="px-5 py-4 text-xs text-zinc-700">
+                    {lead.nextContactAt || lead.nextCommercialVisit ? <div className="space-y-1 whitespace-nowrap">
+                      {lead.nextContactAt ? <p>Contacto: {formatCommercialDateTime(lead.nextContactAt)}</p> : null}
+                      {lead.nextCommercialVisit ? <p>Visita: {formatCommercialDateTime(lead.nextCommercialVisit.startAt)}{lead.nextCommercialVisit.outcome === 'confirmed' ? ' · confirmada' : ''}</p> : null}
+                    </div> : <span className="text-zinc-400">Sin programar</span>}
+                  </td>
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-0.5">
                       <TableActionButton icon={Eye} label="Ver detalle" onClick={() => router.push(`/admin/leads/${lead._id}`)} />

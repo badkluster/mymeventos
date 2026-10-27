@@ -185,8 +185,24 @@ router.get(
       .limit(limit)
       .lean();
 
+    const visits = items.length ? await CalendarItem.find({
+      leadId: { $in: items.map((lead) => lead._id) },
+      type: 'meeting',
+      'metadata.commercialVisit': true,
+      status: 'scheduled',
+      deletedAt: null,
+      ...(!request.user!.roles.includes(Role.ADMIN) ? { salonId: { $in: accessibleSalonIds(request.user!) } } : {})
+    }).select('leadId salonId startAt metadata.visitOutcome').sort({ startAt: 1 }).lean() : [];
+    const nextVisitByLead = new Map<string, { startAt: Date; salonId: unknown; outcome?: string }>();
+    for (const visit of visits) {
+      const leadId = visit.leadId?.toString();
+      if (leadId && !nextVisitByLead.has(leadId)) {
+        nextVisitByLead.set(leadId, { startAt: visit.startAt, salonId: visit.salonId, outcome: visit.metadata?.visitOutcome });
+      }
+    }
+
     return sendSuccess(response, {
-      items,
+      items: items.map((lead) => ({ ...lead, nextCommercialVisit: nextVisitByLead.get(String(lead._id)) ?? null })),
       meta: {
         page,
         limit,
