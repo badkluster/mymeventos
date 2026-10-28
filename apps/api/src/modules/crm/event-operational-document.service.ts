@@ -286,6 +286,13 @@ function renderTable(document: PDFKit.PDFDocument, event: any, type: Operational
   });
 }
 
+function guestCountSummary(event: any, type: OperationalDocumentType): string {
+  if (type !== 'full') return event.guestCount ? `${event.guestCount} personas` : 'A confirmar';
+  const serviceCount = Number(event.guestCount);
+  const loadedCount = guestListData(event).guests.length;
+  return `Servicio: ${Number.isFinite(serviceCount) && serviceCount > 0 ? serviceCount : 'a confirmar'} · En lista: ${loadedCount}`;
+}
+
 function eventDetails(document: PDFKit.PDFDocument, event: any, type: OperationalDocumentType, heading: string | null = documentTitle(type)): void {
   const customer = event.customerId;
   const salon = event.salonId;
@@ -297,7 +304,7 @@ function eventDetails(document: PDFKit.PDFDocument, event: any, type: Operationa
     ['Cliente', text(customerName)],
     ['Salón', text(salonName)],
     ['Tipo de evento', text(event.eventType)],
-    ['Invitados', event.guestCount ? `${event.guestCount} personas` : 'A confirmar']
+    ['Invitados', guestCountSummary(event, type)]
   ];
   const y = document.y;
   document.roundedRect(page.left, y, page.right - page.left, 93, 8).fill(color.card);
@@ -484,6 +491,8 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
   const numberWidth = 13;
   const detailWidth = 48;
   const nameWidth = tableWidth - numberWidth - detailWidth - 14;
+  const guestRowPadding = 1.6;
+  const minimumGuestRowHeight = 12.5;
   const groups = Array.from({ length: Math.ceil(entries.length / 3) }, (_, index) => entries.slice(index * 3, index * 3 + 3));
   const detailFor = (guest: any) => guestListDetail(guest, event.guestCountMode);
 
@@ -494,16 +503,16 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
       const headingHeight = Math.max(14, document.font('Helvetica-Bold').fontSize(7.5).heightOfString(heading, { width: tableWidth - 10, lineGap: .8 }) + 4);
       const rowHeights = Array.from({ length: slots }, (_, index) => {
         const guest = entry.guests[index];
-        if (!guest) return 10.8;
+        if (!guest) return minimumGuestRowHeight;
         const nameHeight = document.font('Helvetica-Bold').fontSize(7.5).heightOfString(text(guest.fullName), { width: nameWidth, lineGap: .8 });
         const detail = detailFor(guest);
         const detailHeight = detail ? document.font('Helvetica').fontSize(6.6).heightOfString(detail, { width: detailWidth, lineGap: .8 }) : 0;
-        return Math.max(10.8, Math.max(nameHeight, detailHeight) + 1.8);
+        return Math.max(minimumGuestRowHeight, Math.max(nameHeight, detailHeight) + guestRowPadding * 2);
       });
       return { entry, heading, headingHeight, slots, rowHeights };
     });
     const maxSlots = Math.max(...entryMetrics.map((metric) => metric.slots), 0);
-    const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? 10.8)));
+    const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? minimumGuestRowHeight)));
     const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 8));
     const groupHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 3;
     if (document.y + groupHeight > page.bottom - 30) newPage(document, event, 'full');
@@ -526,11 +535,11 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
       rowHeights.forEach((rowHeight, rowIndex) => {
         const guest = metric.entry.guests[rowIndex];
         document.moveTo(x + 1, rowY).lineTo(x + tableWidth - 1, rowY).strokeColor(color.line).lineWidth(.35).stroke();
-        document.font('Helvetica-Bold').fontSize(6.5).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + 2, { width: numberWidth - 2, align: 'right' });
+        document.font('Helvetica-Bold').fontSize(6.5).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + guestRowPadding, { width: numberWidth - 2, align: 'right' });
         if (guest) {
-          document.font('Helvetica-Bold').fontSize(7.5).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + 2, { width: nameWidth, lineGap: .8 });
+          document.font('Helvetica-Bold').fontSize(7.5).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + guestRowPadding, { width: nameWidth, lineGap: .8 });
           const detail = detailFor(guest);
-          if (detail) document.font('Helvetica').fontSize(6.6).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + 2, { width: detailWidth - 4, lineGap: .8 });
+          if (detail) document.font('Helvetica').fontSize(6.6).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + guestRowPadding, { width: detailWidth - 4, lineGap: .8 });
         }
         rowY += rowHeight;
       });
@@ -668,9 +677,10 @@ type CompactGuestLayout = { profile: CompactGuestProfile; columns: CompactGuestF
 
 const compactPage = { width: 841.89, height: 595.28, left: 28, right: 813.89, contentTop: 108, contentBottom: 562 };
 const compactGuestProfiles: CompactGuestProfile[] = [
-  { columns: 2, rowHeight: 12, headingHeight: 20, noteHeight: 10, gap: 7, titleFont: 7.6, nameFont: 7.5, detailFont: 6.1 },
-  { columns: 3, rowHeight: 12.2, headingHeight: 18, noteHeight: 9, gap: 6, titleFont: 7.1, nameFont: 7.4, detailFont: 6 },
-  { columns: 4, rowHeight: 10.8, headingHeight: 17, noteHeight: 8, gap: 5, titleFont: 6.4, nameFont: 6.6, detailFont: 5.3 },
+  { columns: 2, rowHeight: 12.5, headingHeight: 19, noteHeight: 10, gap: 6, titleFont: 7.6, nameFont: 7.5, detailFont: 6.1 },
+  { columns: 3, rowHeight: 12.8, headingHeight: 17, noteHeight: 9, gap: 5, titleFont: 7.1, nameFont: 7.4, detailFont: 6 },
+  { columns: 4, rowHeight: 11.7, headingHeight: 16, noteHeight: 8, gap: 4, titleFont: 6.4, nameFont: 6.6, detailFont: 5.3 },
+  { columns: 5, rowHeight: 7.1, headingHeight: 13, noteHeight: 7, gap: 3, titleFont: 5.2, nameFont: 4.9, detailFont: 4.1 },
   { columns: 5, rowHeight: 6.8, headingHeight: 14, noteHeight: 7, gap: 4, titleFont: 5.2, nameFont: 4.9, detailFont: 4.1 }
 ];
 
@@ -1073,7 +1083,7 @@ function fullReport(document: PDFKit.PDFDocument, event: any): void {
   const inventory = supportingInventoryRows(event);
   const areas: Array<{ title: string; hint?: string; hasContent: boolean; sharesSummary?: boolean; render: () => void }> = [
     { title: '1. Momentos del evento', hint: 'Cronograma horario y notas para el staff', hasContent: timelineHasContent(event), sharesSummary: true, render: () => timeline(document, event, 'full') },
-    { title: '2. Invitados y mesas', hint: (tables.length || guests.length) ? `${guests.length} invitado${guests.length === 1 ? '' : 's'} cargado${guests.length === 1 ? '' : 's'}` : undefined, hasContent: tables.length > 0 || guests.length > 0, render: () => guestList(document, event, 'full', null) },
+    { title: '2. Invitados y mesas', hint: (tables.length || guests.length) ? `${guests.length} invitado${guests.length === 1 ? '' : 's'} cargado${guests.length === 1 ? '' : 's'}${event.guestCount ? ` · Servicio: ${event.guestCount}` : ''}` : undefined, hasContent: tables.length > 0 || guests.length > 0, render: () => guestList(document, event, 'full', null) },
     { title: '3. Logística y coordinación', hasContent: logisticsActiveSections(event).length > 0, render: () => logistics(document, event, 'full') },
     { title: '4. Inventario de vajilla', hint: 'Control de salida y retorno', hasContent: tableware.length > 0, render: () => tablewareControl(document, event, 'full') },
     { title: '5. Registro operativo de mantelería', hint: 'Propios, alquilados y control', hasContent: linen.length > 0, render: () => linenRegister(document, event, 'full') },
@@ -1241,7 +1251,7 @@ function fullReportWordHtml(event: any): string {
 export function generateOperationalWord(event: any, type: OperationalDocumentType): { buffer: Buffer; fileName: string } {
   const customer = typeof event.customerId === 'object' ? event.customerId?.fullName : undefined;
   const salon = typeof event.salonId === 'object' ? event.salonId?.name : undefined;
-  const details = [['Fecha', date(event.eventDate)], ['Horario', event.startTime || event.endTime ? `${event.startTime || 'A definir'} a ${event.endTime || 'A definir'}` : 'A confirmar'], ['Cliente', text(customer)], ['Salón', text(salon)], ['Tipo de evento', text(event.eventType)], ['Invitados', event.guestCount ? `${event.guestCount} personas` : 'A confirmar']];
+  const details = [['Fecha', date(event.eventDate)], ['Horario', event.startTime || event.endTime ? `${event.startTime || 'A definir'} a ${event.endTime || 'A definir'}` : 'A confirmar'], ['Cliente', text(customer)], ['Salón', text(salon)], ['Tipo de evento', text(event.eventType)], ['Invitados', guestCountSummary(event, type)]];
   const detailsHtml = details.map(([label, value]) => `<div class="detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join('');
   const content = type === 'timeline'
     ? `${timelineWordHtml(event)}${guestListWordHtml(event)}`

@@ -312,6 +312,23 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(pdfContentText(pdf.buffer)).toContain('Invitado 100 Apellido');
   });
 
+  it('shows the service guest count alongside the number of names actually loaded', async () => {
+    const tables = Array.from({ length: 6 }, (_, index) => ({ id: `mesa${index + 1}`, name: `Mesa ${index + 1}`, capacity: 10 }));
+    const guests = Array.from({ length: 55 }, (_, index) => ({ fullName: `Invitado ${index + 1}`, tableId: tables[Math.floor(index / 10)].id }));
+    const event = {
+      ...minimalEvent,
+      guestCount: 60,
+      resourcePlanSnapshot: { guestList: { tables, guests: [...guests, { fullName: '  ', tableId: tables[5].id }] } }
+    };
+
+    const pdf = await generateOperationalPdf(event, 'full');
+    const word = html(generateOperationalWord(event, 'full').buffer);
+
+    expect(pdfContentText(pdf.buffer)).toContain('Servicio: 60 · En lista: 55');
+    expect(pdfContentText(pdf.buffer)).toContain('55 invitados cargados · Servicio: 60');
+    expect(word).toContain('Servicio: 60 · En lista: 55');
+  });
+
   it('limits the guest table detail to age group and dietary restrictions, excluding operational menu and notes', async () => {
     const meal = 'Menú interno que no debe imprimirse';
     const operationalNote = 'Observación operativa que no debe imprimirse';
