@@ -299,7 +299,22 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(pdfContentText(pdf.buffer)).toContain('Indicación operativa 16');
   });
 
-  it('fits 10 guest tables on their own portrait page in the full schedule', async () => {
+  it('keeps nine populated guest tables on the same portrait page even with wrapped names and details', async () => {
+    const tables = Array.from({ length: 9 }, (_, index) => ({ id: `mesa${index + 1}`, name: `Mesa ${index + 1}`, capacity: 10 }));
+    const guests = Array.from({ length: 90 }, (_, index) => ({
+      fullName: index % 11 === 0 ? `Invitado Nombre Apellido Compuesto ${index + 1}` : `Invitado ${String(index + 1).padStart(2, '0')} Apellido`,
+      tableId: tables[Math.floor(index / 10)].id,
+      ageGroup: index % 17 === 0 ? 'child_5_9' : undefined,
+      dietaryPreference: index % 13 === 0 ? 'vegetarian' : 'none'
+    }));
+    const pdf = await generateOperationalPdf({ ...minimalEvent, resourcePlanSnapshot: { guestList: { tables, guests } } }, 'full');
+
+    expect(pdfPageCount(pdf.buffer)).toBe(2);
+    expect(pdfContentText(pdf.buffer)).toContain('MESA 9');
+    expect(pdfContentText(pdf.buffer)).toContain('Invitado 90 Apellido');
+  });
+
+  it('continues the full schedule guest list on another page when ten full tables need more room', async () => {
     const tables = Array.from({ length: 10 }, (_, index) => ({ id: `mesa${index + 1}`, name: `Mesa ${index + 1}`, capacity: 10, audience: index < 3 ? 'family' : 'open' }));
     const guests = Array.from({ length: 100 }, (_, index) => ({ fullName: `Invitado ${String(index + 1).padStart(2, '0')} Apellido`, tableId: tables[Math.floor(index / 10)].id }));
     const pdf = await generateOperationalPdf({
@@ -307,7 +322,7 @@ describe('event-operational-document.service — cronograma integral (type "full
       resourcePlanSnapshot: { guestList: { tables, guests } }
     }, 'full');
 
-    expect(pdfPageCount(pdf.buffer)).toBe(2);
+    expect(pdfPageCount(pdf.buffer)).toBe(3);
     expect(pdfContentText(pdf.buffer)).toContain('MESA 10');
     expect(pdfContentText(pdf.buffer)).toContain('Invitado 100 Apellido');
   });
