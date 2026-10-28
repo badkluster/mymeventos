@@ -21,6 +21,22 @@ function pdfContentText(buffer: Buffer): string {
   return Buffer.concat(encodedText).toString('latin1');
 }
 
+function pdfTextY(buffer: Buffer, fragment: string): number {
+  for (const stream of buffer.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+    let content: string;
+    try { content = inflateSync(Buffer.from(stream[1], 'latin1')).toString('latin1'); }
+    catch { continue; }
+    const lines = new Map<number, string>();
+    for (const match of content.matchAll(/1 0 0 1 [\d.]+ ([\d.]+) Tm\s+\/F\d+ 8\.5 Tf\s+\[([^\]]+)\] TJ/g)) {
+      const y = Number(match[1]);
+      const text = Array.from(match[2].matchAll(/<([0-9A-Fa-f]+)>/g)).map((part) => Buffer.from(part[1], 'hex').toString('latin1')).join('');
+      lines.set(y, (lines.get(y) ?? '') + text);
+    }
+    for (const [y, line] of lines) if (line.includes(fragment)) return y;
+  }
+  throw new Error(`No se encontró el texto «${fragment}» en el PDF.`);
+}
+
 function pdfPageCount(buffer: Buffer): number {
   return buffer.toString('latin1').match(/\/Type\s*\/Page\b/g)?.length ?? 0;
 }
@@ -243,6 +259,18 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(word).toContain('Confirmar <strong>SIN EXCEPCIÓN</strong> con coordinación');
   });
 
+  it('keeps Windows line breaks and blank paragraphs between staff note lines in the PDF and Word exports', async () => {
+    const note = '**RECEPCIÓN:** mesa x mesa\r\n- 9 paneras\r\n- **VEGETARIANOS:** 1 cazuela\r\n\r\n**ENTRADA:** mesa x mesa';
+    const event = { ...minimalEvent, resourcePlanSnapshot: { staffNotes: [{ title: 'Menú', notes: note }] } };
+    const pdf = await generateOperationalPdf(event, 'full');
+    const word = html(generateOperationalWord(event, 'full').buffer);
+
+    expect(pdfTextY(pdf.buffer, 'paneras') - pdfTextY(pdf.buffer, 'VEGETARIANOS:')).toBeCloseTo(13);
+    expect(pdfTextY(pdf.buffer, 'VEGETARIANOS:') - pdfTextY(pdf.buffer, 'ENTRADA:')).toBeCloseTo(26);
+    expect(word).toContain('paneras<br>- <strong>VEGETARIANOS:</strong>');
+    expect(word).toContain('cazuela<br><br><strong>ENTRADA:</strong>');
+  });
+
   it('uses a compact two-column layout when it keeps all event moments on their dedicated page', async () => {
     const timelineItems = Array.from({ length: 15 }, (_, index) => ({
       time: `${String(18 + Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`,
@@ -304,8 +332,8 @@ describe('event-operational-document.service — cronograma integral (type "full
     const guests = Array.from({ length: 90 }, (_, index) => ({
       fullName: index % 11 === 0 ? `Invitado Nombre Apellido Compuesto ${index + 1}` : `Invitado ${String(index + 1).padStart(2, '0')} Apellido`,
       tableId: tables[Math.floor(index / 10)].id,
-      ageGroup: index % 17 === 0 ? 'child_5_9' : undefined,
-      dietaryPreference: index % 13 === 0 ? 'vegetarian' : 'none'
+      ageGroup: index % 31 === 0 ? 'child_5_9' : undefined,
+      dietaryPreference: index % 41 === 0 ? 'vegetarian' : 'none'
     }));
     const pdf = await generateOperationalPdf({ ...minimalEvent, resourcePlanSnapshot: { guestList: { tables, guests } } }, 'full');
 
@@ -365,6 +393,33 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(content).not.toContain(meal);
     expect(content).not.toContain(operationalNote);
     expect(content).not.toContain(tableNote);
+  });
+
+  it('identifies adults in the full guest list, including older records without an age group', async () => {
+    const event = {
+      ...minimalEvent,
+      resourcePlanSnapshot: {
+        guestList: {
+          tables: [{ id: 'mesa1', name: 'Mesa 1', capacity: 4 }],
+          guests: [
+            { fullName: 'Ana Mayor', tableId: 'mesa1', ageGroup: 'adult' },
+            { fullName: 'Bruno Sin Edad', tableId: 'mesa1' },
+            { fullName: 'Carla Celíaca', tableId: 'mesa1', ageGroup: 'adult', dietaryPreference: 'celiac' },
+            { fullName: 'Damián Menor', tableId: 'mesa1', ageGroup: 'minor_10_17' }
+          ]
+        }
+      }
+    };
+
+    const pdf = await generateOperationalPdf(event, 'full');
+    const pdfText = pdfContentText(pdf.buffer);
+    const word = html(generateOperationalWord(event, 'full').buffer);
+
+    expect(pdfText.match(/Adulto/g)).toHaveLength(3);
+    expect(pdfText).toContain('Celíaco/a');
+    expect(pdfText).toContain('10 a 17 años');
+    expect(word.match(/Adulto/g)).toHaveLength(3);
+    expect(word).toContain('Celíaco/a');
   });
 });
 

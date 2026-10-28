@@ -174,9 +174,13 @@ function card(document: PDFKit.PDFDocument, event: any, type: OperationalDocumen
 type RichTextToken = { text: string; bold: boolean };
 type RichTextLine = RichTextToken[];
 
+function normalizeStaffNoteLineBreaks(value: string): string {
+  return value.replace(/\r\n?|\u2028|\u2029/g, '\n');
+}
+
 /** Convierte el Markdown mínimo usado por las notas (**texto**) en líneas listas para PDFKit. */
 function staffNoteTokens(value: string): RichTextToken[] {
-  return value.split(/(\*\*[\s\S]+?\*\*)/g).filter(Boolean).map((part) => {
+  return normalizeStaffNoteLineBreaks(value).split(/(\*\*[\s\S]+?\*\*)/g).filter(Boolean).map((part) => {
     const bold = part.startsWith('**') && part.endsWith('**');
     return { text: bold ? part.slice(2, -2) : part, bold };
   });
@@ -194,7 +198,7 @@ function richTextLines(document: PDFKit.PDFDocument, value: string, width: numbe
   };
 
   staffNoteTokens(value).forEach((token) => {
-    token.text.split(/(\n|\s+)/).filter(Boolean).forEach((part) => {
+    token.text.split(/(\n|[^\S\n]+)/).filter(Boolean).forEach((part) => {
       if (part === '\n') { flush(); return; }
       const whitespace = /^\s+$/.test(part);
       if (whitespace && !line.length) return;
@@ -473,8 +477,9 @@ function guestListData(event: any): { tables: any[]; guests: any[] } {
 
 /** La lista de mesas sólo expone datos útiles para identificar al invitado, no indicaciones internas de operación. */
 function guestListDetail(guest: any, guestCountMode?: string): string {
+  const ageGroup = (guestCountMode === 'headcount' ? guestAgeGroupHeadcountLabels : guestAgeGroupLabels)[guest.ageGroup] ?? 'Adulto';
   return [
-    (guestCountMode === 'headcount' ? guestAgeGroupHeadcountLabels : guestAgeGroupLabels)[guest.ageGroup] ?? '',
+    ageGroup,
     guest.dietaryPreference && guest.dietaryPreference !== 'none' ? dietaryPreferenceLabels[guest.dietaryPreference] ?? text(guest.dietaryPreference) : ''
   ].filter(Boolean).join(' · ');
 }
@@ -1151,7 +1156,7 @@ function escapeHtml(value: unknown): string {
 }
 
 function staffNoteHtml(value: string): string {
-  return escapeHtml(value).replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  return escapeHtml(normalizeStaffNoteLineBreaks(value)).replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
 }
 
 function timelineWordHtml(event: any, separateStaffNotes = false): string {
