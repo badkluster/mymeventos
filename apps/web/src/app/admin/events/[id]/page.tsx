@@ -2,7 +2,7 @@
 /* eslint-disable react/no-unescaped-entities */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { AlertTriangle, CalendarPlus, ChevronLeft, Copy, CreditCard, Download, Eye, FileText, LockKeyhole, Mail, MapPin, MessageCircle, Plus, Printer, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import { Permission } from '@mym/shared';
@@ -63,6 +63,7 @@ function entityId(value: unknown) {
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useSession();
   const { showToast } = useToast();
   const [id, setId] = useState('');
@@ -87,7 +88,15 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [loadError, setLoadError] = useState('');
   const [supplementaryLoadError, setSupplementaryLoadError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('resumen');
+  const requestedTab = searchParams?.get('tab');
+  const activeTab = requestedTab && eventTabs.includes(requestedTab) ? requestedTab : 'resumen';
+  const selectTab = (tab: string) => {
+    if (tab === activeTab) return;
+    const url = new URL(window.location.href);
+    if (tab === 'resumen') url.searchParams.delete('tab');
+    else url.searchParams.set('tab', tab);
+    window.history.replaceState(null, '', url.toString());
+  };
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [statusReason, setStatusReason] = useState('');
   const [lifecyclePreview, setLifecyclePreview] = useState<LifecyclePreview>();
@@ -463,7 +472,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       <button type="button" aria-label={`Copiar ID del ${event.serviceMode === 'external_catering' ? 'servicio' : 'evento'}: ${event._id}`} title="Copiar ID" onClick={() => void copyEventId()} className="mt-4 inline-flex max-w-full items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-medium tabular-nums text-zinc-600 transition hover:border-zinc-300 hover:bg-white hover:text-zinc-950 focus:outline-none focus:ring-2 focus:ring-zinc-500/20"><Copy aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /><span className="truncate">ID: {event._id}</span></button>
     </header>
     {isTerminal ? <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-rose-950"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-semibold">Evento en estado terminal: sólo lectura</p><p className="mt-1 text-sm leading-6 text-rose-800">Se preservan contratos, pagos, gastos e historial. Reactivalo para editarlo; las reservas operativas liberadas deberán revisarse antes de volver a confirmarlo.</p></div></div> : null}
-    <div className="flex flex-wrap gap-2 border-b border-zinc-200">{eventTabs.map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`px-4 py-3 text-sm font-medium ${activeTab === tab ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>{eventTabLabels[tab]}</button>)}</div>
+    <div className="flex flex-wrap gap-2 border-b border-zinc-200">{eventTabs.map((tab) => <button key={tab} type="button" onClick={() => selectTab(tab)} className={`px-4 py-3 text-sm font-medium ${activeTab === tab ? 'border-b-2 border-zinc-950 text-zinc-950' : 'text-zinc-500'}`}>{eventTabLabels[tab]}</button>)}</div>
     <fieldset disabled={isTerminal} className="contents">
     {(activeTab === 'resumen' || activeTab === 'pagos') && <FinancialOverview total={financialTotal} paid={financialPaid} balance={financialBalance} />}
     {activeTab === 'pagos' && !isTerminal && <OverdueInstallmentCollectionActions eventId={event._id} installments={event.paymentPlanSnapshot?.length ? event.paymentPlanSnapshot : contract?.paymentPlanSnapshot ?? []} />}
