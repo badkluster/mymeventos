@@ -1,65 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Check, MapPin, MessageCircle, PackageCheck, Sparkles } from 'lucide-react';
-import { absoluteUrl, localSeoPages, salonSeoPages, serializeJsonLd, siteUrl, type LocalSeoPage } from '@/lib/local-seo';
+import { crossLinksFor, localSeoPages, salonSeoPages, serializeJsonLd, type LocalSeoPage } from '@/lib/local-seo';
 import { brandAssets } from '@/lib/brand-assets';
 import { capacityForPublicSalon, imageForPublicSalon, locationForPublicSalon, titleForPublicSalon, type PublicLanding, type PublicPackage, type PublicSalon } from '@/lib/public-landing';
-
-function jsonLdForPage(page: LocalSeoPage, path: string, salonMode: boolean, salon?: PublicSalon, packages: PublicPackage[] = [], landing?: PublicLanding | null) {
-  const url = absoluteUrl(path);
-  const image = imageForPublicSalon(salon, page.heroImage) || page.heroImage;
-  const openGraphImage = landing?.settings?.openGraphImageUrl || brandAssets.openGraphImage;
-  const phone = salon?.phone || landing?.settings?.contactPhone;
-  const streetAddress = salon?.address || page.address;
-  const address = streetAddress ? {
-    '@type': 'PostalAddress',
-    streetAddress,
-    addressLocality: salon?.locality || salon?.city || page.location,
-    addressRegion: salon?.province || 'Buenos Aires',
-    addressCountry: 'AR'
-  } : undefined;
-  const faqs = landing?.faqs?.filter((faq) => faq.question && faq.answer).slice(0, 4).map((faq) => ({ question: faq.question!, answer: faq.answer! })) ?? page.faqs;
-  return [
-    {
-      '@context': 'https://schema.org',
-      '@type': 'EventVenue',
-      name: salon ? titleForPublicSalon(salon) : page.title,
-      url,
-      image,
-      description: salonMode && salon ? salon.publicDescription || salon.publicShortDescription || page.metaDescription : page.metaDescription,
-      ...(address ? { address } : {}),
-      amenityFeature: page.services.map((service) => ({ '@type': 'LocationFeatureSpecification', name: service, value: true })),
-      ...(phone ? { telephone: phone } : {})
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'LocalBusiness',
-      name: 'M&M Eventos',
-      url: siteUrl,
-      image: openGraphImage,
-      areaServed: ['La Plata', 'San Carlos', 'Villa Elisa'],
-      makesOffer: (packages.length ? packages.map((item) => item.name) : page.packages).map((name) => ({ '@type': 'Offer', name }))
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: faqs.map((faq) => ({
-        '@type': 'Question',
-        name: faq.question,
-        acceptedAnswer: { '@type': 'Answer', text: faq.answer }
-      }))
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Inicio', item: absoluteUrl('/') },
-        ...(salonMode ? [{ '@type': 'ListItem', position: 2, name: 'Salones', item: absoluteUrl('/#salones') }] : []),
-        { '@type': 'ListItem', position: salonMode ? 3 : 2, name: page.title, item: url }
-      ]
-    }
-  ];
-}
+import { localPageStructuredData, visibleFaqsFor } from '@/lib/structured-data';
 
 function relatedPage(slug: string, salonMode: boolean) {
   const pool = salonMode ? salonSeoPages : localSeoPages;
@@ -69,7 +14,7 @@ function relatedPage(slug: string, salonMode: boolean) {
 
 export function LocalSeoPageView({ page, path, salonMode = false, landing, salon, packages = [] }: { page: LocalSeoPage; path: string; salonMode?: boolean; landing?: PublicLanding | null; salon?: PublicSalon; packages?: PublicPackage[] }) {
   const related = page.relatedSlugs.map((slug) => relatedPage(slug, salonMode)).filter(Boolean) as { href: string; label: string }[];
-  const crossLinks = salonMode ? localSeoPages.slice(0, 4).map((item) => ({ href: `/${item.slug}`, label: item.title })) : salonSeoPages.map((item) => ({ href: `/salones/${item.slug}`, label: item.title }));
+  const crossLinks = crossLinksFor(page, salonMode);
   const heroImage = imageForPublicSalon(salon, page.heroImage) || page.heroImage;
   const heroAlt = salon?.mediaGallery?.[0]?.altText || (salon ? `${titleForPublicSalon(salon)}, salón de eventos` : 'Salón de eventos preparado para una celebración');
   const heading = salonMode && salon ? `${titleForPublicSalon(salon)}: ${page.h1.split(':').pop()?.trim() ?? page.title}` : page.h1;
@@ -84,12 +29,11 @@ export function LocalSeoPageView({ page, path, salonMode = false, landing, salon
     salon?.defaultPaymentTerms || page.highlights[0]
   ].filter(Boolean);
   const highlights = realHighlights.length ? realHighlights : page.highlights;
-  const faqs = landing?.faqs?.filter((faq) => faq.question && faq.answer).slice(0, 4) ?? [];
-  const visibleFaqs = faqs.length ? faqs.map((faq) => ({ question: faq.question!, answer: faq.answer! })) : page.faqs;
+  const visibleFaqs = visibleFaqsFor(page, landing);
   const logoOnDark = landing?.settings?.logoOnDarkUrl || brandAssets.logoLightOnDark;
 
   return <main className="min-h-screen overflow-x-hidden bg-zinc-950 text-white">
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLdForPage(page, path, salonMode, salon, packages, landing)) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(localPageStructuredData(page, path, salonMode, salon, packages, landing)) }} />
     <section className="relative isolate min-h-[620px] overflow-hidden">
       <Image src={heroImage} alt={heroAlt} fill priority sizes="100vw" className="object-cover" />
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/72 to-black/20" />

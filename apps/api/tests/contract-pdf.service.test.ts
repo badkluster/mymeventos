@@ -14,6 +14,21 @@ function pdfText(buffer: Buffer): string {
   }).map((stream) => [...stream.matchAll(/<([0-9a-fA-F]+)>/g)].map((match) => Buffer.from(match[1], 'hex').toString('latin1')).join('')).join('\n');
 }
 
+function pdfPageTexts(buffer: Buffer): string[] {
+  const source = buffer.toString('latin1');
+  const pageObjects = [...source.matchAll(/\d+ 0 obj\s*<<([\s\S]*?)>>\s*endobj/g)]
+    .map((match) => match[1])
+    .filter((body) => /\/Type\s*\/Page\b/.test(body));
+  return pageObjects.map((pageObject) => {
+    const contentId = pageObject.match(/\/Contents\s+(\d+)\s+0\s+R/)?.[1];
+    expect(contentId).toBeDefined();
+    const stream = source.match(new RegExp(`\\b${contentId} 0 obj\\s*<<[\\s\\S]*?>>\\s*stream\\r?\\n([\\s\\S]*?)\\r?\\nendstream`))?.[1];
+    expect(stream).toBeDefined();
+    const content = inflateSync(Buffer.from(stream!, 'latin1')).toString('latin1');
+    return [...content.matchAll(/<([0-9a-fA-F]+)>/g)].map((match) => Buffer.from(match[1], 'hex').toString('latin1')).join('');
+  });
+}
+
 describe('contract PDF considerations', () => {
   it('identifies M&M Eventos and its representative in the provider section', async () => {
     const pdf = await buildContractPdfBuffer({
@@ -50,5 +65,38 @@ describe('contract PDF considerations', () => {
     expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
     expect((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g) ?? []).length).toBeGreaterThan(2);
     expect(pdfText(pdf)).toContain(finalMarker);
+  });
+
+  it('keeps legal headings with their text and both signatures with conformity across payment plans', async () => {
+    const legalText = 'Las partes acuerdan las condiciones del evento y se comprometen a cumplirlas durante la prestación del servicio. ';
+    const clauses = Array.from({ length: 18 }, (_, index) => ({
+      title: index === 12 ? 'Fondo de garantía' : index === 13 ? 'Fuerza mayor' : `Cláusula de prueba ${index + 1}`,
+      text: `${legalText.repeat(index === 12 || index === 13 ? 12 : index === 14 ? 20 : 3)}\n\nCIERRE-CLAUSULA-${index + 1}`
+    }));
+    for (const installmentCount of [0, 4, 8, 12, 16, 20]) {
+      const clientName = installmentCount === 20
+        ? 'Cliente de prueba con apellido extendido para verificar el espacio de las firmas'
+        : 'Cliente de prueba';
+      const pdf = await buildContractPdfBuffer({
+        contractNumber: `C-TEST-${installmentCount}`,
+        customerSnapshot: { fullName: clientName },
+        eventSnapshot: {}, commercialSnapshot: {}, totalAmount: 0, balanceAmount: 0,
+        paymentPlanSnapshot: Array.from({ length: installmentCount }, (_, index) => ({ label: `Cuota ${index + 1}`, amount: 1000 })),
+        legalTermsSnapshot: { clauses }
+      });
+      const pages = pdfPageTexts(pdf);
+      expect(pages.length).toBeGreaterThan(1);
+      clauses.forEach((clause, index) => {
+        const titlePage = pages.find((pageText) => pageText.includes(`${index + 1}. ${clause.title}`));
+        expect(titlePage).toBeDefined();
+        expect(titlePage!.indexOf('Laspartesacuerdan', titlePage!.indexOf(`${index + 1}. ${clause.title}`))).toBeGreaterThan(-1);
+        expect(pages.join('')).toContain(`CIERRE-CLAUSULA-${index + 1}`);
+      });
+      const conformityPage = pages.find((pageText) => pageText.includes('Conformidad'));
+      expect(conformityPage).toContain('En prueba de conformidad');
+      expect(conformityPage).toContain('M&M Eventos · Prestadora');
+      expect(conformityPage).toContain('Cliente de prueba');
+      expect(pages.at(-1)).toBe(conformityPage);
+    }
   });
 });

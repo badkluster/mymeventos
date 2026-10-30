@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { brandAssets } from '@/lib/brand-assets';
 import { emitAnalyticsEvent } from '@/components/analytics-tracker';
+import { readEntryAttribution, searchEngineForHost } from '@/lib/entry-attribution';
 
 export type WhatsappSalonOption = {
   key: string;
@@ -21,13 +22,23 @@ function waLink(number: string, message: string) {
 }
 
 // UTM-aware, but never guesses a channel it can't see — full attribution still
-// travels on every click via AnalyticsTracker's existing utm_* capture.
-function sourceSuffix(utmSource: string, referrer: string): string {
+// travels on every click via AnalyticsTracker's existing utm_* capture. Without UTMs,
+// the session's first external referrer (e.g. an organic Google result that led to a
+// landing page before reaching /whatsapp) tells the sales team where the chat came from.
+function sourceSuffix(utmSource: string, referrer: string, entryReferrerHost?: string): string {
   const src = utmSource.toLowerCase();
   if (src.includes('instagram') || src === 'ig') return ' Vengo desde Instagram.';
   if (src.includes('google')) return ' Vengo desde Google.';
   if (src.includes('meta') || src.includes('facebook') || src.includes('fb')) return ' Vengo desde Facebook.';
-  if (!src && /instagram\.com/i.test(referrer)) return ' Vengo desde Instagram.';
+  if (src) return '';
+  if (/instagram\.com/i.test(referrer) || /(^|\.)instagram\.com$/i.test(entryReferrerHost ?? '')) return ' Vengo desde Instagram.';
+  let referrerHost = entryReferrerHost;
+  try {
+    referrerHost ||= referrer ? new URL(referrer).hostname : undefined;
+  } catch {
+    referrerHost = undefined;
+  }
+  if (searchEngineForHost(referrerHost) === 'google') return ' Vengo desde Google.';
   return '';
 }
 
@@ -35,11 +46,12 @@ export function WhatsappSelector({ salons, logoOnDarkUrl }: { salons: WhatsappSa
   const [suffix, setSuffix] = useState('');
 
   useEffect(() => {
-    const utmSource = new URLSearchParams(window.location.search).get('utm_source') || '';
+    const entry = readEntryAttribution();
+    const utmSource = new URLSearchParams(window.location.search).get('utm_source') || entry?.utmSource || '';
     // location.search/document.referrer only exist post-hydration; setting this during
     // render would mismatch the server-rendered (window-less) output.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSuffix(sourceSuffix(utmSource, document.referrer || ''));
+    setSuffix(sourceSuffix(utmSource, document.referrer || '', entry?.referrerHost));
   }, []);
 
   return (

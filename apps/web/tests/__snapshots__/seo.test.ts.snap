@@ -1,0 +1,78 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SEO surface that must not change > keeps titles, descriptions and H1s of every SEO page 1`] = `
+[
+  {
+    "h1": "Salones de fiestas en La Plata",
+    "metaDescription": "Salones de fiestas en La Plata para cumpleaños, 15 años y casamientos, con catering, bebidas, DJ, iluminación y organización integral.",
+    "metaTitle": "Salones de Fiestas en La Plata | M&M Eventos",
+    "slug": "salones-de-fiestas-la-plata",
+  },
+  {
+    "h1": "Salones para fiestas de 15 en La Plata",
+    "metaDescription": "Salones para fiestas de 15 en La Plata con catering, DJ, iluminación, sector de fotos, mesa principal y organización integral del evento.",
+    "metaTitle": "Salones para Fiestas de 15 en La Plata | M&M Eventos",
+    "slug": "fiestas-de-15-la-plata",
+  },
+  {
+    "h1": "Salón y catering para casamientos en La Plata",
+    "metaDescription": "Salón y catering para casamientos en La Plata con bebidas, DJ, iluminación, vajilla, mantelería y organización integral para celebrar sin preocuparte.",
+    "metaTitle": "Salón y Catering para Casamientos en La Plata | M&M Eventos",
+    "slug": "casamientos-la-plata",
+  },
+  {
+    "h1": "Salón de fiestas en San Carlos para eventos sociales y familiares",
+    "metaDescription": "M&M San Carlos es un salón de fiestas en San Carlos, La Plata, con paquetes para eventos sociales, infantiles, cumpleaños, 15 años y celebraciones familiares.",
+    "metaTitle": "Salón de fiestas en San Carlos, La Plata | M&M Eventos",
+    "slug": "salon-fiestas-san-carlos",
+  },
+  {
+    "h1": "Salón de eventos en Villa Elisa con servicio integral",
+    "metaDescription": "M&M Villa Elisa ofrece salón de eventos con catering, DJ, ambientación, bebidas, staff y organización para fiestas, 15 años, casamientos y eventos sociales.",
+    "metaTitle": "Salón de eventos en Villa Elisa | M&M Eventos",
+    "slug": "salon-eventos-villa-elisa",
+  },
+  {
+    "h1": "Catering para eventos en La Plata",
+    "metaDescription": "Catering para eventos en La Plata para cumpleaños, 15 años y casamientos, con recepción, menú, bebidas, vajilla y personal de servicio según la propuesta.",
+    "metaTitle": "Catering para eventos en La Plata | M&M Eventos",
+    "slug": "catering-la-plata",
+  },
+  {
+    "h1": "Salón con catering incluido en La Plata para fiestas completas",
+    "metaDescription": "Salón con catering incluido en La Plata para fiestas, casamientos, 15 años y egresados. Paquetes con menú, bebida, DJ, ambientación, vajilla y staff.",
+    "metaTitle": "Salón con catering incluido en La Plata | M&M Eventos",
+    "slug": "salon-con-catering-la-plata",
+  },
+  {
+    "h1": "Salones para cumpleaños en La Plata",
+    "metaDescription": "Salones para cumpleaños en La Plata con catering, DJ, ambientación, sector de fotos y organización integral para festejar sin ocuparte de la logística.",
+    "metaTitle": "Salones para Cumpleaños en La Plata | M&M Eventos",
+    "slug": "cumpleanos-la-plata",
+  },
+  {
+    "h1": "Eventos empresariales en La Plata con salón, catering y proyector",
+    "metaDescription": "Salón para eventos empresariales en La Plata: cenas de fin de año, lanzamientos y reuniones corporativas con catering, proyector y organización integral.",
+    "metaTitle": "Eventos empresariales en La Plata | M&M Eventos",
+    "slug": "eventos-empresariales-la-plata",
+  },
+  {
+    "h1": "M&M Eventos La Plata: salón de fiestas para celebrar",
+    "metaDescription": "M&M Eventos La Plata es un salón de fiestas para cumpleaños, 15 años, casamientos y celebraciones sociales, con opciones de catering y organización integral.",
+    "metaTitle": "M&M Eventos La Plata | Salón de Fiestas en La Plata",
+    "slug": "la-plata",
+  },
+  {
+    "h1": "M&M Eventos San Carlos: salón para eventos familiares",
+    "metaDescription": "M&M Eventos San Carlos es un salón para cumpleaños, fiestas infantiles, 15 años y celebraciones familiares en San Carlos, La Plata.",
+    "metaTitle": "M&M Eventos San Carlos | Salón de Eventos en La Plata",
+    "slug": "san-carlos",
+  },
+  {
+    "h1": "M&M Eventos Villa Elisa: salón de fiestas para tu evento",
+    "metaDescription": "M&M Eventos Villa Elisa es un salón de fiestas para cumpleaños, 15 años, casamientos y eventos sociales, con catering y organización integral.",
+    "metaTitle": "M&M Eventos Villa Elisa | Salón de Fiestas en Villa Elisa",
+    "slug": "villa-elisa",
+  },
+]
+`;

@@ -7,11 +7,12 @@ import { AnalyticsSession } from '../analytics/analytics.models';
 import { Contract, Event, Payment, Quote, QuoteRequest } from '../crm/crm.models';
 import { Salon } from '../salons/salon.model';
 import { parseReportPeriod, resolveReportScope } from '../reporting/report-filter';
+import { searchEngineForReferrer } from '../../utils/traffic-source';
 
 const router = Router();
 router.use(requireAuth, requirePermission(Permission.ANALYTICS_VIEW));
 
-type AttributionMethod = 'utm' | 'session' | 'crm_source' | 'unknown';
+type AttributionMethod = 'utm' | 'session' | 'referrer' | 'crm_source' | 'unknown';
 type AttributionIdentity = {
   source: string;
   medium: string | null;
@@ -106,7 +107,7 @@ function sessionForRequest(sessions: any[], createdAt: Date): any | null {
   }) ?? null;
 }
 
-function attributionForRequest(item: any, session: any | null): AttributionIdentity {
+export function attributionForRequest(item: any, session: any | null): AttributionIdentity {
   const payload = item.originalPayload && typeof item.originalPayload === 'object' ? item.originalPayload : {};
   const payloadSource = text(payload.utmSource);
   const payloadMedium = text(payload.utmMedium);
@@ -136,6 +137,12 @@ function attributionForRequest(item: any, session: any | null): AttributionIdent
     };
   }
 
+  // Organic search without UTMs: the public form sends the session's first external
+  // referrer host, available even when the visitor declined analytics cookies.
+  const searchEngine = searchEngineForReferrer(text(payload.referrerHost));
+  if (searchEngine) {
+    return { source: searchEngine, medium: 'organic', campaign: null, method: 'referrer', attributed: true };
+  }
   const fallback = crmFallbackSource(item.source);
   if (fallback !== 'direct') {
     return { source: fallback, medium: null, campaign: null, method: 'crm_source', attributed: true };

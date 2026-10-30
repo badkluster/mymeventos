@@ -68,7 +68,7 @@ Principios verificados en el código (no solo aspiracionales):
 - Sin librería de formularios/validación (no `react-hook-form`, no `zod` en el cliente), sin capa de datos (no React Query/SWR — `fetch` directo por página), sin librería de tablas ni de fechas.
 - Cliente HTTP propio en `src/lib/api.ts`: `fetch` con `credentials: 'include'`, refresco automático de sesión ante `401 UNAUTHENTICATED` (reintenta una vez tras `POST /auth/refresh`), envoltorio de respuesta `{ success, data, error }`.
 - **No existe `middleware.ts`**: toda la protección de rutas `/admin/*` es del lado del cliente (`Protected` en `src/app/admin/layout.tsx`, redirección con `router.replace`). La seguridad real depende exclusivamente de que el backend rechace solicitudes no autorizadas — el frontend es solo UX, nunca una barrera de seguridad.
-- Sin suite de tests (no hay script `test` en `apps/web/package.json`).
+- Tests: desde 2026-10-29, `vitest` (`apps/web/tests/`, entorno Node) cubre helpers puros de SEO, JSON-LD y analítica. No hay tests de render ni E2E versionados.
 - Estructura: `app/` (rutas), `components/` (shell admin, primitivas UI, proveedores de sesión/tema), `features/` (módulos de negocio grandes: `digital`, `events`, `quotes`, `salons`, `landing`, `notifications`), `lib/` (cliente API, auth, permisos de navegación, labels de enums), `pages/api/[...path].ts` (único remanente de Pages Router, probablemente proxy).
 
 ### 2.3 App móvil — `apps/mobile`
@@ -111,7 +111,7 @@ Cubre: login (con Bearer token, no cookie), biometría local, fichaje de entrada
 | `pnpm build` | `pnpm -r run build` |
 | `pnpm lint` | `pnpm -r run lint` |
 | `pnpm typecheck` | `pnpm -r run typecheck` |
-| `pnpm test` | `pnpm -r run test` (nota: `apps/web` no tiene script `test`, por lo que ese workspace no aporta nada al comando) |
+| `pnpm test` | `pnpm -r run test` |
 
 ### `apps/api` (usar `pnpm --filter @mym/api <script>`)
 
@@ -121,7 +121,7 @@ Cubre: login (con Bearer token, no cookie), biometría local, fichaje de entrada
 
 ### `apps/web` (usar `pnpm --filter @mym/web <script>`)
 
-`dev`, `build`, `start`, `lint`, `typecheck`. **Sin script `test`.**
+`dev`, `build`, `start`, `lint`, `typecheck`, `test` (`vitest run`, agregado 2026-10-29).
 
 ### `apps/mobile` (usar `pnpm --filter @mym/mobile <script>`)
 
@@ -601,6 +601,28 @@ esos permisos denegados pueda ver el detalle de pagos/gastos de eventos de su
 propio salón, es una decisión de negocio nueva a confirmar explícitamente con
 el usuario — no una extensión obvia de este fix.
 
+Actualización 2026-10-29 — auditoría SEO y medición de conversiones del sitio
+público (`docs/seo/SEO_AUDIT_2026-10-29.md`). Reglas nuevas a respetar:
+(1) `whatsapp_click` cuenta solo destinos reales `wa.me`/`whatsapp.com`
+(`apps/web/src/lib/analytics-conversions.ts`), no el selector `/whatsapp` ni
+botones que abren un modal; (2) `generate_lead` se dispara solo tras el 201
+de `POST /public/quick-quote`; (3) los eventos de conversión del `dataLayer`
+llevan `venue_id`/`venue_name`/`contact_channel`/`page_path` y nunca datos
+personales; (4) `POST /public/quick-quote` acepta `landingPath` y
+`referrerHost` opcionales (guardados en `QuoteRequest.originalPayload`, sin
+cambio de modelo), y `crm-attribution` usa `referrerHost` de buscador como
+`google / organic`; (5) `AnalyticsSession.source` clasifica referrers de
+buscadores como orgánicos (`apps/api/src/utils/traffic-source.ts`); (6) el
+JSON-LD vive en `apps/web/src/lib/structured-data.ts`, con `@id` estables
+para la organización y cada salón; no volver a usar `department` en un
+`EventVenue` ni `LocalBusiness` sin dirección. Contradicción encontrada y
+documentada (no resuelta): las landings temáticas muestran las FAQs globales
+del CMS en lugar de las propias de `local-seo.ts`, y los servicios/paquetes
+del salón La Plata en lugar de los propios de cada tema — propuestas P1/P2
+del informe, pendientes de aprobación. GTM (contenedor v7) todavía dispara
+`whatsapp_click` por clic en enlace sin parámetros; los pasos manuales están
+en el informe §4.2.
+
 ## 9. Integraciones — estado real
 
 | Integración | Librería/mecanismo | Estado |
@@ -676,6 +698,7 @@ Estos archivos existentes se conservan como documentación granular por módulo.
 | `MOBILE_AUTHENTICATION.md` | Auth Bearer móvil, gate de doble condición, dispositivos, biometría, recuperación de contraseña | Vigente, creado 2026-07-25 |
 | `MOBILE_BUILDS.md` | Config de `app.json`, variables de entorno, estado de build EAS/push (pendientes) | Vigente, creado 2026-07-25 |
 | `MOBILE_QA.md` | Cobertura de tests (backend + mobile), QA manual E2E real ejecutado, bug encontrado y corregido, recomendaciones | Vigente, creado 2026-07-25 |
+| `seo/SEO_AUDIT_2026-10-29.md` | Auditoría SEO técnica y de medición de conversiones (GA4/GTM/CRM): hallazgos contrastados con el código, cambios aplicados, propuestas pendientes de aprobación, pasos manuales de GTM/GA4 y plan de medición a 14/28/60 días | Vigente, creado 2026-10-29 |
 | `MYM_EVENTOS_ADMINISTRATIVE_GAP_ANALYSIS.html` | Informe (HTML, no markdown) que cruza los 5 documentos Excel/Word reales que usa el equipo (cronograma, producción, control de gastos, contratos, control de pagos) contra el código real de Producción/Gastos/Payroll/Reportes, con cita de archivo/línea por hallazgo | Vigente, creado 2026-07-29 |
 
 Archivos creados/actualizados en esta tarea (además de las anteriores ya registradas): `MYM_EVENTOS_PROJECT_CONTEXT.md` (esta actualización, 2026-07-29) y `MYM_EVENTOS_ADMINISTRATIVE_GAP_ANALYSIS.html` (nuevo, 2026-07-29).

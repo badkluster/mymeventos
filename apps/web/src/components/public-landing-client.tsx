@@ -14,11 +14,13 @@ import type { GooglePlaceReview } from '@/lib/google-place-reviews';
 import { localSeoPages, salonSeoPages } from '@/lib/local-seo';
 import type { PublicLandingSettings } from '@/lib/public-landing';
 import { analyticsAttributionId, emitAnalyticsEvent } from '@/components/analytics-tracker';
+import { venueCodeForSalon } from '@/lib/analytics-conversions';
+import { readEntryAttribution } from '@/lib/entry-attribution';
 
 type Media = { url: string; secureUrl?: string; title?: string; altText?: string; resourceType?: string; displayOrder?: number };
 type ExtraService = { _id?: string; name: string; description?: string; basePrice?: number; includedByDefault?: boolean };
 type SalonManager = { _id?: string; firstName?: string; lastName?: string; fullName?: string; phone?: string; email?: string };
-type Salon = { _id: string; name: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; province?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; manager?: SalonManager; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
+type Salon = { _id: string; name: string; slug?: string; publicTitle?: string; publicShortDescription?: string; publicDescription?: string; heroImageUrl?: string; galleryImageUrls?: string[]; mediaGallery?: Media[]; locationText?: string; locality?: string; city?: string; province?: string; address?: string; mapUrl?: string; phone?: string; email?: string; whatsapp?: string; instagramUrl?: string; facebookUrl?: string; tiktokUrl?: string; manager?: SalonManager; minCapacity?: number; maxCapacity?: number; recommendedCapacity?: number; defaultStartTime?: string; defaultEndTime?: string; defaultDurationHours?: number; defaultDepositAmount?: number; defaultPaymentTerms?: string; extraServices?: ExtraService[]; packages?: Package[] };
 type Package = { _id: string; name: string; salonId?: string; salonName?: string; description?: string; notes?: string; durationHours?: number; startTime?: string; endTime?: string; pricingMode?: 'per_person' | 'fixed'; pricePerPerson?: number; finalPricePerPerson?: number; fixedPrice?: number; finalFixedPrice?: number; depositAmount?: number; paymentTerms?: string; promotionText?: string; giftText?: string; includedServices?: string[]; menuSections?: { title?: string; name?: string; items: string[] }[]; badgeLabel?: string; featured?: boolean };
 type LandingItem = { _id?: string; title?: string; subtitle?: string; description?: string; imageUrl?: string; altText?: string; category?: string; badgeText?: string; ctaLabel?: string; ctaLink?: string; quote?: string; customerName?: string; eventType?: string; rating?: number; question?: string; answer?: string; icon?: string };
 type Settings = PublicLandingSettings;
@@ -77,7 +79,7 @@ const fallbackFaqs = [
   { question: '¿Se puede congelar el precio con seña?', answer: 'Sí, las condiciones vigentes se pueden reservar abonando la seña indicada en la propuesta.' },
 ];
 const footerSeoLinks = [
-  ...localSeoPages.slice(0, 7).map((item) => ({ href: `/${item.slug}`, label: item.title })),
+  ...localSeoPages.map((item) => ({ href: `/${item.slug}`, label: item.title })),
   ...salonSeoPages.map((item) => ({ href: `/salones/${item.slug}`, label: item.title }))
 ];
 const contactPhonePattern = /^[+()\d\s-]{6,24}$/;
@@ -156,6 +158,8 @@ const socialOptions = [
 ];
 
 function titleForSalon(salon: Salon) { return salon.publicTitle || salon.name; }
+// Ties WhatsApp/phone clicks to a salon in analytics (venue_id), using the same codes as /whatsapp.
+function contactAnalyticsProps(salon: Salon) { const venue = venueCodeForSalon(salon); return venue ? { 'data-analytics-entity': venue } : {}; }
 function locationForSalon(salon: Salon) { return salon.locationText || salon.locality || salon.city || salon.address || 'La Plata'; }
 function heroLocationForSalon(salon: Salon) { return salon.locality || salon.city || titleForSalon(salon); }
 function descriptionForSalon(salon: Salon) { return salon.publicShortDescription || salon.publicDescription || 'Un espacio M&M preparado para celebrar con servicio integral.'; }
@@ -600,7 +604,7 @@ function SalonDetailModal({ salon, googleReviews, onClose, onRequestQuote }: { s
                 {item.includedServices?.length ? <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">{item.includedServices.slice(0, 4).map((service) => <li key={service} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c8cdd3]" />{service}</li>)}</ul> : null}
                 {item.promotionText || item.giftText ? <p className="mt-3 text-sm text-[#d4d4d8]">{item.promotionText || item.giftText}</p> : null}
                 <PackageFullDetail item={item} />
-                <div className="mt-auto pt-5"><a href={waLink(salonWhatsAppNumber(salon), packageWaMessage(salon, item))} target="_blank" rel="noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#25d366]/35 px-4 py-2.5 text-sm font-semibold text-[#d8ffe5] transition hover:border-[#25d366] hover:bg-[#25d366] hover:text-black">Me interesa <ExternalLink className="h-4 w-4" /></a></div>
+                <div className="mt-auto pt-5"><a href={waLink(salonWhatsAppNumber(salon), packageWaMessage(salon, item))} target="_blank" rel="noreferrer" {...contactAnalyticsProps(salon)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#25d366]/35 px-4 py-2.5 text-sm font-semibold text-[#d8ffe5] transition hover:border-[#25d366] hover:bg-[#25d366] hover:text-black">Me interesa <ExternalLink className="h-4 w-4" /></a></div>
               </article>)}</div>
             </section> : null}
           </div>
@@ -610,12 +614,12 @@ function SalonDetailModal({ salon, googleReviews, onClose, onRequestQuote }: { s
               <h3 className="text-lg font-semibold">Acciones rápidas</h3>
               <div className="mt-4 grid gap-2">
                 <button type="button" onClick={() => onRequestQuote(salon)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Pedir presupuesto <Send className="h-4 w-4" /></button>
-                <a href={waLink(salonWhatsAppNumber(salon), salonWaMessage(salon))} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#25d366] hover:text-[#25d366]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a>
+                <a href={waLink(salonWhatsAppNumber(salon), salonWaMessage(salon))} target="_blank" rel="noreferrer" {...contactAnalyticsProps(salon)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#25d366] hover:text-[#25d366]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a>
                 <button type="button" onClick={() => setMapOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-4 py-3 text-sm font-semibold transition hover:border-[#c8cdd3] hover:text-[#f1f5f9]">Ver ubicación <MapPin className="h-4 w-4" /></button>
               </div>
               <div className="mt-5 space-y-2 text-sm text-zinc-400">
                 {salon.address ? <p><span className="text-zinc-200">Dirección:</span> {salon.address}</p> : null}
-                {salonWhatsAppNumber(salon) ? <p><span className="text-zinc-200">Teléfono:</span> <a href={phoneLink(salonWhatsAppNumber(salon)!)} className="hover:text-white">{salonWhatsAppNumber(salon)}</a></p> : null}
+                {salonWhatsAppNumber(salon) ? <p><span className="text-zinc-200">Teléfono:</span> <a href={phoneLink(salonWhatsAppNumber(salon)!)} {...contactAnalyticsProps(salon)} className="hover:text-white">{salonWhatsAppNumber(salon)}</a></p> : null}
                 {salon.email ? <p><span className="text-zinc-200">Email:</span> {salon.email}</p> : null}
                 {salon.defaultDepositAmount ? <p><span className="text-zinc-200">Seña sugerida:</span> {money(salon.defaultDepositAmount)}</p> : null}
               </div>
@@ -883,6 +887,10 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
     setFormState('loading');
     setFormMessage('');
     try {
+      const query = new URLSearchParams(window.location.search);
+      // UTMs of the current URL win; otherwise keep the ones from the session's first
+      // page, which are lost after navigating from a landing page to this form.
+      const entry = readEntryAttribution();
       const result = await api.post<{ quoteRequestId?: string }>('/public/quick-quote', {
         name: textValue(formData.get('name')),
         phone,
@@ -894,10 +902,12 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
         packageTemplateId: packageTemplateId || undefined,
         message,
         attributionId: analyticsAttributionId() || undefined,
-        utmSource: new URLSearchParams(window.location.search).get('utm_source') || undefined,
-        utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
-        utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
-        utmCampaignId: new URLSearchParams(window.location.search).get('utm_id') || undefined,
+        utmSource: query.get('utm_source') || entry?.utmSource || undefined,
+        utmMedium: query.get('utm_medium') || entry?.utmMedium || undefined,
+        utmCampaign: query.get('utm_campaign') || entry?.utmCampaign || undefined,
+        utmCampaignId: query.get('utm_id') || entry?.utmCampaignId || undefined,
+        landingPath: entry?.landingPath || undefined,
+        referrerHost: entry?.referrerHost || undefined,
       });
       if (selectedSalonForRequest && salonWhatsAppNumber(selectedSalonForRequest)) {
         const whatsappUrl = waLink(salonWhatsAppNumber(selectedSalonForRequest), quoteRequestManagerMessage({
@@ -918,7 +928,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
       setSelectedContactPackageId('');
       setFormState('success');
       setFormMessage('Recibimos tu solicitud. Un asesor de M&M Eventos se contactará para enviarte una propuesta personalizada.');
-      emitAnalyticsEvent('form_success', { sectionId: 'contact', elementId: 'contact-form', entityId: result.quoteRequestId });
+      // Fired only after the API confirmed the request (201): this is the generate_lead conversion.
+      emitAnalyticsEvent('form_success', { sectionId: 'contact', elementId: 'contact-form', entityId: result.quoteRequestId, venueId: venueCodeForSalon(selectedSalonForRequest) });
     } catch (error) {
       setFormState('error');
       setFormMessage(error instanceof Error ? error.message : 'No se pudo enviar la solicitud. Revisá los datos e intentá nuevamente.');
@@ -953,7 +964,9 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
           {hasActiveTickets ? <Link href="/entradas" className="group relative py-3 transition-colors duration-300 hover:text-white focus-visible:outline-none focus-visible:text-white"><span>Entradas</span><span className="absolute inset-x-0 bottom-1 h-px origin-center scale-x-0 bg-[#c7a3ff] transition-transform duration-300 group-hover:scale-x-100 group-focus-visible:scale-x-100" /></Link> : null}
         </nav>
         <div className="hidden items-center gap-5 xl:flex">
-          <Link href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-14 w-14 place-items-center rounded-xl border border-[#b98cff]/55 bg-black/10 text-white/90 shadow-[inset_0_0_0_1px_rgba(255,255,255,.05)] backdrop-blur-sm transition duration-300 hover:border-[#cfadff] hover:bg-[#9f68ef]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff]"><LogIn className="h-5 w-5" /></Link>
+          {/* Full page load on purpose: tags loaded on the public site must not keep measuring backoffice navigation. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/admin/login" aria-label="Ingresar al backoffice" title="Backoffice" className="grid h-14 w-14 place-items-center rounded-xl border border-[#b98cff]/55 bg-black/10 text-white/90 shadow-[inset_0_0_0_1px_rgba(255,255,255,.05)] backdrop-blur-sm transition duration-300 hover:border-[#cfadff] hover:bg-[#9f68ef]/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff]"><LogIn className="h-5 w-5" /></a>
           <button type="button" onClick={() => scrollTo('contacto')} style={displayFont} className="h-14 min-w-[230px] rounded-xl bg-[#f4f2f5] px-8 text-[18px] font-semibold text-[#17131c] shadow-[0_14px_40px_rgba(9,4,18,.22)] transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_18px_44px_rgba(174,126,238,.22)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#08050d]">Solicitá presupuesto</button>
         </div>
         <button type="button" onClick={() => setMobileOpen(true)} className="grid h-12 w-12 place-items-center rounded-xl border border-[#b98cff]/45 bg-black/25 text-white backdrop-blur-sm transition hover:border-[#cfadff] hover:bg-[#9f68ef]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7a3ff] xl:hidden" aria-label="Abrir menú"><Menu className="h-5 w-5" /></button>
@@ -968,7 +981,8 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
         <nav style={displayFont} className="relative mt-8 grid gap-2">{nav.map(([label, id]) => <button key={id} type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo(id), 0); }} className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 text-left text-xl font-medium text-white transition hover:border-[#b98cff]/55 hover:bg-[#9f68ef]/10"><span>{label}</span><ArrowRight className="h-4 w-4 text-[#c7a3ff] transition-transform duration-300 group-hover:translate-x-1" /></button>)}{hasActiveTickets ? <Link href="/entradas" onClick={() => setMobileOpen(false)} className="group flex items-center justify-between rounded-xl border border-[#b98cff]/35 bg-[#9f68ef]/10 px-5 py-4 text-left text-xl font-medium text-white"><span>Entradas</span><ArrowRight className="h-4 w-4 text-[#c7a3ff]" /></Link> : null}</nav>
         <div className="relative mt-8 grid gap-3">
           <button type="button" onClick={() => { setMobileOpen(false); window.setTimeout(() => scrollTo('contacto'), 0); }} style={displayFont} className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#f4f2f5] px-5 py-4 text-lg font-semibold text-[#17131c] shadow-[0_14px_40px_rgba(0,0,0,.24)]">Solicitá presupuesto <ArrowRight className="h-4 w-4" /></button>
-          <Link href="/admin/login" onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-4 text-sm font-medium text-zinc-300"><LogIn className="h-4 w-4" />Ingresar al backoffice</Link>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- full page load, see the header link above. */}
+          <a href="/admin/login" onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-4 text-sm font-medium text-zinc-300"><LogIn className="h-4 w-4" />Ingresar al backoffice</a>
         </div>
       </div></Portal> : null}
     </header>
@@ -1178,7 +1192,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
           <button type="button" onClick={() => selectedPackageSalon ? openSalon(selectedPackageSalon) : scrollTo('contacto')} className="rounded-lg border border-[#c8cdd3]/45 px-4 py-3 text-sm font-semibold transition hover:bg-[#c8cdd3] hover:text-black">Ver salón</button>
         </div>
       </motion.article>;
-      })}</motion.div> : <motion.div key={`${selectedPackageSalon?._id || 'todos'}-sin-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : (packagesRevealed ? 'visible' : 'hidden')} exit={shouldReduceMotion ? undefined : 'hidden'} variants={cardVariants} className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</motion.div>}
+      })}</motion.div> : <motion.div key={`${selectedPackageSalon?._id || 'todos'}-sin-combos`} initial={shouldReduceMotion ? false : 'hidden'} animate={shouldReduceMotion ? undefined : (packagesRevealed ? 'visible' : 'hidden')} exit={shouldReduceMotion ? undefined : 'hidden'} variants={cardVariants} className="rounded-2xl border border-[#c8cdd3]/25 bg-white/[0.03] p-8 text-center"><h3 className="text-xl font-semibold">Este salón todavía no tiene combos publicados.</h3><p className="mt-2 text-sm text-zinc-400">Consultanos y armamos una propuesta personalizada para tu evento.</p>{selectedPackageSalon ? <a href={waLink(salonWhatsAppNumber(selectedPackageSalon, settings.whatsappNumber), salonWaMessage(selectedPackageSalon))} target="_blank" rel="noreferrer" {...contactAnalyticsProps(selectedPackageSalon)} className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[#c8cdd3] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e5e7eb]">Consultar por WhatsApp <ExternalLink className="h-4 w-4" /></a> : null}</motion.div>}
       </AnimatePresence>
     </AnimatedSection>
 
@@ -1322,7 +1336,7 @@ export function PublicLandingClient({ initialLanding }: { initialLanding?: Parti
         <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#c8cdd3]">Contacto por salón</p><h2 className="mt-2 text-2xl font-semibold">Elegí a cuál {activeSocial.label} acceder</h2><p className="mt-2 text-sm text-zinc-400">Cada salón administra su propio canal.</p></div><button type="button" onClick={() => setSocialNetwork(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/15 text-white transition hover:bg-white hover:text-black" aria-label="Cerrar selector"><X className="h-4 w-4" /></button></div>
         <div className="mt-5 grid gap-3">{displaySalons.map((salon) => {
           const href = activeSocial.key === 'whatsapp' ? waLink(salonWhatsAppNumber(salon, settings.whatsappNumber), settings.whatsappDefaultMessage) : salon[activeSocial.field];
-          return href ? <a key={salon._id} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/10"><span><strong className="block text-white">{titleForSalon(salon)}</strong><span className="text-zinc-400">{locationForSalon(salon)}</span></span><activeSocial.icon className="h-5 w-5 text-[#c8cdd3]" /></a> : <div key={salon._id} className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-400"><strong className="block text-zinc-300">{titleForSalon(salon)}</strong>Sin {activeSocial.label} configurado</div>;
+          return href ? <a key={salon._id} href={href} target="_blank" rel="noreferrer" {...contactAnalyticsProps(salon)} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm transition hover:border-[#c8cdd3] hover:bg-[#c8cdd3]/10"><span><strong className="block text-white">{titleForSalon(salon)}</strong><span className="text-zinc-400">{locationForSalon(salon)}</span></span><activeSocial.icon className="h-5 w-5 text-[#c8cdd3]" /></a> : <div key={salon._id} className="rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-400"><strong className="block text-zinc-300">{titleForSalon(salon)}</strong>Sin {activeSocial.label} configurado</div>;
         })}</div>
       </section>
     </div> : null}

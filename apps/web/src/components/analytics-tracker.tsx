@@ -2,6 +2,8 @@
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { buildGa4Payload, classifyContactHref } from '@/lib/analytics-conversions';
+import { captureEntryAttribution, clearEntryAttribution } from '@/lib/entry-attribution';
 
 type AnalyticsName =
   | 'session_start' | 'page_view' | 'section_view' | 'section_engagement' | 'scroll_depth' | 'click' | 'cta_click'
@@ -12,7 +14,8 @@ type QueueEvent = Record<string, unknown> & { eventName: AnalyticsName };
 type TrackerSettings = { enabled: boolean; consentRequired: boolean; collectClicks: boolean; collectSectionEngagement: boolean };
 type MetaStandardEvent = 'PageView' | 'ViewContent' | 'Contact' | 'Lead';
 type MetaCustomerData = { email?: string; phone?: string; firstName?: string; lastName?: string };
-type AnalyticsDetail = { sectionId?: string; elementId?: string; entityId?: string; metaCustomerData?: MetaCustomerData };
+// venueId only feeds the GA4 dataLayer; the first-party collector schema is strict.
+type AnalyticsDetail = { sectionId?: string; elementId?: string; entityId?: string; venueId?: string; metaCustomerData?: MetaCustomerData };
 type MetaFbq = ((...args: unknown[]) => void) & {
   callMethod?: (...args: unknown[]) => void;
   queue: unknown[][];
@@ -45,50 +48,10 @@ const metaEventMapping: Partial<Record<AnalyticsName, MetaStandardEvent>> = {
   phone_click: 'Contact',
   form_success: 'Lead',
 };
-const ga4EventMapping: Partial<Record<AnalyticsName, string>> = {
-  whatsapp_click: 'whatsapp_click',
-  phone_click: 'phone_click',
-  form_start: 'form_start',
-  form_submit: 'form_submit',
-  form_success: 'generate_lead',
-  salon_view: 'salon_view',
-  package_view: 'package_view',
-  promotion_click: 'promotion_click',
-};
-
 function trackGa4DataLayerEvent(eventName: AnalyticsName, detail: Record<string, unknown>, utm: Record<string, string> = {}) {
-  const ga4EventName = ga4EventMapping[eventName];
-  if (!ga4EventName) return;
+  const payload = buildGa4Payload(eventName, detail, { pagePath: location.pathname, utm });
+  if (!payload) return;
   window.dataLayer = window.dataLayer || [];
-  const payload: Record<string, unknown> = {
-    event: ga4EventName,
-    section_id: detail.sectionId,
-    element_id: detail.elementId,
-    entity_id: detail.entityId,
-  };
-  if (ga4EventName === 'generate_lead') payload.lead_id = detail.entityId;
-  if (ga4EventName === 'salon_view') {
-    payload.salon_id = detail.entityId;
-    payload.salon_name = detail.elementId;
-  }
-  if (ga4EventName === 'package_view') {
-    payload.package_id = detail.entityId;
-    payload.package_name = detail.elementId;
-  }
-  if (ga4EventName === 'promotion_click') {
-    payload.promotion_id = detail.entityId;
-    payload.promotion_name = detail.elementId;
-  }
-  if (ga4EventName === 'whatsapp_click') {
-    // Attribution channel selectors (e.g. /whatsapp) rely on this to resolve which
-    // salon a click belongs to without a second event.
-    payload.salon = detail.entityId;
-    payload.utm_source = utm.utmSource || undefined;
-    payload.utm_medium = utm.utmMedium || undefined;
-    payload.utm_campaign = utm.utmCampaign || undefined;
-    payload.utm_content = utm.utmContent || undefined;
-    payload.utm_term = utm.utmTerm || undefined;
-  }
   window.dataLayer.push(payload);
 }
 
@@ -224,12 +187,21 @@ export function AnalyticsTracker() {
   const scrollMilestones = useRef(new Set<number>());
   const formStarted = useRef(new Set<string>());
   const formCustomerData = useRef(new Map<string, MetaCustomerData>());
+  // The tracking effect re-runs on every client-side navigation; session_start must
+  // still be sent once per browser session, not once per page.
+  const sessionStartedFor = useRef('');
   const publicPage = !pathname.startsWith('/admin') && !pathname.startsWith('/invitacion') && !pathname.startsWith('/invitados') && !pathname.startsWith('/entrada');
 
   useEffect(() => {
     setConsent(localStorage.getItem(consentKey) as 'accepted' | 'declined' | null);
     setConsentLoaded(true);
   }, []);
+
+  useEffect(() => {
+    // Only the first public page of the session is stored; later calls are no-ops.
+    if (consent === 'declined') clearEntryAttribution();
+    else if (publicPage && consentLoaded) captureEntryAttribution();
+  }, [consent, consentLoaded, publicPage]);
 
   useEffect(() => {
     if (!publicPage) return;
@@ -253,7 +225,7 @@ export function AnalyticsTracker() {
     const enqueue = (eventName: AnalyticsName, detail: AnalyticsDetail & Record<string, unknown> = {}) => {
       const eventId = crypto.randomUUID();
       const occurredAt = new Date().toISOString();
-      const { metaCustomerData, ...analyticsDetail } = detail;
+      const { metaCustomerData, venueId, ...analyticsDetail } = detail;
       const queuedEvent: QueueEvent = {
         eventId, anonymousVisitorId: visitorId.current, sessionId: sessionId.current, attributionId: attributionId.current,
         eventName, pagePath: location.pathname, pageTitle: document.title.slice(0, 240), referrer: document.referrer.slice(0, 500),
@@ -262,12 +234,13 @@ export function AnalyticsTracker() {
         occurredAt, pageVersion, ...analyticsDetail,
       };
       queue.current.push(queuedEvent);
-      trackGa4DataLayerEvent(eventName, analyticsDetail, utm.current);
+      trackGa4DataLayerEvent(eventName, { ...analyticsDetail, venueId }, utm.current);
       const standardEvent = trackMetaBrowserEvent(eventName, eventId, analyticsDetail);
       if (standardEvent) trackMetaServerEvent(standardEvent, eventName, eventId, occurredAt, attributionId.current, analyticsDetail, metaCustomerData);
       if (queue.current.length >= 10) flush();
     };
-    enqueue('session_start'); enqueue('page_view');
+    if (sessionStartedFor.current !== sessionId.current) { sessionStartedFor.current = sessionId.current; enqueue('session_start'); }
+    enqueue('page_view');
     const timer = window.setInterval(flush, 5_000);
     const sectionObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) {
@@ -287,18 +260,21 @@ export function AnalyticsTracker() {
     }, { threshold: 0.4 });
     document.querySelectorAll<HTMLElement>('[data-analytics-section]').forEach((section) => sectionObserver.observe(section));
     const click = (event: MouseEvent) => {
-      if (!settings.collectClicks) return;
       const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-analytics-id],a,button') : null;
       if (!target) return;
+      const href = target instanceof HTMLAnchorElement ? target.href : '';
+      const contactEvent = classifyContactHref(href);
+      // Contact clicks are conversions: they are recorded even when the heatmap click
+      // collection is off, just without coordinates.
+      if (!settings.collectClicks && !contactEvent) return;
       const sectionId = target.closest<HTMLElement>('[data-analytics-section]')?.dataset.analyticsSection;
       const elementId = analyticsElementId(target);
       const entityId = target.dataset.analyticsEntity || undefined;
-      const href = target instanceof HTMLAnchorElement ? target.href : '';
       let eventName: AnalyticsName = target.dataset.analyticsId ? 'cta_click' : 'click';
-      if (/wa\.me|whatsapp/i.test(href) || /whatsapp/i.test(elementId)) eventName = 'whatsapp_click';
-      else if (/^tel:/i.test(href)) eventName = 'phone_click';
+      if (contactEvent) eventName = contactEvent;
       else if (/maps|mapa/i.test(href) || /map/i.test(elementId)) eventName = 'map_click';
       else if (/instagram|facebook|tiktok/i.test(href)) eventName = 'social_click';
+      if (!settings.collectClicks) { enqueue(eventName, { sectionId, elementId, entityId }); return; }
       const scrollWidth = Math.max(document.documentElement.scrollWidth, 1); const scrollHeight = Math.max(document.documentElement.scrollHeight, 1);
       enqueue(eventName, { sectionId, elementId, entityId, normalizedX: Math.min(1, Math.max(0, event.pageX / scrollWidth)), normalizedY: Math.min(1, Math.max(0, event.pageY / scrollHeight)) });
     };

@@ -19,33 +19,64 @@ function logo(document: PDFKit.PDFDocument, x: number, y: number) { const asset 
 function header(document: PDFKit.PDFDocument, contract: any) { document.rect(0, 0, page.width, 76).fill(color.ink); logo(document, page.left, 8); document.font('Helvetica').fontSize(8).fillColor('#ddc99f').text('CONTRATO DE PRESTACIÓN DE SERVICIOS', 250, 20, { width: 299, align: 'right', characterSpacing: 1 }); document.font('Helvetica-Bold').fontSize(11).fillColor(color.white).text(contract.contractNumber, 250, 36, { width: 299, align: 'right' }); }
 function footer(document: PDFKit.PDFDocument, current: number, total: number) { document.moveTo(page.left, page.bottom - 12).lineTo(page.right, page.bottom - 12).strokeColor(color.line).stroke(); document.font('Helvetica').fontSize(7.5).fillColor(color.muted).text(`M&M Eventos · Contrato ${current} de ${total}`, page.left, page.bottom - 3, { width: page.right - page.left }); }
 function ensure(document: PDFKit.PDFDocument, contract: any, height: number) { if (document.y + height < page.bottom - 35) return; document.addPage(); header(document, contract); document.y = 98; }
-function title(document: PDFKit.PDFDocument, contract: any, label: string) { ensure(document, contract, 38); const y = document.y; document.font('Helvetica-Bold').fontSize(11).fillColor(color.ink).text(label, page.left, y); document.moveTo(page.left, y + 19).lineTo(page.right, y + 19).strokeColor(color.gold).stroke(); document.y = y + 28; }
+function title(document: PDFKit.PDFDocument, contract: any, label: string, minimumHeight = 38) { ensure(document, contract, minimumHeight); const y = document.y; document.font('Helvetica-Bold').fontSize(11).fillColor(color.ink).text(label, page.left, y); document.moveTo(page.left, y + 19).lineTo(page.right, y + 19).strokeColor(color.gold).stroke(); document.y = y + 28; }
 function pair(document: PDFKit.PDFDocument, label: string, value: unknown, x: number, y: number, width: number) { document.font('Helvetica-Bold').fontSize(7).fillColor(color.muted).text(label.toUpperCase(), x, y, { width }); document.font('Helvetica').fontSize(8.7).fillColor(color.ink).text(text(value), x, y + 10, { width, height: 23, ellipsis: true }); }
-function paragraph(document: PDFKit.PDFDocument, contract: any, value: string) { const height = document.heightOfString(value, { width: page.right - page.left, lineGap: 3 }); ensure(document, contract, height + 8); document.font('Helvetica').fontSize(9.2).fillColor('#273449').text(value, page.left, document.y, { width: page.right - page.left, lineGap: 3 }); document.moveDown(.8); }
-function contentThatFits(document: PDFKit.PDFDocument, content: string, width: number, maxHeight: number): [string, string] {
-  document.font('Helvetica').fontSize(9.2);
-  if (document.heightOfString(content, { width, lineGap: 3 }) <= maxHeight) return [content, ''];
-  let lastBreak = 0;
-  for (let index = 0; index < content.length; index += 1) {
-    if (/\s/.test(content[index])) lastBreak = index + 1;
-    if (document.heightOfString(content.slice(0, index + 1), { width, lineGap: 3 }) > maxHeight) {
-      const splitAt = Math.max(1, lastBreak || index);
-      return [content.slice(0, splitAt).trimEnd(), content.slice(splitAt).trimStart()];
-    }
+function paragraph(document: PDFKit.PDFDocument, contract: any, value: string) { document.font('Helvetica').fontSize(9.2); const height = document.heightOfString(value, { width: page.right - page.left, lineGap: 3 }); ensure(document, contract, height + 8); document.fillColor('#273449').text(value, page.left, document.y, { width: page.right - page.left, lineGap: 3 }); document.moveDown(.8); }
+function contentThatFits(document: PDFKit.PDFDocument, content: string, width: number, maxHeight: number, align: 'left' | 'justify'): [string, string] {
+  const options = { width, lineGap: 3, align };
+  if (document.heightOfString(content, options) <= maxHeight) return [content, ''];
+  const words = content.split(' ');
+  let low = 1;
+  let high = words.length;
+  let fittingWords = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    if (document.heightOfString(words.slice(0, middle).join(' '), options) <= maxHeight) {
+      fittingWords = middle;
+      low = middle + 1;
+    } else high = middle - 1;
   }
-  return [content, ''];
+  if (fittingWords) return [words.slice(0, fittingWords).join(' '), words.slice(fittingWords).join(' ')];
+  // A single unbroken token can exceed the available space; always make progress.
+  let fittingCharacters = 0;
+  low = 1;
+  high = words[0].length;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    if (document.heightOfString(words[0].slice(0, middle), options) <= maxHeight) {
+      fittingCharacters = middle;
+      low = middle + 1;
+    } else high = middle - 1;
+  }
+  return [words[0].slice(0, fittingCharacters), `${words[0].slice(fittingCharacters)} ${words.slice(1).join(' ')}`.trim()];
 }
-function flowingParagraph(document: PDFKit.PDFDocument, contract: any, value: string): void {
+function flowingParagraph(document: PDFKit.PDFDocument, contract: any, value: string, align: 'left' | 'justify' = 'left'): void {
   let remaining = value.trim();
+  const width = page.right - page.left;
   while (remaining) {
-    ensure(document, contract, 24);
-    const width = page.right - page.left;
-    const available = Math.max(14, page.bottom - 35 - document.y);
-    const [chunk, next] = contentThatFits(document, remaining, width, available);
-    document.font('Helvetica').fontSize(9.2).fillColor('#273449').text(chunk, page.left, document.y, { width, lineGap: 3 });
-    document.moveDown(.8);
+    document.font('Helvetica').fontSize(9.2);
+    const lineHeight = document.heightOfString('Ag', { width, lineGap: 3, align });
+    ensure(document, contract, lineHeight);
+    const available = page.bottom - 35 - document.y;
+    const [chunk, next] = contentThatFits(document, remaining, width, available, align);
+    if (!chunk) { document.addPage(); header(document, contract); document.y = 98; continue; }
+    document.fillColor('#273449').text(chunk, page.left, document.y, { width, lineGap: 3, align });
     remaining = next;
+    if (remaining) { document.addPage(); header(document, contract); document.y = 98; }
   }
+  document.y += 7;
+}
+function legalClause(document: PDFKit.PDFDocument, contract: any, label: string, value: string): void {
+  const width = page.right - page.left;
+  const body = value.replace(/\s+/g, ' ').trim();
+  document.font('Helvetica-Bold').fontSize(9.5);
+  const headingHeight = document.heightOfString(label, { width });
+  document.font('Helvetica').fontSize(9.2);
+  const bodyHeight = document.heightOfString(body, { width, lineGap: 3, align: 'justify' });
+  const twoLines = document.heightOfString('Ag\nAg', { width, lineGap: 3 });
+  ensure(document, contract, headingHeight + Math.min(bodyHeight, twoLines) + 7);
+  document.font('Helvetica-Bold').fontSize(9.5).fillColor(color.ink).text(label, page.left, document.y, { width });
+  flowingParagraph(document, contract, body, 'justify');
 }
 
 export async function buildContractPdfBuffer(contract: any): Promise<Buffer> {
@@ -60,8 +91,35 @@ export async function buildContractPdfBuffer(contract: any): Promise<Buffer> {
   if (contract.servicesSnapshot?.length) { title(document, contract, 'Servicios incluidos'); contract.servicesSnapshot.forEach((item: string) => paragraph(document, contract, `• ${item}`)); }
   if (contract.menuSnapshot?.length) { title(document, contract, 'Menú contratado'); contract.menuSnapshot.forEach((section: any) => { ensure(document, contract, 35); document.font('Helvetica-Bold').fontSize(9.5).fillColor(color.ink).text(section.title || 'Menú', page.left, document.y); (section.items ?? []).forEach((item: string) => paragraph(document, contract, `• ${item}`)); }); }
   if (text(contract.considerations, '') !== '') { title(document, contract, 'Consideraciones'); flowingParagraph(document, contract, text(contract.considerations, '')); }
-  title(document, contract, 'Cláusulas y condiciones'); const clauses = contract.legalTermsSnapshot?.clauses ?? []; if (clauses.length) clauses.forEach((clause: any, index: number) => { ensure(document, contract, 35); document.font('Helvetica-Bold').fontSize(9.5).fillColor(color.ink).text(`${index + 1}. ${text(clause.title, 'Cláusula')}`, page.left, document.y); paragraph(document, contract, text(clause.text, '')); }); else paragraph(document, contract, 'Las partes aceptan las condiciones comerciales y operativas detalladas en este contrato.'); if (text(contract.legalTermsSnapshot?.providerText, '') !== '') { ensure(document, contract, 35); document.font('Helvetica-Bold').fontSize(9.5).fillColor(color.ink).text('Condiciones particulares del salón', page.left, document.y); paragraph(document, contract, text(contract.legalTermsSnapshot?.providerText)); }
-  title(document, contract, 'Conformidad'); paragraph(document, contract, 'En prueba de conformidad, las partes firman dos ejemplares de un mismo tenor y a un solo efecto.'); ensure(document, contract, 72); const signY = document.y + 25; document.moveTo(page.left + 28, signY).lineTo(page.left + 215, signY).strokeColor(color.muted).stroke(); document.moveTo(page.left + 287, signY).lineTo(page.right - 28, signY).strokeColor(color.muted).stroke(); document.font('Helvetica').fontSize(8).fillColor(color.muted).text('M&M Eventos · Prestadora', page.left + 28, signY + 8, { width: 187, align: 'center' }); document.text(text(client.fullName, 'Cliente'), page.left + 287, signY + 8, { width: 187, align: 'center' });
+  title(document, contract, 'Cláusulas y condiciones', 85);
+  const clauses = contract.legalTermsSnapshot?.clauses ?? [];
+  if (clauses.length) {
+    clauses.forEach((clause: any, index: number) => {
+      legalClause(document, contract, `${index + 1}. ${text(clause.title, 'Cláusula')}`, text(clause.text, ''));
+    });
+  } else {
+    legalClause(document, contract, 'Condiciones generales', 'Las partes aceptan las condiciones comerciales y operativas detalladas en este contrato.');
+  }
+  if (text(contract.legalTermsSnapshot?.providerText, '') !== '') {
+    legalClause(document, contract, 'Condiciones particulares del salón', text(contract.legalTermsSnapshot?.providerText));
+  }
+  const conformityText = 'En prueba de conformidad, las partes firman dos ejemplares de un mismo tenor y a un solo efecto.';
+  document.font('Helvetica').fontSize(9.2);
+  const conformityHeight = document.heightOfString(conformityText, { width: page.right - page.left, lineGap: 3 });
+  document.fontSize(8);
+  const signatureLabelHeight = Math.max(
+    document.heightOfString('M&M Eventos · Prestadora', { width: 187, align: 'center' }),
+    document.heightOfString(text(client.fullName, 'Cliente'), { width: 187, align: 'center' })
+  );
+  ensure(document, contract, 28 + conformityHeight + 7 + 25 + 8 + signatureLabelHeight + 8);
+  title(document, contract, 'Conformidad');
+  document.font('Helvetica').fontSize(9.2).fillColor('#273449').text(conformityText, page.left, document.y, { width: page.right - page.left, lineGap: 3 });
+  document.y += 7;
+  const signY = document.y + 25;
+  document.moveTo(page.left + 28, signY).lineTo(page.left + 215, signY).strokeColor(color.muted).stroke();
+  document.moveTo(page.left + 287, signY).lineTo(page.right - 28, signY).strokeColor(color.muted).stroke();
+  document.font('Helvetica').fontSize(8).fillColor(color.muted).text('M&M Eventos · Prestadora', page.left + 28, signY + 8, { width: 187, align: 'center' });
+  document.text(text(client.fullName, 'Cliente'), page.left + 287, signY + 8, { width: 187, align: 'center' });
   const range = document.bufferedPageRange(); for (let index = 0; index < range.count; index += 1) { document.switchToPage(index); footer(document, index + 1, range.count); }
   return buffer(document);
 }

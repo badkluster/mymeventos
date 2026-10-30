@@ -23,6 +23,8 @@ export type LocalSeoPage = {
   packages: string[];
   faqs: { question: string; answer: string }[];
   relatedSlugs: string[];
+  // Salon pages only: the topic landing for the same salon, always linked from it.
+  localLandingSlug?: string;
 };
 
 export const localSeoPages: LocalSeoPage[] = [
@@ -269,7 +271,8 @@ export const salonSeoPages: LocalSeoPage[] = [
     servicesHeading: 'Todo lo que necesitás para tu evento en un solo lugar',
     servicesIntro: 'Organizá tu celebración sin tener que contratar cada servicio por separado. M&M La Plata reúne salón, catering, bebidas, DJ, iluminación, ambientación, vajilla y personal para acompañarte durante toda la noche.',
     contentSections: undefined,
-    relatedSlugs: ['san-carlos', 'villa-elisa']
+    relatedSlugs: ['san-carlos', 'villa-elisa'],
+    localLandingSlug: 'salones-de-fiestas-la-plata'
   },
   {
     ...localSeoPages[3],
@@ -278,7 +281,8 @@ export const salonSeoPages: LocalSeoPage[] = [
     metaTitle: 'M&M Eventos San Carlos | Salón de Eventos en La Plata',
     metaDescription: 'M&M Eventos San Carlos es un salón para cumpleaños, fiestas infantiles, 15 años y celebraciones familiares en San Carlos, La Plata.',
     h1: 'M&M Eventos San Carlos: salón para eventos familiares',
-    relatedSlugs: ['la-plata', 'villa-elisa']
+    relatedSlugs: ['la-plata', 'villa-elisa'],
+    localLandingSlug: 'salon-fiestas-san-carlos'
   },
   {
     ...localSeoPages[4],
@@ -287,9 +291,20 @@ export const salonSeoPages: LocalSeoPage[] = [
     metaTitle: 'M&M Eventos Villa Elisa | Salón de Fiestas en Villa Elisa',
     metaDescription: 'M&M Eventos Villa Elisa es un salón de fiestas para cumpleaños, 15 años, casamientos y eventos sociales, con catering y organización integral.',
     h1: 'M&M Eventos Villa Elisa: salón de fiestas para tu evento',
-    relatedSlugs: ['la-plata', 'san-carlos']
+    relatedSlugs: ['la-plata', 'san-carlos'],
+    localLandingSlug: 'salon-eventos-villa-elisa'
   }
 ];
+
+// Salon pages link to a fixed set of topic landings plus their own local landing, so
+// e.g. /salones/villa-elisa reaches /salon-eventos-villa-elisa (previously unlinked).
+export function crossLinksFor(page: LocalSeoPage, salonMode: boolean) {
+  if (!salonMode) return salonSeoPages.map((item) => ({ href: `/salones/${item.slug}`, label: item.title }));
+  const links = localSeoPages.slice(0, 4).map((item) => ({ href: `/${item.slug}`, label: item.title }));
+  const ownLanding = page.localLandingSlug ? localSeoPages.find((item) => item.slug === page.localLandingSlug) : undefined;
+  if (ownLanding && !links.some((link) => link.href === `/${ownLanding.slug}`)) links.push({ href: `/${ownLanding.slug}`, label: ownLanding.title });
+  return links;
+}
 
 export function absoluteUrl(path: string) {
   return new URL(path, siteUrl).toString();

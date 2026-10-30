@@ -27,10 +27,10 @@ Despliegue: proyecto único de Vercel (`vercel.json` en la raíz), `apps/web` co
 ```
 pnpm dev            # todas las apps en paralelo
 pnpm dev:web / dev:api / dev:mobile
-pnpm build / pnpm lint / pnpm typecheck / pnpm test   # -r sobre los workspaces (apps/web no tiene script test)
+pnpm build / pnpm lint / pnpm typecheck / pnpm test   # -r sobre los workspaces
 
 pnpm --filter @mym/api test        # vitest run (sin usar una base persistente/remota)
-pnpm --filter @mym/web typecheck
+pnpm --filter @mym/web typecheck / test   # test = vitest (helpers SEO/analytics, sin navegador)
 pnpm --filter @mym/mobile start / typecheck / test   # Expo dev server / tsc / jest (ver docs/MOBILE_STAFF_APP.md)
 pnpm --filter @mym/shared build    # reconstruir antes de que api/web/mobile recojan cambios de tipos/enums
 ```

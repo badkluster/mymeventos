@@ -335,6 +335,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      vitest:
+        specifier: ^1.6.1
+        version: 1.6.1(@types/node@20.19.43)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.48.0)
 
   packages/shared:
     dependencies:

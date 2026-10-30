@@ -89,6 +89,26 @@ describe('quote requests API', () => {
     expect(mocks.createQuoteRequest).toHaveBeenCalledWith(expect.objectContaining({ source: 'quick_quote', contactName: 'Ana Perez', interestedSalonIds: [salonId] }));
   });
 
+  it('public quick quote keeps landing and referrer attribution in the original payload', async () => {
+    const response = await request(app)
+      .post('/api/public/quick-quote')
+      .send({ name: 'Ana Perez', phone: '221 555-1111', eventType: 'Fiesta de 15', guestCount: 120, salonId, landingPath: '/fiestas-de-15-la-plata', referrerHost: 'www.google.com.ar', utmSource: 'google' });
+
+    expect(response.status).toBe(201);
+    expect(mocks.createQuoteRequest).toHaveBeenCalledWith(expect.objectContaining({
+      originalPayload: expect.objectContaining({ landingPath: '/fiestas-de-15-la-plata', referrerHost: 'www.google.com.ar', utmSource: 'google' })
+    }));
+  });
+
+  it('public quick quote rejects malformed attribution fields', async () => {
+    const response = await request(app)
+      .post('/api/public/quick-quote')
+      .send({ name: 'Ana Perez', phone: '221 555-1111', eventType: 'Cumpleaños', guestCount: 80, salonId, landingPath: 'https://evil.example/x', referrerHost: 'ana@test.com' });
+
+    expect(response.status).toBe(400);
+    expect(mocks.createQuoteRequest).not.toHaveBeenCalled();
+  });
+
   it('returns the new quote request count without loading quote request rows', async () => {
     mocks.quoteRequestCount.mockResolvedValue(7);
 

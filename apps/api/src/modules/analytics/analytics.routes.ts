@@ -7,6 +7,7 @@ import { requireAuth, requirePermission } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/api';
+import { sessionTrafficSource } from '../../utils/traffic-source';
 import { parseReportPeriod } from '../reporting/report-filter';
 import { QuoteRequest, Quote, Event } from '../crm/crm.models';
 import { AnalyticsDailyAggregate, AnalyticsEvent, AnalyticsSectionAggregate, AnalyticsSession, AnalyticsSettings, analyticsEventNames } from './analytics.models';
@@ -64,7 +65,7 @@ publicRouter.post('/collect', validateRequest(collectSchema), asyncHandler(async
     const ordered = events.sort((left, right) => left.occurredAt.getTime() - right.occurredAt.getTime());
     const first = ordered[0]; const last = ordered[ordered.length - 1]; const converted = events.some((event) => event.eventName === 'form_success');
     await AnalyticsSession.updateOne({ sessionId }, {
-      $setOnInsert: { sessionId, anonymousVisitorId: first.anonymousVisitorId, attributionId: first.attributionId, startedAt: first.occurredAt, entryPage: first.pagePath, source: first.utmSource || (first.referrer ? 'referral' : 'direct'), medium: first.utmMedium, campaign: first.utmCampaign, deviceType: first.deviceType, browserFamily: first.browserFamily, operatingSystem: first.operatingSystem },
+      $setOnInsert: { sessionId, anonymousVisitorId: first.anonymousVisitorId, attributionId: first.attributionId, startedAt: first.occurredAt, entryPage: first.pagePath, ...sessionTrafficSource(first), campaign: first.utmCampaign, deviceType: first.deviceType, browserFamily: first.browserFamily, operatingSystem: first.operatingSystem },
       $set: { lastActivityAt: last.occurredAt, exitPage: last.pagePath, expiresAt, ...(converted ? { converted: true, convertedAt: last.occurredAt } : {}) },
       $inc: { pageViews: events.filter((event) => event.eventName === 'page_view').length, eventCount: events.length },
     }, { upsert: true });
