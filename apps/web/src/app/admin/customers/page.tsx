@@ -295,8 +295,9 @@ export default function CustomersPage() {
 
     <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Nuevo cliente" description="Cargá un cliente manualmente, sin pasar por un lead o presupuesto.">
       <form onSubmit={createCustomer} className="grid gap-5 p-6 md:grid-cols-2">
-        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Nombre<Input required name="firstName" placeholder="Nombre" /></label>
-        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Apellido<Input required name="lastName" placeholder="Apellido" /></label>
+        <p className="text-xs text-zinc-500 md:col-span-2"><span className="text-red-600">*</span> Campos obligatorios</p>
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Nombre <span aria-hidden="true" className="text-red-600">*</span><Input required name="firstName" placeholder="Nombre" /></label>
+        <label className="space-y-1.5 text-sm font-medium text-zinc-700">Apellido <span aria-hidden="true" className="text-red-600">*</span><Input required name="lastName" placeholder="Apellido" /></label>
         <label className="space-y-1.5 text-sm font-medium text-zinc-700">Teléfono<Input name="phone" placeholder="Ej. 221 555 1234" /></label>
         <label className="space-y-1.5 text-sm font-medium text-zinc-700">Email<Input name="email" type="email" placeholder="nombre@email.com" /></label>
         <label className="space-y-1.5 text-sm font-medium text-zinc-700">Documento / DNI<Input name="documentNumber" placeholder="Opcional" /></label>
@@ -304,7 +305,7 @@ export default function CustomersPage() {
         <label className="space-y-1.5 text-sm font-medium text-zinc-700">Fecha de nacimiento<Input name="birthDate" type="date" /><span className="mt-1 block text-xs font-normal text-zinc-400">Opcional — habilita el saludo automático de cumpleaños.</span></label>
         <label className="space-y-1.5 text-sm font-medium text-zinc-700">Domicilio<Input name="address" placeholder="Opcional" /></label>
         <div className="md:col-span-2">
-          <label className="space-y-1.5 text-sm font-medium text-zinc-700">Salones asociados
+          <label className="space-y-1.5 text-sm font-medium text-zinc-700">Salones asociados <span aria-hidden="true" className="text-red-600">*</span>
             <Select multiple required aria-label="Salones asociados" value={selectedSalonIds} onChange={(event) => setSelectedSalonIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value))} className="min-h-32 py-2">
               {salons.map((salon) => <option key={salon._id} value={salon._id}>{salon.name}</option>)}
             </Select>
