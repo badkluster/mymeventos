@@ -496,8 +496,8 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
   const numberWidth = 13;
   const detailWidth = 48;
   const nameWidth = tableWidth - numberWidth - detailWidth - 14;
-  const guestRowPadding = 2.4;
-  const minimumGuestRowHeight = 14.5;
+  const guestRowPadding = 2;
+  const minimumGuestRowHeight = 14;
   const groups = Array.from({ length: Math.ceil(entries.length / 3) }, (_, index) => entries.slice(index * 3, index * 3 + 3));
   const detailFor = (guest: any) => guestListDetail(guest, event.guestCountMode);
 
@@ -505,7 +505,7 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
     const entryMetrics = group.map((entry: any) => {
       const slots = Math.max(entry.guests.length, Number(entry.capacity) || 0);
       const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience.toUpperCase()}` : ''} · ${entry.guests.length}${entry.capacity ? `/${entry.capacity}` : ''}`;
-      const headingHeight = Math.max(14, document.font('Helvetica-Bold').fontSize(7.5).heightOfString(heading, { width: tableWidth - 10, lineGap: .8 }) + 4);
+      const headingHeight = Math.max(17, document.font('Helvetica-Bold').fontSize(7.5).heightOfString(heading, { width: tableWidth - 10, lineGap: .8 }) + 6);
       const rowHeights = Array.from({ length: slots }, (_, index) => {
         const guest = entry.guests[index];
         if (!guest) return minimumGuestRowHeight;
@@ -518,8 +518,8 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
     });
     const maxSlots = Math.max(...entryMetrics.map((metric) => metric.slots), 0);
     const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? minimumGuestRowHeight)));
-    const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 8));
-    return { group, entryMetrics, rowHeights, headerHeight, height: headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 3 };
+    const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 13));
+    return { entryMetrics, rowHeights, headerHeight, height: headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 3 };
   });
 
   let nextGroup = 0;
@@ -538,26 +538,27 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
     // El espacio libre de la hoja se reparte entre nombres, sin desplazar otra mesa a la página siguiente.
     const extraRowHeight = Math.min(2.5, Math.max(0, availableHeight - usedHeight) / Math.max(1, rowCount));
 
-    pageLayouts.forEach(({ group, entryMetrics, rowHeights: baseRowHeights, headerHeight }) => {
+    pageLayouts.forEach(({ entryMetrics, rowHeights: baseRowHeights, headerHeight }) => {
       const rowHeights = baseRowHeights.map((height) => height + extraRowHeight);
       const groupHeight = headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 3;
-      const tableHeight = groupHeight - 3;
       const rowPadding = guestRowPadding + extraRowHeight / 2;
       const y = document.y;
-      // La última fila incompleta queda centrada sin reducir el ancho de cada mesa.
-      const groupOffset = groups.length > 1 && group.length < 3 ? ((3 - group.length) * (tableWidth + gap)) / 2 : 0;
 
       entryMetrics.forEach((metric, entryIndex) => {
-        const x = page.left + groupOffset + entryIndex * (tableWidth + gap);
+        const x = page.left + entryIndex * (tableWidth + gap);
+        // Cada tarjeta termina en sus propias plazas, aunque el grupo reserve la altura de la mesa más larga.
+        const entryRowHeights = rowHeights.slice(0, metric.slots);
+        const tableHeight = headerHeight + entryRowHeights.reduce((total, height) => total + height, 0);
         document.roundedRect(x, y, tableWidth, tableHeight, 4).fill(color.card);
         document.roundedRect(x, y, tableWidth, metric.headingHeight, 4).fill(color.ink);
         document.font('Helvetica-Bold').fontSize(7.5).fillColor(color.white).text(metric.heading, x + 5, y + 3, { width: tableWidth - 10, lineGap: .8 });
-        const labelsY = y + metric.headingHeight + 1;
+        document.rect(x, y + metric.headingHeight, tableWidth, headerHeight - metric.headingHeight).fill(color.white);
+        const labelsY = y + metric.headingHeight + 3;
         document.font('Helvetica-Bold').fontSize(5.9).fillColor(color.muted).text('N°', x + 4, labelsY, { width: numberWidth - 2 });
         document.font('Helvetica-Bold').fontSize(5.9).fillColor(color.muted).text('APELLIDO Y NOMBRE', x + numberWidth + 5, labelsY, { width: nameWidth });
         document.font('Helvetica-Bold').fontSize(5.9).fillColor(color.muted).text('DETALLE', x + numberWidth + nameWidth + 7, labelsY, { width: detailWidth - 4 });
         let rowY = y + headerHeight;
-        rowHeights.forEach((rowHeight, rowIndex) => {
+        entryRowHeights.forEach((rowHeight, rowIndex) => {
           const guest = metric.entry.guests[rowIndex];
           document.moveTo(x + 1, rowY).lineTo(x + tableWidth - 1, rowY).strokeColor(color.line).lineWidth(.35).stroke();
           document.font('Helvetica-Bold').fontSize(6.5).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + rowPadding, { width: numberWidth - 2, align: 'right' });

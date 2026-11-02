@@ -7,11 +7,38 @@ function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function normalizeLineBreaks(value: string): string {
+  return value.replace(/\r\n?|\u2028|\u2029/g, '\n');
+}
+
 /** El formato persistido es Markdown mínimo: sólo **negrita**. Es seguro y compatible con notas ya existentes. */
-function noteToEditorHtml(value: string): string {
-  return escapeHtml(value)
+export function noteToEditorHtml(value: string): string {
+  return escapeHtml(normalizeLineBreaks(value))
     .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br>');
+}
+
+function isBlock(node: Node): boolean {
+  return node.nodeType === Node.ELEMENT_NODE && ['DIV', 'P'].includes((node as HTMLElement).tagName);
+}
+
+function childrenToMarkdown(parent: Node): string {
+  const children = Array.from(parent.childNodes);
+  // El navegador usa un <br> solitario para mantener visible un bloque vacío.
+  if (isBlock(parent) && children.length === 1 && children[0].nodeType === Node.ELEMENT_NODE && (children[0] as HTMLElement).tagName === 'BR') return '';
+
+  let result = '';
+  let previous: Node | undefined;
+  let previousWasEmptyBlock = false;
+  children.forEach((child) => {
+    const block = isBlock(child);
+    const content = nodeToMarkdown(child);
+    if (previous && (block || isBlock(previous)) && (!result.endsWith('\n') || previousWasEmptyBlock)) result += '\n';
+    result += content;
+    previous = child;
+    previousWasEmptyBlock = block && content === '';
+  });
+  return result;
 }
 
 function nodeToMarkdown(node: Node): string {
@@ -20,13 +47,13 @@ function nodeToMarkdown(node: Node): string {
 
   const element = node as HTMLElement;
   if (element.tagName === 'BR') return '\n';
-  const content = Array.from(element.childNodes).map(nodeToMarkdown).join('');
-  if (element.tagName === 'STRONG' || element.tagName === 'B') return `**${content}**`;
-  return ['DIV', 'P'].includes(element.tagName) ? `${content}\n` : content;
+  const content = childrenToMarkdown(element);
+  if (element.tagName === 'STRONG' || element.tagName === 'B') return content ? `**${content}**` : '';
+  return content;
 }
 
-function editorToNote(editor: HTMLElement): string {
-  return Array.from(editor.childNodes).map(nodeToMarkdown).join('').replace(/\n+$/, '');
+export function editorToNote(editor: HTMLElement): string {
+  return normalizeLineBreaks(childrenToMarkdown(editor));
 }
 
 function selectionIsBold(editor: HTMLElement): boolean {
@@ -46,7 +73,7 @@ export function StaffNoteEditor({ value, onChange, disabled }: { value: string; 
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (editor && editorToNote(editor) !== value) editor.innerHTML = noteToEditorHtml(value);
+    if (editor && editorToNote(editor) !== normalizeLineBreaks(value)) editor.innerHTML = noteToEditorHtml(value);
   }, [value]);
 
   const syncValue = () => {

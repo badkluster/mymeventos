@@ -41,6 +41,20 @@ function pdfPageCount(buffer: Buffer): number {
   return buffer.toString('latin1').match(/\/Type\s*\/Page\b/g)?.length ?? 0;
 }
 
+function pdfPositionedText(buffer: Buffer): Array<Array<{ x: number; y: number; fontSize: number; text: string }>> {
+  return Array.from(buffer.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g), (stream) => {
+    let content: string;
+    try { content = inflateSync(Buffer.from(stream[1], 'latin1')).toString('latin1'); }
+    catch { return []; }
+    return Array.from(content.matchAll(/1 0 0 1 ([\d.]+) ([\d.]+) Tm\s+\/F\d+ ([\d.]+) Tf(?:\s+[-\d.]+ Tc)?\s+\[([^\]]+)\] TJ/g), (match) => ({
+      x: Number(match[1]),
+      y: Number(match[2]),
+      fontSize: Number(match[3]),
+      text: Array.from(match[4].matchAll(/<([0-9A-Fa-f]+)>/g), (part) => Buffer.from(part[1], 'hex').toString('latin1')).join('')
+    }));
+  });
+}
+
 const minimalEvent: any = { _id: 'evt-empty', eventName: 'Evento vacío' };
 
 const fullEvent: any = {
@@ -353,6 +367,44 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(pdfPageCount(pdf.buffer)).toBe(3);
     expect(pdfContentText(pdf.buffer)).toContain('MESA 10');
     expect(pdfContentText(pdf.buffer)).toContain('Invitado 100 Apellido');
+  });
+
+  it('left-aligns the tenth table, separates column labels, and stops each table at its own capacity', async () => {
+    const counts = [7, 10, 10, 10, 9, 10, 11, 11, 10, 7];
+    const tables = counts.map((count, index) => ({
+      id: `mesa${index + 1}`,
+      name: `Mesa ${index + 1}`,
+      capacity: index === 9 ? 8 : count,
+      audience: 'open'
+    }));
+    const guests = counts.flatMap((count, tableIndex) => Array.from({ length: count }, (_, guestIndex) => ({
+      fullName: tableIndex < 6 ? `Apellido Compuesto Nombre ${guestIndex + 1}` : `Apellido ${tableIndex + 1} Nombre ${guestIndex + 1}`,
+      tableId: tables[tableIndex].id,
+      ageGroup: guestIndex % 4 === 0 ? 'minor_10_17' : 'adult'
+    })));
+    const pdf = await generateOperationalPdf({
+      ...minimalEvent,
+      resourcePlanSnapshot: { guestList: { tables, guests } }
+    }, 'full');
+    const continuation = pdfPositionedText(pdf.buffer).find((items) => items.some((item) => item.text.startsWith('MESA 7 ·')));
+
+    expect(pdfPageCount(pdf.buffer)).toBe(3);
+    expect(continuation).toBeDefined();
+    const mesa7 = continuation!.find((item) => item.text.startsWith('MESA 7 ·'))!;
+    const mesa9 = continuation!.find((item) => item.text.startsWith('MESA 9 ·'))!;
+    const mesa10 = continuation!.find((item) => item.text.startsWith('MESA 10 ·'))!;
+    expect(mesa10.x).toBeCloseTo(mesa7.x, 3);
+    expect(mesa10.y).toBeLessThan(mesa7.y);
+
+    const mesa9Numbers = continuation!.filter((item) => item.fontSize === 6.5 && /^\d+$/.test(item.text)
+      && item.x >= mesa9.x && item.x < mesa9.x + 15 && item.y < mesa9.y && item.y > mesa10.y);
+    expect(mesa9Numbers.map((item) => Number(item.text))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(continuation!.filter((item) => item.fontSize === 6.5 && item.text === '11' && item.y > mesa10.y)).toHaveLength(2);
+
+    const labels = continuation!.find((item) => item.text === 'APELLIDO Y NOMBRE' && item.x > mesa7.x && item.x < mesa7.x + 100)!;
+    const firstGuest = continuation!.find((item) => item.text === 'Apellido 7 Nombre 1')!;
+    expect(mesa7.y - labels.y).toBeGreaterThan(14);
+    expect(labels.y - firstGuest.y).toBeGreaterThan(13);
   });
 
   it('shows the service guest count alongside the number of names actually loaded', async () => {
