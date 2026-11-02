@@ -369,7 +369,7 @@ describe('event-operational-document.service — cronograma integral (type "full
     expect(pdfContentText(pdf.buffer)).toContain('Invitado 100 Apellido');
   });
 
-  it('left-aligns the tenth table, separates column labels, and stops each table at its own capacity', async () => {
+  it('left-aligns the tenth table, separates column labels, and numbers only loaded guests', async () => {
     const counts = [7, 10, 10, 10, 9, 10, 11, 11, 10, 7];
     const tables = counts.map((count, index) => ({
       id: `mesa${index + 1}`,
@@ -395,6 +395,11 @@ describe('event-operational-document.service — cronograma integral (type "full
     const mesa10 = continuation!.find((item) => item.text.startsWith('MESA 10 ·'))!;
     expect(mesa10.x).toBeCloseTo(mesa7.x, 3);
     expect(mesa10.y).toBeLessThan(mesa7.y);
+    expect(mesa10.text).toContain('7/8');
+
+    const mesa10Numbers = continuation!.filter((item) => item.fontSize === 6.5 && /^\d+$/.test(item.text)
+      && item.x >= mesa10.x && item.x < mesa10.x + 15 && item.y < mesa10.y);
+    expect(mesa10Numbers.map((item) => Number(item.text))).toEqual([1, 2, 3, 4, 5, 6, 7]);
 
     const mesa9Numbers = continuation!.filter((item) => item.fontSize === 6.5 && /^\d+$/.test(item.text)
       && item.x >= mesa9.x && item.x < mesa9.x + 15 && item.y < mesa9.y && item.y > mesa10.y);

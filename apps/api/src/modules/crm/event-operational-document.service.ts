@@ -503,20 +503,17 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
 
   const layouts = groups.map((group) => {
     const entryMetrics = group.map((entry: any) => {
-      const slots = Math.max(entry.guests.length, Number(entry.capacity) || 0);
       const heading = `${entry.title.toUpperCase()}${entry.audience ? ` · ${entry.audience.toUpperCase()}` : ''} · ${entry.guests.length}${entry.capacity ? `/${entry.capacity}` : ''}`;
       const headingHeight = Math.max(17, document.font('Helvetica-Bold').fontSize(7.5).heightOfString(heading, { width: tableWidth - 10, lineGap: .8 }) + 6);
-      const rowHeights = Array.from({ length: slots }, (_, index) => {
-        const guest = entry.guests[index];
-        if (!guest) return minimumGuestRowHeight;
+      const rowHeights = entry.guests.map((guest: any) => {
         const nameHeight = document.font('Helvetica-Bold').fontSize(7.5).heightOfString(text(guest.fullName), { width: nameWidth, lineGap: .8 });
         const detail = detailFor(guest);
         const detailHeight = detail ? document.font('Helvetica').fontSize(6.6).heightOfString(detail, { width: detailWidth, lineGap: .8 }) : 0;
         return Math.max(minimumGuestRowHeight, Math.max(nameHeight, detailHeight) + guestRowPadding * 2);
       });
-      return { entry, heading, headingHeight, slots, rowHeights };
+      return { entry, heading, headingHeight, rowHeights };
     });
-    const maxSlots = Math.max(...entryMetrics.map((metric) => metric.slots), 0);
+    const maxSlots = Math.max(...entryMetrics.map((metric) => metric.rowHeights.length), 0);
     const rowHeights = Array.from({ length: maxSlots }, (_, rowIndex) => Math.max(...entryMetrics.map((metric) => metric.rowHeights[rowIndex] ?? minimumGuestRowHeight)));
     const headerHeight = Math.max(...entryMetrics.map((metric) => metric.headingHeight + 13));
     return { entryMetrics, rowHeights, headerHeight, height: headerHeight + rowHeights.reduce((total, height) => total + height, 0) + 3 };
@@ -546,8 +543,8 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
 
       entryMetrics.forEach((metric, entryIndex) => {
         const x = page.left + entryIndex * (tableWidth + gap);
-        // Cada tarjeta termina en sus propias plazas, aunque el grupo reserve la altura de la mesa más larga.
-        const entryRowHeights = rowHeights.slice(0, metric.slots);
+        // La capacidad se muestra en el título; las filas numeran sólo a los invitados cargados.
+        const entryRowHeights = rowHeights.slice(0, metric.rowHeights.length);
         const tableHeight = headerHeight + entryRowHeights.reduce((total, height) => total + height, 0);
         document.roundedRect(x, y, tableWidth, tableHeight, 4).fill(color.card);
         document.roundedRect(x, y, tableWidth, metric.headingHeight, 4).fill(color.ink);
@@ -562,11 +559,9 @@ function compactFullGuestList(document: PDFKit.PDFDocument, event: any): void {
           const guest = metric.entry.guests[rowIndex];
           document.moveTo(x + 1, rowY).lineTo(x + tableWidth - 1, rowY).strokeColor(color.line).lineWidth(.35).stroke();
           document.font('Helvetica-Bold').fontSize(6.5).fillColor(color.muted).text(String(rowIndex + 1), x + 4, rowY + rowPadding, { width: numberWidth - 2, align: 'right' });
-          if (guest) {
-            document.font('Helvetica-Bold').fontSize(7.5).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + rowPadding, { width: nameWidth, lineGap: .8 });
-            const detail = detailFor(guest);
-            if (detail) document.font('Helvetica').fontSize(6.6).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + rowPadding, { width: detailWidth - 4, lineGap: .8 });
-          }
+          document.font('Helvetica-Bold').fontSize(7.5).fillColor(color.ink).text(text(guest.fullName), x + numberWidth + 5, rowY + rowPadding, { width: nameWidth, lineGap: .8 });
+          const detail = detailFor(guest);
+          if (detail) document.font('Helvetica').fontSize(6.6).fillColor(color.muted).text(detail, x + numberWidth + nameWidth + 7, rowY + rowPadding, { width: detailWidth - 4, lineGap: .8 });
           rowY += rowHeight;
         });
       });
