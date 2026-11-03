@@ -14,13 +14,13 @@ import {
   CheckCircle2,
   CheckSquare,
   ChefHat,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   CircleDollarSign,
   Clock3,
   Eye,
-  Filter,
   Handshake,
   Info,
   Lock,
@@ -457,6 +457,11 @@ export default function CalendarPage() {
   const [selectedAvailabilitySlot, setSelectedAvailabilitySlot] = useState<AvailabilitySlot | null>(null);
   const [eventCreateOpen, setEventCreateOpen] = useState(false);
   const [eventCreateDefaults, setEventCreateDefaults] = useState<EventCreateDefaults>();
+  const upcomingMenuRef = useRef<HTMLDetailsElement>(null);
+  const helpMenuRef = useRef<HTMLDivElement>(null);
+  const [helpPinned, setHelpPinned] = useState(false);
+  const [helpHovered, setHelpHovered] = useState(false);
+  const helpVisible = helpPinned || helpHovered;
   const canReadEvents = userCanAccess(user, [Permission.EVENTS_READ]);
   const canCreateEvents = userCanAccess(user, [Permission.EVENTS_CREATE]);
   const canCreateQuotes = userCanAccess(user, [Permission.QUOTES_CREATE]);
@@ -544,6 +549,24 @@ export default function CalendarPage() {
   useEffect(() => { void loadOptions(); }, [loadOptions]);
   useEffect(() => { setAvailabilityDayInput(toDateInputValue(focusDate)); }, [focusDate]);
   useEffect(() => {
+    const closeMenus = (event: PointerEvent) => {
+      if (upcomingMenuRef.current && !upcomingMenuRef.current.contains(event.target as Node)) upcomingMenuRef.current.open = false;
+      if (helpMenuRef.current && !helpMenuRef.current.contains(event.target as Node)) setHelpPinned(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (upcomingMenuRef.current) upcomingMenuRef.current.open = false;
+      setHelpPinned(false);
+      setHelpHovered(false);
+    };
+    document.addEventListener('pointerdown', closeMenus);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeMenus);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, []);
+  useEffect(() => {
     const timer = window.setTimeout(() => setFilters((current) => ({ ...current, query: searchInput.trim() })), 300);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
@@ -596,7 +619,6 @@ export default function CalendarPage() {
       .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
   }, [calendarItems, canShowEvents, canShowItems, events, filters.notifications, filters.priority, filters.status, mode, visibleRange.end, visibleRange.start]);
 
-  const selectedDayEntries = useMemo(() => entriesForDay(entries, focusDate), [entries, focusDate]);
   const upcomingEntries = useMemo(() => entries.filter((entry) => entry.startAt >= startOfDay(new Date())).slice(0, 8), [entries]);
   const criticalCount = entries.filter((entry) => entry.priority === 'critical').length;
   const notificationCount = entries.filter((entry) => entry.notification?.enabled).length;
@@ -736,8 +758,36 @@ export default function CalendarPage() {
           <Button variant="secondary" className="h-10 w-10 px-0" onClick={() => setFocusDate((current) => moveDate(navigationView, current, 1))} aria-label="Periodo siguiente"><ChevronRight className="h-4 w-4" /></Button>
           <h2 className="min-w-0 px-2 text-xl font-semibold capitalize text-zinc-950">{titleFor(navigationView, focusDate)}</h2>
         </div>
-        {mode === 'agenda' ? <div className="grid grid-cols-4 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
-          {(Object.keys(viewLabels) as CalendarView[]).map((item) => <button key={item} type="button" onClick={() => setView(item)} className={`rounded-lg px-3 py-2 text-sm font-medium transition ${view === item ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-white'}`}>{viewLabels[item]}</button>)}
+        {mode === 'agenda' ? <div className="relative flex flex-wrap items-center justify-end gap-2">
+          <details ref={upcomingMenuRef} className="group">
+            <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/30 [&::-webkit-details-marker]:hidden">
+              <Clock3 className="h-4 w-4" />Próximos<span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-xs tabular-nums">{upcomingEntries.length}</span><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="absolute right-0 top-full z-30 mt-2 w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl">
+              <h3 className="mb-3 text-sm font-semibold text-zinc-950">Próximos items en el rango</h3>
+              <AgendaList entries={upcomingEntries} empty="Sin próximos items en el rango." onOpen={(entry) => { if (upcomingMenuRef.current) upcomingMenuRef.current.open = false; setSelectedEntry(entry); }} />
+            </div>
+          </details>
+          <div ref={helpMenuRef} onMouseEnter={() => setHelpHovered(true)} onMouseLeave={() => setHelpHovered(false)}>
+            <button type="button" aria-label="Ayuda del calendario" aria-expanded={helpVisible} aria-controls="calendar-quick-help" title="Ayuda del calendario" onClick={() => { setHelpPinned((pinned) => !pinned); setHelpHovered(false); }} className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/30"><Info className="h-5 w-5" /></button>
+            {helpVisible ? <div id="calendar-quick-help" className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl">
+              <h3 className="text-sm font-semibold text-zinc-950">Lectura rápida</h3>
+              <p className="mt-1 text-xs text-zinc-500">Iconos y cantidad de items visibles en este período.</p>
+              <div className="mt-3 grid gap-1.5">
+                {(Object.keys(typeMeta) as CalendarItemType[]).map((type) => {
+                  const meta = typeMeta[type];
+                  const Icon = meta.icon;
+                  const count = entries.filter((entry) => entry.type === type && (type !== 'event' || entry.event?.serviceMode !== 'external_catering')).length;
+                  return <div key={type} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-zinc-700"><span className="flex items-center gap-2"><span className={`grid h-7 w-7 place-items-center rounded-lg ${meta.badge}`}><Icon className="h-4 w-4" /></span>{meta.label}</span><span className="font-semibold tabular-nums">{count}</span></div>;
+                })}
+                <div className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-zinc-700"><span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-orange-100 text-orange-800"><ChefHat className="h-4 w-4" /></span>Catering externo</span><span className="font-semibold tabular-nums">{entries.filter((entry) => entry.event?.serviceMode === 'external_catering').length}</span></div>
+              </div>
+              <p className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-500"><Bell className="mr-1 inline h-3.5 w-3.5" /> indica un aviso. El borde izquierdo señala la prioridad.</p>
+            </div> : null}
+          </div>
+          <div className="grid grid-cols-4 rounded-xl border border-zinc-200 bg-zinc-50 p-1">
+            {(Object.keys(viewLabels) as CalendarView[]).map((item) => <button key={item} type="button" onClick={() => setView(item)} className={`rounded-lg px-3 py-2 text-sm font-medium transition ${view === item ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-white'}`}>{viewLabels[item]}</button>)}
+          </div>
         </div> : <div role="group" className="grid grid-cols-3 rounded-xl border border-zinc-200 bg-zinc-50 p-1" aria-label="Vista de disponibilidad">
           {(['day', 'week', 'month'] as AvailabilityView[]).map((item) => <button key={item} type="button" onClick={() => selectAvailabilityView(item)} className={`rounded-lg px-4 py-2 text-sm font-medium transition ${availabilityView === item ? 'bg-zinc-950 text-white shadow-sm' : 'text-zinc-600 hover:bg-white hover:text-zinc-950'}`}>{item === 'day' ? 'Día' : item === 'week' ? 'Semana' : 'Mes'}</button>)}
         </div>}
@@ -771,26 +821,11 @@ export default function CalendarPage() {
       </div>}
     </div>
 
-    {mode === 'availability' ? <EventAvailabilityBoard date={focusDate} view={availabilityView} events={events.filter((event) => event.serviceMode !== 'external_catering')} salons={salons} loading={loading} canCreateEvents={canCreateEvents} canCreateQuotes={canCreateQuotes} selectedSlot={selectedAvailabilitySlot} onSelectSlot={setSelectedAvailabilitySlot} onSelectDate={openAvailabilityDay} onCreateEvent={openEventCreateFromAvailability} /> : <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+    {mode === 'availability' ? <EventAvailabilityBoard date={focusDate} view={availabilityView} events={events.filter((event) => event.serviceMode !== 'external_catering')} salons={salons} loading={loading} canCreateEvents={canCreateEvents} canCreateQuotes={canCreateQuotes} selectedSlot={selectedAvailabilitySlot} onSelectSlot={setSelectedAvailabilitySlot} onSelectDate={openAvailabilityDay} onCreateEvent={openEventCreateFromAvailability} /> :
       <div className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
         <CalendarSurface view={view} focusDate={focusDate} entries={entries} loading={loading} onSelectDate={setFocusDate} onCreate={openCreate} onOpenEntry={setSelectedEntry} onOpenDayStack={setDayStackDate} />
       </div>
-      <aside className="space-y-4">
-        <AgendaPanel title="Seleccionado" icon={CalendarDays} entries={selectedDayEntries} empty="Sin items para este dia." onOpen={setSelectedEntry} />
-        <AgendaPanel title="Proximos" icon={Clock3} entries={upcomingEntries} empty="Sin próximos items en el rango." onOpen={setSelectedEntry} />
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-950"><Filter className="h-4 w-4" />Lectura rápida</div>
-          <div className="mt-3 grid gap-2">
-            {(Object.keys(typeMeta) as CalendarItemType[]).map((type) => {
-              const meta = typeMeta[type];
-              const Icon = meta.icon;
-              const count = entries.filter((entry) => entry.type === type).length;
-              return <div key={type} className="flex items-center justify-between rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700"><span className="flex items-center gap-2"><span className={`grid h-7 w-7 place-items-center rounded-lg ${meta.badge}`}><Icon className="h-4 w-4" /></span>{meta.label}</span><span className="font-semibold">{count}</span></div>;
-            })}
-          </div>
-        </section>
-      </aside>
-    </div>}
+    }
 
     <CalendarItemFormModal open={formOpen} mode={formMode} form={form} salons={salons} users={users} leads={leads} customers={customers} events={linkEvents} quotes={quotes} contracts={contracts} payments={payments} suppliers={suppliers} saving={saving} onClose={() => setFormOpen(false)} onSubmit={saveCalendarItem} onChange={setForm} />
     {eventCreateOpen ? <EventCreateModal open={eventCreateOpen} salons={salons} initialValues={eventCreateDefaults} onClose={() => setEventCreateOpen(false)} onCreated={(eventId, message) => void handleEventCreated(eventId, message)} onError={(message) => showToast({ message, variant: 'error' })} /> : null}
@@ -876,13 +911,8 @@ function YearView({ focusDate, entries, onSelectDate }: { focusDate: Date; entri
   </div>;
 }
 
-function AgendaPanel({ title, icon: Icon, entries, empty, onOpen }: { title: string; icon: LucideIcon; entries: CalendarEntry[]; empty: string; onOpen: (entry: CalendarEntry) => void }) {
-  return <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-    <div className="flex items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950"><Icon className="h-4 w-4" />{title}</h2>
-      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">{entries.length}</span>
-    </div>
-    <div className="mt-3 grid max-h-[420px] gap-2 overflow-y-auto pr-1">
+function AgendaList({ entries, empty, onOpen }: { entries: CalendarEntry[]; empty: string; onOpen: (entry: CalendarEntry) => void }) {
+  return <div className="grid max-h-[420px] gap-2 overflow-y-auto pr-1">
       {entries.map((entry) => <button type="button" key={`${entry.source}-${entry.id}`} onClick={() => onOpen(entry)} className={`rounded-xl border border-l-4 p-3 text-left transition hover:bg-zinc-50 ${priorityMeta[entry.priority].rail}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0"><p className="truncate text-sm font-semibold text-zinc-950">{entry.title}</p><p className="mt-1 text-xs text-zinc-500">{entryTime(entry)} · {entry.salonName}</p></div>
@@ -890,8 +920,7 @@ function AgendaPanel({ title, icon: Icon, entries, empty, onOpen }: { title: str
         </div>
       </button>)}
       {!entries.length ? <p className="rounded-xl border border-dashed border-zinc-200 px-3 py-6 text-center text-sm text-zinc-500">{empty}</p> : null}
-    </div>
-  </section>;
+    </div>;
 }
 
 function relationLink(label: string, value: unknown, href: string, icon: LucideIcon) {
