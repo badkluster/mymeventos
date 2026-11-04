@@ -1,7 +1,5 @@
 'use client';
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Bell, CheckCheck, ExternalLink, Inbox } from 'lucide-react';
 import Link from 'next/link';
@@ -73,12 +71,14 @@ export function NotificationBell() {
     const timer = window.setInterval(refreshWhenVisible, notificationPollingIntervalMs);
     window.addEventListener('focus', refreshWhenVisible);
     document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('notifications:changed', refreshWhenVisible);
 
     return () => {
       disposed = true;
       window.clearInterval(timer);
       window.removeEventListener('focus', refreshWhenVisible);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('notifications:changed', refreshWhenVisible);
     };
   }, [load]);
 

@@ -6,7 +6,7 @@ import { Bell, Check, CheckCheck, ExternalLink, Inbox, Search, Trash2 } from 'lu
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TableActionButton } from '@/components/admin/table-action-button';
-import { Button, Input, PageHeader, Select } from '@/components/ui/primitives';
+import { Button, Input, Modal, PageHeader, Select } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/toast-provider';
 import type { BackofficeNotification, NotificationsResponse } from '@/features/notifications/types';
 import { api } from '@/lib/api';
@@ -61,6 +61,10 @@ function TypeBadge({ type }: { type: string }) {
   return <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-500/15">{notificationTypeLabel(type)}</span>;
 }
 
+function refreshNotificationBell() {
+  window.dispatchEvent(new Event('notifications:changed'));
+}
+
 export default function NotificationsPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -69,6 +73,7 @@ export default function NotificationsPage() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,6 +111,7 @@ export default function NotificationsPage() {
     try {
       await api.patch(`/notifications/${notification._id}/read`, {});
       setItems((current) => current.map((item) => (item._id === notification._id ? { ...item, readAt: new Date().toISOString() } : item)));
+      refreshNotificationBell();
       showToast({ message: 'Notificación marcada como leída.', variant: 'success' });
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudo actualizar la notificación.', variant: 'error' });
@@ -120,6 +126,7 @@ export default function NotificationsPage() {
       await api.patch('/notifications/read-all', {});
       const readAt = new Date().toISOString();
       setItems((current) => current.map((notification) => ({ ...notification, readAt: notification.readAt ?? readAt })));
+      refreshNotificationBell();
       showToast({ message: 'Todas las notificaciones fueron marcadas como leídas.', variant: 'success' });
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudieron actualizar las notificaciones.', variant: 'error' });
@@ -133,9 +140,25 @@ export default function NotificationsPage() {
     try {
       await api.delete(`/notifications/${notification._id}`);
       setItems((current) => current.filter((item) => item._id !== notification._id));
+      refreshNotificationBell();
       showToast({ message: 'Notificación eliminada.', variant: 'success' });
     } catch (error) {
       showToast({ message: error instanceof Error ? error.message : 'No se pudo eliminar la notificación.', variant: 'error' });
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function deleteAllNotifications() {
+    setUpdatingId('delete-all');
+    try {
+      await api.delete('/notifications/all');
+      setItems([]);
+      setConfirmDeleteAll(false);
+      refreshNotificationBell();
+      showToast({ message: 'Se borraron todas tus notificaciones.', variant: 'success' });
+    } catch (error) {
+      showToast({ message: error instanceof Error ? error.message : 'No se pudieron borrar las notificaciones.', variant: 'error' });
     } finally {
       setUpdatingId(null);
     }
@@ -158,12 +181,15 @@ export default function NotificationsPage() {
       <PageHeader
         title="Notificaciones"
         description="Avisos operativos del backoffice y accesos rápidos al área correspondiente."
-        action={
-          <Button variant="secondary" disabled={!metrics.unread || updatingId === 'all'} onClick={() => void markAllAsRead()}>
+        action={<div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={loading || !metrics.unread || Boolean(updatingId)} onClick={() => void markAllAsRead()}>
             <CheckCheck className="mr-2 h-4 w-4" />
             {updatingId === 'all' ? 'Actualizando…' : 'Marcar todo como leído'}
           </Button>
-        }
+          <Button variant="danger" disabled={loading || !metrics.total || Boolean(updatingId)} onClick={() => setConfirmDeleteAll(true)}>
+            <Trash2 className="mr-2 h-4 w-4" />Borrar todas
+          </Button>
+        </div>}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -210,7 +236,7 @@ export default function NotificationsPage() {
             <tbody className="divide-y divide-zinc-100">
               {filteredItems.map((notification) => {
                 const destination = normalizeAdminUrl(notification.actionUrl);
-                const busy = updatingId === notification._id;
+                const busy = Boolean(updatingId);
                 return (
                   <tr key={notification._id} className={`transition-colors hover:bg-amber-50/35 ${notification.readAt ? '' : 'bg-red-50/25'}`}>
                     <td className="whitespace-nowrap px-5 py-4">
@@ -247,10 +273,19 @@ export default function NotificationsPage() {
               {loading ? <Bell className="h-6 w-6" /> : <Inbox className="h-6 w-6" />}
             </span>
             <h2 className="mt-4 font-semibold text-zinc-900">{loading ? 'Cargando notificaciones' : 'No hay notificaciones para mostrar'}</h2>
-            <p className="mt-1 max-w-sm text-sm text-zinc-500">Probá cambiar los filtros o esperar nuevos avisos del sistema.</p>
+            <p className="mt-1 max-w-sm text-sm text-zinc-500">{metrics.total ? 'Probá cambiar los filtros o esperar nuevos avisos del sistema.' : 'Los nuevos avisos aparecerán acá.'}</p>
           </div>
         )}
       </div>
+      <Modal open={confirmDeleteAll} title="Borrar todas las notificaciones" description="Esta acción afecta solo a las notificaciones de tu cuenta." onClose={() => { if (updatingId !== 'delete-all') setConfirmDeleteAll(false); }}>
+        <div className="p-6">
+          <p className="text-sm leading-6 text-zinc-600">Se borrarán las {metrics.total} notificaciones, incluidas las que no aparecen con los filtros actuales. No se puede deshacer.</p>
+          <div className="mt-6 flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" disabled={updatingId === 'delete-all'} onClick={() => setConfirmDeleteAll(false)}>Cancelar</Button>
+            <Button variant="danger" disabled={updatingId === 'delete-all'} onClick={() => void deleteAllNotifications()}>{updatingId === 'delete-all' ? 'Borrando…' : 'Sí, borrar todas'}</Button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

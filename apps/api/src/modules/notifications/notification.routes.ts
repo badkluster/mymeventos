@@ -42,6 +42,15 @@ router.patch('/read-all', asyncHandler(async (request, response) => {
   return sendSuccess(response, { updated: result.modifiedCount });
 }));
 
+router.delete('/all', asyncHandler(async (request, response) => {
+  const userId = request.user!.id;
+  const result = await Notification.updateMany(
+    { userId, deletedAt: null, type: { $ne: 'daily_digest' } },
+    { deletedAt: new Date(), deletedBy: userId, updatedBy: userId },
+  );
+  return sendSuccess(response, { deleted: result.modifiedCount });
+}));
+
 router.patch('/:id/read', validateRequest(notificationIdSchema), asyncHandler(async (request, response) => {
   const notification = await Notification.findOneAndUpdate(
     { _id: request.params.id, userId: request.user!.id, deletedAt: null },
