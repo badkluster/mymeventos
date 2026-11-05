@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { Role } from '@mym/shared';
+import { Permission, Role } from '@mym/shared';
 import { generateAccessToken } from '../src/utils/tokens';
 
 const mocks = vi.hoisted(() => ({
@@ -158,6 +158,37 @@ describe('payments routes', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.cancelPayment).toHaveBeenCalledWith(paymentId, adminId, 'El cliente pidió cancelar.');
+  });
+
+  it('lets an assigned salon manager cancel a payment with a reason', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: salonManagerId, roles: [Role.SALON_MANAGER], permissionOverrides: [], permissionDeniedOverrides: [], salonIds: [salonId], active: true }));
+    mocks.paymentFindOne.mockReturnValue(detailChain({ _id: paymentId, salonId, status: 'paid' }));
+    mocks.cancelPayment.mockResolvedValue({ _id: paymentId, status: 'cancelled' });
+
+    const response = await request(app).post(`/api/payments/${paymentId}/cancel`).set('Cookie', salonManagerCookie).send({ reason: 'Importe incorrecto.' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.cancelPayment).toHaveBeenCalledWith(paymentId, salonManagerId, 'Importe incorrecto.');
+  });
+
+  it('respects an explicit cancellation denial for a salon manager', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: salonManagerId, roles: [Role.SALON_MANAGER], permissionOverrides: [], permissionDeniedOverrides: [Permission.PAYMENTS_CANCEL], salonIds: [salonId], active: true }));
+    mocks.paymentFindOne.mockReturnValue(detailChain({ _id: paymentId, salonId, status: 'paid' }));
+
+    const response = await request(app).post(`/api/payments/${paymentId}/cancel`).set('Cookie', salonManagerCookie).send({ reason: 'Importe incorrecto.' });
+
+    expect(response.status).toBe(403);
+    expect(mocks.cancelPayment).not.toHaveBeenCalled();
+  });
+
+  it('keeps salon scope when a salon manager cancels a payment', async () => {
+    mocks.userFindOne.mockReturnValue(chainLean({ _id: salonManagerId, roles: [Role.SALON_MANAGER], permissionOverrides: [], permissionDeniedOverrides: [], salonIds: [salonId], active: true }));
+    mocks.paymentFindOne.mockReturnValue(detailChain({ _id: paymentId, salonId: '507f1f77bcf86cd799439014', status: 'paid' }));
+
+    const response = await request(app).post(`/api/payments/${paymentId}/cancel`).set('Cookie', salonManagerCookie).send({ reason: 'Importe incorrecto.' });
+
+    expect(response.status).toBe(403);
+    expect(mocks.cancelPayment).not.toHaveBeenCalled();
   });
 
   it('rejects payment cancellation for a user without PAYMENTS_CANCEL', async () => {

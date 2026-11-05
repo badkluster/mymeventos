@@ -262,7 +262,7 @@ export const RolePresets: Record<Role, Permission[]> = {
     Permission.CUSTOMERS_READ, Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_UPDATE,
     Permission.EVENTS_READ, Permission.EVENTS_CREATE, Permission.EVENTS_UPDATE, Permission.EVENTS_CANCEL,
     Permission.CONTRACTS_READ, Permission.CONTRACTS_CREATE, Permission.CONTRACTS_UPDATE,
-    Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE,
+    Permission.PAYMENTS_READ, Permission.PAYMENTS_CREATE, Permission.PAYMENTS_CANCEL,
     Permission.INVITATIONS_READ,
     Permission.TICKETS_READ, Permission.TICKETS_VALIDATE,
     Permission.SUPPLIERS_READ,
