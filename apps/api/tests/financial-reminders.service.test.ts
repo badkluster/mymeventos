@@ -35,7 +35,12 @@ vi.mock('../src/modules/users/user.model', () => ({ User: { find: mocks.userFind
 vi.mock('../src/modules/notifications/notification.model', () => ({ Notification: { bulkWrite: mocks.notificationBulkWrite } }));
 vi.mock('../src/modules/email/email.service', () => ({ sendEmail: mocks.sendEmail }));
 
-import { processFinancialReminderTick } from '../src/modules/crm/financial-reminders.service';
+import { isOpenInstallment, processFinancialReminderTick } from '../src/modules/crm/financial-reminders.service';
+
+it('treats a cuota with no applied amount as open even if its old status says paid', () => {
+  expect(isOpenInstallment({ amount: 272727, status: 'paid' })).toBe(true);
+  expect(isOpenInstallment({ amount: 272727, paidAmount: 272727, status: 'paid' })).toBe(false);
+});
 
 function leanQuery<T>(result: T) {
   const query: any = {

@@ -17,7 +17,6 @@ const FINANCIAL_RETRY_DELAY_MS = 60 * 60_000;
 const MAX_REMINDERS_PER_TICK = 50;
 const EVENT_TERMINAL_STATUSES = new Set(['cancelled', 'lost']);
 const PAYMENT_TERMINAL_STATUSES = new Set(['paid', 'cancelled', 'refunded']);
-const INSTALLMENT_TERMINAL_STATUSES = new Set(['paid', 'cancelled']);
 
 type RecipientMode = 'normal' | 'balance' | 'escalation';
 type ReminderRule = {
@@ -96,15 +95,15 @@ function humanDate(value?: string): string {
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00.000Z`));
 }
 
-// Exported (unchanged otherwise) so client-payment-reminders.service.ts can reuse the exact same
-// notion of "open installment"/due date instead of re-deriving it and risking drift.
+// Client-payment-reminders.service.ts reuses the same notion of an open installment.
+// A legacy "paid" label without an applied amount does not close the obligation.
 export function remainingInstallmentAmount(installment: any): number {
   return Math.max(0, Number(installment?.amount ?? 0) - Number(installment?.paidAmount ?? 0));
 }
 
 export function isOpenInstallment(installment: any): boolean {
   return Boolean(installment)
-    && !INSTALLMENT_TERMINAL_STATUSES.has(String(installment.status ?? ''))
+    && installment.status !== 'cancelled'
     && remainingInstallmentAmount(installment) > 0;
 }
 

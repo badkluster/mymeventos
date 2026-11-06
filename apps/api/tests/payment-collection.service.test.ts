@@ -99,6 +99,20 @@ describe('payment collection service', () => {
     });
   });
 
+  it('allows collection contact for an overdue cuota incorrectly marked paid with zero collected', async () => {
+    mocks.eventFindOne.mockReturnValue(populateQuery({
+      _id: '507f1f77bcf86cd799439021',
+      status: 'confirmed',
+      customerId: { fullName: 'Cliente' },
+      paymentPlanSnapshot: [{ id: 'third-installment', label: 'Tercera cuota', amount: 272727, status: 'paid', dueDate: '2026-09-10' }]
+    }));
+    mocks.contractFindOne.mockReturnValue(leanQuery({ _id: '507f1f77bcf86cd799439024', paymentPlanSnapshot: [] }));
+
+    const contact = await resolvePaymentCollectionContact({ source: 'installment', eventId: '507f1f77bcf86cd799439021', installmentId: 'third-installment' }, new Date('2026-11-06T15:00:00.000Z'));
+
+    expect(contact.obligation.amount).toBe(272727);
+  });
+
   it('sends the edited email copy and reports unavailable SMTP explicitly', async () => {
     const contact = {
       target: { source: 'payment' as const, paymentId: '507f1f77bcf86cd799439011' },

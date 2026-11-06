@@ -4,7 +4,6 @@ import { sendEmail } from '../email/email.service';
 import { argentinaDateKey, dueDateKey } from '../../utils/argentina-date';
 
 const TERMINAL_EVENT_STATUSES = new Set(['cancelled', 'lost']);
-const TERMINAL_INSTALLMENT_STATUSES = new Set(['paid', 'cancelled']);
 
 export type PaymentCollectionTarget =
   | { source: 'payment'; paymentId: string }
@@ -149,7 +148,7 @@ async function contactForInstallment(eventId: string, installmentId: string, now
   const installment = paymentPlan(event, contract).find((item: any) => String(item?.id ?? '') === installmentId);
   const dueDate = dueDateKey(installment?.paymentWindowEnd ?? installment?.dueDate);
   const remainingAmount = remainingInstallmentAmount(installment);
-  if (!installment || TERMINAL_INSTALLMENT_STATUSES.has(String(installment.status ?? '')) || remainingAmount <= 0) {
+  if (!installment || installment.status === 'cancelled' || remainingAmount <= 0) {
     throw new ApiError(422, 'PAYMENT_COLLECTION_INSTALLMENT_NOT_FOUND', 'La cuota ya no está pendiente de cobro.');
   }
   assertOverdue('pending', dueDate, now);

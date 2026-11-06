@@ -140,7 +140,7 @@ export function OverdueInstallmentCollectionActions({ eventId, installments }: {
   const overdue = installments.filter((installment) => {
     const dueDate = installment.paymentWindowEnd ?? installment.dueDate;
     const remaining = Math.max(0, Number(installment.amount ?? 0) - Number(installment.paidAmount ?? 0));
-    return Boolean(installment.id) && !['paid', 'cancelled'].includes(installment.status ?? '') && remaining > 0 && isOverduePaymentDate(dueDate);
+    return Boolean(installment.id) && installment.status !== 'cancelled' && remaining > 0 && isOverduePaymentDate(dueDate);
   });
   if (!overdue.length) return null;
 

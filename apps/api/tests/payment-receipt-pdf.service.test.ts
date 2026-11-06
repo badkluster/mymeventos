@@ -57,6 +57,20 @@ describe('payment receipt PDF', () => {
     expect(content).toContain('SALDO CONTRACTUAL RESTANTE');
   });
 
+  it('shows a cuota with zero applied amount as the next due date even if its old status says paid', async () => {
+    const pdf = await buildPaymentReceiptPdfBuffer(
+      { paymentNumber: 'P-2026-00003', amount: 100000, method: 'cash', paidAt: '2026-08-01T15:00:00.000Z' },
+      { eventName: 'Evento', eventDate: '2027-05-01' },
+      { fullName: 'Cliente' },
+      { contractNumber: 'C-2026-00033', balanceAmount: 200000, paymentPlanSnapshot: [
+        { amount: 100000, status: 'paid', paidAmount: 0, paymentWindowEnd: '2026-09-10' },
+        { amount: 100000, status: 'scheduled', paidAmount: 0, paymentWindowEnd: '2026-10-10' },
+      ] }
+    );
+
+    expect(pdfText(pdf)).toContain('10 de septiembre de 2026');
+  });
+
   it('overwrites the current receipt instead of accumulating PDF assets', async () => {
     mocks.uploadBuffer.mockResolvedValue({
       publicId: 'mym-eventos/payments/payment-1/comprobante-PAY-2026-00001',

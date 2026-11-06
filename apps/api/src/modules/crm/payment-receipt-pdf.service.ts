@@ -23,7 +23,7 @@ function summaryItem(document: PDFKit.PDFDocument, label: string, content: strin
 export async function buildPaymentReceiptPdfBuffer(payment: any, event: any, customer: any, contract: any): Promise<Buffer> {
   const document = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Comprobante ${payment.paymentNumber}`, Author: 'M&M Eventos', Subject: 'Comprobante de pago' } });
   document.rect(0, 0, 595.28, 114).fill('#101a2c'); logo(document); document.font('Helvetica').fontSize(8.5).fillColor('#decaa2').text('COMPROBANTE DE PAGO', 300, 34, { width: 249, align: 'right', characterSpacing: 1 }); document.font('Helvetica-Bold').fontSize(15).fillColor('#ffffff').text(payment.paymentNumber, 300, 51, { width: 249, align: 'right' });
-  const nextInstallment = (Array.isArray(contract?.paymentPlanSnapshot) ? contract.paymentPlanSnapshot : []).find((item: any) => !['paid', 'cancelled'].includes(item.status) && Number(item.amount || 0) > Number(item.paidAmount || 0));
+  const nextInstallment = (Array.isArray(contract?.paymentPlanSnapshot) ? contract.paymentPlanSnapshot : []).find((item: any) => item.status !== 'cancelled' && Number(item.amount || 0) > Number(item.paidAmount || 0));
   const manualAdditionalAmount = Number(payment.manualAdditionalAmount ?? 0);
   const contractAppliedAmount = Number(payment.contractAppliedAmount ?? payment.amount ?? 0);
   document.roundedRect(46, 146, 503, 166, 12).fill('#f5f7fa');

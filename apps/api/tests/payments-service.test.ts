@@ -381,6 +381,15 @@ describe('applyPaymentToPlan', () => {
     expect(result[2]).toMatchObject({ status: 'partial', paidAmount: 40000 });
   });
 
+  it('can collect a legacy cuota marked paid without any applied amount', () => {
+    const plan = [{ id: 'installment-1', amount: 100000, status: 'paid' }];
+
+    const { plan: result, overpaymentAmount } = applyPaymentToPlan(plan, 100000, { planInstallmentId: 'installment-1', paymentId: 'payment-1' });
+
+    expect(result[0]).toMatchObject({ status: 'paid', paidAmount: 100000, paymentId: 'payment-1' });
+    expect(overpaymentAmount).toBe(0);
+  });
+
   it('reports the leftover as overpaymentAmount instead of discarding it or shrinking another installment', () => {
     const plan = installmentPlan(2, 50000);
 

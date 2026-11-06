@@ -15,7 +15,6 @@ export { computeFinancialSummary as paymentSummary, recalculateContractPayments 
 
 const refundableStatuses = new Set(['paid']);
 const terminalPaymentStatuses = new Set(['cancelled', 'refunded']);
-const closedInstallmentStatuses = new Set(['paid', 'cancelled']);
 
 export type PlanInstallment = {
   id?: string;
@@ -42,7 +41,10 @@ export function applyPaymentToPlan(
 ): { plan: PlanInstallment[]; overpaymentAmount: number } {
   const nextPlan = plan.map((item) => ({ ...item }));
   const selectedIndex = options.planInstallmentId ? nextPlan.findIndex((item) => item.id === options.planInstallmentId) : -1;
-  const openIndexes = nextPlan.map((_, index) => index).filter((index) => !closedInstallmentStatuses.has(String(nextPlan[index].status)));
+  const openIndexes = nextPlan.map((_, index) => index).filter((index) => {
+    const installment = nextPlan[index];
+    return installment.status !== 'cancelled' && amount(installment.amount) > amount(installment.paidAmount);
+  });
   const startPosition = selectedIndex >= 0 ? Math.max(0, openIndexes.indexOf(selectedIndex)) : 0;
 
   let remaining = amount(paymentAmount);

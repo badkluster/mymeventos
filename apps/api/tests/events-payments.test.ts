@@ -104,6 +104,17 @@ describe('event payment registration and the installment plan', () => {
     expect(mocks.createPayment).not.toHaveBeenCalled();
   });
 
+  it('does not create a payment against an already settled installment', async () => {
+    const event: any = { _id: eventId, salonId, paymentPlanSnapshot: [{ id: 'installment-1', amount: 100000, paidAmount: 100000, status: 'paid' }] };
+    mocks.eventFindOne.mockResolvedValue(event);
+
+    const response = await request(app).post(`/api/events/${eventId}/payments`).set('Cookie', adminCookie).send({ amount: 100000, method: 'cash', planInstallmentId: 'installment-1' });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('EVENT_INSTALLMENT_NOT_PAYABLE');
+    expect(mocks.createPayment).not.toHaveBeenCalled();
+  });
+
   it('still cascades an installment payment across the plan (default type)', async () => {
     const plan = installmentPlan(12, 112500);
     const event: any = { _id: eventId, salonId, customerId: undefined, quoteId: undefined, paymentPlanSnapshot: plan, save: vi.fn().mockResolvedValue(undefined) };

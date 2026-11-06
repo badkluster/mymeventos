@@ -22,6 +22,7 @@ import { buildDefaultEventAlerts } from './event-alert-defaults';
 import { createContractFromEvent } from './event-to-contract.service';
 import { convertQuoteToEvent } from './quote-to-event.service';
 import { applyPaymentToPlan, createPayment, paymentSummary } from './payments.service';
+import { mergeCommercialPaymentPlan } from './commercial-payment-plan';
 import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
 import { sendEmail } from '../email/email.service';
 import { uploadBuffer } from '../uploads/cloudinary.service';
@@ -1004,6 +1005,14 @@ router.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREATE), vali
   const previousBalance = contract.balanceAmount;
 
   const type = request.body.type ?? 'installment';
+  if (type === 'installment' && request.body.planInstallmentId) {
+    const installment = Array.isArray(event.paymentPlanSnapshot)
+      ? event.paymentPlanSnapshot.find((item: any) => item.id === request.body.planInstallmentId)
+      : undefined;
+    if (!installment || installment.status === 'cancelled' || Number(installment.amount ?? 0) <= Number(installment.paidAmount ?? 0)) {
+      throw new ApiError(422, 'EVENT_INSTALLMENT_NOT_PAYABLE', 'La cuota seleccionada ya no tiene saldo pendiente. Actualizá la página y elegí una cuota abierta.');
+    }
+  }
   const manualAdditionalAmount = Number(request.body.manualAdditionalAmount ?? 0);
   let installmentAmount = Number(request.body.amount);
   if (manualAdditionalAmount > 0) {
@@ -1590,6 +1599,9 @@ router.patch('/:id', requirePermission(Permission.EVENTS_UPDATE), validateReques
   // que sincroniza el gasto de forma transaccional. Los demás editores siguen
   // enviando el plan completo por compatibilidad, por eso preservamos esta rama.
   const updateBody: Record<string, any> = { ...request.body };
+  if (Object.prototype.hasOwnProperty.call(updateBody, 'paymentPlanSnapshot')) {
+    updateBody.paymentPlanSnapshot = mergeCommercialPaymentPlan(event.paymentPlanSnapshot, updateBody.paymentPlanSnapshot);
+  }
   const resultingEvent = { ...(typeof event.toObject === 'function' ? event.toObject() : event), ...updateBody };
   const missingRequired = [
     !resultingEvent.eventType && 'Debe indicar el tipo de evento.',
