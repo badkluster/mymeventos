@@ -47,6 +47,7 @@ import { useToast } from '@/components/ui/toast-provider';
 import { userCanAccess } from '@/lib/admin-permissions';
 import { useSession } from '@/components/session-provider';
 import { EventAvailabilityBoard, type AvailabilitySlot, type AvailabilityView } from '@/features/events/event-availability-board';
+import { calendarVenueCardTone, venueColorLegend } from '@/features/events/calendar-venue-colors';
 import { EventCreateModal, type EventCreateDefaults } from '@/features/events/event-create-modal';
 import { civilDateKey, parseCivilDateKey } from '@/lib/dates';
 import type { Event, Salon } from '@/features/quotes/types';
@@ -394,18 +395,19 @@ function formFromEntry(entry: CalendarEntry): CalendarForm {
 }
 
 function TypeBadge({ type, catering = false }: { type: CalendarItemType; catering?: boolean }) {
-  const meta = catering ? { label: 'Catering externo', icon: ChefHat, badge: 'bg-orange-100 text-orange-800' } : typeMeta[type];
+  const meta = catering ? { label: 'Catering externo', icon: ChefHat, badge: 'bg-sky-100 text-sky-900' } : typeMeta[type];
   const Icon = meta.icon;
   return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${meta.badge}`}><Icon className="h-3.5 w-3.5" />{meta.label}</span>;
 }
 
 function EntryCard({ entry, compact = false, onOpen }: { entry: CalendarEntry; compact?: boolean; onOpen: (entry: CalendarEntry) => void }) {
   const meta = entry.event?.serviceMode === 'external_catering'
-    ? { label: 'Catering externo', icon: ChefHat, tone: 'border-orange-200 bg-orange-50 text-orange-900', dot: 'bg-orange-500', badge: 'bg-orange-100 text-orange-800' }
+    ? { label: 'Catering externo', icon: ChefHat, tone: 'border-sky-200 bg-sky-50 text-sky-900', dot: 'bg-sky-500', badge: 'bg-sky-100 text-sky-900' }
     : typeMeta[entry.type];
   const priority = priorityMeta[entry.priority];
   const Icon = meta.icon;
-  return <button type="button" onClick={() => onOpen(entry)} className={`group block w-full rounded-lg border border-l-4 px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${meta.tone} ${priority.rail}`}>
+  const venueTone = calendarVenueCardTone(entry.salonName, entry.event?.serviceMode === 'external_catering');
+  return <button type="button" onClick={() => onOpen(entry)} className={`group block w-full rounded-lg border border-l-4 px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${venueTone ?? meta.tone} ${priority.rail}`}>
     <span className="flex min-w-0 items-center gap-2">
       <Icon className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate text-xs font-semibold">{entry.title}</span>
@@ -572,6 +574,7 @@ export default function CalendarPage() {
   }, [searchInput]);
 
   const entries = useMemo<CalendarEntry[]>(() => {
+    const salonNameFor = (value: string | Salon | undefined) => salons.find((salon) => salon._id === entityId(value))?.name ?? entityName(value);
     const eventEntries: CalendarEntry[] = canShowEvents ? events.filter((event) => {
       const date = eventDate(event);
       return date && date >= visibleRange.start && date <= visibleRange.end;
@@ -591,7 +594,7 @@ export default function CalendarPage() {
         status: event.status,
         priority: event.status === 'deposit_pending' ? 'high' as const : 'normal' as const,
         visibility: 'shared' as const,
-        salonName: event.serviceMode === 'external_catering' ? event.externalVenue?.name || 'Locación externa' : entityName(event.salonId),
+        salonName: event.serviceMode === 'external_catering' ? event.externalVenue?.name || 'Locación externa' : salonNameFor(event.salonId),
         href: `/admin/events/${event._id}`,
         event
       };
@@ -608,7 +611,7 @@ export default function CalendarPage() {
       status: item.status,
       priority: item.priority ?? 'normal',
       visibility: item.visibility ?? 'private',
-      salonName: entityName(item.salonId),
+      salonName: salonNameFor(item.salonId),
       notification: item.notification,
       item
     })) : [];
@@ -617,7 +620,7 @@ export default function CalendarPage() {
       .filter((entry) => mode === 'availability' || !filters.priority || entry.priority === filters.priority)
       .filter((entry) => mode === 'availability' || filters.notifications === 'all' || (filters.notifications === 'with' ? entry.notification?.enabled : !entry.notification?.enabled))
       .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
-  }, [calendarItems, canShowEvents, canShowItems, events, filters.notifications, filters.priority, filters.status, mode, visibleRange.end, visibleRange.start]);
+  }, [calendarItems, canShowEvents, canShowItems, events, filters.notifications, filters.priority, filters.status, mode, salons, visibleRange.end, visibleRange.start]);
 
   const upcomingEntries = useMemo(() => entries.filter((entry) => entry.startAt >= startOfDay(new Date())).slice(0, 8), [entries]);
   const criticalCount = entries.filter((entry) => entry.priority === 'critical').length;
@@ -780,7 +783,10 @@ export default function CalendarPage() {
                   const count = entries.filter((entry) => entry.type === type && (type !== 'event' || entry.event?.serviceMode !== 'external_catering')).length;
                   return <div key={type} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-zinc-700"><span className="flex items-center gap-2"><span className={`grid h-7 w-7 place-items-center rounded-lg ${meta.badge}`}><Icon className="h-4 w-4" /></span>{meta.label}</span><span className="font-semibold tabular-nums">{count}</span></div>;
                 })}
-                <div className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-zinc-700"><span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-orange-100 text-orange-800"><ChefHat className="h-4 w-4" /></span>Catering externo</span><span className="font-semibold tabular-nums">{entries.filter((entry) => entry.event?.serviceMode === 'external_catering').length}</span></div>
+                <div className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-zinc-700"><span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-sky-100 text-sky-900"><ChefHat className="h-4 w-4" /></span>Catering externo</span><span className="font-semibold tabular-nums">{entries.filter((entry) => entry.event?.serviceMode === 'external_catering').length}</span></div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-zinc-100 pt-3 text-xs text-zinc-700">
+                {venueColorLegend.map(({ label, swatch }) => <span key={label} className="flex items-center gap-2"><span className={`h-3 w-3 shrink-0 rounded-sm ${swatch}`} />{label}</span>)}
               </div>
               <p className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-500"><Bell className="mr-1 inline h-3.5 w-3.5" /> indica un aviso. El borde izquierdo señala la prioridad.</p>
             </div> : null}
@@ -913,9 +919,9 @@ function YearView({ focusDate, entries, onSelectDate }: { focusDate: Date; entri
 
 function AgendaList({ entries, empty, onOpen }: { entries: CalendarEntry[]; empty: string; onOpen: (entry: CalendarEntry) => void }) {
   return <div className="grid max-h-[420px] gap-2 overflow-y-auto pr-1">
-      {entries.map((entry) => <button type="button" key={`${entry.source}-${entry.id}`} onClick={() => onOpen(entry)} className={`rounded-xl border border-l-4 p-3 text-left transition hover:bg-zinc-50 ${priorityMeta[entry.priority].rail}`}>
+      {entries.map((entry) => <button type="button" key={`${entry.source}-${entry.id}`} onClick={() => onOpen(entry)} className={`rounded-xl border border-l-4 p-3 text-left transition ${calendarVenueCardTone(entry.salonName, entry.event?.serviceMode === 'external_catering') ?? 'border-zinc-200 bg-white text-zinc-950 hover:bg-zinc-50'} ${priorityMeta[entry.priority].rail}`}>
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0"><p className="truncate text-sm font-semibold text-zinc-950">{entry.title}</p><p className="mt-1 text-xs text-zinc-500">{entryTime(entry)} · {entry.salonName}</p></div>
+          <div className="min-w-0"><p className="truncate text-sm font-semibold">{entry.title}</p><p className="mt-1 text-xs opacity-80">{entryTime(entry)} · {entry.salonName}</p></div>
           <TypeBadge type={entry.type} catering={entry.event?.serviceMode === 'external_catering'} />
         </div>
       </button>)}

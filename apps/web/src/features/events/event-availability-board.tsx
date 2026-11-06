@@ -5,6 +5,7 @@ import { CalendarPlus, Check, Clock3, Plus, ReceiptText, X } from 'lucide-react'
 import { Button } from '@/components/ui/primitives';
 import { displayLabel, eventStatusLabels } from '@/lib/display-labels';
 import { civilDateKey, parseCivilDateKey } from '@/lib/dates';
+import { calendarVenueCardTone } from '@/features/events/calendar-venue-colors';
 import type { Event, Salon } from '@/features/quotes/types';
 
 export type AvailabilityView = 'day' | 'week' | 'month';
@@ -55,8 +56,8 @@ function salonId(event: Event) {
   return typeof event.salonId === 'string' ? event.salonId : event.salonId?._id ?? '';
 }
 
-function salonName(event: Event) {
-  return typeof event.salonId === 'string' ? 'Salón' : event.salonId?.name ?? 'Sin salón';
+function salonName(event: Event, salons: Salon[]) {
+  return salons.find((salon) => salon._id === salonId(event))?.name ?? (typeof event.salonId === 'string' ? 'Salón' : event.salonId?.name ?? 'Sin salón');
 }
 
 function dateKey(date: Date) {
@@ -178,16 +179,18 @@ function selectedSlotLabel(slot: AvailabilitySlot) {
   return `${slot.salonName} · ${shortDateFormatter.format(startDate)} · ${slot.startTime} a ${slot.endTime}${endDay}`;
 }
 
-function EventOverviewCard({ event, compact = false }: { event: Event; compact?: boolean }) {
+function EventOverviewCard({ event, salons, compact = false }: { event: Event; salons: Salon[]; compact?: boolean }) {
   const locked = lockedStatuses.has(event.status);
-  return <Link href={`/admin/events/${event._id}`} className={`block rounded-xl border text-left transition hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-zinc-500/30 ${compact ? 'px-2.5 py-2' : 'px-3 py-3'} ${locked ? 'border-zinc-800 bg-zinc-900 text-white' : 'border-amber-300 bg-amber-100 text-amber-950'}`}>
+  const venueName = salonName(event, salons);
+  const venueTone = calendarVenueCardTone(venueName, event.serviceMode === 'external_catering');
+  return <Link href={`/admin/events/${event._id}`} className={`block rounded-xl border border-l-4 text-left transition hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-zinc-500/30 ${compact ? 'px-2.5 py-2' : 'px-3 py-3'} ${venueTone ?? (locked ? 'border-zinc-800 bg-zinc-900 text-white' : 'border-amber-300 bg-amber-100 text-amber-950')} ${locked ? 'border-l-zinc-950' : 'border-l-amber-500'}`}>
     <span className="block truncate text-xs font-semibold">{event.eventName || event.eventType || 'Evento'}</span>
-    <span className="mt-1 block truncate text-[11px] font-medium tabular-nums opacity-80">{event.startTime && event.endTime ? `${event.startTime}–${event.endTime}` : 'Sin horario'} · {salonName(event)}</span>
+    <span className="mt-1 block truncate text-[11px] font-medium tabular-nums opacity-80">{event.startTime && event.endTime ? `${event.startTime}–${event.endTime}` : 'Sin horario'} · {venueName}</span>
     {!compact ? <span className="mt-1 block truncate text-[10px] opacity-70">{displayLabel(eventStatusLabels, event.status)}</span> : null}
   </Link>;
 }
 
-function AvailabilityWeek({ date, events, onSelectDate }: { date: Date; events: Event[]; onSelectDate: (date: Date) => void }) {
+function AvailabilityWeek({ date, events, salons, onSelectDate }: { date: Date; events: Event[]; salons: Salon[]; onSelectDate: (date: Date) => void }) {
   return <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
     <header className="border-b border-zinc-200 px-4 py-4">
       <h2 className="font-semibold text-zinc-950">Eventos de la semana</h2>
@@ -202,7 +205,7 @@ function AvailabilityWeek({ date, events, onSelectDate }: { date: Date; events: 
               <span><span className="block text-xs font-medium capitalize text-zinc-500">{weekdayFormatter.format(day)}</span><span className="text-lg font-semibold text-zinc-950">{day.getDate()}</span></span>
               <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">{items.length}</span>
             </button>
-            <div className="mt-3 grid gap-2">{items.map((event) => <EventOverviewCard key={event._id} event={event} />)}</div>
+            <div className="mt-3 grid gap-2">{items.map((event) => <EventOverviewCard key={event._id} event={event} salons={salons} />)}</div>
             {!items.length ? <button type="button" onClick={() => onSelectDate(day)} className="mt-3 flex min-h-24 w-full items-center justify-center rounded-xl border border-dashed border-zinc-200 px-3 text-center text-xs font-medium text-zinc-500 transition hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900">Sin eventos<br />Ver horarios libres</button> : null}
           </section>;
         })}
@@ -211,7 +214,7 @@ function AvailabilityWeek({ date, events, onSelectDate }: { date: Date; events: 
   </section>;
 }
 
-function AvailabilityMonth({ date, events, onSelectDate }: { date: Date; events: Event[]; onSelectDate: (date: Date) => void }) {
+function AvailabilityMonth({ date, events, salons, onSelectDate }: { date: Date; events: Event[]; salons: Salon[]; onSelectDate: (date: Date) => void }) {
   return <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
     <header className="border-b border-zinc-200 px-4 py-4">
       <h2 className="font-semibold text-zinc-950">Eventos del mes</h2>
@@ -231,7 +234,7 @@ function AvailabilityMonth({ date, events, onSelectDate }: { date: Date; events:
                 <span className={`grid h-8 w-8 place-items-center rounded-lg text-sm font-semibold ${outside ? 'text-zinc-500' : 'text-zinc-950'}`}>{day.getDate()}</span>
                 {items.length ? <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">{items.length}</span> : null}
               </button>
-              <div className="mt-1 grid gap-1.5">{items.slice(0, 3).map((event) => <EventOverviewCard key={event._id} event={event} compact />)}</div>
+              <div className="mt-1 grid gap-1.5">{items.slice(0, 3).map((event) => <EventOverviewCard key={event._id} event={event} salons={salons} compact />)}</div>
               {items.length > 3 ? <button type="button" onClick={() => onSelectDate(day)} className="mt-1 min-h-9 w-full rounded-lg text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950">Ver {items.length - 3} más</button> : null}
               {!items.length && !outside ? <button type="button" onClick={() => onSelectDate(day)} className="mt-2 min-h-10 w-full rounded-lg text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950">Ver disponibilidad</button> : null}
             </section>;
@@ -245,8 +248,8 @@ function AvailabilityMonth({ date, events, onSelectDate }: { date: Date; events:
 export function EventAvailabilityBoard({ date, view, events, salons, loading, canCreateEvents, canCreateQuotes, selectedSlot, onSelectSlot, onSelectDate, onCreateEvent }: Props) {
   const visibleEvents = events.filter((event) => !ignoredStatuses.has(event.status) && eventDateKey(event));
   if (loading) return <div className="grid min-h-80 place-items-center rounded-2xl border border-zinc-200 bg-white text-sm text-zinc-500 shadow-sm">Cargando disponibilidad…</div>;
-  if (view === 'week') return <AvailabilityWeek date={date} events={visibleEvents} onSelectDate={onSelectDate} />;
-  if (view === 'month') return <AvailabilityMonth date={date} events={visibleEvents} onSelectDate={onSelectDate} />;
+  if (view === 'week') return <AvailabilityWeek date={date} events={visibleEvents} salons={salons} onSelectDate={onSelectDate} />;
+  if (view === 'month') return <AvailabilityMonth date={date} events={visibleEvents} salons={salons} onSelectDate={onSelectDate} />;
 
   const consideredEvents = visibleEvents.filter((event) => eventInterval(event, date));
   const activeEvents = consideredEvents.filter((event) => {
@@ -264,8 +267,8 @@ export function EventAvailabilityBoard({ date, view, events, salons, loading, ca
         <p className="mt-1 text-sm text-zinc-500">La grilla representa el día civil completo, de 00:00 a 24:00. Solo los espacios vacíos abren acciones de carga.</p>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-zinc-600">
-        <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm bg-zinc-900" />Reservado / confirmado</span>
-        <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm border border-amber-300 bg-amber-100" />Posibilidad</span>
+        <span className="inline-flex items-center gap-2"><span className="h-3 w-1 rounded-sm bg-zinc-950" />Reservado / confirmado</span>
+        <span className="inline-flex items-center gap-2"><span className="h-3 w-1 rounded-sm bg-amber-500" />Posibilidad</span>
         <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-sm border border-dashed border-zinc-300 bg-white" />Disponible</span>
       </div>
     </header>
@@ -311,7 +314,7 @@ export function EventAvailabilityBoard({ date, view, events, salons, loading, ca
                 const locked = lockedStatuses.has(event.status);
                 const interval = eventInterval(event, date)!;
                 const top = ((Math.max(interval.start, START_MINUTES) - START_MINUTES) / 60) * HOUR_HEIGHT + 6;
-                return <Link key={event._id} href={`/admin/events/${event._id}`} className={`absolute left-2 right-2 z-20 rounded-xl border px-3 py-2 text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-zinc-500/30 ${locked ? 'border-zinc-800 bg-zinc-900 text-white' : 'border-amber-300 bg-amber-100 text-amber-950'}`} style={{ top }}>
+                return <Link key={event._id} href={`/admin/events/${event._id}`} className={`absolute left-2 right-2 z-20 rounded-xl border border-l-4 px-3 py-2 text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-zinc-500/30 ${calendarVenueCardTone(salon.name) ?? (locked ? 'border-zinc-800 bg-zinc-900 text-white' : 'border-amber-300 bg-amber-100 text-amber-950')} ${locked ? 'border-l-zinc-950' : 'border-l-amber-500'}`} style={{ top }}>
                   <span className="block truncate text-xs font-semibold">{event.eventName || event.eventType || 'Evento'}</span>
                   <span className="mt-1 block text-[11px] opacity-75">Sin horario · {locked ? 'bloquea su día civil' : 'posibilidad'}</span>
                 </Link>;
@@ -328,7 +331,7 @@ export function EventAvailabilityBoard({ date, view, events, salons, loading, ca
                 const top = ((visibleStart - START_MINUTES) / 60) * HOUR_HEIGHT + 2;
                 const height = Math.max(46, ((visibleEnd - visibleStart) / 60) * HOUR_HEIGHT - 4);
                 const timeLabel = start < START_MINUTES ? `Continúa hasta ${event.endTime}` : end > END_MINUTES ? `${event.startTime}–${event.endTime} · continúa` : `${event.startTime}–${event.endTime}`;
-                return <Link key={event._id} href={`/admin/events/${event._id}`} className={`absolute z-10 overflow-hidden rounded-xl border px-2.5 py-2 text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-zinc-500/30 ${locked ? 'border-zinc-800 bg-zinc-900 text-white' : 'border-amber-300 bg-amber-100 text-amber-950'}`} style={{ top, height, left, width }}>
+                return <Link key={event._id} href={`/admin/events/${event._id}`} className={`absolute z-10 overflow-hidden rounded-xl border border-l-4 px-2.5 py-2 text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-zinc-500/30 ${calendarVenueCardTone(salon.name) ?? (locked ? 'border-zinc-800 bg-zinc-900 text-white' : 'border-amber-300 bg-amber-100 text-amber-950')} ${locked ? 'border-l-zinc-950' : 'border-l-amber-500'}`} style={{ top, height, left, width }}>
                   <span className="block truncate text-xs font-semibold">{event.eventName || event.eventType || 'Evento'}</span>
                   <span className="mt-1 block truncate text-[11px] font-medium tabular-nums opacity-80">{timeLabel}</span>
                   {height >= 70 ? <span className="mt-1 block truncate text-[10px] opacity-70">{displayLabel(eventStatusLabels, event.status)}</span> : null}
