@@ -1,6 +1,6 @@
 import { addDaysToDateKey, argentinaMidnight, dueDateKey } from '../../utils/argentina-date';
 
-export const PUBLIC_GUEST_LIST_CLOSE_DAYS_BEFORE_EVENT = 15;
+export const PUBLIC_GUEST_LIST_CLOSE_DAYS_BEFORE_EVENT = 5;
 
 export type PublicGuestListAccess = {
   editable: boolean;
@@ -9,7 +9,7 @@ export type PublicGuestListAccess = {
 };
 
 /**
- * The guest-list deadline is the start of the Argentina civil day that is 15
+ * The guest-list deadline is the start of the Argentina civil day that is 5
  * days before the event. The public route is the sole enforcement point; the
  * backoffice keeps its normal event-editing permissions after this cutoff.
  */

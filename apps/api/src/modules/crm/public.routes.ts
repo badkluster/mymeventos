@@ -10,7 +10,7 @@ import { getApiMessage } from '../../utils/messages';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { ApiError } from '../../middlewares/errorHandler';
 import { createQuoteRequest } from './quote-request.service';
-import { publicGuestListAccess, publicGuestListAccessPayload } from './public-guest-list-access';
+import { PUBLIC_GUEST_LIST_CLOSE_DAYS_BEFORE_EVENT, publicGuestListAccess, publicGuestListAccessPayload } from './public-guest-list-access';
 import { guestListSchema } from './guest-list.schema';
 
 const router = Router();
@@ -188,7 +188,7 @@ router.patch('/guest-list/:token', validateRequest(publicGuestListUpdateSchema),
   const event: any = await Event.findOne(eventQuery);
   if (!event) throw new ApiError(404, 'El enlace de lista de invitados no es válido o ya no está disponible.');
   const access = publicGuestListAccess(event.eventDate);
-  if (!access.editable) throw new ApiError(403, 'GUEST_LIST_EDITING_CLOSED', 'La lista de invitados quedó cerrada para edición 15 días antes del evento. El equipo de M&M Eventos puede seguir gestionándola internamente.');
+  if (!access.editable) throw new ApiError(403, 'GUEST_LIST_EDITING_CLOSED', `La lista de invitados quedó cerrada para edición ${PUBLIC_GUEST_LIST_CLOSE_DAYS_BEFORE_EVENT} días antes del evento. El equipo de M&M Eventos puede seguir gestionándola internamente.`);
   const expectedSubmittedAt = request.body.expectedSubmittedAt ?? null;
   if ((event.resourcePlanSnapshot?.guestList?.submittedAt ?? null) !== expectedSubmittedAt) {
     throw new ApiError(409, 'GUEST_LIST_CHANGED', 'La lista cambió desde otra sesión. Tus cambios siguen en este dispositivo; consultá la versión actual antes de reemplazarla.');
