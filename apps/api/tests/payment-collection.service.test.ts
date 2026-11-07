@@ -113,6 +113,26 @@ describe('payment collection service', () => {
     expect(contact.obligation.amount).toBe(272727);
   });
 
+  it('rejects collection contact when a global payment settled the contract but left plan entries open', async () => {
+    mocks.eventFindOne.mockReturnValue(populateQuery({
+      _id: '507f1f77bcf86cd799439021',
+      status: 'confirmed',
+      customerId: { fullName: 'Cliente' },
+      paymentPlanSnapshot: [{ id: 'sixth-installment', amount: 118_500, paidAmount: 0, dueDate: '2026-09-10' }]
+    }));
+    mocks.contractFindOne.mockReturnValue(leanQuery({
+      _id: '507f1f77bcf86cd799439024',
+      totalAmount: 4_581_500,
+      paidAmount: 4_581_500,
+      balanceAmount: 0,
+      paymentPlanSnapshot: []
+    }));
+
+    await expect(resolvePaymentCollectionContact({
+      source: 'installment', eventId: '507f1f77bcf86cd799439021', installmentId: 'sixth-installment'
+    }, new Date('2026-11-07T15:00:00.000Z'))).rejects.toMatchObject({ code: 'PAYMENT_COLLECTION_INSTALLMENT_NOT_FOUND' });
+  });
+
   it('sends the edited email copy and reports unavailable SMTP explicitly', async () => {
     const contact = {
       target: { source: 'payment' as const, paymentId: '507f1f77bcf86cd799439011' },

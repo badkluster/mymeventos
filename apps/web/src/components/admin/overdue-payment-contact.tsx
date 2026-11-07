@@ -136,7 +136,8 @@ export function OverduePaymentContact({ target, iconOnly = false, label = 'Conta
   </>;
 }
 
-export function OverdueInstallmentCollectionActions({ eventId, installments }: { eventId: string; installments: Installment[] }) {
+export function OverdueInstallmentCollectionActions({ eventId, installments, contractFullyPaid }: { eventId: string; installments: Installment[]; contractFullyPaid: boolean }) {
+  if (contractFullyPaid) return null;
   const overdue = installments.filter((installment) => {
     const dueDate = installment.paymentWindowEnd ?? installment.dueDate;
     const remaining = Math.max(0, Number(installment.amount ?? 0) - Number(installment.paidAmount ?? 0));

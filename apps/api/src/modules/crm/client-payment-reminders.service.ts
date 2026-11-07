@@ -14,6 +14,7 @@ import {
   type GenericTickResult
 } from './reminder-engine';
 import { planFor, isOpenInstallment, installmentDueDateKey, remainingInstallmentAmount } from './financial-reminders.service';
+import { isContractFullyPaid } from './contract-settlement';
 
 // Client-facing counterpart to financial-reminders.service.ts, which is internal-only by
 // design. Deliberately simpler: no overdue/escalation stages — dunning a client automatically is
@@ -94,7 +95,7 @@ async function syncClientPaymentReminders(now: Date): Promise<number> {
   const startedAt = Date.now();
   const todayKey = argentinaDateKey(now);
   const contracts: any[] = await Contract.find({ deletedAt: null, status: 'approved', clientReminderOptIn: { $ne: false } })
-    .select('_id eventId customerId salonId balanceAmount paymentPlanSnapshot versionNumber createdAt')
+    .select('_id eventId customerId salonId totalAmount paidAmount balanceAmount paymentPlanSnapshot versionNumber createdAt')
     .sort({ eventId: 1, versionNumber: -1, createdAt: -1 })
     .lean();
   if (!contracts.length) return 0;
@@ -119,7 +120,7 @@ async function syncClientPaymentReminders(now: Date): Promise<number> {
 
     for (const installment of planFor(event, contract)) {
       const dueKey = installmentDueDateKey(installment);
-      if (!dueKey || dueKey < todayKey || !isOpenInstallment(installment)) continue;
+      if (!dueKey || dueKey < todayKey || !isOpenInstallment(installment) || isContractFullyPaid(contract)) continue;
       const installmentId = String(installment.id ?? dueKey);
       for (const rule of clientInstallmentRules) {
         const sendAtKey = addDaysToDateKey(dueKey, -rule.daysUntilDue);
@@ -179,11 +180,12 @@ async function stillApplies(item: any): Promise<boolean> {
   const contractId = idOf(item?.contractId);
   const eventId = idOf(item?.eventId);
   const [contract, event] = await Promise.all([
-    contractId ? Contract.findOne({ _id: contractId, deletedAt: null, status: 'approved', clientReminderOptIn: { $ne: false } }).select('_id balanceAmount paymentPlanSnapshot').lean() : Promise.resolve(undefined),
+    contractId ? Contract.findOne({ _id: contractId, deletedAt: null, status: 'approved', clientReminderOptIn: { $ne: false } }).select('_id totalAmount paidAmount balanceAmount paymentPlanSnapshot').lean() : Promise.resolve(undefined),
     eventId ? Event.findOne({ _id: eventId, deletedAt: null }).select('_id status paymentPlanSnapshot').lean() : Promise.resolve(undefined)
   ]);
   if (!contract || !event || EVENT_TERMINAL_STATUSES.has(String((event as any).status))) return false;
   if (item.metadata.kind === 'balance') return Number((contract as any).balanceAmount ?? 0) > 0;
+  if (isContractFullyPaid(contract)) return false;
   const plan = planFor(event, contract);
   const installment = plan.find((candidate: any) => String(candidate?.id ?? '') === String(item.metadata.installmentId));
   return isOpenInstallment(installment) && installmentDueDateKey(installment) === item.metadata.dueDateKey;

@@ -2,6 +2,7 @@ import { CalendarItem, Contract, Event, Payment } from './crm.models';
 import { ApiError } from '../../middlewares/errorHandler';
 import { sendEmail } from '../email/email.service';
 import { argentinaDateKey, dueDateKey } from '../../utils/argentina-date';
+import { isContractFullyPaid } from './contract-settlement';
 
 const TERMINAL_EVENT_STATUSES = new Set(['cancelled', 'lost']);
 
@@ -142,9 +143,12 @@ async function contactForInstallment(eventId: string, installmentId: string, now
   if (!event || TERMINAL_EVENT_STATUSES.has(String(event.status))) throw new ApiError(404, 'EVENT_NOT_FOUND');
   const contract: any = await Contract.findOne({ eventId: event._id, deletedAt: null, status: 'approved' })
     .sort({ versionNumber: -1, createdAt: -1 })
-    .select('_id paymentPlanSnapshot')
+    .select('_id totalAmount paidAmount paymentPlanSnapshot')
     .lean();
   if (!contract) throw new ApiError(422, 'PAYMENT_COLLECTION_INSTALLMENT_NOT_FOUND', 'No se encontró un contrato aprobado para esta cuota.');
+  if (isContractFullyPaid(contract)) {
+    throw new ApiError(422, 'PAYMENT_COLLECTION_INSTALLMENT_NOT_FOUND', 'El contrato ya está totalmente cobrado.');
+  }
   const installment = paymentPlan(event, contract).find((item: any) => String(item?.id ?? '') === installmentId);
   const dueDate = dueDateKey(installment?.paymentWindowEnd ?? installment?.dueDate);
   const remainingAmount = remainingInstallmentAmount(installment);

@@ -11,6 +11,7 @@ import {
   daysBetweenDateKeys,
   dueDateKey
 } from '../../utils/argentina-date';
+import { isContractFullyPaid } from './contract-settlement';
 
 const FINANCIAL_LOCK_MS = 10 * 60_000;
 const FINANCIAL_RETRY_DELAY_MS = 60 * 60_000;
@@ -520,7 +521,7 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
   const todayKey = argentinaDateKey(now);
   const contractsStartedAt = Date.now();
   const contracts: any[] = await Contract.find({ deletedAt: null, status: 'approved' })
-    .select('_id eventId customerId salonId balanceAmount paymentPlanSnapshot versionNumber createdAt')
+    .select('_id eventId customerId salonId totalAmount paidAmount balanceAmount paymentPlanSnapshot versionNumber createdAt')
     .sort({ eventId: 1, versionNumber: -1, createdAt: -1 })
     .lean();
   const contractsQueryMs = Date.now() - contractsStartedAt;
@@ -573,7 +574,7 @@ async function syncFinancialCalendarItems(now: Date): Promise<number> {
     for (const installment of installments) {
       const dueKey = installmentDueDateKey(installment);
       const obligationKey = `financial:installment:${idOf(event._id)}:${String(installment?.id ?? dueKey ?? '')}`;
-      if (!dueKey || !isOpenInstallment(installment)) {
+      if (!dueKey || !isOpenInstallment(installment) || isContractFullyPaid(contract)) {
         await cancelObligationItems(obligationKey, { eventId: event._id });
         continue;
       }
@@ -718,7 +719,7 @@ async function stillRequiresReminder(item: any): Promise<boolean> {
   const contractId = idOf(item?.contractId);
   const [event, contract] = await Promise.all([
     eventId ? Event.findOne({ _id: eventId, deletedAt: null }).select('_id status paymentPlanSnapshot').lean() : Promise.resolve(undefined),
-    contractId ? Contract.findOne({ _id: contractId, deletedAt: null, status: 'approved' }).select('_id balanceAmount paymentPlanSnapshot').lean() : Promise.resolve(undefined)
+    contractId ? Contract.findOne({ _id: contractId, deletedAt: null, status: 'approved' }).select('_id totalAmount paidAmount balanceAmount paymentPlanSnapshot').lean() : Promise.resolve(undefined)
   ]);
   if (!event || EVENT_TERMINAL_STATUSES.has(String((event as any).status)) || !contract) return false;
   if (source === 'payment') {
@@ -727,6 +728,7 @@ async function stillRequiresReminder(item: any): Promise<boolean> {
     return Boolean(payment && payment.status === 'pending' && dueDateKey(payment.dueDate) === item?.metadata?.dueDateKey);
   }
   if (source === 'installment') {
+    if (isContractFullyPaid(contract)) return false;
     const installmentId = String(item?.metadata?.planInstallmentId ?? '');
     const plan = planFor(event, contract);
     const installment = plan.find((candidate: any) => String(candidate?.id ?? '') === installmentId);

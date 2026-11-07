@@ -152,6 +152,26 @@ describe('financial reminders service', () => {
     expect(d7Call?.[2]).toEqual({ upsert: true, new: true, setDefaultsOnInsert: true });
   });
 
+  it('does not schedule installment reminders for a fully paid contract with stale open plan entries', async () => {
+    mocks.contractFind.mockReturnValue(leanQuery([{
+      _id: 'contract-1', eventId: 'event-1', totalAmount: 4_581_500,
+      paidAmount: 4_581_500, balanceAmount: 0, paymentPlanSnapshot: []
+    }]));
+    mocks.eventFind.mockReturnValue(leanQuery([{
+      _id: 'event-1', status: 'confirmed',
+      paymentPlanSnapshot: [{ id: 'installment-6', amount: 118_500, paidAmount: 0, dueDate: '2026-09-10' }]
+    }]));
+
+    const result = await processFinancialReminderTick(new Date('2026-11-07T15:00:00.000Z'));
+
+    expect(result.synced).toBe(0);
+    expect(upsertCalls()).toHaveLength(0);
+    expect(mocks.calendarUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ 'metadata.obligationKey': 'financial:installment:event-1:installment-6' }),
+      expect.anything()
+    );
+  });
+
   it('creates the D+7 escalation for the lead, salon manager, and financial fallback recipients', async () => {
     const contract = {
       _id: 'contract-1',
