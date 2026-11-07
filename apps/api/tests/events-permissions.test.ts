@@ -293,6 +293,20 @@ describe('event detail salon scope', () => {
     expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(response.body.data.event).toEqual(event);
   });
+
+  it('includes the paid and remaining contract amounts needed by the payment tab', async () => {
+    const event = { _id: eventId, eventName: 'Evento saldado', salonId: { _id: salonId } };
+    const contract = { _id: '507f1f77bcf86cd799439019', status: 'approved', totalAmount: 4_581_500, paidAmount: 4_581_500, balanceAmount: 0 };
+    const contractQuery = { select: vi.fn().mockReturnThis(), sort: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue([contract]) };
+    mocks.eventFindOne.mockReturnValue(populatedQuery(event));
+    mocks.contractFind.mockReturnValue(contractQuery);
+
+    const response = await request(app).get(`/api/events/${eventId}`).set('Cookie', managerCookie);
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(contractQuery.select).toHaveBeenCalledWith(expect.stringContaining('paidAmount balanceAmount'));
+    expect(response.body.data.contract).toMatchObject({ totalAmount: 4_581_500, paidAmount: 4_581_500, balanceAmount: 0 });
+  });
 });
 
 describe('event search by customer', () => {

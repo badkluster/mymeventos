@@ -1550,7 +1550,7 @@ router.get('/:id', requirePermission(Permission.EVENTS_READ), validateRequest(id
     .populate('sourceQuoteId')
     .lean();
   await ensureEventAccess(request, event);
-  const contracts = await Contract.find({ eventId: request.params.id, deletedAt: null }).select('contractNumber status eventId customerId salonId versionNumber supersedesContractId supersededByContractId totalAmount pdfSecureUrl createdAt sentAt signedAt approvedAt').sort({ versionNumber: -1, createdAt: -1 }).lean();
+  const contracts = await Contract.find({ eventId: request.params.id, deletedAt: null }).select('contractNumber status eventId customerId salonId versionNumber supersedesContractId supersededByContractId totalAmount paidAmount balanceAmount pdfSecureUrl createdAt sentAt signedAt approvedAt').sort({ versionNumber: -1, createdAt: -1 }).lean();
   const contract = contracts.find((item: any) => item.status === 'approved')
     ?? contracts.find((item: any) => ['pending_approval', 'draft', 'requires_changes'].includes(item.status));
   const proposedContract = contract?.status === 'approved'

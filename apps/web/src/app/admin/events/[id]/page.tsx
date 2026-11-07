@@ -416,7 +416,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const financialTotal = Number(event.finalAmount ?? event.estimatedAmount ?? commercial.totalAmount ?? contract?.totalAmount ?? 0);
   const financialPaid = Number(paymentSummary.paidAmount ?? 0);
   const financialBalance = Math.max(0, Number(contract?.balanceAmount ?? financialTotal - financialPaid));
-  const contractFullyPaid = Boolean(contract && Number(contract.totalAmount) > 0 && Number(contract.paidAmount ?? 0) >= Number(contract.totalAmount));
+  const contractFullyPaid = Boolean(contract && Number(contract.totalAmount) > 0 && Number(contract.paidAmount ?? financialPaid) >= Number(contract.totalAmount));
   const canRegisterPayment = contract?.status === 'approved';
   const paymentRegistrationBlockedMessage = !contract
     ? 'No podés registrar cobros porque el evento no tiene un contrato aprobado. Generá o revisá el contrato, aprobalo desde la pestaña Contrato y luego volvé a intentar.'
