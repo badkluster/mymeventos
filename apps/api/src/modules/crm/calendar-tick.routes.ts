@@ -3,7 +3,7 @@ import { Router, type Request } from 'express';
 import { env } from '../../config/env';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendError, sendSuccess } from '../../utils/api';
-import { processFinancialReminderTick } from './financial-reminders.service';
+import { processFinancialReminderTick, processFinancialReminderSyncTick, processFinancialReminderDeliveryTick } from './financial-reminders.service';
 import { processEventAlertReminderTick } from './event-alert-reminders.service';
 import { processDailyDigestTick } from './daily-digest.service';
 import { processPostEventReviewTick } from './post-event-review.service';
@@ -43,12 +43,38 @@ const domainTicks: Array<{ key: string; run: (now?: Date) => Promise<{ hasMore: 
   { key: 'birthdayCampaign', run: processBirthdayCampaignTick }
 ];
 
-async function runRound(): Promise<{ round: Record<string, unknown>; hasMore: boolean }> {
+type TickDomain = (typeof domainTicks)[number];
+type ScheduledScope = 'commercial' | 'operations' | 'financial-delivery' | 'financial-sync' | 'daily';
+type TickScope = 'all' | ScheduledScope;
+
+// Scope each scheduled invocation so an expensive maintenance task cannot block
+// unrelated follow-ups under the same 30-second Vercel function limit.
+const scheduledDomainTicks: Record<ScheduledScope, TickDomain[]> = {
+  commercial: domainTicks.filter(({ key }) => ['postEventReview', 'collectionFollowUp', 'leadFollowUp', 'quoteLifecycle'].includes(key)),
+  operations: domainTicks.filter(({ key }) => ['eventAlert', 'productionMissing', 'productionPendingClose', 'tablewareOverbooking', 'closurePending', 'openWorkSession', 'payrollPending'].includes(key)),
+  'financial-delivery': [
+    { key: 'financialDelivery', run: processFinancialReminderDeliveryTick },
+    ...domainTicks.filter(({ key }) => key === 'clientPaymentReminder')
+  ],
+  'financial-sync': [{ key: 'financialSync', run: processFinancialReminderSyncTick }],
+  daily: domainTicks.filter(({ key }) => ['dailyDigest', 'birthdayCampaign'].includes(key))
+};
+
+function parseScope(value: unknown): TickScope | null {
+  if (value === undefined || value === null || value === '') return 'all';
+  if (value === 'all') return 'all';
+  if (typeof value === 'string' && Object.prototype.hasOwnProperty.call(scheduledDomainTicks, value)) {
+    return value as ScheduledScope;
+  }
+  return null;
+}
+
+async function runRound(domains: TickDomain[]): Promise<{ round: Record<string, unknown>; hasMore: boolean }> {
   const startedAt = Date.now();
   const round: Record<string, unknown> = {};
   const domainTimings: Array<{ key: string; elapsedMs: number }> = [];
   let hasMore = false;
-  for (const domain of domainTicks) {
+  for (const domain of domains) {
     const domainStartedAt = Date.now();
     try {
       const result = await domain.run();
@@ -92,10 +118,13 @@ function tickCount(value: unknown): number {
 for (const method of ['get', 'post'] as const) {
   router[method]('/calendar-tick', asyncHandler(async (request, response) => {
     if (!authorized(request)) return sendError(response, 403, 'INTERNAL_CALENDAR_TICK_FORBIDDEN', 'No autorizado.');
+    const scope = parseScope(method === 'get' ? request.query.scope : request.body?.scope);
+    if (!scope) return sendError(response, 400, 'INTERNAL_CALENDAR_TICK_INVALID_SCOPE', 'Grupo de automatizaciones no válido.');
+    const domains = scope === 'all' ? domainTicks : scheduledDomainTicks[scope];
     const requestedTicks = method === 'get' ? request.query.maxTicks : request.body?.maxTicks;
     const ticks = [];
     for (let index = 0; index < tickCount(requestedTicks); index += 1) {
-      const { round, hasMore } = await runRound();
+      const { round, hasMore } = await runRound(domains);
       ticks.push(round);
       if (!hasMore) break;
     }

@@ -821,8 +821,14 @@ async function markReminderFailure(item: any, error: unknown, now: Date): Promis
   });
 }
 
-export async function processFinancialReminderTick(now = new Date()): Promise<FinancialTickResult> {
+// Reconcile calendar entries daily, independently of delivery work.
+export async function processFinancialReminderSyncTick(now = new Date()): Promise<{ synced: number; hasMore: false }> {
   const synced = await syncFinancialCalendarItems(now);
+  return { synced, hasMore: false };
+}
+
+// Deliver already-scheduled reminders every two hours without a full reconciliation.
+export async function processFinancialReminderDeliveryTick(now = new Date()): Promise<Omit<FinancialTickResult, 'synced'>> {
   let delivered = 0;
   let skipped = 0;
   let failed = 0;
@@ -841,7 +847,13 @@ export async function processFinancialReminderTick(now = new Date()): Promise<Fi
     }
   }
   const hasMore = processed >= MAX_REMINDERS_PER_TICK;
-  return { synced, delivered, skipped, failed, hasMore };
+  return { delivered, skipped, failed, hasMore };
+}
+// Preserve existing manual/legacy behavior for callers not using scoped scheduling.
+export async function processFinancialReminderTick(now = new Date()): Promise<FinancialTickResult> {
+  const sync = await processFinancialReminderSyncTick(now);
+  const delivery = await processFinancialReminderDeliveryTick(now);
+  return { synced: sync.synced, ...delivery };
 }
 
 export const financialReminderPolicy = {

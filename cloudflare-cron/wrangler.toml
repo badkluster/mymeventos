@@ -3,7 +3,11 @@ main = "src/index.js"
 compatibility_date = "2026-08-21"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/10 * * * *"]
+
+[vars]
+# Digital tickets are not in use. Do not poll until explicitly enabled.
+ENABLE_TICKET_AUTOMATION = "false"
 
 [[secrets_store_secrets]]
 binding = "TICKET_AUTOMATION_APP_BASE_URL"
