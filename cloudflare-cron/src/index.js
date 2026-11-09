@@ -48,14 +48,14 @@ async function runTicketAutomation(env) {
   return postJson(`${baseUrl}/api/tickets/process`, token, { maxTicks: 1 });
 }
 
-async function runFinancialReminders(env) {
+async function runCalendarScope(env, scope) {
   const [baseUrlValue, token] = await Promise.all([
     readBinding(env.FINANCIAL_REMINDERS_APP_BASE_URL, "FINANCIAL_REMINDERS_APP_BASE_URL"),
     readBinding(env.CRON_SECRET, "CRON_SECRET"),
   ]);
   const baseUrl = baseUrlValue.replace(/\/$/, "");
 
-  return postJson(`${baseUrl}/api/internal/calendar-tick`, token, { maxTicks: 1 });
+  return postJson(`${baseUrl}/api/internal/calendar-tick`, token, { maxTicks: 1, scope });
 }
 
 async function runMarketingQueue(env) {
@@ -78,22 +78,45 @@ async function runTask(name, task) {
   }
 }
 
+// All times are UTC. Buenos Aires is UTC-3 (09:00 AR = 12:00 UTC).
+// Ticket automation remains opt-in until the ticketing product launches.
+// Cloudflare invokes this Worker every 10 minutes; not every feature needs
+// to hit the Vercel API at that frequency.
 export default {
   async scheduled(controller, env, ctx) {
     const scheduledDate = new Date(controller.scheduledTime);
     const minute = scheduledDate.getUTCMinutes();
+    const hour = scheduledDate.getUTCHours();
 
-    const tasks = [
-      runTask("ticket-automation", () => runTicketAutomation(env)),
-    ];
+    // Keep existing marketing dispatch cadence while campaigns may be queued.
+    const tasks = [runTask("marketing-queue", () => runMarketingQueue(env))];
 
-    // The Worker wakes up every 5 minutes. Financial and marketing jobs only
-    // need to run every 10 minutes, so run them on UTC minutes divisible by 10.
-    if (minute % 10 === 0) {
+    // Deliberately disabled by default. Re-enable only when digital tickets launch.
+    if (env.ENABLE_TICKET_AUTOMATION === "true") {
+      tasks.push(runTask("ticket-automation", () => runTicketAutomation(env)));
+    }
+
+    if (minute === 0) {
+      // Commercial follow-ups and operational alerts: once per hour.
       tasks.push(
-        runTask("financial-reminders", () => runFinancialReminders(env)),
-        runTask("marketing-queue", () => runMarketingQueue(env)),
+        runTask("commercial", () => runCalendarScope(env, "commercial")),
+        runTask("operations", () => runCalendarScope(env, "operations")),
       );
+
+      // Delivery of due financial reminders: every two hours.
+      if (hour % 2 === 0) {
+        tasks.push(runTask("financial-delivery", () => runCalendarScope(env, "financial-delivery")));
+      }
+
+      // Financial reconciliation is expensive: only once per day (08:00 AR).
+      if (hour === 11) {
+        tasks.push(runTask("financial-sync", () => runCalendarScope(env, "financial-sync")));
+      }
+
+      // Daily digest and birthday campaigns once per day (09:00 AR).
+      if (hour === 12) {
+        tasks.push(runTask("daily", () => runCalendarScope(env, "daily")));
+      }
     }
 
     ctx.waitUntil(Promise.all(tasks));
