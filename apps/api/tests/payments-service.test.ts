@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
   paymentFind: vi.fn(),
   paymentFindOne: vi.fn(),
   paymentFindOneAndUpdate: vi.fn(),
-  paymentCreate: vi.fn()
+  paymentCreate: vi.fn(),
+  rebuildPlan: vi.fn()
 }));
 
 vi.mock('../src/modules/crm/crm.models', () => ({
@@ -15,8 +16,10 @@ vi.mock('../src/modules/crm/crm.models', () => ({
   Payment: { countDocuments: mocks.paymentCount, find: mocks.paymentFind, findOne: mocks.paymentFindOne, findOneAndUpdate: mocks.paymentFindOneAndUpdate, create: mocks.paymentCreate }
 }));
 
+vi.mock('../src/modules/crm/payment-plan-rebuild.service', () => ({ rebuildEventPaymentPlan: mocks.rebuildPlan }));
+
 import { ApiError } from '../src/middlewares/errorHandler';
-import { applyPaymentToPlan, cancelPayment, correctPaidInstallmentLateFee, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from '../src/modules/crm/payments.service';
+import { applyPaymentToPlan, cancelPayment, correctPaidInstallmentLateFee, correctPaidPaymentAmount, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from '../src/modules/crm/payments.service';
 
 describe('payments service', () => {
   beforeEach(() => {
@@ -196,6 +199,38 @@ describe('payments service', () => {
 
     expect(payment).toMatchObject({ amount: 1273471, contractAppliedAmount: 1059721, manualAdditionalAmount: 213750 });
     expect(payment.save).toHaveBeenCalled();
+  });
+
+  it('corrects a paid payment amount, recalculates the balance and rebuilds the plan', async () => {
+    const payment = { _id: 'payment-1', source: 'manual', status: 'paid', type: 'installment', amount: 2285558, contractAppliedAmount: 2285558, eventId: { toString: () => 'event-1' }, contractId: { toString: () => 'contract-1' }, affectsContractBalance: true, save: vi.fn().mockResolvedValue(undefined) };
+    mocks.paymentFindOne.mockResolvedValue(payment);
+    mocks.contractFindOne.mockResolvedValue(contractDoc({ totalAmount: 4050000 }));
+    mocks.paymentFind.mockResolvedValue([{ status: 'paid', amount: 400000, type: 'deposit', affectsContractBalance: true }, { status: 'paid', amount: 2230558, type: 'installment', affectsContractBalance: true }]);
+
+    const result = await correctPaidPaymentAmount('payment-1', 2230558, 'Importe cargado de más', 'user-1');
+
+    expect(result.previousAmount).toBe(2285558);
+    expect(payment.amount).toBe(2230558);
+    expect(payment.contractAppliedAmount).toBeUndefined();
+    expect(payment.save).toHaveBeenCalled();
+    expect(mocks.rebuildPlan).toHaveBeenCalledWith('event-1', 'contract-1');
+  });
+
+  it('rejects an amount correction without reason, on unpaid payments, or with surcharge', async () => {
+    await expect(correctPaidPaymentAmount('payment-1', 100, ' ', 'user-1')).rejects.toMatchObject({ code: 'PAYMENT_CORRECTION_REASON_REQUIRED' });
+    mocks.paymentFindOne.mockResolvedValue({ source: 'manual', status: 'pending', type: 'installment', amount: 500 });
+    await expect(correctPaidPaymentAmount('payment-1', 100, 'x', 'user-1')).rejects.toMatchObject({ code: 'PAYMENT_AMOUNT_CORRECTION_NOT_ALLOWED' });
+    mocks.paymentFindOne.mockResolvedValue({ source: 'manual', status: 'paid', type: 'installment', amount: 500, manualAdditionalAmount: 50 });
+    await expect(correctPaidPaymentAmount('payment-1', 100, 'x', 'user-1')).rejects.toMatchObject({ code: 'PAYMENT_AMOUNT_CORRECTION_NOT_ALLOWED' });
+    expect(mocks.rebuildPlan).not.toHaveBeenCalled();
+  });
+
+  it('rejects raising an amount above the contract balance', async () => {
+    const payment = { source: 'manual', status: 'paid', type: 'installment', amount: 500, affectsContractBalance: true, contractId: { toString: () => 'contract-1' }, save: vi.fn() };
+    mocks.paymentFindOne.mockResolvedValue(payment);
+    mocks.contractFindOne.mockResolvedValue(contractDoc({ totalAmount: 1000, balanceAmount: 100 }));
+    await expect(correctPaidPaymentAmount('payment-1', 700, 'x', 'user-1')).rejects.toMatchObject({ code: 'PAYMENT_AMOUNT_EXCEEDS_BALANCE' });
+    expect(payment.save).not.toHaveBeenCalled();
   });
 
   it('requires a reason to cancel a payment', async () => {

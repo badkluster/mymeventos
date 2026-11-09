@@ -9,8 +9,9 @@ import { ApiError } from '../../middlewares/errorHandler';
 import { sendSuccess } from '../../utils/api';
 import { getApiMessage } from '../../utils/messages';
 import { writeAuditLog } from '../audit/audit.service';
-import { cancelPayment, correctPaidInstallmentLateFee, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from './payments.service';
+import { cancelPayment, correctPaidInstallmentLateFee, correctPaidPaymentAmount, createPayment, markPaymentPaid, paymentSummary, recalculateContractPayments, refundPayment, updatePayment } from './payments.service';
 import { generateAndUploadPaymentReceiptPdf } from './payment-receipt-pdf.service';
+import { sendEmail } from '../email/email.service';
 import { argentinaMidnight, isDateKey } from '../../utils/argentina-date';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
@@ -52,6 +53,8 @@ const refundSchema = z.object({
   query: z.object({})
 });
 const lateFeeCorrectionSchema = z.object({ body: z.object({ manualAdditionalAmount: z.coerce.number().positive() }), params: z.object({ id: objectId }), query: z.object({}) });
+
+const amountCorrectionSchema = z.object({ body: z.object({ amount: z.coerce.number().positive(), reason: z.string().trim().min(1), sendReceiptEmail: z.boolean().optional() }), params: z.object({ id: objectId }), query: z.object({}) });
 
 const router = Router();
 
@@ -208,6 +211,29 @@ router.post('/:id/correct-late-fee', requirePermission(Permission.PAYMENTS_CREAT
   await regeneratePaymentReceipt(payment);
   await writeAuditLog(request, 'PAYMENT_LATE_FEE_CORRECTED', 'Payment', payment._id.toString(), { manualAdditionalAmount: payment.manualAdditionalAmount, contractAppliedAmount: payment.contractAppliedAmount, receiptRegenerated: true });
   return sendSuccess(response, { payment }, 200, 'Recargo por vencimiento corregido y comprobante regenerado.');
+}));
+
+router.post('/:id/correct-amount', requirePermission(Permission.PAYMENTS_CREATE), validateRequest(amountCorrectionSchema), asyncHandler(async (request, response) => {
+  const existing: any = await Payment.findOne({ _id: request.params.id, deletedAt: null }).lean();
+  await ensurePaymentAccess(request, existing);
+  const { payment, previousAmount } = await correctPaidPaymentAmount(request.params.id, request.body.amount, request.body.reason, request.user!.id);
+  const [event, customer, contract]: any[] = await Promise.all([
+    Event.findOne({ _id: payment.eventId, deletedAt: null }).lean(),
+    Customer.findOne({ _id: payment.customerId, deletedAt: null }).lean(),
+    Contract.findOne({ _id: payment.contractId, deletedAt: null }).lean()
+  ]);
+  if (!event || !customer || !contract) throw new ApiError(422, 'El importe se corrigió, pero no se pudo regenerar el comprobante porque faltan datos asociados al pago.');
+  const receipt = await generateAndUploadPaymentReceiptPdf(payment, event, customer, contract);
+  const { pdfBuffer, ...receiptFields } = receipt;
+  Object.assign(payment, receiptFields);
+  let receiptEmailSent = false;
+  if (request.body.sendReceiptEmail && customer.email) {
+    receiptEmailSent = await sendEmail({ to: customer.email, subject: `Comprobante corregido ${payment.paymentNumber} · M&M Eventos`, text: `Hola ${customer.fullName ?? ''}, corregimos el importe de tu pago ${payment.paymentNumber}. Adjuntamos el comprobante actualizado. También podés verlo aquí: ${receipt.receiptPdfSecureUrl}`, attachments: [{ filename: `comprobante-${payment.paymentNumber}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }] });
+    if (receiptEmailSent) payment.receiptEmailSentAt = new Date();
+  }
+  await payment.save();
+  await writeAuditLog(request, 'PAYMENT_AMOUNT_CORRECTED', 'Payment', payment._id.toString(), { eventId: referenceId(payment.eventId), previousAmount, newAmount: payment.amount, reason: request.body.reason, planRebuilt: true, receiptRegenerated: true, receiptEmailSent });
+  return sendSuccess(response, { payment, receiptEmailSent }, 200, 'Importe corregido, plan de cuotas recalculado y comprobante regenerado.');
 }));
 
 router.post('/:id/mark-paid', requirePermission(Permission.PAYMENTS_APPROVE), validateRequest(actionSchema), asyncHandler(async (request, response) => {

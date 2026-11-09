@@ -623,6 +623,21 @@ del informe, pendientes de aprobación. GTM (contenedor v7) todavía dispara
 `whatsapp_click` por clic en enlace sin parámetros; los pasos manuales están
 en el informe §4.2.
 
+Actualización 2026-11-07 — corrección de importe de un pago ya cobrado. Caso real
+(evento `XV Lola`): un pago manual se cargó con $55.000 de más; la app bloqueaba
+editar el importe de un pago cobrado (`PAYMENT_PAID_LOCKED`) y anular un pago
+recalculaba el saldo del contrato sin revertir lo aplicado a las cuotas, por lo
+que hubo que corregirlo directo en la base (autorizado por el usuario). Nuevo flujo
+normal: `POST /payments/:id/correct-amount` (`PAYMENTS_CREATE`, motivo obligatorio,
+`sendReceiptEmail` opcional) → `correctPaidPaymentAmount` (`payments.service.ts`)
+actualiza el pago, recalcula el saldo del contrato y reconstruye el plan de cuotas
+de evento y contrato (`payment-plan-rebuild.service.ts`: cascada FIFO sobre los
+pagos `installment` cobrados en orden de creación; ignora la cuota elegida
+originalmente por pago), regenera el PDF y deja auditoría `PAYMENT_AMOUNT_CORRECTED`.
+Rechaza pagos con recargo (usar "Corregir recargo"), con reembolsos, de entradas
+digitales, y subas que excedan el saldo. UI: tarjeta "Corregir importe cobrado" en
+`/admin/payments/[id]`. Pendiente: anular un pago sigue sin reconstruir el plan.
+
 ## 9. Integraciones — estado real
 
 | Integración | Librería/mecanismo | Estado |

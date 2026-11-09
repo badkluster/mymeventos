@@ -10,6 +10,7 @@ import {
   reserveContractBalance,
   reserveRefundAmount
 } from './contract-financials.service';
+import { rebuildEventPaymentPlan } from './payment-plan-rebuild.service';
 
 export { computeFinancialSummary as paymentSummary, recalculateContractPayments } from './contract-financials.service';
 
@@ -252,6 +253,38 @@ export async function correctPaidInstallmentLateFee(paymentId: string, manualAdd
   await payment.save();
   await recalculateContractPayments(payment.contractId.toString());
   return payment;
+}
+
+/**
+ * Fixes the amount of an already-paid manual payment that was entered wrong. Updates the payment,
+ * the contract balance and the installment plan together (a plain edit would leave the plan stale).
+ * Surcharge payments must use correctPaidInstallmentLateFee instead.
+ */
+export async function correctPaidPaymentAmount(paymentId: string, newAmount: number, reason: string, userId: string): Promise<{ payment: any; previousAmount: number }> {
+  if (!reason || !reason.trim()) throw new ApiError(422, 'PAYMENT_CORRECTION_REASON_REQUIRED', 'Indicá el motivo de la corrección.');
+  const payment: any = await Payment.findOne({ _id: paymentId, deletedAt: null });
+  if (!payment) throw new ApiError(404, 'PAYMENT_NOT_FOUND');
+  assertEditableManualPayment(payment);
+  if (payment.status !== 'paid' || payment.type === 'refund') throw new ApiError(422, 'PAYMENT_AMOUNT_CORRECTION_NOT_ALLOWED', 'Sólo se puede corregir el importe de un pago cobrado.');
+  if (amount(payment.refundedAmount) > 0) throw new ApiError(422, 'PAYMENT_AMOUNT_CORRECTION_NOT_ALLOWED', 'El pago tiene reembolsos registrados y no puede corregirse.');
+  if (amount(payment.manualAdditionalAmount) > 0) throw new ApiError(422, 'PAYMENT_AMOUNT_CORRECTION_NOT_ALLOWED', 'El pago tiene un recargo registrado; no se puede corregir el importe.');
+  const nextAmount = amount(newAmount);
+  const previousAmount = amount(payment.amount);
+  if (nextAmount <= 0 || nextAmount === previousAmount) throw new ApiError(422, 'PAYMENT_AMOUNT_CORRECTION_INVALID', 'El nuevo importe debe ser mayor a cero y distinto del actual.');
+
+  if (nextAmount > previousAmount && payment.affectsContractBalance) {
+    const contract: any = await Contract.findOne({ _id: payment.contractId, deletedAt: null });
+    if (!contract) throw new ApiError(404, 'CONTRACT_NOT_FOUND');
+    if (amount(contract.balanceAmount) < nextAmount - previousAmount) throw new ApiError(422, 'PAYMENT_AMOUNT_EXCEEDS_BALANCE', 'El nuevo importe supera el saldo del contrato.');
+  }
+
+  payment.amount = nextAmount;
+  payment.contractAppliedAmount = undefined;
+  payment.updatedBy = userId;
+  await payment.save();
+  await recalculateContractPayments(payment.contractId.toString());
+  if (payment.eventId) await rebuildEventPaymentPlan(payment.eventId.toString(), payment.contractId.toString());
+  return { payment, previousAmount };
 }
 
 export async function markPaymentPaid(paymentId: string, payload: PaymentPayload, userId: string): Promise<any> {
