@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   processTick: vi.fn(),
+  processFinancialSyncTick: vi.fn(),
+  processFinancialDeliveryTick: vi.fn(),
   processEventAlertTick: vi.fn(),
   processDailyDigestTick: vi.fn(),
   processPostEventReviewTick: vi.fn(),
@@ -21,7 +23,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/config/env', () => ({ env: { CRON_SECRET: 'financial-cron-test-secret' } }));
-vi.mock('../src/modules/crm/financial-reminders.service', () => ({ processFinancialReminderTick: mocks.processTick }));
+vi.mock('../src/modules/crm/financial-reminders.service', () => ({
+  processFinancialReminderTick: mocks.processTick,
+  processFinancialReminderSyncTick: mocks.processFinancialSyncTick,
+  processFinancialReminderDeliveryTick: mocks.processFinancialDeliveryTick
+}));
 vi.mock('../src/modules/crm/event-alert-reminders.service', () => ({ processEventAlertReminderTick: mocks.processEventAlertTick }));
 vi.mock('../src/modules/crm/daily-digest.service', () => ({ processDailyDigestTick: mocks.processDailyDigestTick }));
 vi.mock('../src/modules/crm/post-event-review.service', () => ({ processPostEventReviewTick: mocks.processPostEventReviewTick }));
@@ -47,6 +53,8 @@ describe('financial calendar tick route', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.processTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
+    mocks.processFinancialSyncTick.mockResolvedValue({ synced: 0, hasMore: false });
+    mocks.processFinancialDeliveryTick.mockResolvedValue({ delivered: 0, skipped: 0, failed: 0, hasMore: false });
     mocks.processEventAlertTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
     mocks.processDailyDigestTick.mockResolvedValue({ delivered: 0, skipped: 0, failed: 0, hasMore: false });
     mocks.processPostEventReviewTick.mockResolvedValue({ synced: 0, delivered: 0, skipped: 0, failed: 0, hasMore: false });
@@ -108,4 +116,59 @@ describe('financial calendar tick route', () => {
     expect(mocks.processTick).toHaveBeenCalledTimes(2);
     expect(mocks.processEventAlertTick).toHaveBeenCalledTimes(2);
   });
+  it('runs only financial delivery and client payment reminders every two hours', async () => {
+    const response = await request(app)
+      .post('/api/internal/calendar-tick')
+      .set('Authorization', 'Bearer financial-cron-test-secret')
+      .send({ maxTicks: 1, scope: 'financial-delivery' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.processFinancialDeliveryTick).toHaveBeenCalledTimes(1);
+    expect(mocks.processClientPaymentReminderTick).toHaveBeenCalledTimes(1);
+    expect(mocks.processFinancialSyncTick).not.toHaveBeenCalled();
+    expect(mocks.processTick).not.toHaveBeenCalled();
+    expect(mocks.processLeadFollowUpTick).not.toHaveBeenCalled();
+    expect(response.body.data.ticks[0]).toHaveProperty('financialDelivery');
+  });
+
+  it('reconciles financial items without delivering reminders', async () => {
+    const response = await request(app)
+      .post('/api/internal/calendar-tick')
+      .set('Authorization', 'Bearer financial-cron-test-secret')
+      .send({ maxTicks: 1, scope: 'financial-sync' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.processFinancialSyncTick).toHaveBeenCalledTimes(1);
+    expect(mocks.processFinancialDeliveryTick).not.toHaveBeenCalled();
+    expect(mocks.processClientPaymentReminderTick).not.toHaveBeenCalled();
+  });
+
+  it('runs commercial follow-ups without running financial or daily work', async () => {
+    const response = await request(app)
+      .post('/api/internal/calendar-tick')
+      .set('Authorization', 'Bearer financial-cron-test-secret')
+      .send({ scope: 'commercial' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.processLeadFollowUpTick).toHaveBeenCalledTimes(1);
+    expect(mocks.processQuoteLifecycleTick).toHaveBeenCalledTimes(1);
+    expect(mocks.processCollectionFollowUpTick).toHaveBeenCalledTimes(1);
+    expect(mocks.processPostEventReviewTick).toHaveBeenCalledTimes(1);
+    expect(mocks.processDailyDigestTick).not.toHaveBeenCalled();
+    expect(mocks.processFinancialDeliveryTick).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid scopes without executing any automation', async () => {
+    const response = await request(app)
+      .post('/api/internal/calendar-tick')
+      .set('Authorization', 'Bearer financial-cron-test-secret')
+      .send({ scope: 'unknown-task' });
+
+    expect(response.status).toBe(400);
+    expect(mocks.processTick).not.toHaveBeenCalled();
+    expect(mocks.processFinancialSyncTick).not.toHaveBeenCalled();
+    expect(mocks.processFinancialDeliveryTick).not.toHaveBeenCalled();
+    expect(mocks.processLeadFollowUpTick).not.toHaveBeenCalled();
+  });
+
 });
