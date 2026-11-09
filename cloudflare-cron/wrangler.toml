@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2026-08-21"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/10 * * * *"]
 
 [[secrets_store_secrets]]
 binding = "TICKET_AUTOMATION_APP_BASE_URL"
