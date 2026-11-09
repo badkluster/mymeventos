@@ -18,15 +18,5 @@
       "source": "/health",
       "destination": "/api/health"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/marketing/process",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/internal/calendar-tick",
-      "schedule": "0 8 * * *"
-    }
   ]
 }
